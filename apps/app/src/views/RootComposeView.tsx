@@ -419,6 +419,7 @@ interface BuildMobileRecentThreadsArgs {
 
 interface ShouldNavigateAfterThreadCreateArgs {
   isForkDraft: boolean;
+  isPluginNewThreadDraft: boolean;
   navigateToThreadAfterCreate: boolean;
 }
 
@@ -535,9 +536,10 @@ export function readLockedReuseEnvironmentIdFromLocationState(
 
 export function shouldNavigateAfterThreadCreate({
   isForkDraft,
+  isPluginNewThreadDraft,
   navigateToThreadAfterCreate,
 }: ShouldNavigateAfterThreadCreateArgs): boolean {
-  return isForkDraft || navigateToThreadAfterCreate;
+  return isForkDraft || isPluginNewThreadDraft || navigateToThreadAfterCreate;
 }
 
 function readForkThreadCreateSeedFromLocationState(
@@ -1752,6 +1754,7 @@ export function RootComposeView() {
       try {
         const shouldNavigateToCreatedThread = shouldNavigateAfterThreadCreate({
           isForkDraft: forkSeed !== null,
+          isPluginNewThreadDraft: pluginNewThreadDraftKey !== null,
           navigateToThreadAfterCreate,
         });
         const request =
@@ -1816,6 +1819,7 @@ export function RootComposeView() {
       navigate,
       navigateToThreadAfterCreate,
       permissionMode,
+      pluginNewThreadDraftKey,
       projectId,
       promptDraft,
       reasoningLevel,
@@ -2559,7 +2563,19 @@ export function RootComposeView() {
       rootPanelTerminalTarget,
     ],
   );
+  const pluginNewThreadTabCloseHandlerRef = useRef<(() => boolean) | null>(
+    null,
+  );
+  const handlePluginNewThreadTabCloseHandlerChange = useCallback(
+    (handler: (() => boolean) | null) => {
+      pluginNewThreadTabCloseHandlerRef.current = handler;
+    },
+    [],
+  );
   const handleCloseWindowRequest = useCallback(() => {
+    if (pluginNewThreadTabCloseHandlerRef.current?.()) {
+      return true;
+    }
     // Gate on the visible panel state, not the persisted flag: on compact
     // viewports the drawer can be dismissed while tabs stay persisted, and
     // Cmd+W must not consume hidden tabs.
@@ -3501,6 +3517,9 @@ export function RootComposeView() {
               <PluginNewThreadContextBar
                 projectId={projectId}
                 environmentId={reuseEnvironmentId}
+                onCloseHandlerChange={
+                  handlePluginNewThreadTabCloseHandlerChange
+                }
               />
             ) : null
           }

@@ -244,9 +244,13 @@
 }
 
 .conductor-new-conversation {
-  flex: none;
-  max-width: none;
   white-space: nowrap;
+}
+
+.conductor-new-conversation-slot {
+  width: 6.25rem;
+  max-width: 6.25rem;
+  flex: 0 0 6.25rem;
 }
 
 .conductor-more-tabs-trigger {
@@ -263,6 +267,14 @@
 
 .conductor-context-bar[data-compact] .conductor-tab-rail {
   padding-block: 0.125rem;
+}
+
+.conductor-context-bar[data-compact] .conductor-new-conversation-slot {
+  width: 2.5rem;
+  max-width: 2.5rem;
+  flex-basis: 2.5rem;
+  justify-content: center;
+  padding-inline: 0;
 }
 
 .conductor-signal-slot {
@@ -324,6 +336,54 @@
   }
 }
 
+@keyframes conductor-draft-tab-enter {
+  from {
+    opacity: 0.55;
+    transform: translateX(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes conductor-draft-indicator-enter {
+  from {
+    opacity: 0;
+    transform: scaleX(0.35);
+  }
+  to {
+    opacity: 1;
+    transform: scaleX(1);
+  }
+}
+
+@keyframes conductor-conversation-exit {
+  from {
+    opacity: 1;
+    filter: blur(0);
+    transform: translateX(0);
+  }
+  to {
+    opacity: 0;
+    filter: blur(3px);
+    transform: translateX(-8px);
+  }
+}
+
+@keyframes conductor-conversation-enter {
+  from {
+    opacity: 0;
+    filter: blur(3px);
+    transform: translateX(8px);
+  }
+  to {
+    opacity: 1;
+    filter: blur(0);
+    transform: translateX(0);
+  }
+}
+
 @media (prefers-reduced-motion: no-preference) {
   .conductor-icon-button,
   .conductor-drag-handle,
@@ -372,6 +432,32 @@
   .conductor-pixel-matrix--activity .conductor-pixel {
     animation: conductor-pixel-wave 1.4s steps(1, end) infinite;
     animation-delay: calc(var(--pixel-phase) * -70ms);
+  }
+
+  .conductor-conversation-tab[data-new-conversation] {
+    animation: conductor-draft-tab-enter 250ms cubic-bezier(0.22, 1, 0.36, 1)
+      both;
+  }
+
+  .conductor-conversation-tab[data-new-conversation]::after {
+    transform-origin: left center;
+    animation: conductor-draft-indicator-enter 250ms
+      cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+
+  html[data-conductor-tab-transition]::view-transition-old(*) {
+    animation: conductor-conversation-exit 150ms cubic-bezier(0.22, 1, 0.36, 1)
+      both;
+  }
+
+  html[data-conductor-tab-transition]::view-transition-new(*) {
+    animation: conductor-conversation-enter 250ms cubic-bezier(0.22, 1, 0.36, 1)
+      both;
+  }
+
+  html[data-conductor-tab-transition]::view-transition-old(root),
+  html[data-conductor-tab-transition]::view-transition-new(root) {
+    animation: none;
   }
 }
 

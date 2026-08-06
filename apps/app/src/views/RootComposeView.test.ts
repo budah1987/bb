@@ -646,12 +646,14 @@ describe("shouldNavigateAfterThreadCreate", () => {
     expect(
       shouldNavigateAfterThreadCreate({
         isForkDraft: false,
+        isPluginNewThreadDraft: false,
         navigateToThreadAfterCreate: false,
       }),
     ).toBe(false);
     expect(
       shouldNavigateAfterThreadCreate({
         isForkDraft: false,
+        isPluginNewThreadDraft: false,
         navigateToThreadAfterCreate: true,
       }),
     ).toBe(true);
@@ -661,6 +663,17 @@ describe("shouldNavigateAfterThreadCreate", () => {
     expect(
       shouldNavigateAfterThreadCreate({
         isForkDraft: true,
+        isPluginNewThreadDraft: false,
+        navigateToThreadAfterCreate: false,
+      }),
+    ).toBe(true);
+  });
+
+  it("always turns a submitted plugin draft tab into its created thread", () => {
+    expect(
+      shouldNavigateAfterThreadCreate({
+        isForkDraft: false,
+        isPluginNewThreadDraft: true,
         navigateToThreadAfterCreate: false,
       }),
     ).toBe(true);

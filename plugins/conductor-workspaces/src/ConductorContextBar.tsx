@@ -59,6 +59,7 @@ export function ConductorNewThreadContextBar({
   projectId,
   environmentId,
   isCompactViewport,
+  experimental_registerCloseHandler,
 }: PluginNewThreadContextBarProps) {
   return (
     <ConductorWorkspaceContextBar
@@ -66,6 +67,7 @@ export function ConductorNewThreadContextBar({
       projectId={projectId}
       environmentId={environmentId}
       isCompactViewport={isCompactViewport}
+      registerCloseHandler={experimental_registerCloseHandler}
     />
   );
 }
@@ -122,17 +124,19 @@ function ConductorWorkspaceContextBar({
   const openThreads =
     workspace?.threads.filter((thread) => !closedTabIdSet.has(thread.id)) ?? [];
   const openNewConversation = useCallback(() => {
-    actions.openNewThread({
-      projectId,
-      focusPrompt: true,
-      ...(environmentId
-        ? {
-            experimental_sameEnvironment: {
-              environmentId,
-              locked: true,
-            },
-          }
-        : {}),
+    runWorkspaceTabTransition(() => {
+      actions.openNewThread({
+        projectId,
+        focusPrompt: true,
+        ...(environmentId
+          ? {
+              experimental_sameEnvironment: {
+                environmentId,
+                locked: true,
+              },
+            }
+          : {}),
+      });
     });
   }, [actions, environmentId, projectId]);
 
@@ -174,8 +178,9 @@ function ConductorWorkspaceContextBar({
     if (activeIndex < 0) {
       const fallback = openThreads[0];
       if (!fallback) return false;
+      closeInFlightRef.current = true;
       cycleThreadIdRef.current = fallback.id;
-      actions.open(fallback.id);
+      runWorkspaceTabTransition(() => actions.open(fallback.id));
       return true;
     }
     // The thread route is also the workspace shell. Keep one tab open so a
@@ -371,19 +376,22 @@ function ConductorWorkspaceContextBar({
         {activeThreadId === null ? (
           <button
             type="button"
-            className="conductor-conversation-tab"
+            className="conductor-conversation-tab conductor-new-conversation-slot"
             data-active
+            data-new-conversation
             aria-current="page"
             aria-label="New conversation"
             title="New conversation"
           >
             <Icon name="Plus" className="size-3.5" aria-hidden />
-            <span className="truncate">New conversation</span>
+            {isCompactViewport ? null : (
+              <span className="truncate">New conversation</span>
+            )}
           </button>
         ) : (
           <button
             type="button"
-            className="conductor-new-conversation"
+            className="conductor-new-conversation conductor-new-conversation-slot"
             aria-label="New conversation in this workspace"
             aria-keyshortcuts="Meta+T"
             title="New conversation (⌘T)"
@@ -401,6 +409,24 @@ function ConductorWorkspaceContextBar({
       />
     </div>
   );
+}
+
+function runWorkspaceTabTransition(navigate: () => void): void {
+  if (
+    typeof document === "undefined" ||
+    typeof document.startViewTransition !== "function" ||
+    window.matchMedia("(prefers-reduced-motion: reduce)").matches
+  ) {
+    navigate();
+    return;
+  }
+
+  const root = document.documentElement;
+  root.dataset.conductorTabTransition = "";
+  const transition = document.startViewTransition(navigate);
+  void transition.finished.finally(() => {
+    delete root.dataset.conductorTabTransition;
+  });
 }
 
 function isCycleBlockedTarget(target: EventTarget | null): boolean {

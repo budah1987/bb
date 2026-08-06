@@ -172,7 +172,10 @@ and a disabled or uninstalled plugin gets its list back when it returns.
    `experimental_newThreadContextBar`, mounted above the composer while it is
    locked to an existing environment. Audit whether this should remain tied to
    the sidebar style, whether unlocked environment selection needs the same
-   surface, and which draft-tab lifecycle commands the host should own.
+   surface, and which draft-tab lifecycle commands the host should own. Its
+   `experimental_registerCloseHandler` follows the context bar's boolean close
+   ownership protocol so an unsent draft tab can consume native close requests;
+   audit whether both companions should share a dedicated close contract.
 
 ## `experimental_useSidebarThreads` / `experimental_useSidebarThreadActions` (`@bb/plugin-sdk/app`)
 

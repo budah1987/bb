@@ -5,9 +5,11 @@ import { PluginSlotMount } from "./PluginSlotMount";
 export function PluginNewThreadContextBar({
   projectId,
   environmentId,
+  onCloseHandlerChange,
 }: {
   projectId: string;
   environmentId: string;
+  onCloseHandlerChange: (handler: (() => boolean) | null) => void;
 }) {
   const provider = useThreadListProvider();
   const isCompactViewport = useIsCompactViewport();
@@ -28,6 +30,7 @@ export function PluginNewThreadContextBar({
         projectId={projectId}
         environmentId={environmentId}
         isCompactViewport={isCompactViewport}
+        experimental_registerCloseHandler={onCloseHandlerChange}
       />
     </PluginSlotMount>
   );

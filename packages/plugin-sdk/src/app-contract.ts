@@ -139,6 +139,14 @@ export interface PluginNewThreadContextBarProps {
   projectId: string;
   environmentId: string;
   isCompactViewport: boolean;
+  /**
+   * Registers the new-thread companion's focused-tab close handler with the
+   * host. The handler must return true when it consumed the request. Pass null
+   * on cleanup.
+   *
+   * Experimental: see docs/api_to_audit.md.
+   */
+  experimental_registerCloseHandler?: (handler: (() => boolean) | null) => void;
 }
 
 /**

@@ -20,9 +20,7 @@ import { DETAIL_GRID_CLASS } from "@/components/ui/detail-card.js";
 import { useAtomValue } from "jotai";
 import { cn } from "@bb/shared-ui/lib/utils";
 import { ThreadSecondaryPanel } from "@/components/secondary-panel/ThreadSecondaryPanel";
-import {
-  secondaryPanelWidthPercentAtom,
-} from "@/components/secondary-panel/threadSecondaryPanelAtoms";
+import { secondaryPanelWidthPercentAtom } from "@/components/secondary-panel/threadSecondaryPanelAtoms";
 import {
   ThreadMetadataCard,
   ThreadMetadataContent,
@@ -33,6 +31,7 @@ import { useThreads } from "@/hooks/queries/thread-queries";
 import { ThreadTimelinePane } from "./ThreadTimelinePane";
 import { PANEL_COLLAPSE_TRANSITION_CLASS } from "@/components/secondary-panel/panelTransitionTokens";
 import { dispatchBrowserViewBoundsSync } from "@/lib/browser-view-bounds-sync";
+import { getConversationViewTransitionName } from "@/lib/conversation-view-transition";
 import {
   usePaneContext,
   usePaneSecondaryPanelRegistration,
@@ -111,6 +110,8 @@ function ThreadDetailSecondaryContentBody({
   timeline,
 }: ThreadDetailSecondaryContentProps) {
   const { isFocused, paneId, secondaryPanelHost } = usePaneContext();
+  const conversationViewTransitionName =
+    getConversationViewTransitionName(paneId);
   const composerHost = usePluginComposerHost();
   const stableMetadata = metadata;
   const stableSecondaryPanel = secondaryPanel;
@@ -349,6 +350,7 @@ function ThreadDetailSecondaryContentBody({
         <div
           data-conversation-collapsed={isConversationCollapsedActive}
           inert={isConversationCollapsedActive}
+          style={{ viewTransitionName: conversationViewTransitionName }}
           className={cn(
             "flex min-h-0 min-w-0 flex-1 flex-col transition-opacity",
             PANEL_COLLAPSE_TRANSITION_CLASS,
@@ -427,7 +429,12 @@ function ThreadDetailSecondaryContentBody({
               )}
             >
               {header}
-              <ThreadTimelinePane {...stableTimeline} footer={footer} />
+              <div
+                className="flex min-h-0 flex-1 flex-col"
+                style={{ viewTransitionName: conversationViewTransitionName }}
+              >
+                <ThreadTimelinePane {...stableTimeline} footer={footer} />
+              </div>
             </div>
           </Panel>
           {inlineSecondaryPanelContent}

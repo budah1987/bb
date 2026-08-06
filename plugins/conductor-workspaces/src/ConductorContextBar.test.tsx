@@ -310,12 +310,16 @@ describe("ConductorContextBar compact layout", () => {
   });
 
   it("keeps workspace tabs visible while composing a new conversation", async () => {
+    let closeHandler: (() => boolean) | null = null;
     const rendered = renderSlot(
       newThreadContextBar,
       {
         projectId: "project-1",
         environmentId: "environment-1",
         isCompactViewport: false,
+        experimental_registerCloseHandler: (handler) => {
+          closeHandler = handler;
+        },
       },
       {
         sidebarThreads: {
@@ -342,6 +346,18 @@ describe("ConductorContextBar compact layout", () => {
         .getByRole("button", { name: "New conversation" })
         .getAttribute("aria-current"),
     ).toBe("page");
+
+    await waitFor(() => expect(closeHandler).not.toBeNull());
+    let handled = false;
+    act(() => {
+      handled = closeHandler?.() ?? false;
+    });
+    expect(handled).toBe(true);
+    expect(rendered.sidebarActionCalls.at(-1)).toEqual({
+      method: "open",
+      threadId: "thread-1",
+      options: undefined,
+    });
 
     fireEvent.keyDown(window, {
       key: "]",

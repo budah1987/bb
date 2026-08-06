@@ -21,6 +21,7 @@ import { secondaryPanelWidthPercentAtom } from "@/components/secondary-panel/thr
 import { PANEL_COLLAPSE_TRANSITION_CLASS } from "@/components/secondary-panel/panelTransitionTokens";
 import { PAGE_SHELL_CONTENT_STYLE } from "@/components/ui/page-shell-content-style.js";
 import { dispatchBrowserViewBoundsSync } from "@/lib/browser-view-bounds-sync";
+import { getConversationViewTransitionName } from "@/lib/conversation-view-transition";
 import { COARSE_POINTER_HEADER_ICON_BUTTON_CLASS } from "@bb/shared-ui/coarse-pointer-sizing";
 import {
   CHROME_ROW_HEIGHT_CLASS,
@@ -126,6 +127,9 @@ export function RootComposeSecondaryContent({
   // workspace's top edge keep the intended title-bar drag affordance.
   const rendersWindowDragStrip =
     usesDesktopChrome && paneContext?.isTopRow !== false;
+  const conversationViewTransitionName = getConversationViewTransitionName(
+    paneContext?.paneId ?? null,
+  );
   const compactDrawerContentSettleFrameRef = useRef<number | null>(null);
   const compactDrawerContentSettleGenerationRef = useRef(0);
   const compactDrawerContentSettleStateRef = useRef({
@@ -313,7 +317,10 @@ export function RootComposeSecondaryContent({
         </div>
       ) : null}
       {contextBar}
-      <div className="@container/page min-h-0 flex-1 overflow-y-auto">
+      <div
+        className="@container/page min-h-0 flex-1 overflow-y-auto"
+        style={{ viewTransitionName: conversationViewTransitionName }}
+      >
         <div
           className={cn(
             "mx-auto flex w-full flex-col px-4 pb-4 pt-2",
