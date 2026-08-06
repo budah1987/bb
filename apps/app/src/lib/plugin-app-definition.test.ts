@@ -92,13 +92,14 @@ describe("collectPluginAppRegistrations — experimental_threadHeaderAction", ()
 });
 
 describe("collectPluginAppRegistrations — experimental_threadList", () => {
-  it("collects the selected-style context bar", () => {
+  it("collects the selected-style context bars", () => {
     const definition = definePluginApp((app) => {
       app.slots.experimental_threadList({
         id: "workspaces",
         title: "Workspaces",
         component: Component,
         experimental_contextBar: Component,
+        experimental_newThreadContextBar: Component,
       });
     });
 
@@ -107,6 +108,7 @@ describe("collectPluginAppRegistrations — experimental_threadList", () => {
       title: "Workspaces",
       component: Component,
       experimental_contextBar: Component,
+      experimental_newThreadContextBar: Component,
     });
   });
 

@@ -132,6 +132,16 @@ export interface PluginThreadContextBarProps {
 }
 
 /**
+ * Props passed to a selected thread-list provider's new-thread companion.
+ * The host mounts this only while composing into an existing environment.
+ */
+export interface PluginNewThreadContextBarProps {
+  projectId: string;
+  environmentId: string;
+  isCompactViewport: boolean;
+}
+
+/**
  * Props passed to an `experimental_threadHeaderAction` component, rendered in
  * the thread header's action row.
  */
@@ -629,6 +639,12 @@ export interface PluginThreadListRegistration {
    * Experimental: see docs/api_to_audit.md.
    */
   experimental_contextBar?: ComponentType<PluginThreadContextBarProps>;
+  /**
+   * Optional companion mounted above the new-thread composer when it is
+   * creating another conversation in an existing environment.
+   * Experimental: see docs/api_to_audit.md.
+   */
+  experimental_newThreadContextBar?: ComponentType<PluginNewThreadContextBarProps>;
 }
 
 /**

@@ -234,6 +234,14 @@ export function collectPluginAppRegistrations(
                 ),
               }
             : {}),
+          ...(registration.experimental_newThreadContextBar !== undefined
+            ? {
+                experimental_newThreadContextBar: requireComponent(
+                  kind,
+                  registration.experimental_newThreadContextBar,
+                ),
+              }
+            : {}),
         });
       },
       experimental_threadHeaderAction(registration) {

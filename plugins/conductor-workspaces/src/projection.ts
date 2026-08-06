@@ -233,7 +233,7 @@ export function pickWorkspaceThread(
 
 export function partitionWorkspaceThreads(
   threads: readonly PluginSidebarThread[],
-  activeThreadId: string,
+  activeThreadId: string | null,
   maxVisible: number,
 ): {
   visible: readonly PluginSidebarThread[];

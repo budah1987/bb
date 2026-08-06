@@ -168,6 +168,11 @@ and a disabled or uninstalled plugin gets its list back when it returns.
    host's native close request before a secondary panel or desktop window does;
    audit the boolean ownership protocol and whether close/reopen should become
    host-owned tab primitives instead.
+7. **New-thread companion.** A registration may also provide
+   `experimental_newThreadContextBar`, mounted above the composer while it is
+   locked to an existing environment. Audit whether this should remain tied to
+   the sidebar style, whether unlocked environment selection needs the same
+   surface, and which draft-tab lifecycle commands the host should own.
 
 ## `experimental_useSidebarThreads` / `experimental_useSidebarThreadActions` (`@bb/plugin-sdk/app`)
 

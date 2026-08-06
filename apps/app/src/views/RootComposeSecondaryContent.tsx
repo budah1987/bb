@@ -80,6 +80,7 @@ type RootSecondaryPanelProps = Omit<
 interface RootComposeSecondaryContentProps {
   children: ReactNode;
   contentClassName?: string;
+  contextBar?: ReactNode;
   isSecondaryPanelOpen: boolean;
   onToggleSecondaryPanel: () => void;
   panelTogglePositionClassName: string;
@@ -91,6 +92,7 @@ function noopToggleConversationCollapse(): void {}
 export function RootComposeSecondaryContent({
   children,
   contentClassName,
+  contextBar,
   isSecondaryPanelOpen,
   onToggleSecondaryPanel,
   panelTogglePositionClassName,
@@ -310,6 +312,7 @@ export function RootComposeSecondaryContent({
           ) : null}
         </div>
       ) : null}
+      {contextBar}
       <div className="@container/page min-h-0 flex-1 overflow-y-auto">
         <div
           className={cn(

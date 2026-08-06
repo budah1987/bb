@@ -72,6 +72,7 @@ import { useIsCompactViewport } from "@bb/shared-ui/hooks/use-compact-viewport";
 import { usePointerCoarse } from "@bb/shared-ui/hooks/use-pointer-coarse";
 import { COARSE_POINTER_COMPACT_ICON_SIZE_CLASS } from "@bb/shared-ui/coarse-pointer-sizing";
 import { PluginIcon } from "@/components/plugin/PluginIcon";
+import { PluginNewThreadContextBar } from "@/components/plugin/PluginNewThreadContextBar";
 import { PluginPanelTabContent } from "@/components/plugin/PluginPanelActions";
 import { usePluginSlots } from "@/lib/plugin-slots";
 import { useUploadPromptAttachment } from "@/hooks/mutations/project-mutations";
@@ -3478,6 +3479,14 @@ export function RootComposeView() {
             showEmptyWelcome
               ? ROOT_COMPOSE_EMPTY_WELCOME_CONTENT_CLASS
               : ROOT_COMPOSE_SIDEBAR_ACTION_ALIGNED_TOP_PADDING_CLASS
+          }
+          contextBar={
+            reuseEnvironmentId !== null ? (
+              <PluginNewThreadContextBar
+                projectId={projectId}
+                environmentId={reuseEnvironmentId}
+              />
+            ) : null
           }
           isSecondaryPanelOpen={isSecondaryPanelOpen}
           onToggleSecondaryPanel={handleToggleSecondaryPanel}

@@ -1,5 +1,8 @@
 import { definePluginApp } from "@bb/plugin-sdk/app";
-import { ConductorContextBar } from "./src/ConductorContextBar";
+import {
+  ConductorContextBar,
+  ConductorNewThreadContextBar,
+} from "./src/ConductorContextBar";
 import { ConductorSidebar } from "./src/ConductorSidebar";
 import "./src/conductor.css";
 
@@ -11,5 +14,6 @@ export default definePluginApp((app) => {
       "Repositories, isolated workspaces, and shared conversation tabs.",
     component: ConductorSidebar,
     experimental_contextBar: ConductorContextBar,
+    experimental_newThreadContextBar: ConductorNewThreadContextBar,
   });
 });

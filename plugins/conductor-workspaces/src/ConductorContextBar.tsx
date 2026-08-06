@@ -6,34 +6,16 @@ import {
   useMemo,
   useRef,
   useState,
-  type FormEvent,
   type ComponentPropsWithoutRef,
-  type ReactNode,
 } from "react";
 import {
   experimental_useSidebarThreadActions as useSidebarThreadActions,
   experimental_useSidebarThreads as useSidebarThreads,
   type PluginSidebarThread,
+  type PluginNewThreadContextBarProps,
   type PluginThreadContextBarProps,
 } from "@bb/plugin-sdk/app";
-import { Button } from "@/components/ui/button";
-import {
-  ContextMenu,
-  ContextMenuContent,
-  ContextMenuItem,
-  ContextMenuSeparator,
-  ContextMenuTrigger,
-} from "@/components/ui/context-menu";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import { Icon } from "@/components/ui/icon";
-import { Input } from "@/components/ui/input";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -49,6 +31,11 @@ import {
 import { calculateVisibleTabCount } from "./tab-layout";
 import { useReconciliation } from "./useReconciliation";
 import { loadClosedTabIds, saveClosedTabIds } from "./sidebar-preferences";
+import {
+  ConversationActionMenu,
+  RenameConversationDialog,
+  pickDeleteFallbackThread,
+} from "./ConversationActions";
 
 export function ConductorContextBar({
   threadId,
@@ -57,11 +44,50 @@ export function ConductorContextBar({
   isCompactViewport,
   experimental_registerCloseHandler,
 }: PluginThreadContextBarProps) {
+  return (
+    <ConductorWorkspaceContextBar
+      activeThreadId={threadId}
+      projectId={projectId}
+      environmentId={environmentId}
+      isCompactViewport={isCompactViewport}
+      registerCloseHandler={experimental_registerCloseHandler}
+    />
+  );
+}
+
+export function ConductorNewThreadContextBar({
+  projectId,
+  environmentId,
+  isCompactViewport,
+}: PluginNewThreadContextBarProps) {
+  return (
+    <ConductorWorkspaceContextBar
+      activeThreadId={null}
+      projectId={projectId}
+      environmentId={environmentId}
+      isCompactViewport={isCompactViewport}
+    />
+  );
+}
+
+function ConductorWorkspaceContextBar({
+  activeThreadId,
+  projectId,
+  environmentId,
+  isCompactViewport,
+  registerCloseHandler,
+}: {
+  activeThreadId: string | null;
+  projectId: string;
+  environmentId: string | null;
+  isCompactViewport: boolean;
+  registerCloseHandler?: (handler: (() => boolean) | null) => void;
+}) {
   const state = useSidebarThreads();
   const actions = useSidebarThreadActions();
   const reconciliation = useReconciliation();
   const tabRailRef = useRef<HTMLElement>(null);
-  const cycleThreadIdRef = useRef(threadId);
+  const cycleThreadIdRef = useRef(activeThreadId);
   const closeInFlightRef = useRef(false);
   const [tabRailWidth, setTabRailWidth] = useState<number | null>(null);
   const [renameThread, setRenameThread] = useState<PluginSidebarThread | null>(
@@ -82,14 +108,16 @@ export function ConductorContextBar({
   const workspace = project?.workspaces.find((candidate) =>
     environmentId === null
       ? candidate.isUnassigned &&
-        candidate.threads.some((thread) => thread.id === threadId)
+        candidate.threads.some((thread) => thread.id === activeThreadId)
       : candidate.environmentId === environmentId,
   );
   const hasContext = Boolean(workspace && project);
   const persistedClosedTabIds = workspace
     ? loadClosedTabIds(workspace.key)
     : [];
-  const closedTabIds = persistedClosedTabIds.filter((id) => id !== threadId);
+  const closedTabIds = persistedClosedTabIds.filter(
+    (id) => id !== activeThreadId,
+  );
   const closedTabIdSet = new Set(closedTabIds);
   const openThreads =
     workspace?.threads.filter((thread) => !closedTabIdSet.has(thread.id)) ?? [];
@@ -123,9 +151,9 @@ export function ConductorContextBar({
   }, [hasContext]);
 
   useEffect(() => {
-    cycleThreadIdRef.current = threadId;
+    cycleThreadIdRef.current = activeThreadId;
     closeInFlightRef.current = false;
-  }, [threadId]);
+  }, [activeThreadId]);
 
   useEffect(() => {
     if (!workspace || persistedClosedTabIds.length === closedTabIds.length) {
@@ -143,7 +171,13 @@ export function ConductorContextBar({
     const activeIndex = openThreads.findIndex(
       (thread) => thread.id === cycleThreadIdRef.current,
     );
-    if (activeIndex < 0) return false;
+    if (activeIndex < 0) {
+      const fallback = openThreads[0];
+      if (!fallback) return false;
+      cycleThreadIdRef.current = fallback.id;
+      actions.open(fallback.id);
+      return true;
+    }
     // The thread route is also the workspace shell. Keep one tab open so a
     // close request never sends the user to the blank composer or the window.
     if (openThreads.length === 1) return true;
@@ -181,10 +215,10 @@ export function ConductorContextBar({
   }, [actions, workspace]);
 
   useEffect(() => {
-    if (!experimental_registerCloseHandler) return;
-    experimental_registerCloseHandler(closeFocusedConversation);
-    return () => experimental_registerCloseHandler(null);
-  }, [closeFocusedConversation, experimental_registerCloseHandler]);
+    if (!registerCloseHandler) return;
+    registerCloseHandler(closeFocusedConversation);
+    return () => registerCloseHandler(null);
+  }, [closeFocusedConversation, registerCloseHandler]);
 
   useEffect(() => {
     if (!workspace || renameThread) return;
@@ -224,9 +258,12 @@ export function ConductorContextBar({
       const activeIndex = openThreads.findIndex(
         (thread) => thread.id === cycleThreadIdRef.current,
       );
-      if (activeIndex < 0) return;
       const nextIndex =
-        (activeIndex + offset + openThreads.length) % openThreads.length;
+        activeIndex < 0
+          ? offset < 0
+            ? openThreads.length - 1
+            : 0
+          : (activeIndex + offset + openThreads.length) % openThreads.length;
       const nextThread = openThreads[nextIndex];
       if (!nextThread) return;
 
@@ -256,7 +293,7 @@ export function ConductorContextBar({
   });
 
   const { visible: visibleTabs, hidden: hiddenTabs } =
-    partitionWorkspaceThreads(openThreads, threadId, visibleTabCount);
+    partitionWorkspaceThreads(openThreads, activeThreadId, visibleTabCount);
 
   return (
     <div
@@ -281,7 +318,7 @@ export function ConductorContextBar({
         aria-label="Workspace conversations"
       >
         {visibleTabs.map((thread) => (
-          <ConversationTabMenu
+          <ConversationActionMenu
             key={thread.id}
             thread={thread}
             onRename={() => setRenameThread(thread)}
@@ -301,10 +338,10 @@ export function ConductorContextBar({
           >
             <ConversationTab
               thread={thread}
-              active={thread.id === threadId}
+              active={thread.id === activeThreadId}
               onOpen={() => actions.open(thread.id)}
             />
-          </ConversationTabMenu>
+          </ConversationActionMenu>
         ))}
         {hiddenTabs.length > 0 ? (
           <DropdownMenu>
@@ -331,17 +368,31 @@ export function ConductorContextBar({
             </DropdownMenuContent>
           </DropdownMenu>
         ) : null}
-        <button
-          type="button"
-          className="conductor-new-conversation"
-          aria-label="New conversation in this workspace"
-          aria-keyshortcuts="Meta+T"
-          title="New conversation (⌘T)"
-          onClick={openNewConversation}
-        >
-          <Icon name="Plus" className="size-3.5" aria-hidden />
-          {isCompactViewport ? null : <span>Conversation</span>}
-        </button>
+        {activeThreadId === null ? (
+          <button
+            type="button"
+            className="conductor-conversation-tab"
+            data-active
+            aria-current="page"
+            aria-label="New conversation"
+            title="New conversation"
+          >
+            <Icon name="Plus" className="size-3.5" aria-hidden />
+            <span className="truncate">New conversation</span>
+          </button>
+        ) : (
+          <button
+            type="button"
+            className="conductor-new-conversation"
+            aria-label="New conversation in this workspace"
+            aria-keyshortcuts="Meta+T"
+            title="New conversation (⌘T)"
+            onClick={openNewConversation}
+          >
+            <Icon name="Plus" className="size-3.5" aria-hidden />
+            {isCompactViewport ? null : <span>Conversation</span>}
+          </button>
+        )}
       </nav>
       <RenameConversationDialog
         thread={renameThread}
@@ -355,160 +406,6 @@ export function ConductorContextBar({
 function isCycleBlockedTarget(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) return false;
   return target.closest('[role="dialog"], [role="menu"]') !== null;
-}
-
-export function pickDeleteFallbackThread(
-  threads: readonly PluginSidebarThread[],
-  deletedThreadId: string,
-): PluginSidebarThread | null {
-  const deletedIndex = threads.findIndex(
-    (thread) => thread.id === deletedThreadId,
-  );
-  if (deletedIndex < 0) return null;
-  const threadsById = new Map(threads.map((thread) => [thread.id, thread]));
-  const isDeletedWithTarget = (candidate: PluginSidebarThread): boolean => {
-    let parentId = candidate.parentThreadId;
-    const visited = new Set<string>();
-    while (parentId !== null && !visited.has(parentId)) {
-      if (parentId === deletedThreadId) return true;
-      visited.add(parentId);
-      parentId = threadsById.get(parentId)?.parentThreadId ?? null;
-    }
-    return false;
-  };
-
-  for (let index = deletedIndex + 1; index < threads.length; index += 1) {
-    const candidate = threads[index];
-    if (candidate && !isDeletedWithTarget(candidate)) return candidate;
-  }
-  for (let index = deletedIndex - 1; index >= 0; index -= 1) {
-    const candidate = threads[index];
-    if (candidate && !isDeletedWithTarget(candidate)) return candidate;
-  }
-  return null;
-}
-
-function ConversationTabMenu({
-  thread,
-  children,
-  onRename,
-  onArchive,
-  onDelete,
-}: {
-  thread: PluginSidebarThread;
-  children: ReactNode;
-  onRename: () => void;
-  onArchive: () => void;
-  onDelete: () => void;
-}) {
-  const title = threadDisplayTitle(thread);
-  return (
-    <ContextMenu>
-      <ContextMenuTrigger asChild>{children}</ContextMenuTrigger>
-      <ContextMenuContent aria-label={`${title} actions`}>
-        <ContextMenuItem onSelect={onRename}>
-          <Icon name="Edit" aria-hidden />
-          Rename…
-        </ContextMenuItem>
-        <ContextMenuItem onSelect={onArchive}>
-          <Icon name="Archive" aria-hidden />
-          Archive
-        </ContextMenuItem>
-        <ContextMenuSeparator />
-        <ContextMenuItem
-          className="text-destructive-text focus:text-destructive-text"
-          onSelect={onDelete}
-        >
-          <Icon name="Trash2" aria-hidden />
-          Delete…
-        </ContextMenuItem>
-      </ContextMenuContent>
-    </ContextMenu>
-  );
-}
-
-function RenameConversationDialog({
-  thread,
-  onClose,
-  onRename,
-}: {
-  thread: PluginSidebarThread | null;
-  onClose: () => void;
-  onRename: (thread: PluginSidebarThread, title: string) => Promise<void>;
-}) {
-  const [title, setTitle] = useState("");
-  const [error, setError] = useState<string | null>(null);
-  const [isSaving, setIsSaving] = useState(false);
-
-  useEffect(() => {
-    setTitle(thread ? threadDisplayTitle(thread) : "");
-    setError(null);
-    setIsSaving(false);
-  }, [thread]);
-
-  if (!thread) return null;
-  const currentThread = thread;
-
-  async function submit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const nextTitle = title.trim();
-    if (!nextTitle) return;
-    setIsSaving(true);
-    setError(null);
-    try {
-      await onRename(currentThread, nextTitle);
-      onClose();
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Rename failed.");
-      setIsSaving(false);
-    }
-  }
-
-  return (
-    <Dialog open onOpenChange={(open) => !open && onClose()}>
-      <DialogContent>
-        <form onSubmit={submit} className="space-y-4">
-          <DialogHeader>
-            <DialogTitle>Rename conversation</DialogTitle>
-            <DialogDescription>
-              Changes this conversation’s name everywhere it appears in BB.
-            </DialogDescription>
-          </DialogHeader>
-          <label className="block space-y-1.5 text-xs font-medium text-foreground">
-            <span>Conversation name</span>
-            <Input
-              autoFocus
-              value={title}
-              aria-invalid={error ? true : undefined}
-              aria-describedby={
-                error ? "conductor-conversation-rename-error" : undefined
-              }
-              onChange={(event) => setTitle(event.target.value)}
-            />
-          </label>
-          {error ? (
-            <p
-              id="conductor-conversation-rename-error"
-              className="text-xs text-destructive"
-            >
-              {error}
-            </p>
-          ) : null}
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={onClose}>
-              Cancel
-            </Button>
-            <Button
-              type="submit"
-              disabled={isSaving || title.trim().length === 0}
-            >
-              {isSaving ? "Renaming…" : "Rename"}
-            </Button>
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
-  );
 }
 
 interface ConversationTabProps extends Omit<

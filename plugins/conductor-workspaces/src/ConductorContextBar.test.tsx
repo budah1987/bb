@@ -25,6 +25,13 @@ if (!contextComponent)
 const contextBar = {
   component: contextComponent,
 };
+const newThreadContextComponent =
+  app.threadLists[0]?.experimental_newThreadContextBar;
+if (!newThreadContextComponent)
+  throw new Error("Conductor new-thread context bar was not registered");
+const newThreadContextBar = {
+  component: newThreadContextComponent,
+};
 
 beforeAll(() => {
   Object.defineProperty(window, "matchMedia", {
@@ -299,6 +306,52 @@ describe("ConductorContextBar compact layout", () => {
     expect(rendered.sidebarActionCalls).toContainEqual({
       method: "archive",
       threadId: "thread-1",
+    });
+  });
+
+  it("keeps workspace tabs visible while composing a new conversation", async () => {
+    const rendered = renderSlot(
+      newThreadContextBar,
+      {
+        projectId: "project-1",
+        environmentId: "environment-1",
+        isCompactViewport: false,
+      },
+      {
+        sidebarThreads: {
+          status: "ready",
+          threads: [thread(1), thread(2)],
+          projects: [{ id: "project-1", name: "BB", isPersonal: false }],
+        },
+        rpc: {
+          readReconciliation: () => ({
+            legacyWorkspaces: [],
+            recordedSignature: null,
+          }),
+        },
+      },
+    );
+
+    expect(
+      (
+        await screen.findByRole("button", { name: "Conversation 1" })
+      ).getAttribute("aria-current"),
+    ).toBeNull();
+    expect(
+      screen
+        .getByRole("button", { name: "New conversation" })
+        .getAttribute("aria-current"),
+    ).toBe("page");
+
+    fireEvent.keyDown(window, {
+      key: "]",
+      code: "BracketRight",
+      metaKey: true,
+    });
+    expect(rendered.sidebarActionCalls).toContainEqual({
+      method: "open",
+      threadId: "thread-1",
+      options: undefined,
     });
   });
 

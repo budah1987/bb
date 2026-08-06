@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  act,
   cleanup,
   fireEvent,
   screen,
@@ -75,6 +76,7 @@ function thread(
 afterEach(() => {
   cleanup();
   window.localStorage.clear();
+  vi.useRealTimers();
   vi.unstubAllGlobals();
 });
 
@@ -190,6 +192,114 @@ describe("ConductorSidebar", () => {
 
     await waitFor(() => {
       expect(screen.getByText("Repository workspace")).toBeDefined();
+    });
+  });
+
+  it("renames and requests deletion from a Thread context menu", async () => {
+    const rendered = renderSlot(
+      sidebar,
+      {
+        activeThreadId: "Personal one",
+        activeProjectId: "personal",
+        isCompactViewport: false,
+        onNavigate: () => undefined,
+        searchQuery: "",
+      },
+      {
+        sidebarThreads: {
+          status: "ready",
+          projects: [{ id: "personal", name: "Personal", isPersonal: true }],
+          threads: [
+            thread("Personal one", {
+              projectId: "personal",
+              environment: null,
+              createdAt: 2,
+            }),
+            thread("Personal two", {
+              projectId: "personal",
+              environment: null,
+              createdAt: 1,
+            }),
+          ],
+        },
+        rpc: {
+          readReconciliation: () => ({
+            legacyWorkspaces: [],
+            recordedSignature: null,
+          }),
+          recordReconciliation: () => ({ recorded: false }),
+        },
+      },
+    );
+
+    const row = await screen.findByRole("link", { name: "Personal one" });
+    fireEvent.contextMenu(row);
+    fireEvent.click(await screen.findByRole("menuitem", { name: "Rename…" }));
+    fireEvent.change(
+      await screen.findByRole("textbox", { name: "Conversation name" }),
+      { target: { value: "Renamed personal thread" } },
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Rename" }));
+    await waitFor(() => {
+      expect(rendered.sidebarActionCalls).toContainEqual({
+        method: "rename",
+        threadId: "Personal one",
+        title: "Renamed personal thread",
+      });
+    });
+
+    fireEvent.contextMenu(row);
+    fireEvent.click(await screen.findByRole("menuitem", { name: "Delete…" }));
+    expect(rendered.sidebarActionCalls).toContainEqual({
+      method: "requestDelete",
+      threadId: "Personal one",
+      options: { experimental_fallbackThreadId: "Personal two" },
+    });
+  });
+
+  it("opens Thread actions on a mobile long press", async () => {
+    const rendered = renderSlot(
+      sidebar,
+      {
+        activeThreadId: null,
+        activeProjectId: "personal",
+        isCompactViewport: true,
+        onNavigate: () => undefined,
+        searchQuery: "",
+      },
+      {
+        sidebarThreads: {
+          status: "ready",
+          projects: [{ id: "personal", name: "Personal", isPersonal: true }],
+          threads: [
+            thread("Mobile personal", {
+              projectId: "personal",
+              environment: null,
+            }),
+          ],
+        },
+        rpc: {
+          readReconciliation: () => ({
+            legacyWorkspaces: [],
+            recordedSignature: null,
+          }),
+          recordReconciliation: () => ({ recorded: false }),
+        },
+      },
+    );
+
+    const row = await screen.findByRole("link", { name: "Mobile personal" });
+    vi.useFakeTimers();
+    fireEvent.pointerDown(row, {
+      pointerType: "touch",
+      clientX: 24,
+      clientY: 24,
+    });
+    act(() => vi.advanceTimersByTime(700));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Archive" }));
+    expect(rendered.sidebarActionCalls).toContainEqual({
+      method: "archive",
+      threadId: "Mobile personal",
     });
   });
 

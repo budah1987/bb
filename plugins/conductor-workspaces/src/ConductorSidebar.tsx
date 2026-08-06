@@ -26,6 +26,7 @@ import {
   experimental_useSidebarThreadActions as useSidebarThreadActions,
   experimental_useSidebarThreads as useSidebarThreads,
   useRpc,
+  type PluginSidebarThread,
   type PluginThreadListProps,
 } from "@bb/plugin-sdk/app";
 import { Button } from "@/components/ui/button";
@@ -68,6 +69,11 @@ import {
 } from "./thread-state";
 import type { conductorRpcContract } from "./server";
 import { useReconciliation } from "./useReconciliation";
+import {
+  ConversationActionMenu,
+  RenameConversationDialog,
+  pickDeleteFallbackThread,
+} from "./ConversationActions";
 
 type RenameScope = "display" | "branch" | "folder";
 
@@ -441,6 +447,9 @@ export function ConductorSidebar({
   );
   const [projectOrder, setProjectOrder] = useState(loadProjectOrder);
   const [renameTarget, setRenameTarget] = useState<RenameTarget | null>(null);
+  const [renameThread, setRenameThread] = useState<PluginSidebarThread | null>(
+    null,
+  );
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
     useSensor(KeyboardSensor, {
@@ -651,41 +660,63 @@ export function ConductorSidebar({
                   const statusLabel = signalLabel(signal);
                   return (
                     <li key={thread.id} className="list-none">
-                      <div
-                        className="conductor-workspace-row relative"
-                        data-active={thread.id === activeThreadId || undefined}
+                      <ConversationActionMenu
+                        thread={thread}
+                        onRename={() => setRenameThread(thread)}
+                        onArchive={() => actions.archive(thread.id)}
+                        onDelete={() => {
+                          const fallback = pickDeleteFallbackThread(
+                            personalThreads,
+                            thread.id,
+                          );
+                          actions.requestDelete(
+                            thread.id,
+                            fallback
+                              ? {
+                                  experimental_fallbackThreadId: fallback.id,
+                                }
+                              : undefined,
+                          );
+                        }}
                       >
-                        <a
-                          href="#"
-                          aria-label={threadDisplayTitle(thread)}
-                          aria-current={
-                            thread.id === activeThreadId ? "page" : undefined
+                        <div
+                          className="conductor-workspace-row relative"
+                          data-active={
+                            thread.id === activeThreadId || undefined
                           }
-                          className="absolute inset-0 rounded-lg outline-none"
-                          onClick={(event) => {
-                            event.preventDefault();
-                            actions.open(thread.id, {
-                              split: event.metaKey || event.ctrlKey,
-                            });
-                            onNavigate();
-                          }}
-                        />
-                        <PixelMatrix
-                          signal={signal}
-                          label={thread.indicatorLabel ?? statusLabel}
-                        />
-                        <span className="pointer-events-none relative min-w-0 flex-1 text-left">
-                          <span className="block truncate text-xs font-medium text-sidebar-foreground">
-                            {threadDisplayTitle(thread)}
+                        >
+                          <a
+                            href="#"
+                            aria-label={threadDisplayTitle(thread)}
+                            aria-current={
+                              thread.id === activeThreadId ? "page" : undefined
+                            }
+                            className="absolute inset-0 rounded-lg outline-none"
+                            onClick={(event) => {
+                              event.preventDefault();
+                              actions.open(thread.id, {
+                                split: event.metaKey || event.ctrlKey,
+                              });
+                              onNavigate();
+                            }}
+                          />
+                          <PixelMatrix
+                            signal={signal}
+                            label={thread.indicatorLabel ?? statusLabel}
+                          />
+                          <span className="pointer-events-none relative min-w-0 flex-1 text-left">
+                            <span className="block truncate text-xs font-medium text-sidebar-foreground">
+                              {threadDisplayTitle(thread)}
+                            </span>
+                            <span
+                              className="block truncate text-2xs text-muted-foreground"
+                              data-signal={signal}
+                            >
+                              {statusLabel}
+                            </span>
                           </span>
-                          <span
-                            className="block truncate text-2xs text-muted-foreground"
-                            data-signal={signal}
-                          >
-                            {statusLabel}
-                          </span>
-                        </span>
-                      </div>
+                        </div>
+                      </ConversationActionMenu>
                     </li>
                   );
                 })}
@@ -710,6 +741,11 @@ export function ConductorSidebar({
             value,
           });
         }}
+      />
+      <RenameConversationDialog
+        thread={renameThread}
+        onClose={() => setRenameThread(null)}
+        onRename={(target, title) => actions.rename(target.id, title)}
       />
     </>
   );

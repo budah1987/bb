@@ -658,6 +658,12 @@ function collectRegistrations(definition) {
               kind,
               registration.experimental_contextBar
             )
+          } : {},
+          ...registration.experimental_newThreadContextBar !== void 0 ? {
+            experimental_newThreadContextBar: requireComponent(
+              kind,
+              registration.experimental_newThreadContextBar
+            )
           } : {}
         });
       },
