@@ -210,6 +210,30 @@ describe("public thread parenting routes", () => {
     });
   });
 
+  it("deletes through the body-preserving POST action used by remote PWAs", async () => {
+    await withTestHarness(async (harness) => {
+      const { host } = seedHostSession(harness.deps);
+      const { project } = seedProjectWithSource(harness.deps, {
+        hostId: host.id,
+      });
+      const thread = seedThread(harness.deps, {
+        projectId: project.id,
+      });
+
+      const response = await harness.app.request(
+        `/api/v1/threads/${thread.id}/delete`,
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ childThreadsConfirmed: false }),
+        },
+      );
+
+      expect(response.status).toBe(200);
+      expect(getThread(harness.db, thread.id)).toBeNull();
+    });
+  });
+
   it("keeps hidden children in ordinary confirmation and archive cascades", async () => {
     await withTestHarness(async (harness) => {
       const { host } = seedHostSession(harness.deps);

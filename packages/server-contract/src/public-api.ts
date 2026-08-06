@@ -957,6 +957,15 @@ export const publicApiRoutes = {
       ),
       response: jsonResponse<{ ok: true }>(),
     }),
+    /** Body-preserving transport alias for remote gateways that reject DELETE bodies. */
+    deleteAction: defineRoute({
+      path: "/threads/:id/delete",
+      method: "post",
+      request: jsonRequest<PathId, DeleteThreadRequest>(
+        deleteThreadRequestSchema,
+      ),
+      response: jsonResponse<{ ok: true }>(),
+    }),
     childSummary: defineRoute({
       path: "/threads/:id/child-summary",
       method: "get",

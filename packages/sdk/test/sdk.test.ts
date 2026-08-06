@@ -103,6 +103,31 @@ function createFetchQueue(
 }
 
 describe("@bb/sdk", () => {
+  it("deletes threads through the POST action supported by remote tunnels", async () => {
+    const queue = createFetchQueue([{ body: { ok: true } }]);
+    const sdk = createBbSdk({
+      transport: createHttpTransport({
+        baseUrl: "http://bb.test",
+        fetch: queue.fetch,
+        runtime: "node",
+      }),
+    });
+
+    await expect(
+      sdk.threads.delete({
+        childThreadsConfirmed: false,
+        threadId: "thr_remote",
+      }),
+    ).resolves.toEqual({ ok: true });
+    expect(queue.requests).toEqual([
+      {
+        bodyText: JSON.stringify({ childThreadsConfirmed: false }),
+        method: "POST",
+        url: "http://bb.test/api/v1/threads/thr_remote/delete",
+      },
+    ]);
+  });
+
   it("sends thread pane presentation actions through the typed transport", async () => {
     const queue = createFetchQueue([{ body: { delivered: 3 } }]);
     const sdk = createBbSdk({

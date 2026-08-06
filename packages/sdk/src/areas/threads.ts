@@ -896,7 +896,7 @@ export function createThreadsArea(args: CreateSdkAreaArgs): ThreadsArea {
     },
     async delete(input) {
       await transport.readVoid(
-        transport.api.v1.threads[":id"].$delete({
+        transport.api.v1.threads[":id"].delete.$post({
           param: { id: input.threadId },
           json: {
             childThreadsConfirmed: input.childThreadsConfirmed,

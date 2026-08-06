@@ -16,6 +16,7 @@ import {
   threadIncludeOptionSchema,
   publicApiRoutes,
   typedRoutes,
+  type DeleteThreadRequest,
   type ThreadGetQuery,
   type ThreadIncludeOption,
   type ThreadChildSummaryResponse,
@@ -194,6 +195,44 @@ export function registerThreadBaseRoutes(app: Hono, deps: AppDeps): void {
     onValidationError: (msg) => new ApiError(400, "invalid_request", msg),
   });
   const routes = publicApiRoutes.threads;
+
+  async function deleteRequestedThread(
+    threadId: string,
+    payload: DeleteThreadRequest,
+  ): Promise<void> {
+    const thread = requirePublicThread(deps.db, threadId);
+    requireChildThreadsConfirmation({
+      action: "delete",
+      confirmed: payload.childThreadsConfirmed,
+      deps,
+      thread,
+    });
+    const deletedThread = markThreadDeleted(deps.db, deps.hub, {
+      threadId: thread.id,
+    });
+    if (deletedThread) emitPluginThreadDeleted(deletedThread);
+    deps.terminalSessions.closeDeletedThreadTerminals({ threadId: thread.id });
+    if (thread.environmentId === null) {
+      finalizeStoppedThread(deps, {
+        threadId: thread.id,
+      });
+      return;
+    }
+
+    const environment = requireEnvironment(deps.db, thread.environmentId);
+    // Deletion finalization owns non-runtime cleanup; only active runtime work
+    // needs a daemon stop request here.
+    requestActiveRuntimeThreadStopIfNeeded(deps, thread, environment);
+    finalizeStoppedThread(deps, {
+      threadId: thread.id,
+    });
+    requestEnvironmentCleanup(deps, {
+      environmentId: environment.id,
+    });
+    requestEnvironmentCleanupAdvance(deps, {
+      environmentId: environment.id,
+    });
+  }
 
   get(routes.list, (context, query) => {
     const limit = parseOptionalInteger(query.limit, "limit");
@@ -383,38 +422,12 @@ export function registerThreadBaseRoutes(app: Hono, deps: AppDeps): void {
   });
 
   del(routes.delete, async (context, payload) => {
-    const thread = requirePublicThread(deps.db, context.req.param("id"));
-    requireChildThreadsConfirmation({
-      action: "delete",
-      confirmed: payload.childThreadsConfirmed,
-      deps,
-      thread,
-    });
-    const deletedThread = markThreadDeleted(deps.db, deps.hub, {
-      threadId: thread.id,
-    });
-    if (deletedThread) emitPluginThreadDeleted(deletedThread);
-    deps.terminalSessions.closeDeletedThreadTerminals({ threadId: thread.id });
-    if (thread.environmentId === null) {
-      finalizeStoppedThread(deps, {
-        threadId: thread.id,
-      });
-      return context.json({ ok: true });
-    }
+    await deleteRequestedThread(context.req.param("id"), payload);
+    return context.json({ ok: true });
+  });
 
-    const environment = requireEnvironment(deps.db, thread.environmentId);
-    // Deletion finalization owns non-runtime cleanup; only active runtime work
-    // needs a daemon stop request here.
-    requestActiveRuntimeThreadStopIfNeeded(deps, thread, environment);
-    finalizeStoppedThread(deps, {
-      threadId: thread.id,
-    });
-    requestEnvironmentCleanup(deps, {
-      environmentId: environment.id,
-    });
-    requestEnvironmentCleanupAdvance(deps, {
-      environmentId: environment.id,
-    });
+  post(routes.deleteAction, async (context, payload) => {
+    await deleteRequestedThread(context.req.param("id"), payload);
     return context.json({ ok: true });
   });
 }
