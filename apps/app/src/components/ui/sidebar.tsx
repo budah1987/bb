@@ -5,6 +5,13 @@ import { Slot } from "@radix-ui/react-slot";
 import { Drawer as DrawerPrimitive } from "vaul";
 
 import { useIsCompactViewport } from "@bb/shared-ui/hooks/use-compact-viewport";
+import { useStandaloneCompactPwa } from "@/hooks/useStandaloneCompactPwa";
+import { isCompactPwaSidebarEdgeSwipe } from "@/lib/compact-pwa-gesture-zones";
+import {
+  getSwipeSelectionRoot,
+  hasExpandedTextSelectionWithin,
+  isInsideHorizontalScrollRegion,
+} from "@/lib/swipe-gesture-targets";
 import { cn } from "@bb/shared-ui/lib/utils";
 import { Button } from "@bb/shared-ui/button";
 import { COARSE_POINTER_HEADER_ICON_BUTTON_CLASS } from "@bb/shared-ui/coarse-pointer-sizing";
@@ -187,60 +194,8 @@ function shouldOpenSidebarMobileSwipe(
   );
 }
 
-function isHorizontallyScrollableElement(element: Element): boolean {
-  const view = element.ownerDocument.defaultView;
-  if (view === null || !(element instanceof view.HTMLElement)) {
-    return false;
-  }
-
-  const overflowX = view.getComputedStyle(element).overflowX;
-  if (
-    overflowX !== "auto" &&
-    overflowX !== "scroll" &&
-    overflowX !== "overlay"
-  ) {
-    return false;
-  }
-
-  return element.scrollWidth > element.clientWidth + 1;
-}
-
-function isInsideHorizontalScrollRegion(target: Element): boolean {
-  let element: Element | null = target;
-  while (element !== null) {
-    if (isHorizontallyScrollableElement(element)) {
-      return true;
-    }
-    if (
-      element.matches('[data-sidebar="inset"], [data-sidebar-mobile-backdrop]')
-    ) {
-      return false;
-    }
-    element = element.parentElement;
-  }
-
-  return false;
-}
-
-function getSidebarSwipeSelectionRoot(
-  target: EventTarget | null,
-): Element | null {
-  return target instanceof Element
-    ? target.closest("[data-sidebar-swipe-selectable]")
-    : null;
-}
-
-function hasExpandedTextSelectionWithin(root: Element): boolean {
-  const selection = root.ownerDocument.getSelection();
-  if (selection === null || selection.isCollapsed) {
-    return false;
-  }
-
-  return (
-    (selection.anchorNode !== null && root.contains(selection.anchorNode)) ||
-    (selection.focusNode !== null && root.contains(selection.focusNode))
-  );
-}
+const SIDEBAR_SWIPE_SCROLL_BOUNDARY_SELECTOR =
+  '[data-sidebar="inset"], [data-sidebar-mobile-backdrop]';
 
 function shouldIgnoreSidebarSwipeTarget(target: EventTarget | null): boolean {
   if (!(target instanceof Element)) {
@@ -266,15 +221,15 @@ function shouldIgnoreSidebarSwipeTarget(target: EventTarget | null): boolean {
     return true;
   }
 
-  const selectionRoot = getSidebarSwipeSelectionRoot(target);
-  if (
-    selectionRoot !== null &&
-    hasExpandedTextSelectionWithin(selectionRoot)
-  ) {
+  const selectionRoot = getSwipeSelectionRoot(target);
+  if (selectionRoot !== null && hasExpandedTextSelectionWithin(selectionRoot)) {
     return true;
   }
 
-  return isInsideHorizontalScrollRegion(target);
+  return isInsideHorizontalScrollRegion(
+    target,
+    SIDEBAR_SWIPE_SCROLL_BOUNDARY_SELECTOR,
+  );
 }
 
 function isSidebarInsetSwipeTarget(target: EventTarget | null): boolean {
@@ -720,6 +675,10 @@ const SidebarTrigger = React.forwardRef<
   React.ComponentProps<typeof Button>
 >(({ className, onClick, "aria-expanded": ariaExpanded, ...props }, ref) => {
   const { isCompactViewport, open, openMobile, toggleSidebar } = useSidebar();
+  // The one app-level control that stays outside the travelling page surface in
+  // the installed compact app, so it is also the one that must always be
+  // thumb-sized there. Elsewhere it keeps the shared header-control geometry.
+  const isStandaloneCompactPwa = useStandaloneCompactPwa();
 
   return (
     <Button
@@ -727,7 +686,11 @@ const SidebarTrigger = React.forwardRef<
       data-sidebar="trigger"
       variant="ghost"
       size="icon"
-      className={cn(COARSE_POINTER_HEADER_ICON_BUTTON_CLASS, className)}
+      className={cn(
+        COARSE_POINTER_HEADER_ICON_BUTTON_CLASS,
+        isStandaloneCompactPwa && "h-11 w-11",
+        className,
+      )}
       aria-expanded={ariaExpanded ?? (isCompactViewport ? openMobile : open)}
       onClick={(event) => {
         onClick?.(event);
@@ -753,6 +716,10 @@ const SidebarInset = React.forwardRef<
     setSuppressMobileOpenAnimation,
     setSuppressMobileCloseAnimation,
   } = useSidebar();
+  // The installed compact app gives the sidebar a narrow leading-edge gesture;
+  // swipes begun in the page remain workspace navigation. Browser tabs keep
+  // their existing inset swipe, and Vaul owns swipe-to-close once open.
+  const isStandaloneCompactPwa = useStandaloneCompactPwa();
   const swipeSessionRef = React.useRef<SidebarInsetSwipeSession | null>(null);
   const removeSwipeListenersRef = React.useRef<(() => void) | null>(null);
   const removeSwipeClickSuppressorRef = React.useRef<(() => void) | null>(null);
@@ -1016,7 +983,9 @@ const SidebarInset = React.forwardRef<
       const touch = event.touches.item(0);
       if (
         touch == null ||
-        touch.clientX < SIDEBAR_MOBILE_SWIPE_BROWSER_EDGE_GUARD_PX
+        (isStandaloneCompactPwa
+          ? !isCompactPwaSidebarEdgeSwipe(touch.clientX)
+          : touch.clientX < SIDEBAR_MOBILE_SWIPE_BROWSER_EDGE_GUARD_PX)
       ) {
         return;
       }
@@ -1034,7 +1003,7 @@ const SidebarInset = React.forwardRef<
         id: touch.identifier,
         startX: touch.clientX,
         startY: touch.clientY,
-        selectionRoot: getSidebarSwipeSelectionRoot(event.target),
+        selectionRoot: getSwipeSelectionRoot(event.target),
       });
 
       const removeListeners = () => {
@@ -1054,6 +1023,7 @@ const SidebarInset = React.forwardRef<
       handleTouchEnd,
       handleTouchMove,
       isCompactViewport,
+      isStandaloneCompactPwa,
       openMobile,
     ],
   );
@@ -1066,7 +1036,9 @@ const SidebarInset = React.forwardRef<
         openMobile ||
         event.pointerType !== "touch" ||
         event.button !== 0 ||
-        event.clientX < SIDEBAR_MOBILE_SWIPE_BROWSER_EDGE_GUARD_PX ||
+        (isStandaloneCompactPwa
+          ? !isCompactPwaSidebarEdgeSwipe(event.clientX)
+          : event.clientX < SIDEBAR_MOBILE_SWIPE_BROWSER_EDGE_GUARD_PX) ||
         swipeSessionRef.current !== null ||
         !isSidebarInsetSwipeTarget(event.target) ||
         shouldIgnoreSidebarSwipeTarget(event.target)
@@ -1079,7 +1051,7 @@ const SidebarInset = React.forwardRef<
         id: event.pointerId,
         startX: event.clientX,
         startY: event.clientY,
-        selectionRoot: getSidebarSwipeSelectionRoot(event.target),
+        selectionRoot: getSwipeSelectionRoot(event.target),
       });
 
       const removeListeners = () => {
@@ -1094,7 +1066,13 @@ const SidebarInset = React.forwardRef<
       window.addEventListener("pointercancel", handleSwipeEnd);
       removeSwipeListenersRef.current = removeListeners;
     },
-    [handleSwipeEnd, handleSwipeMove, isCompactViewport, openMobile],
+    [
+      handleSwipeEnd,
+      handleSwipeMove,
+      isCompactViewport,
+      isStandaloneCompactPwa,
+      openMobile,
+    ],
   );
 
   React.useEffect(() => {
@@ -1182,7 +1160,7 @@ const SidebarInset = React.forwardRef<
   );
 
   React.useEffect(() => {
-    if (!isCompactViewport) {
+    if (!isCompactViewport || isStandaloneCompactPwa) {
       clearWheelSwipe();
       return;
     }
@@ -1197,7 +1175,12 @@ const SidebarInset = React.forwardRef<
       });
       clearWheelSwipe();
     };
-  }, [clearWheelSwipe, handleWheelSwipe, isCompactViewport]);
+  }, [
+    clearWheelSwipe,
+    handleWheelSwipe,
+    isCompactViewport,
+    isStandaloneCompactPwa,
+  ]);
 
   React.useEffect(
     () => () => {
@@ -1265,7 +1248,7 @@ const SidebarContent = React.forwardRef<
       ref={ref}
       data-sidebar="content"
       className={cn(
-        "flex min-h-0 flex-1 flex-col gap-2 overflow-auto group-data-[collapsible=icon]:overflow-hidden",
+        "flex min-h-0 flex-1 flex-col gap-2 overflow-x-hidden overflow-y-auto overscroll-contain group-data-[collapsible=icon]:overflow-hidden",
         className,
       )}
       {...props}

@@ -4,6 +4,7 @@ import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { renderToString } from "react-dom/server";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { CompactViewportOverrideProvider } from "@bb/shared-ui/hooks/use-compact-viewport";
+import { STANDALONE_DISPLAY_MODE_QUERY } from "@/hooks/useStandaloneCompactPwa";
 import {
   Sidebar,
   SidebarInset,
@@ -15,6 +16,7 @@ import {
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
+  vi.unstubAllGlobals();
 });
 
 function createTouch(clientX: number, clientY: number): Touch {
@@ -49,6 +51,7 @@ function renderSelectableSwipeHarness() {
   render(
     <CompactViewportOverrideProvider isCompactViewport>
       <SidebarProvider>
+        <SidebarTrigger />
         <Sidebar>Sidebar content</Sidebar>
         <SidebarInset>
           <div data-sidebar-swipe-selectable>Selectable message prose</div>
@@ -56,6 +59,20 @@ function renderSelectableSwipeHarness() {
       </SidebarProvider>
     </CompactViewportOverrideProvider>,
   );
+}
+
+/** jsdom's polyfilled matchMedia always reports false, i.e. a browser tab. */
+function stubStandaloneDisplayMode() {
+  vi.stubGlobal("matchMedia", (query: string) => ({
+    matches: query === STANDALONE_DISPLAY_MODE_QUERY,
+    media: query,
+    onchange: null,
+    addListener: () => {},
+    removeListener: () => {},
+    addEventListener: () => {},
+    removeEventListener: () => {},
+    dispatchEvent: () => false,
+  }));
 }
 
 function OptionalSidebarProbe() {
@@ -97,6 +114,18 @@ describe("mobile sidebar text-selection arbitration", () => {
     expect(document.querySelector('[data-sidebar="panel"]')).not.toBeNull();
   });
 
+  it("opens from a wheel swipe that crosses the browser-tab distance", () => {
+    renderSelectableSwipeHarness();
+
+    fireEvent.wheel(screen.getByText("Selectable message prose"), {
+      clientX: 200,
+      deltaX: 140,
+      deltaY: 0,
+    });
+
+    expect(document.querySelector('[data-sidebar="panel"]')).not.toBeNull();
+  });
+
   it("cancels a pending prose swipe when native text selection begins", () => {
     let hasSelection = false;
     let selectionNode: Node | null = null;
@@ -119,5 +148,41 @@ describe("mobile sidebar text-selection arbitration", () => {
     fireTouch(window, "touchmove", createTouch(260, 164));
 
     expect(document.querySelector('[data-sidebar="panel"]')).toBeNull();
+  });
+});
+
+describe("standalone compact PWA sidebar", () => {
+  it("opens from the leading edge while page swipes and wheel stay silent", () => {
+    stubStandaloneDisplayMode();
+    renderSelectableSwipeHarness();
+    const prose = screen.getByText("Selectable message prose");
+
+    fireTouch(prose, "touchstart", createTouch(120, 160));
+    fireTouch(window, "touchmove", createTouch(260, 164));
+    fireEvent.wheel(prose, { clientX: 200, deltaX: 140, deltaY: 0 });
+
+    expect(document.querySelector('[data-sidebar="panel"]')).toBeNull();
+
+    fireTouch(prose, "touchstart", createTouch(12, 160));
+    fireTouch(window, "touchmove", createTouch(180, 164));
+
+    const edgeSwipePanel = document.querySelector('[data-sidebar="panel"]');
+    expect(edgeSwipePanel).not.toBeNull();
+    expect(edgeSwipePanel?.getAttribute("data-vaul-drawer-direction")).toBe(
+      "left",
+    );
+  });
+
+  it("keeps the explicit sidebar button available", () => {
+    stubStandaloneDisplayMode();
+    renderSelectableSwipeHarness();
+
+    // The explicit affordance is unaffected, and the open drawer keeps Vaul's
+    // own swipe-to-close.
+    fireEvent.click(screen.getByRole("button", { name: "Toggle Sidebar" }));
+
+    const panel = document.querySelector('[data-sidebar="panel"]');
+    expect(panel).not.toBeNull();
+    expect(panel?.getAttribute("data-vaul-drawer-direction")).toBe("left");
   });
 });

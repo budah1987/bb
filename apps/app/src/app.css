@@ -41,6 +41,19 @@
     html.bb-app-shell-root {
       height: var(--bb-shell-height);
     }
+
+    /*
+     * The installed app renders its own text over its own background rather than
+     * borrowing browser chrome, and it is the surface where whole pages slide
+     * under a finger. Antialiased glyphs stay weight-stable through a transform;
+     * subpixel smoothing shifts colour fringes as the layer moves. Set only
+     * here: the app has no global smoothing declaration to duplicate, and a tab
+     * should keep the platform default.
+     */
+    body.bb-app-shell {
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
   }
 
   html.bb-app-shell-root,

@@ -13,9 +13,21 @@ import {
   type PointerEvent as ReactPointerEvent,
   type SetStateAction,
 } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { useRouteState } from "@/hooks/useRouteState";
 import {
+  canPopToInAppHistoryEntry,
+  createCommandCenterNavigation,
+  parseCommandCenterNavigation,
+  shouldPreserveLayoutForCommandCenter,
+  type CommandCenterNavigation,
+} from "@/lib/command-center-navigation";
+import { CompactCommandCenterIntro } from "./CompactCommandCenterIntro";
+import { CompactPluginPanelSurface } from "./CompactPluginPanelSurface";
+import { CompactWorkspaceSwipeHost } from "./CompactWorkspaceSwipeHost";
+import { useStandaloneCompactPwa } from "@/hooks/useStandaloneCompactPwa";
+import {
+  getRootComposeRoutePath,
   getThreadRoutePath,
   type ThreadRoutePathArgs,
 } from "@/lib/route-paths";
@@ -225,6 +237,8 @@ function SplitThreadAreaContent({ routeContent }: SplitThreadAreaProps) {
   const { projectId, threadId } = useRouteState();
   const threadSplitsEnabled = useThreadSplitsEnabled();
   const splitWorkspaceActive = useSplitWorkspaceActive();
+  const isStandaloneCompactPwa = useStandaloneCompactPwa();
+  const { state: locationState } = useLocation();
   const navigate = useNavigate();
   const store = useStore();
   const [storedLayout, setLayout] = useAtom(splitLayoutAtom);
@@ -244,17 +258,46 @@ function SplitThreadAreaContent({ routeContent }: SplitThreadAreaProps) {
     [routeContent, routeThread],
   );
 
+  const commandCenterNavigation = useMemo(
+    () => parseCommandCenterNavigation(locationState),
+    [locationState],
+  );
+
+  // The standalone-compact Command Center is a full-page surface reached by a
+  // workspace gesture, so its `/` commit must leave the arrangement it came
+  // from intact — pane count, content, and focus. Guarding here, at the one
+  // reconciliation boundary every surface shares, is what keeps the gesture
+  // from destroying a pane. Nothing else can produce this intent: a direct `/`
+  // and every non-standalone route reconcile exactly as before.
+  const preservesCommandCenterLayout =
+    storedLayout !== null &&
+    currentContent !== null &&
+    shouldPreserveLayoutForCommandCenter({
+      content: currentContent,
+      isStandaloneCompactPwa,
+      navigation: commandCenterNavigation,
+    });
+
   // Fold external navigation (initial load, sidebar click, deep link) into the
   // layout. The reconcile is idempotent, so a URL that already matches the
   // focused pane is a no-op — no history spam, no render loop.
   useEffect(() => {
-    if (!threadSplitsEnabled || currentContent === null) {
+    if (
+      !threadSplitsEnabled ||
+      currentContent === null ||
+      preservesCommandCenterLayout
+    ) {
       return;
     }
     setLayout((previous) =>
       reconcileLayoutForContent(previous, currentContent),
     );
-  }, [currentContent, setLayout, threadSplitsEnabled]);
+  }, [
+    currentContent,
+    preservesCommandCenterLayout,
+    setLayout,
+    threadSplitsEnabled,
+  ]);
 
   // Effective layout for render/handlers before the effect seeds the atom.
   const layout: SplitLayout | null =
@@ -374,6 +417,39 @@ function SplitThreadAreaContent({ routeContent }: SplitThreadAreaProps) {
     },
     [layout, maximizedPaneId, navigate, setLayout, setMaximizedPaneId],
   );
+
+  // A committed long rightward swipe pushes exactly one `/` entry carrying the
+  // return target, so the left-swipe return can pop it instead of stacking an
+  // alternating `/`↔thread history. Reads the store so the pushed state
+  // describes the arrangement as it is at commit time.
+  const openCommandCenterFromSwipe = useCallback(() => {
+    const current = store.get(splitLayoutAtom);
+    if (current === null) {
+      return;
+    }
+    navigate(getRootComposeRoutePath(), {
+      state: createCommandCenterNavigation({
+        returnPath: focusedPaneRoute(current) ?? getRootComposeRoutePath(),
+        returnPaneId: current.focusedPaneId,
+      }),
+    });
+  }, [navigate, store]);
+
+  const returnFromCommandCenter = useCallback(() => {
+    // Popping is the correct move: this entry is the one the gesture pushed, so
+    // going back keeps `/`↔thread round trips from stacking. Only when there is
+    // provably no in-app entry beneath it (a cold launch straight onto a
+    // restored Command Center entry) does the validated return path stand in,
+    // replacing rather than pushing so the stack still cannot grow.
+    if (
+      commandCenterNavigation !== null &&
+      !canPopToInAppHistoryEntry(window.history)
+    ) {
+      navigate(commandCenterNavigation.returnPath, { replace: true });
+      return;
+    }
+    navigate(-1);
+  }, [commandCenterNavigation, navigate]);
 
   const closePane = useCallback(
     (paneId: string) => {
@@ -574,9 +650,38 @@ function SplitThreadAreaContent({ routeContent }: SplitThreadAreaProps) {
   // reads the same predicate to decide whether it owns the header — see
   // useSplitWorkspaceActive.
   if (!splitWorkspaceActive || layout === null || currentContent === null) {
-    return currentContent ? (
-      <StandalonePaneContent content={currentContent} />
-    ) : null;
+    if (currentContent === null) {
+      return null;
+    }
+    // In the installed compact app every page owns its own chrome, including a
+    // plugin panel's header, because that chrome has to travel with the page.
+    // AppLayout stands down for exactly the same condition — it is keyed on the
+    // capability alone, so the page keeps that header even where the gesture
+    // below is unavailable.
+    //
+    // The workspace gesture navigates the split workspace, so it needs the
+    // experiment that owns the layout. With splits off nothing writes the layout
+    // atom, and a Command Center commit would animate and then find nothing to
+    // preserve or return to; the disabled experiment keeps its promise of the
+    // byte-identical pre-split page instead.
+    if (!isStandaloneCompactPwa || !threadSplitsEnabled || layout === null) {
+      return (
+        <StandalonePaneContent
+          content={currentContent}
+          ownsPluginChrome={isStandaloneCompactPwa}
+        />
+      );
+    }
+    return (
+      <StandaloneWorkspaceSurface
+        content={currentContent}
+        layout={layout}
+        commandCenterNavigation={commandCenterNavigation}
+        onFocusPane={focusPane}
+        onOpenCommandCenter={openCommandCenterFromSwipe}
+        onReturnFromCommandCenter={returnFromCommandCenter}
+      />
+    );
   }
 
   const commandHandlers = (
@@ -978,14 +1083,90 @@ function WorkspacePaneContent({
   );
 }
 
-function StandalonePaneContent({ content }: { content: PaneContent }) {
+interface StandaloneWorkspaceSurfaceProps {
+  content: PaneContent;
+  layout: SplitLayout;
+  commandCenterNavigation: CommandCenterNavigation | null;
+  onFocusPane: (paneId: string) => void;
+  onOpenCommandCenter: () => void;
+  onReturnFromCommandCenter: () => void;
+}
+
+/**
+ * The installed-app compact surface: one complete page — header, body,
+ * composer, accessories — inside the workspace gesture host, so a swipe moves
+ * all of its chrome together.
+ */
+function StandaloneWorkspaceSurface({
+  content,
+  layout,
+  commandCenterNavigation,
+  onFocusPane,
+  onOpenCommandCenter,
+  onReturnFromCommandCenter,
+}: StandaloneWorkspaceSurfaceProps) {
+  const panes = listPanes(layout.root);
+  // The root compose page becomes the Command Center only when a validated
+  // swipe brought us here; a direct `/` stays the plain New thread page.
+  const isCommandCenter =
+    content.kind === "new-thread" && commandCenterNavigation !== null;
+  return (
+    <CompactWorkspaceSwipeHost
+      contentKey={paneContentRoute(content)}
+      panes={panes}
+      focusedPaneId={layout.focusedPaneId}
+      // Already on the Command Center: offer the return, not another open.
+      allowsCommandCenter={content.kind !== "new-thread"}
+      returnPaneId={
+        isCommandCenter ? commandCenterNavigation.returnPaneId : null
+      }
+      onFocusPane={onFocusPane}
+      onOpenCommandCenter={onOpenCommandCenter}
+      onReturnFromCommandCenter={onReturnFromCommandCenter}
+    >
+      {isCommandCenter ? (
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+          <CompactCommandCenterIntro
+            panes={panes}
+            activePaneId={commandCenterNavigation.returnPaneId}
+            // The pane we came from is already focused, so focusing it again
+            // would be a dead control: that row is the return, like the swipe.
+            onFocusPane={(paneId) => {
+              if (paneId === commandCenterNavigation.returnPaneId) {
+                onReturnFromCommandCenter();
+                return;
+              }
+              onFocusPane(paneId);
+            }}
+          />
+          <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+            <StandalonePaneContent content={content} ownsPluginChrome />
+          </div>
+        </div>
+      ) : (
+        <StandalonePaneContent content={content} ownsPluginChrome />
+      )}
+    </CompactWorkspaceSwipeHost>
+  );
+}
+
+function StandalonePaneContent({
+  content,
+  ownsPluginChrome,
+}: {
+  content: PaneContent;
+  /** True where the page must carry a plugin panel's header itself. */
+  ownsPluginChrome: boolean;
+}) {
   if (content.kind === "thread") {
     return <ThreadDetailView surface="page" />;
   }
   if (content.kind === "new-thread") {
     return <RootComposeView />;
   }
-  return (
+  return ownsPluginChrome ? (
+    <CompactPluginPanelSurface content={content} />
+  ) : (
     <PluginPanelView
       pluginId={content.pluginId}
       panelPath={content.panelPath}

@@ -91,6 +91,7 @@ import { findPaneByThread } from "@/lib/split-layout";
 import { applyThreadOpenToLayout } from "@/views/thread-detail/splitThreadNavigation";
 import { useThreadSplitsEnabled } from "@/hooks/useThreadSplitsEnabled";
 import { useSplitWorkspaceActive } from "@/hooks/useSplitWorkspaceActive";
+import { useStandaloneCompactPwa } from "@/hooks/useStandaloneCompactPwa";
 import { useAppSettingsRouteMemory } from "@/hooks/useAppSettingsRouteMemory";
 import { useSystemConfig } from "@/hooks/queries/system-queries";
 
@@ -402,6 +403,7 @@ export function AppLayout({ children }: AppLayoutProps) {
   const isCompactViewport = useIsCompactViewport();
   const threadSplitsEnabled = useThreadSplitsEnabled();
   const splitWorkspaceActive = useSplitWorkspaceActive();
+  const isStandaloneCompactPwa = useStandaloneCompactPwa();
   const store = useStore();
   const contentShellRef = useRef<HTMLDivElement>(null);
   useMobileVisualViewportHeight(contentShellRef, isCompactViewport);
@@ -569,11 +571,16 @@ export function AppLayout({ children }: AppLayoutProps) {
   // Plugin panel routes hand their header to the split workspace, which draws a
   // pane header per pane. When the workspace is inactive it draws none, so the
   // shared header must come back — it reserves the sidebar trigger footprint,
-  // and without it the trigger overlays the panel body.
+  // and without it the trigger overlays the panel body. The installed compact
+  // app is the second owner: there the page carries its own plugin header so it
+  // travels and unmounts with the page (see CompactPluginPanelSurface).
   const showHeader =
     !isThreadView &&
     !isRootView &&
-    !(splitWorkspaceActive && pluginPanelMatch !== null);
+    !(
+      (splitWorkspaceActive || isStandaloneCompactPwa) &&
+      pluginPanelMatch !== null
+    );
   const [desktopInfo] = useState(getBbDesktopInfo);
   const desktopWindowState = useDesktopWindowState();
   const usesDesktopChrome = shouldUseMacosDesktopChrome(desktopInfo);

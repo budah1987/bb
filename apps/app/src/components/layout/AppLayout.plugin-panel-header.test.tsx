@@ -162,6 +162,19 @@ function renderPluginPanelRoute(): void {
   );
 }
 
+function stubStandaloneDisplayMode() {
+  vi.stubGlobal("matchMedia", (query: string) => ({
+    matches: query === "(display-mode: standalone)",
+    media: query,
+    onchange: null,
+    addListener: () => {},
+    removeListener: () => {},
+    addEventListener: () => {},
+    removeEventListener: () => {},
+    dispatchEvent: () => false,
+  }));
+}
+
 describe("AppLayout plugin panel header", () => {
   beforeEach(() => {
     viewportState.compact = false;
@@ -170,6 +183,7 @@ describe("AppLayout plugin panel header", () => {
   afterEach(() => {
     cleanup();
     vi.clearAllMocks();
+    vi.unstubAllGlobals();
   });
 
   it("renders the shared header on compact viewports so the body clears the sidebar trigger", () => {
@@ -180,6 +194,16 @@ describe("AppLayout plugin panel header", () => {
     expect(screen.getByTestId("plugin-panel-header-center").textContent).toBe(
       "Helm Wiki",
     );
+  });
+
+  // In the installed app the page carries this header itself so it travels and
+  // unmounts with the page under a workspace swipe.
+  it("hands the compact header to the page in the installed app", () => {
+    viewportState.compact = true;
+    stubStandaloneDisplayMode();
+    renderPluginPanelRoute();
+
+    expect(screen.queryByTestId("app-page-header")).toBeNull();
   });
 
   it("leaves the header to the split workspace on regular viewports", () => {

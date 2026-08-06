@@ -15,7 +15,10 @@ import {
 } from "@dnd-kit/sortable";
 import { createPortal } from "react-dom";
 import { PERSONAL_PROJECT_ID, type ThreadListEntry } from "@bb/domain";
-import type { ProjectResponse } from "@bb/server-contract";
+import type {
+  EnvironmentStatusResponse,
+  ProjectResponse,
+} from "@bb/server-contract";
 import { NavLink, useNavigate } from "react-router-dom";
 import { useCreateThreadInWorktree } from "@/hooks/useCreateThreadInWorktree";
 import {
@@ -34,6 +37,13 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@bb/shared-ui/dropdown-menu";
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuSeparator,
+  ContextMenuTrigger,
+} from "@bb/shared-ui/context-menu";
 import { EmptyState } from "@bb/shared-ui/empty-state";
 import { Icon, type IconName } from "@bb/shared-ui/icon";
 import {
@@ -72,6 +82,11 @@ import { getMutationErrorMessage } from "@/lib/mutation-errors";
 import { getProjectSettingsRoutePath } from "@/lib/route-paths";
 import { getThreadDisplayTitle } from "@/lib/thread-title";
 import { appToast } from "@/components/ui/app-toast";
+import {
+  ConfirmDeleteDialog,
+  ConfirmDeleteDialogContent,
+} from "@/components/dialogs/ConfirmDeleteDialog";
+import { sdk } from "@/lib/sdk";
 import {
   CollapsedThreadStatusGlyph,
   ThreadRow,
@@ -396,6 +411,7 @@ interface EnvironmentThreadGroupHeaderProps {
   onCreateNewThread?: () => void;
   onRenameEnvironment?: () => void;
   onToggleCollapsed: (environmentId: string) => void;
+  renderAsContextMenuTrigger?: boolean;
 }
 
 interface EnvironmentThreadGroupHeaderActionsProps {
@@ -415,7 +431,10 @@ interface UseArchiveEnvironmentThreadGroupActionArgs {
 
 interface UseArchiveEnvironmentThreadGroupActionResult {
   archiveThreadsPending: boolean;
+  archiveWarningOpen: boolean;
+  onArchiveWarningOpenChange: (open: boolean) => void;
   onArchiveThreads: () => void;
+  onConfirmArchiveThreads: () => void;
 }
 
 interface UseEnvironmentThreadGroupRenameActionArgs {
@@ -455,6 +474,15 @@ export function formatArchivedEnvironmentThreadsToastTitle({
     return "Archived 1 thread";
   }
   return `Archived ${getThreadDisplayTitle(archivedThread)}`;
+}
+
+export function environmentArchiveNeedsUncommittedWarning(
+  status: EnvironmentStatusResponse,
+): boolean {
+  return (
+    status.outcome === "available" &&
+    status.workspace.workingTree.hasUncommittedChanges
+  );
 }
 
 function getProjectThreadTreeEmptyStateIcon(
@@ -756,7 +784,9 @@ function useArchiveEnvironmentThreadGroupAction({
   } = archiveEnvironmentThreads;
   const archiveThreadsPending =
     archiveThreadsIsPending && variables?.id === environmentId;
-  const onArchiveThreads = useCallback(() => {
+  const [archiveStatusPending, setArchiveStatusPending] = useState(false);
+  const [archiveWarningOpen, setArchiveWarningOpen] = useState(false);
+  const performArchive = useCallback(() => {
     void archiveThreads({ id: environmentId })
       .then((response) => {
         appToast.success(
@@ -781,10 +811,41 @@ function useArchiveEnvironmentThreadGroupAction({
     selectedThreadId,
     threads,
   ]);
+  const onArchiveThreads = useCallback(() => {
+    if (archiveThreadsPending || archiveStatusPending) return;
+    setArchiveStatusPending(true);
+    void sdk.environments
+      .status({ environmentId })
+      .then((status) => {
+        if (environmentArchiveNeedsUncommittedWarning(status)) {
+          setArchiveWarningOpen(true);
+          return;
+        }
+        performArchive();
+      })
+      .catch(() => {
+        appToast.error(
+          "Couldn’t check this workspace for uncommitted changes. Nothing was archived.",
+        );
+      })
+      .finally(() => setArchiveStatusPending(false));
+  }, [
+    archiveStatusPending,
+    archiveThreadsPending,
+    environmentId,
+    performArchive,
+  ]);
+  const onConfirmArchiveThreads = useCallback(() => {
+    setArchiveWarningOpen(false);
+    performArchive();
+  }, [performArchive]);
 
   return {
-    archiveThreadsPending,
+    archiveThreadsPending: archiveThreadsPending || archiveStatusPending,
+    archiveWarningOpen,
+    onArchiveWarningOpenChange: setArchiveWarningOpen,
     onArchiveThreads,
+    onConfirmArchiveThreads,
   };
 }
 
@@ -904,7 +965,7 @@ function EnvironmentThreadGroupHeaderActions({
               }}
             >
               <Icon name="Archive" aria-hidden="true" />
-              Archive worktree
+              Archive workspace
             </DropdownMenuItem>
           ) : null}
         </DropdownMenuContent>
@@ -926,6 +987,7 @@ function EnvironmentThreadGroupHeader({
   onCreateNewThread,
   onRenameEnvironment,
   onToggleCollapsed,
+  renderAsContextMenuTrigger = false,
 }: EnvironmentThreadGroupHeaderProps) {
   const [isActionsOpen, setIsActionsOpen] = useState(false);
   const environmentName = representativeThread.environmentName;
@@ -1021,23 +1083,35 @@ function EnvironmentThreadGroupHeader({
     </>
   );
 
-  if (stickyLevel !== undefined) {
-    return (
+  const header =
+    stickyLevel !== undefined ? (
       <SidebarStickyTier
         tier="parent"
         level={stickyLevel}
         className={className}
         style={style}
+        onPointerDown={(event) => {
+          if (renderAsContextMenuTrigger) event.stopPropagation();
+        }}
       >
         {content}
       </SidebarStickyTier>
+    ) : (
+      <div
+        className={className}
+        style={style}
+        onPointerDown={(event) => {
+          if (renderAsContextMenuTrigger) event.stopPropagation();
+        }}
+      >
+        {content}
+      </div>
     );
-  }
 
-  return (
-    <div className={className} style={style}>
-      {content}
-    </div>
+  return renderAsContextMenuTrigger ? (
+    <ContextMenuTrigger asChild>{header}</ContextMenuTrigger>
+  ) : (
+    header
   );
 }
 
@@ -1057,6 +1131,10 @@ const EnvironmentThreadGroupRow = memo(function EnvironmentThreadGroupRow({
   const { environmentId, nodes, stats } = environmentThreadGroup;
   const representativeNode = nodes[0];
   const representativeThread = representativeNode.thread;
+  const displayName =
+    representativeThread.environmentName ||
+    representativeThread.environmentBranchName ||
+    "Workspace";
   const nodeDepth = representativeNode.depth;
   const rowDepth = getThreadRowDepth({
     depthOffset,
@@ -1076,13 +1154,18 @@ const EnvironmentThreadGroupRow = memo(function EnvironmentThreadGroupRow({
     environmentId,
   });
   const threads = useMemo(() => nodes.map((node) => node.thread), [nodes]);
-  const { archiveThreadsPending, onArchiveThreads } =
-    useArchiveEnvironmentThreadGroupAction({
-      environmentId,
-      projectId,
-      selectedThreadId,
-      threads,
-    });
+  const {
+    archiveThreadsPending,
+    archiveWarningOpen,
+    onArchiveWarningOpenChange,
+    onArchiveThreads,
+    onConfirmArchiveThreads,
+  } = useArchiveEnvironmentThreadGroupAction({
+    environmentId,
+    projectId,
+    selectedThreadId,
+    threads,
+  });
   const handleCreateNewThread = useCallback(() => {
     onProjectSelect?.();
     createThreadInWorktree();
@@ -1101,46 +1184,68 @@ const EnvironmentThreadGroupRow = memo(function EnvironmentThreadGroupRow({
 
   return (
     <>
-      <SidebarStickyGroup className="space-y-0.5">
-        <EnvironmentThreadGroupHeader
-          environmentId={environmentId}
-          representativeThread={representativeThread}
-          rowDepth={rowDepth}
-          stickyLevel={getThreadNodeStickyLevel({
-            depthOffset,
-            node: representativeNode,
-          })}
-          parentLineDepth={parentLineDepth}
-          childActivity={stats.childActivity}
-          isCollapsed={isCollapsed}
-          archiveThreadsPending={archiveThreadsPending}
-          onArchiveThreads={onArchiveThreads}
-          onCreateNewThread={handleCreateNewThread}
-          onRenameEnvironment={onRenameEnvironment}
-          onToggleCollapsed={onToggleEnvironmentCollapsed}
-        />
-        {!isCollapsed ? (
-          <div className="relative space-y-px">
-            <ThreadTreeGroupLine parentRowDepth={rowDepth} />
-            {nodes.map((node) => (
-              <ThreadTreeNodeRow
-                key={node.thread.id}
-                projectId={projectId}
-                node={node}
-                depthOffset={depthOffset + 1}
-                isEnvGrouped
-                selectedThreadId={selectedThreadId}
-                collapsedThreadIds={collapsedThreadIds}
-                collapsedEnvironmentIds={collapsedEnvironmentIds}
-                variant={variant}
-                onProjectSelect={onProjectSelect}
-                onToggleThreadCollapsed={onToggleThreadCollapsed}
-                onToggleEnvironmentCollapsed={onToggleEnvironmentCollapsed}
-              />
-            ))}
-          </div>
-        ) : null}
-      </SidebarStickyGroup>
+      <ContextMenu>
+        <SidebarStickyGroup className="space-y-0.5">
+          <EnvironmentThreadGroupHeader
+            environmentId={environmentId}
+            representativeThread={representativeThread}
+            rowDepth={rowDepth}
+            stickyLevel={getThreadNodeStickyLevel({
+              depthOffset,
+              node: representativeNode,
+            })}
+            parentLineDepth={parentLineDepth}
+            childActivity={stats.childActivity}
+            isCollapsed={isCollapsed}
+            archiveThreadsPending={archiveThreadsPending}
+            onArchiveThreads={onArchiveThreads}
+            onCreateNewThread={handleCreateNewThread}
+            onRenameEnvironment={onRenameEnvironment}
+            onToggleCollapsed={onToggleEnvironmentCollapsed}
+            renderAsContextMenuTrigger
+          />
+          {!isCollapsed ? (
+            <div className="relative space-y-px">
+              <ThreadTreeGroupLine parentRowDepth={rowDepth} />
+              {nodes.map((node) => (
+                <ThreadTreeNodeRow
+                  key={node.thread.id}
+                  projectId={projectId}
+                  node={node}
+                  depthOffset={depthOffset + 1}
+                  isEnvGrouped
+                  selectedThreadId={selectedThreadId}
+                  collapsedThreadIds={collapsedThreadIds}
+                  collapsedEnvironmentIds={collapsedEnvironmentIds}
+                  variant={variant}
+                  onProjectSelect={onProjectSelect}
+                  onToggleThreadCollapsed={onToggleThreadCollapsed}
+                  onToggleEnvironmentCollapsed={onToggleEnvironmentCollapsed}
+                />
+              ))}
+            </div>
+          ) : null}
+        </SidebarStickyGroup>
+        <ContextMenuContent aria-label={`${displayName} actions`}>
+          <ContextMenuItem onSelect={handleCreateNewThread}>
+            <Icon name="MessageSquarePlus" aria-hidden="true" />
+            New thread
+          </ContextMenuItem>
+          <ContextMenuItem onSelect={onRenameEnvironment}>
+            <Icon name="Edit" aria-hidden="true" />
+            Rename
+          </ContextMenuItem>
+          <ContextMenuSeparator />
+          <ContextMenuItem
+            disabled={archiveThreadsPending}
+            className="text-destructive focus:bg-destructive/15 focus:text-destructive data-[last-hovered]:bg-destructive/15 data-[last-hovered]:text-destructive"
+            onSelect={onArchiveThreads}
+          >
+            <Icon name="Archive" aria-hidden="true" />
+            Archive workspace
+          </ContextMenuItem>
+        </ContextMenuContent>
+      </ContextMenu>
       <EnvironmentRenameDialog
         errorMessage={renameEnvironmentErrorMessage}
         target={renameDialogTarget}
@@ -1148,6 +1253,19 @@ const EnvironmentThreadGroupRow = memo(function EnvironmentThreadGroupRow({
         onOpenChange={onRenameDialogOpenChange}
         onRename={onSubmitRenameEnvironment}
       />
+      <ConfirmDeleteDialog
+        open={archiveWarningOpen}
+        onOpenChange={onArchiveWarningOpenChange}
+      >
+        <ConfirmDeleteDialogContent
+          title="Archive workspace with uncommitted work?"
+          description={`“${displayName}” has uncommitted changes. Commit or copy them first if you may need them, or archive the workspace anyway.`}
+          confirmLabel="Archive anyway"
+          pending={archiveThreadsPending}
+          onConfirm={onConfirmArchiveThreads}
+          onCancel={() => onArchiveWarningOpenChange(false)}
+        />
+      </ConfirmDeleteDialog>
     </>
   );
 });

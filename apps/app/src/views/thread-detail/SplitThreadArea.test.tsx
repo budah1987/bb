@@ -26,6 +26,11 @@ import {
 } from "@/lib/split-layout";
 import type { PaneContent, SplitLayout } from "@/lib/split-layout";
 import { usePromptDraftStorage } from "@/hooks/usePromptDraftStorage";
+import { STANDALONE_DISPLAY_MODE_QUERY } from "@/hooks/useStandaloneCompactPwa";
+import {
+  createCommandCenterNavigation,
+  parseCommandCenterNavigation,
+} from "@/lib/command-center-navigation";
 import { createBbDesktopApi } from "@/test/bb-desktop-test-utils";
 import { resourceRouteLabelAtom } from "@/components/layout/resourceRouteLabelAtom";
 import {
@@ -47,6 +52,21 @@ const threadStore = vi.hoisted(
     new Map<string, { archivedAt: number | null; deletedAt: number | null }>(),
 );
 const experimentState = vi.hoisted(() => ({ enabled: true }));
+// Only the fields the Command Center's title lookup reads.
+const sidebarNavigationFixture = vi.hoisted(
+  (): {
+    data:
+      | {
+          personalProject: {
+            threads: { id: string; title: string; titleFallback: string }[];
+          };
+          projects: {
+            threads: { id: string; title: string; titleFallback: string }[];
+          }[];
+        }
+      | undefined;
+  } => ({ data: undefined }),
+);
 const viewportState = vi.hoisted(() => ({ compact: false }));
 const sidebarState = vi.hoisted(() => ({ showing: true }));
 const panelFullScreenState = vi.hoisted(() => ({
@@ -203,6 +223,11 @@ vi.mock("@/views/RootComposeView", () => ({
   RootComposeView: RootComposeFixture,
 }));
 
+// The same cached navigation the root compose page reads for its Recent list.
+vi.mock("@/hooks/queries/sidebar-navigation-query", () => ({
+  useSidebarNavigation: () => ({ data: sidebarNavigationFixture.data }),
+}));
+
 // Lightweight stand-in for the heavyweight thread view. It surfaces the pane's
 // thread id, focus, close affordance, and a real threadId-keyed draft so the
 // test exercises SplitThreadArea's wiring without its dependency tree.
@@ -346,6 +371,22 @@ function twoPaneLayout(
   };
 }
 
+function threePaneLayout(focusedPaneId: string): SplitLayout {
+  return {
+    root: {
+      type: "split",
+      dir: "row",
+      sizes: [1 / 3, 1 / 3, 1 / 3],
+      children: [
+        { type: "pane", paneId: "pane-1", content: threadContent("thr-a") },
+        { type: "pane", paneId: "pane-2", content: threadContent("thr-b") },
+        { type: "pane", paneId: "pane-3", content: threadContent("thr-c") },
+      ],
+    },
+    focusedPaneId,
+  };
+}
+
 function eightPaneThreadLayout(): SplitLayout {
   let layout: SplitLayout | null = null;
   for (let index = 0; index < 8; index += 1) {
@@ -472,6 +513,72 @@ function LocationProbe() {
   return <div data-testid="location">{location.pathname}</div>;
 }
 
+/** Surfaces whether the current entry carries a validated Command Center intent. */
+function CommandCenterStateProbe() {
+  const navigation = parseCommandCenterNavigation(useLocation().state);
+  return (
+    <div data-testid="command-center-state">
+      {navigation === null
+        ? "none"
+        : `${navigation.returnPath}|${navigation.returnPaneId}`}
+    </div>
+  );
+}
+
+function stubMediaQueries(isMatch: (query: string) => boolean) {
+  vi.stubGlobal("matchMedia", (query: string) => ({
+    matches: isMatch(query),
+    media: query,
+    onchange: null,
+    addListener: () => {},
+    removeListener: () => {},
+    addEventListener: () => {},
+    removeEventListener: () => {},
+    dispatchEvent: () => false,
+  }));
+}
+
+// The capability reads the real display-mode query, so drive that query rather
+// than stubbing the capability out — the gate is part of what these tests check.
+function stubStandaloneDisplayMode(isStandalone: boolean) {
+  stubMediaQueries(
+    (query) => isStandalone && query === STANDALONE_DISPLAY_MODE_QUERY,
+  );
+}
+
+function registerDocsPanel() {
+  setPluginSlotRegistrations("docs", {
+    homepageSections: [],
+    settingsSections: [],
+    navPanels: [
+      {
+        id: "docs",
+        title: "Docs",
+        icon: "FileText",
+        path: "docs",
+        component: () => <div>Docs panel</div>,
+      },
+    ],
+    threadPanelActions: [],
+    pendingInteractions: [],
+    sidebarFooterActions: [],
+    fileOpeners: [],
+    messageDirectives: [],
+  });
+}
+
+function storedSplitLayout(store: ReturnType<typeof createStore>): SplitLayout {
+  const layout = store.get(splitLayoutAtom);
+  if (layout === null) {
+    throw new Error("Expected a stored split layout");
+  }
+  return layout;
+}
+
+function paneContents(store: ReturnType<typeof createStore>) {
+  return listPanes(storedSplitLayout(store).root).map((pane) => pane.content);
+}
+
 function ExternalNav({ to }: { to: string }) {
   const navigate = useNavigate();
   return (
@@ -496,12 +603,39 @@ function RouteAwareSplitArea() {
   );
 }
 
+/** Mirrors SplitWorkspaceRoute: "/" is compose, thread URLs self-resolve. */
+function WorkspaceRouteSplitArea() {
+  const location = useLocation();
+  return (
+    <SplitThreadArea
+      routeContent={location.pathname === "/" ? newThreadContent : undefined}
+    />
+  );
+}
+
+function HistoryForwardNav() {
+  const navigate = useNavigate();
+  return (
+    <button
+      type="button"
+      data-testid="history-forward"
+      onClick={() => navigate(1)}
+    >
+      forward
+    </button>
+  );
+}
+
 function renderSplitArea(options: {
   path: string;
   layout?: SplitLayout;
   externalTo?: string;
+  locationState?: unknown;
+  /** Extra history entries below `path`, oldest first. */
+  historyEntries?: string[];
   routeContent?: PaneContent;
   routeAwareContent?: boolean;
+  workspaceRouteContent?: boolean;
   maximizedPaneId?: string;
 }) {
   const store = createStore();
@@ -511,17 +645,31 @@ function renderSplitArea(options: {
   if (options.maximizedPaneId !== undefined) {
     store.set(maximizedPaneIdAtom, options.maximizedPaneId);
   }
+  const initialEntries = [
+    ...(options.historyEntries ?? []).map((pathname) => ({
+      pathname,
+      state: null,
+    })),
+    { pathname: options.path, state: options.locationState ?? null },
+  ];
   render(
     <TooltipProvider>
       <JotaiProvider store={store}>
         <QueryClientProvider client={queryClient}>
-          <MemoryRouter initialEntries={[options.path]}>
+          <MemoryRouter
+            initialEntries={initialEntries}
+            initialIndex={initialEntries.length - 1}
+          >
             {options.routeAwareContent ? (
               <RouteAwareSplitArea />
+            ) : options.workspaceRouteContent ? (
+              <WorkspaceRouteSplitArea />
             ) : (
               <SplitThreadArea routeContent={options.routeContent} />
             )}
             <LocationProbe />
+            <CommandCenterStateProbe />
+            <HistoryForwardNav />
             {options.externalTo !== undefined ? (
               <ExternalNav to={options.externalTo} />
             ) : null}
@@ -544,6 +692,7 @@ beforeEach(() => {
   commandPresentationState.shortcut = null;
   threadStore.set("thr-a", { archivedAt: null, deletedAt: null });
   threadStore.set("thr-b", { archivedAt: null, deletedAt: null });
+  sidebarNavigationFixture.data = undefined;
 });
 
 afterEach(() => {
@@ -2026,6 +2175,710 @@ describe("SplitThreadArea", () => {
     expect(screen.getByTestId("location").textContent).toBe(
       threadPath("thr-a"),
     );
+  });
+
+  describe("standalone compact Command Center commit", () => {
+    const commandCenterState = createCommandCenterNavigation({
+      returnPath: threadPath("thr-b"),
+      returnPaneId: "pane-2",
+    });
+
+    beforeEach(() => {
+      viewportState.compact = true;
+    });
+
+    afterEach(() => {
+      vi.unstubAllGlobals();
+    });
+
+    it("preserves every pane, its content, and focus", async () => {
+      stubStandaloneDisplayMode(true);
+      const store = renderSplitArea({
+        path: "/",
+        layout: twoPaneLayout("pane-2"),
+        routeContent: newThreadContent,
+        locationState: commandCenterState,
+      });
+
+      expect(await screen.findByTestId("root-compose-view")).toBeTruthy();
+      expect(paneContents(store)).toEqual([
+        threadContent("thr-a"),
+        threadContent("thr-b"),
+      ]);
+      expect(storedSplitLayout(store).focusedPaneId).toBe("pane-2");
+    });
+
+    it("still reconciles the same route in a compact browser tab", async () => {
+      stubStandaloneDisplayMode(false);
+      const store = renderSplitArea({
+        path: "/",
+        layout: twoPaneLayout("pane-2"),
+        routeContent: newThreadContent,
+        locationState: commandCenterState,
+      });
+
+      // Today's policy: `/` replaces the focused pane's content in place.
+      await waitFor(() => {
+        expect(paneContents(store)).toEqual([
+          threadContent("thr-a"),
+          newThreadContent,
+        ]);
+      });
+      expect(storedSplitLayout(store).focusedPaneId).toBe("pane-2");
+    });
+
+    it("ignores unvalidated history state in the installed app", async () => {
+      stubStandaloneDisplayMode(true);
+      const store = renderSplitArea({
+        path: "/",
+        layout: twoPaneLayout("pane-2"),
+        routeContent: newThreadContent,
+        locationState: { kind: "some-other-intent", returnPath: "/" },
+      });
+
+      await waitFor(() => {
+        expect(paneContents(store)).toEqual([
+          threadContent("thr-a"),
+          newThreadContent,
+        ]);
+      });
+    });
+  });
+
+  describe("standalone compact workspace swipe", () => {
+    const commandCenterState = createCommandCenterNavigation({
+      returnPath: threadPath("thr-b"),
+      returnPaneId: "pane-2",
+    });
+
+    beforeEach(() => {
+      viewportState.compact = true;
+      stubStandaloneDisplayMode(true);
+    });
+
+    afterEach(() => {
+      vi.unstubAllGlobals();
+      vi.restoreAllMocks();
+      window.history.replaceState(null, "");
+    });
+
+    function firePointer(
+      target: Element | Window,
+      type: "pointerdown" | "pointermove" | "pointerup" | "pointercancel",
+      clientX: number,
+      clientY = 300,
+      pointerId = 1,
+    ) {
+      const event = new Event(type, { bubbles: true, cancelable: true });
+      Object.defineProperties(event, {
+        pointerId: { value: pointerId },
+        pointerType: { value: "touch" },
+        button: { value: 0 },
+        clientX: { value: clientX },
+        clientY: { value: clientY },
+      });
+      fireEvent(target, event);
+    }
+
+    function swipeSurface(): HTMLElement {
+      const surface = document.querySelector(
+        '[data-workspace-swipe-surface="source"]',
+      );
+      if (!(surface instanceof HTMLElement)) {
+        throw new Error("Expected a workspace swipe surface");
+      }
+      return surface;
+    }
+
+    function previewSurface(): HTMLElement | null {
+      const preview = document.querySelector(
+        '[data-workspace-swipe-surface="preview"]',
+      );
+      return preview instanceof HTMLElement ? preview : null;
+    }
+
+    /** Drags to `toX` and leaves the pointer down. jsdom width is 1024. */
+    function dragTo(
+      toX: number,
+      options: { from?: number; target?: Element } = {},
+    ) {
+      const fromX = options.from ?? 500;
+      const target = options.target ?? swipeSurface();
+      firePointer(target, "pointerdown", fromX);
+      firePointer(window, "pointermove", fromX + Math.sign(toX - fromX) * 20);
+      firePointer(window, "pointermove", toX);
+      return { fromX, toX };
+    }
+
+    function locationPath() {
+      return screen.getByTestId("location").textContent;
+    }
+
+    it("moves to the previous pane on a short right swipe", async () => {
+      const store = renderSplitArea({
+        path: threadPath("thr-b"),
+        layout: twoPaneLayout("pane-2"),
+        workspaceRouteContent: true,
+      });
+      await screen.findByTestId("workspace-swipe-position");
+
+      dragTo(900, { from: 500 });
+      firePointer(window, "pointerup", 900);
+
+      await waitFor(() => expect(locationPath()).toBe(threadPath("thr-a")));
+      // Non-destructive: focus moved, both panes kept their content.
+      expect(storedSplitLayout(store).focusedPaneId).toBe("pane-1");
+      expect(paneContents(store)).toEqual([
+        threadContent("thr-a"),
+        threadContent("thr-b"),
+      ]);
+      expect(screen.getByTestId("workspace-swipe-position").textContent).toBe(
+        "Workspace 1 of 2",
+      );
+      // Exactly one surface survives the settle.
+      expect(
+        document.querySelectorAll("[data-workspace-swipe-surface]"),
+      ).toHaveLength(1);
+      expect(swipeSurface().style.transform).toBe("");
+    });
+
+    it("moves to the next pane on a short left swipe, wrapping", async () => {
+      const store = renderSplitArea({
+        path: threadPath("thr-a"),
+        layout: twoPaneLayout("pane-1"),
+        workspaceRouteContent: true,
+      });
+      await screen.findByTestId("workspace-swipe-position");
+
+      dragTo(100, { from: 500 });
+      firePointer(window, "pointerup", 100);
+
+      await waitFor(() => expect(locationPath()).toBe(threadPath("thr-b")));
+      expect(storedSplitLayout(store).focusedPaneId).toBe("pane-2");
+      expect(locationPath()).not.toBe("/");
+    });
+
+    it("cannot reach the Command Center on a fast short right fling", async () => {
+      renderSplitArea({
+        path: threadPath("thr-b"),
+        layout: twoPaneLayout("pane-2"),
+        workspaceRouteContent: true,
+      });
+      await screen.findByTestId("workspace-swipe-position");
+
+      // A real fling: ~23% of the width at ~25 000 px/s.
+      let nowMs = 0;
+      vi.spyOn(Date, "now").mockImplementation(() => nowMs);
+      const surface = swipeSurface();
+      firePointer(surface, "pointerdown", 100);
+      nowMs += 8;
+      firePointer(window, "pointermove", 140);
+      nowMs += 8;
+      firePointer(window, "pointermove", 340);
+      firePointer(window, "pointerup", 340);
+
+      // Velocity completed the pane change; it never promotes to "/".
+      await waitFor(() => expect(locationPath()).toBe(threadPath("thr-a")));
+      expect(screen.getByTestId("command-center-state").textContent).toBe(
+        "none",
+      );
+    });
+
+    it("cancels a short fling that paused before the finger lifted", async () => {
+      renderSplitArea({
+        path: threadPath("thr-b"),
+        layout: twoPaneLayout("pane-2"),
+        workspaceRouteContent: true,
+      });
+      await screen.findByTestId("workspace-swipe-position");
+
+      let nowMs = 0;
+      vi.spyOn(Date, "now").mockImplementation(() => nowMs);
+      const surface = swipeSurface();
+      // 15% of the width, travelled fast…
+      firePointer(surface, "pointerdown", 100);
+      nowMs += 8;
+      firePointer(window, "pointermove", 140);
+      nowMs += 8;
+      firePointer(window, "pointermove", 254);
+      // …then held still before releasing, which is not a fling.
+      nowMs += 300;
+      firePointer(window, "pointerup", 254);
+
+      await waitFor(() => expect(previewSurface()).toBeNull());
+      expect(locationPath()).toBe(threadPath("thr-b"));
+
+      // The same distance released immediately still commits.
+      firePointer(surface, "pointerdown", 100);
+      nowMs += 8;
+      firePointer(window, "pointermove", 140);
+      nowMs += 8;
+      firePointer(window, "pointermove", 254);
+      firePointer(window, "pointerup", 254);
+
+      await waitFor(() => expect(locationPath()).toBe(threadPath("thr-a")));
+    });
+
+    it("opens the Command Center past 68% and keeps the whole layout", async () => {
+      const store = renderSplitArea({
+        path: threadPath("thr-b"),
+        layout: twoPaneLayout("pane-2"),
+        workspaceRouteContent: true,
+      });
+      await screen.findByTestId("workspace-swipe-position");
+
+      dragTo(900, { from: 100 });
+
+      // The travelling surface is the recognizable shell, not the real page.
+      const preview = previewSurface();
+      expect(preview?.textContent).toContain("Recent");
+      expect(preview?.querySelector('[data-testid="root-compose-view"]')).toBe(
+        null,
+      );
+
+      firePointer(window, "pointerup", 900);
+
+      await waitFor(() => expect(locationPath()).toBe("/"));
+      expect(screen.getByTestId("command-center-state").textContent).toBe(
+        `${threadPath("thr-b")}|pane-2`,
+      );
+      expect(paneContents(store)).toEqual([
+        threadContent("thr-a"),
+        threadContent("thr-b"),
+      ]);
+      expect(storedSplitLayout(store).focusedPaneId).toBe("pane-2");
+      expect(screen.getByTestId("workspace-swipe-position").textContent).toBe(
+        "Command Center",
+      );
+    });
+
+    it("pops history on a left swipe out of the Command Center", async () => {
+      const store = renderSplitArea({
+        path: "/",
+        historyEntries: [threadPath("thr-b")],
+        locationState: commandCenterState,
+        layout: twoPaneLayout("pane-2"),
+        workspaceRouteContent: true,
+      });
+      await screen.findByTestId("workspace-swipe-position");
+
+      dragTo(100, { from: 500 });
+      firePointer(window, "pointerup", 100);
+
+      await waitFor(() => expect(locationPath()).toBe(threadPath("thr-b")));
+      expect(paneContents(store)).toEqual([
+        threadContent("thr-a"),
+        threadContent("thr-b"),
+      ]);
+      // A pop, not a forward push: the Command Center entry is still ahead.
+      fireEvent.click(screen.getByTestId("history-forward"));
+      await waitFor(() => expect(locationPath()).toBe("/"));
+    });
+
+    it("previews an inert shell and restores the source on cancel", async () => {
+      renderSplitArea({
+        path: threadPath("thr-b"),
+        layout: twoPaneLayout("pane-2"),
+        workspaceRouteContent: true,
+      });
+      await screen.findByTestId("workspace-swipe-position");
+
+      dragTo(700, { from: 500 });
+
+      const preview = previewSurface();
+      expect(preview?.getAttribute("aria-hidden")).toBe("true");
+      expect(preview?.className).toContain("pointer-events-none");
+      // No thread/compose/plugin runtime is mounted for the destination.
+      expect(preview?.querySelector('[data-testid^="pane-"]')).toBeNull();
+      expect(
+        preview?.querySelectorAll(
+          "input, textarea, button, a[href], [tabindex]",
+        ),
+      ).toHaveLength(0);
+      expect(swipeSurface().style.transform).toBe("translate3d(200px, 0, 0)");
+
+      firePointer(window, "pointercancel", 700);
+
+      await waitFor(() => expect(previewSurface()).toBeNull());
+      expect(locationPath()).toBe(threadPath("thr-b"));
+      expect(swipeSurface().style.transform).toBe("");
+      expect(
+        document.querySelectorAll("[data-workspace-swipe-surface]"),
+      ).toHaveLength(1);
+    });
+
+    it("leaves editable controls their own horizontal axis", async () => {
+      renderSplitArea({
+        path: threadPath("thr-b"),
+        layout: twoPaneLayout("pane-2"),
+        workspaceRouteContent: true,
+      });
+      await screen.findByTestId("workspace-swipe-position");
+
+      dragTo(900, { from: 500, target: screen.getByTestId("draft-thr-a") });
+      firePointer(window, "pointerup", 900);
+
+      expect(previewSurface()).toBeNull();
+      expect(locationPath()).toBe(threadPath("thr-b"));
+    });
+
+    it("reserves the leading edge for global sidebar navigation", async () => {
+      renderSplitArea({
+        path: threadPath("thr-b"),
+        layout: twoPaneLayout("pane-2"),
+        workspaceRouteContent: true,
+      });
+      await screen.findByTestId("workspace-swipe-position");
+
+      dragTo(900, { from: 12 });
+      firePointer(window, "pointerup", 900);
+
+      expect(previewSurface()).toBeNull();
+      expect(locationPath()).toBe(threadPath("thr-b"));
+    });
+
+    it("releases the horizontal touch policy while a text editor is focused", async () => {
+      renderSplitArea({
+        path: threadPath("thr-b"),
+        layout: twoPaneLayout("pane-2"),
+        workspaceRouteContent: true,
+      });
+      await screen.findByTestId("workspace-swipe-position");
+
+      const host = document.querySelector("[data-workspace-swipe-host]");
+      if (!(host instanceof HTMLElement)) {
+        throw new Error("Expected a workspace swipe host");
+      }
+      expect(host.style.touchAction).toBe("pan-y");
+
+      const editor = screen.getByTestId("draft-thr-a");
+      fireEvent.focus(editor);
+
+      expect(host.style.touchAction).toBe("auto");
+      expect(host.hasAttribute("data-workspace-swipe-text-editing")).toBe(true);
+
+      fireEvent.blur(editor);
+      expect(host.style.touchAction).toBe("pan-y");
+    });
+
+    it("drops the positional settle under reduced motion, keeping the move", async () => {
+      stubMediaQueries(
+        (query) =>
+          query === STANDALONE_DISPLAY_MODE_QUERY ||
+          query === "(prefers-reduced-motion: reduce)",
+      );
+      const store = renderSplitArea({
+        path: threadPath("thr-b"),
+        layout: twoPaneLayout("pane-2"),
+        workspaceRouteContent: true,
+      });
+      await screen.findByTestId("workspace-swipe-position");
+
+      dragTo(900, { from: 500 });
+
+      // Nothing travels; the incoming shell states itself quietly instead.
+      expect(swipeSurface().style.transform).toBe("");
+      expect(previewSurface()?.style.opacity).not.toBe("");
+
+      firePointer(window, "pointerup", 900);
+
+      await waitFor(() => expect(locationPath()).toBe(threadPath("thr-a")));
+      expect(storedSplitLayout(store).focusedPaneId).toBe("pane-1");
+    });
+
+    // The gesture navigates the split workspace, so without the experiment that
+    // owns the layout there is no workspace to navigate — and a Command Center
+    // commit would have animated and then found nothing to preserve.
+    it("stays out of the way while thread splits are disabled", async () => {
+      experimentState.enabled = false;
+      renderSplitArea({
+        path: threadPath("thr-b"),
+        layout: twoPaneLayout("pane-2"),
+        workspaceRouteContent: true,
+      });
+
+      expect(await screen.findByTestId("pane-thr-a")).toBeTruthy();
+      expect(document.querySelector("[data-workspace-swipe-host]")).toBeNull();
+      expect(locationPath()).toBe(threadPath("thr-b"));
+    });
+
+    it("keeps the plugin header on the page even with splits disabled", async () => {
+      experimentState.enabled = false;
+      registerDocsPanel();
+      renderSplitArea({
+        path: "/plugins/docs/docs",
+        layout: pluginSplitLayout(),
+        routeContent: docsContent,
+      });
+
+      // AppLayout stood down for the capability alone, so the page must still
+      // carry this header or the route would have none.
+      expect(await screen.findByText("Docs panel")).toBeTruthy();
+      expect(
+        document.querySelector("[data-compact-plugin-panel-surface] header"),
+      ).not.toBeNull();
+      expect(document.querySelector("[data-workspace-swipe-host]")).toBeNull();
+    });
+
+    it("keeps the pre-gesture surface in a compact browser tab", async () => {
+      stubStandaloneDisplayMode(false);
+      renderSplitArea({
+        path: threadPath("thr-b"),
+        layout: twoPaneLayout("pane-2"),
+        workspaceRouteContent: true,
+      });
+
+      expect(await screen.findByTestId("pane-thr-a")).toBeTruthy();
+      expect(document.querySelector("[data-workspace-swipe-host]")).toBeNull();
+      expect(
+        document.querySelector("[data-workspace-swipe-surface]"),
+      ).toBeNull();
+    });
+
+    it("carries a plugin panel's own header inside the travelling surface", async () => {
+      registerDocsPanel();
+      renderSplitArea({
+        path: "/plugins/docs/docs",
+        layout: pluginSplitLayout(),
+        routeContent: docsContent,
+      });
+
+      expect(await screen.findByText("Docs panel")).toBeTruthy();
+      // The page owns its header, so it lives inside the layer that travels.
+      expect(
+        swipeSurface().querySelector(
+          "[data-compact-plugin-panel-surface] header",
+        ),
+      ).not.toBeNull();
+      expect(screen.getByText("Docs")).toBeTruthy();
+    });
+
+    it("previews a plugin pane by its registered title, without its runtime", async () => {
+      registerDocsPanel();
+      const layout = pluginSplitLayout();
+      layout.focusedPaneId = "pane-1";
+      renderSplitArea({
+        path: threadPath("thr-a"),
+        layout,
+        workspaceRouteContent: true,
+      });
+      await screen.findByTestId("workspace-swipe-position");
+
+      // Leftward from pane-1 reaches the plugin pane.
+      dragTo(300, { from: 500 });
+
+      const preview = previewSurface();
+      expect(preview?.textContent).toContain("Docs");
+      expect(preview?.textContent).not.toContain("Docs panel");
+
+      firePointer(window, "pointercancel", 300);
+      await waitFor(() => expect(previewSurface()).toBeNull());
+    });
+
+    it("ignores a second finger's pointer events mid-drag", async () => {
+      renderSplitArea({
+        path: threadPath("thr-b"),
+        layout: twoPaneLayout("pane-2"),
+        workspaceRouteContent: true,
+      });
+      await screen.findByTestId("workspace-swipe-position");
+
+      dragTo(900, { from: 500 });
+      // A second touch lands and lifts elsewhere; it owns neither the drag nor
+      // its outcome.
+      firePointer(window, "pointerup", 120, 300, 2);
+      firePointer(window, "pointercancel", 120, 300, 2);
+
+      expect(previewSurface()).not.toBeNull();
+      expect(locationPath()).toBe(threadPath("thr-b"));
+
+      // The tracked finger still commits normally.
+      firePointer(window, "pointerup", 900);
+      await waitFor(() => expect(locationPath()).toBe(threadPath("thr-a")));
+    });
+
+    it("never starts underneath an open overlay", async () => {
+      renderSplitArea({
+        path: threadPath("thr-b"),
+        layout: twoPaneLayout("pane-2"),
+        workspaceRouteContent: true,
+      });
+      await screen.findByTestId("workspace-swipe-position");
+      const dialog = document.createElement("div");
+      dialog.setAttribute("role", "dialog");
+      dialog.setAttribute("data-state", "open");
+      document.body.appendChild(dialog);
+
+      try {
+        dragTo(900, { from: 500 });
+        firePointer(window, "pointerup", 900);
+
+        // A partial swipe is no way to dismiss a dialog, so nothing moves.
+        expect(previewSurface()).toBeNull();
+        expect(locationPath()).toBe(threadPath("thr-b"));
+      } finally {
+        dialog.remove();
+      }
+    });
+
+    it("drops an in-flight gesture when the surface changes under it", async () => {
+      renderSplitArea({
+        path: threadPath("thr-b"),
+        layout: twoPaneLayout("pane-2"),
+        externalTo: threadPath("thr-c"),
+        workspaceRouteContent: true,
+      });
+      await screen.findByTestId("workspace-swipe-position");
+
+      const host = document.querySelector("[data-workspace-swipe-host]");
+      if (!(host instanceof HTMLElement)) {
+        throw new Error("Expected the workspace swipe host");
+      }
+      const releasePointerCapture = vi.fn();
+      Object.defineProperties(host, {
+        setPointerCapture: { configurable: true, value: vi.fn() },
+        hasPointerCapture: { configurable: true, value: () => true },
+        releasePointerCapture: {
+          configurable: true,
+          value: releasePointerCapture,
+        },
+      });
+
+      dragTo(900, { from: 500 });
+      expect(previewSurface()).not.toBeNull();
+
+      // A sidebar pick, deep link, or agent open lands mid-gesture.
+      fireEvent.click(screen.getByTestId("external-nav"));
+      // The captured finger is handed back rather than left attached.
+      expect(releasePointerCapture).toHaveBeenCalledWith(1);
+      await waitFor(() => expect(locationPath()).toBe(threadPath("thr-c")));
+      expect(previewSurface()).toBeNull();
+
+      firePointer(window, "pointerup", 900);
+
+      // The release cannot commit a destination chosen for the old surface.
+      await waitFor(() => expect(locationPath()).toBe(threadPath("thr-c")));
+      expect(swipeSurface().style.transform).toBe("");
+    });
+
+    it("falls back to the validated return path with no entry to pop", async () => {
+      window.history.replaceState({ idx: 0 }, "");
+      renderSplitArea({
+        path: "/",
+        historyEntries: [threadPath("thr-b")],
+        locationState: commandCenterState,
+        layout: twoPaneLayout("pane-2"),
+        workspaceRouteContent: true,
+      });
+      await screen.findByTestId("workspace-swipe-position");
+
+      dragTo(100, { from: 500 });
+      firePointer(window, "pointerup", 100);
+
+      await waitFor(() => expect(locationPath()).toBe(threadPath("thr-b")));
+      // Replaced, not popped and not pushed: nothing sits ahead of us.
+      fireEvent.click(screen.getByTestId("history-forward"));
+      expect(locationPath()).toBe(threadPath("thr-b"));
+    });
+
+    it("names open thread panes by their cached titles, generically when absent", async () => {
+      sidebarNavigationFixture.data = {
+        personalProject: {
+          threads: [
+            {
+              id: "thr-a",
+              title: "Refactor the swipe host",
+              titleFallback: "",
+            },
+          ],
+        },
+        projects: [
+          {
+            threads: [
+              { id: "thr-b", title: "Ship release notes", titleFallback: "" },
+            ],
+          },
+        ],
+      };
+      renderSplitArea({
+        path: "/",
+        historyEntries: [threadPath("thr-b")],
+        locationState: commandCenterState,
+        layout: threePaneLayout("pane-2"),
+        workspaceRouteContent: true,
+      });
+
+      const intro = await screen.findByTestId("compact-command-center-intro");
+      const labels = [...intro.querySelectorAll("button")].map(
+        (row) => row.firstElementChild?.textContent,
+      );
+      // Two thread panes, two distinct real titles; the unlisted third falls
+      // back to the generic name.
+      expect(labels).toEqual([
+        "Refactor the swipe host",
+        "Ship release notes",
+        "Thread",
+      ]);
+    });
+
+    it("names the Command Center only for a validated swipe arrival", async () => {
+      renderSplitArea({
+        path: "/",
+        historyEntries: [threadPath("thr-b")],
+        locationState: commandCenterState,
+        layout: twoPaneLayout("pane-2"),
+        workspaceRouteContent: true,
+      });
+
+      const intro = await screen.findByTestId("compact-command-center-intro");
+      expect(intro.textContent).toContain("Command Center");
+      expect(intro.textContent).toContain("Workspace 2 of 2");
+      expect(intro.textContent).toContain("Continue workspace");
+      // The composer still arrives whole.
+      expect(screen.getByTestId("root-compose-view")).toBeTruthy();
+      // Every row is a real, thumb-sized button.
+      const rows = intro.querySelectorAll("button");
+      expect(rows).toHaveLength(2);
+      for (const row of rows) {
+        expect(row.className).toContain("min-h-11");
+        expect(row.className).not.toContain("transition-all");
+      }
+
+      fireEvent.click(rows[0]!);
+      await waitFor(() => expect(locationPath()).toBe(threadPath("thr-a")));
+    });
+
+    it("returns through the row for the pane the gesture came from", async () => {
+      renderSplitArea({
+        path: "/",
+        historyEntries: [threadPath("thr-b")],
+        locationState: commandCenterState,
+        layout: twoPaneLayout("pane-2"),
+        workspaceRouteContent: true,
+      });
+
+      const intro = await screen.findByTestId("compact-command-center-intro");
+      const activeRow = intro.querySelector('button[aria-current="true"]');
+      expect(activeRow).not.toBeNull();
+
+      fireEvent.click(activeRow!);
+
+      // Focusing the already-focused pane would do nothing, so the row pops.
+      await waitFor(() => expect(locationPath()).toBe(threadPath("thr-b")));
+      fireEvent.click(screen.getByTestId("history-forward"));
+      await waitFor(() => expect(locationPath()).toBe("/"));
+    });
+
+    it("keeps a direct root route as the plain New thread page", async () => {
+      renderSplitArea({
+        path: "/",
+        layout: twoPaneLayout("pane-2"),
+        workspaceRouteContent: true,
+      });
+
+      expect(await screen.findByTestId("root-compose-view")).toBeTruthy();
+      expect(screen.queryByTestId("compact-command-center-intro")).toBeNull();
+    });
   });
 
   it("prunes a stale focused pane and moves focus + URL to the survivor", async () => {

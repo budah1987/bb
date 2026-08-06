@@ -8,8 +8,10 @@ import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 
 const SIDEBAR_SORTABLE_TRANSITION = {
-  duration: 160,
-  easing: "cubic-bezier(0.2, 0, 0, 1)",
+  // Reordering is a reversible position change, so use the same fast,
+  // smooth-out lane as page and tab slides instead of snapping rows into place.
+  duration: 250,
+  easing: "cubic-bezier(0.22, 1, 0.36, 1)",
 };
 
 /**
@@ -30,8 +32,8 @@ const SIDEBAR_SORTABLE_TRANSITION = {
  * it.
  */
 export const SIDEBAR_DRAG_OVERLAY_DROP_ANIMATION: DropAnimation = {
-  duration: 180,
-  easing: "cubic-bezier(0.2, 0, 0, 1)",
+  duration: 250,
+  easing: "cubic-bezier(0.22, 1, 0.36, 1)",
   sideEffects: null,
 };
 

@@ -9,7 +9,7 @@ import {
 } from "@testing-library/react";
 import type { ThreadListEntry } from "@bb/domain";
 import type { ProjectResponse } from "@bb/server-contract";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter } from "react-router-dom";
 import { Provider, createStore } from "jotai";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -27,6 +27,16 @@ const mockUpdateEnvironment = vi.hoisted(() => ({
 const mockDraftThreadIds = vi.hoisted(() => ({
   current: new Set<string>(),
 }));
+const mockArchiveEnvironmentThreads = vi.hoisted(() => vi.fn());
+const mockEnvironmentStatus = vi.hoisted(() => vi.fn());
+
+vi.mock("@/lib/sdk", () => ({
+  sdk: {
+    environments: {
+      status: mockEnvironmentStatus,
+    },
+  },
+}));
 
 vi.mock("@/hooks/useLocalPathPicker", () => ({
   usePathPickerHost: () => ({ hostId: null, hostName: null }),
@@ -39,7 +49,7 @@ vi.mock("@/hooks/useThreadSplitsEnabled", () => ({
 vi.mock("@/hooks/mutations/environment-mutations", () => ({
   useArchiveEnvironmentThreads: () => ({
     isPending: false,
-    mutate: vi.fn(),
+    mutateAsync: mockArchiveEnvironmentThreads,
     variables: undefined,
   }),
   useUpdateEnvironment: () => ({
@@ -161,6 +171,19 @@ function expectCollapsedActivityAtSidebarEdge(label: string) {
 }
 
 describe("ProjectRow interactions", () => {
+  beforeEach(() => {
+    mockEnvironmentStatus.mockResolvedValue({
+      outcome: "available",
+      workspace: {
+        workingTree: { hasUncommittedChanges: false },
+      },
+    });
+    mockArchiveEnvironmentThreads.mockResolvedValue({
+      ok: true,
+      archivedThreadIds: ["thr_worktree_a", "thr_worktree_b"],
+    });
+  });
+
   afterEach(() => {
     cleanup();
     mockDraftThreadIds.current = new Set();
@@ -497,6 +520,53 @@ describe("ProjectRow interactions", () => {
     ).not.toBeNull();
     await waitFor(() => {
       expect(screen.queryByRole("menuitem", { name: "Rename" })).toBeNull();
+    });
+  });
+
+  it("offers workspace archive on right click and warns for uncommitted work", async () => {
+    mockEnvironmentStatus.mockResolvedValue({
+      outcome: "available",
+      workspace: {
+        workingTree: { hasUncommittedChanges: true },
+      },
+    });
+    renderProjectRow(vi.fn(), {
+      status: "ready",
+      threads: [
+        makeThread({
+          id: "thr_worktree_a",
+          environmentId: "env_test",
+          environmentName: "Feature workspace",
+          environmentBranchName: "feat/archive-warning",
+          environmentWorkspaceDisplayKind: "managed-worktree",
+        }),
+        makeThread({
+          id: "thr_worktree_b",
+          environmentId: "env_test",
+          environmentName: "Feature workspace",
+          environmentBranchName: "feat/archive-warning",
+          environmentWorkspaceDisplayKind: "managed-worktree",
+        }),
+      ],
+    });
+
+    fireEvent.contextMenu(screen.getByText("Feature workspace"));
+    fireEvent.click(
+      await screen.findByRole("menuitem", { name: "Archive workspace" }),
+    );
+
+    expect(
+      await screen.findByRole("dialog", {
+        name: "Archive workspace with uncommitted work?",
+      }),
+    ).not.toBeNull();
+    expect(mockArchiveEnvironmentThreads).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole("button", { name: "Archive anyway" }));
+    await waitFor(() => {
+      expect(mockArchiveEnvironmentThreads).toHaveBeenCalledWith({
+        id: "env_test",
+      });
     });
   });
 });
