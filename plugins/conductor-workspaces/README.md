@@ -116,8 +116,9 @@ environment.
 Workspace rows, thread rows, and conversation tabs reserve a 12px signal slot.
 Active work uses a subtle 5×5 pixel wave, unread or waiting work uses the same
 matrix frozen into a bright center, and idle renders no icon. Rows also say
-**Working**, **Needs attention**, or **Dormant**, so motion and color are never
-the only cues. Reduced-motion clients get a static activity matrix.
+**Working** or **Needs attention** when a conversation is active; idle rows stay
+quiet, so motion and color are never the only cues. Reduced-motion clients get
+a static activity matrix.
 
 On compact viewports, the active conversation stays in a responsive tab rail
 and additional conversations move into a touch-friendly bottom drawer. Context

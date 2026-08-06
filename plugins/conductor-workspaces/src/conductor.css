@@ -133,8 +133,38 @@
 }
 
 .conductor-workspace-row [data-signal="unread"] {
-  color: var(--sidebar-foreground);
+  color: var(--attention);
+}
+
+.conductor-status-label {
+  flex: none;
+  font-size: 0.625rem;
+  line-height: 1rem;
+}
+
+.conductor-status-badge {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 0.25rem;
+  border: 1px solid color-mix(in oklab, var(--attention) 32%, transparent);
+  border-radius: 999px;
+  background: var(--surface-attention);
+  padding: 0.125rem 0.375rem 0.125rem 0.3125rem;
+  color: var(--attention);
+  font-size: 0.625rem;
   font-weight: 500;
+  line-height: 0.875rem;
+  white-space: nowrap;
+}
+
+.conductor-status-badge::before {
+  width: 0.25rem;
+  height: 0.25rem;
+  flex: none;
+  border-radius: 999px;
+  background: currentColor;
+  content: "";
 }
 
 .conductor-sidebar[data-compact] .conductor-section-header,

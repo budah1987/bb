@@ -34,6 +34,7 @@ import {
   ContextMenu,
   ContextMenuContent,
   ContextMenuItem,
+  ContextMenuSeparator,
   ContextMenuTrigger,
 } from "@/components/ui/context-menu";
 import {
@@ -82,6 +83,11 @@ interface RenameTarget {
   scope: RenameScope;
   workspaceTitle: string;
   initialValue: string;
+}
+
+interface ArchiveTarget {
+  environmentId: string;
+  workspaceTitle: string;
 }
 
 const renameCopy: Record<
@@ -186,6 +192,61 @@ function RenameWorkspaceDialog({
   );
 }
 
+function ArchiveWorkspaceDialog({
+  target,
+  error,
+  pending,
+  onClose,
+  onConfirm,
+}: {
+  target: ArchiveTarget | null;
+  error: string | null;
+  pending: boolean;
+  onClose: () => void;
+  onConfirm: (target: ArchiveTarget) => Promise<void>;
+}) {
+  if (!target) return null;
+  const currentTarget = target;
+
+  return (
+    <Dialog open onOpenChange={(open) => !open && !pending && onClose()}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>
+            {error
+              ? "Couldn’t archive workspace"
+              : "Archive workspace with uncommitted work?"}
+          </DialogTitle>
+          <DialogDescription>
+            {error ??
+              `“${currentTarget.workspaceTitle}” has uncommitted changes. Commit or copy them first if you may need them, or archive the workspace anyway.`}
+          </DialogDescription>
+        </DialogHeader>
+        <DialogFooter>
+          <Button
+            type="button"
+            variant="outline"
+            disabled={pending}
+            onClick={onClose}
+          >
+            {error ? "Close" : "Cancel"}
+          </Button>
+          {error ? null : (
+            <Button
+              type="button"
+              variant="destructive"
+              disabled={pending}
+              onClick={() => void onConfirm(currentTarget)}
+            >
+              {pending ? "Archiving…" : "Archive anyway"}
+            </Button>
+          )}
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 function SectionContent({
   collapsed,
   id,
@@ -208,6 +269,28 @@ function SectionContent({
   );
 }
 
+function SignalStatus({
+  signal,
+}: {
+  signal: ReturnType<typeof workspaceSignal>;
+}) {
+  const label = signalLabel(signal);
+  if (!label) return null;
+
+  return (
+    <span
+      className={
+        signal === "unread"
+          ? "conductor-status-badge"
+          : "conductor-status-label"
+      }
+      data-signal={signal}
+    >
+      {label}
+    </span>
+  );
+}
+
 function SectionHeader({
   title,
   contentId,
@@ -227,6 +310,8 @@ function SectionHeader({
   createLabel: string;
   dragHandle?: ReactNode;
 }) {
+  const statusLabel = signalLabel(signal);
+
   return (
     <div className="conductor-section-header group/section flex items-center gap-0.5 px-1 text-xs font-medium text-sidebar-foreground">
       <button
@@ -244,7 +329,7 @@ function SectionHeader({
         <span className="min-w-0 flex-1 truncate text-left">{title}</span>
         <PixelMatrix
           signal={signal}
-          label={`${signalLabel(signal)} in ${title}`}
+          label={statusLabel ? `${statusLabel} in ${title}` : undefined}
         />
       </button>
       {dragHandle}
@@ -264,14 +349,18 @@ function SectionHeader({
 function WorkspaceRow({
   workspace,
   activeThreadId,
+  archivePending,
   shortcutEnabled,
   onOpen,
+  onRequestArchive,
   onRequestRename,
 }: {
   workspace: ConductorWorkspace;
   activeThreadId: string | null;
+  archivePending: boolean;
   shortcutEnabled: boolean;
   onOpen: (threadId: string) => void;
+  onRequestArchive: (workspace: ConductorWorkspace) => void;
   onRequestRename: (workspace: ConductorWorkspace, scope: RenameScope) => void;
 }) {
   const target = pickWorkspaceThread(workspace, activeThreadId);
@@ -299,7 +388,10 @@ function WorkspaceRow({
       aria-current={isActive ? "page" : undefined}
       onClick={() => target && onOpen(target.id)}
     >
-      <PixelMatrix signal={signal} label={`${statusLabel} workspace`} />
+      <PixelMatrix
+        signal={signal}
+        label={statusLabel ? `${statusLabel} workspace` : undefined}
+      />
       <span className="min-w-0 flex-1 text-left">
         <span className="block truncate text-xs font-medium text-sidebar-foreground">
           {workspace.title}
@@ -309,9 +401,7 @@ function WorkspaceRow({
             {workspace.branchName ??
               `${workspace.threads.length} conversation${workspace.threads.length === 1 ? "" : "s"}`}
           </span>
-          <span className="shrink-0" data-signal={signal}>
-            {statusLabel}
-          </span>
+          <SignalStatus signal={signal} />
         </span>
       </span>
       {unreadCount > 0 ? (
@@ -339,6 +429,15 @@ function WorkspaceRow({
           <Icon name="Folder" aria-hidden />
           Rename folder…
         </ContextMenuItem>
+        <ContextMenuSeparator />
+        <ContextMenuItem
+          disabled={archivePending}
+          className="text-destructive focus:bg-destructive/15 focus:text-destructive data-[last-hovered]:bg-destructive/15 data-[last-hovered]:text-destructive"
+          onSelect={() => onRequestArchive(workspace)}
+        >
+          <Icon name="Archive" aria-hidden />
+          Archive workspace
+        </ContextMenuItem>
       </ContextMenuContent>
     </ContextMenu>
   );
@@ -348,19 +447,23 @@ function ProjectSection({
   project,
   activeThreadId,
   collapsed,
+  archivePending,
   dragDisabled,
   onToggle,
   onCreate,
   onOpen,
+  onRequestArchive,
   onRequestRename,
 }: {
   project: ConductorProject;
   activeThreadId: string | null;
   collapsed: boolean;
+  archivePending: boolean;
   dragDisabled: boolean;
   onToggle: () => void;
   onCreate: () => void;
   onOpen: (threadId: string) => void;
+  onRequestArchive: (workspace: ConductorWorkspace) => void;
   onRequestRename: (workspace: ConductorWorkspace, scope: RenameScope) => void;
 }) {
   const {
@@ -421,8 +524,10 @@ function ProjectSection({
               key={workspace.key}
               workspace={workspace}
               activeThreadId={activeThreadId}
+              archivePending={archivePending}
               shortcutEnabled={!collapsed}
               onOpen={onOpen}
+              onRequestArchive={onRequestArchive}
               onRequestRename={onRequestRename}
             />
           ))}
@@ -446,6 +551,11 @@ export function ConductorSidebar({
     loadCollapsedSections,
   );
   const [projectOrder, setProjectOrder] = useState(loadProjectOrder);
+  const [archiveTarget, setArchiveTarget] = useState<ArchiveTarget | null>(
+    null,
+  );
+  const [archiveError, setArchiveError] = useState<string | null>(null);
+  const [archivePending, setArchivePending] = useState(false);
   const [renameTarget, setRenameTarget] = useState<RenameTarget | null>(null);
   const [renameThread, setRenameThread] = useState<PluginSidebarThread | null>(
     null,
@@ -512,6 +622,48 @@ export function ConductorSidebar({
     }))
     .filter((project) => project.workspaces.length > 0);
 
+  const jumpDialogOpen =
+    renameTarget !== null || renameThread !== null || archiveTarget !== null;
+  useEffect(() => {
+    if (jumpDialogOpen) return;
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (
+        event.defaultPrevented ||
+        event.altKey ||
+        event.shiftKey ||
+        event.metaKey === event.ctrlKey ||
+        isJumpBlockedTarget(event.target)
+      ) {
+        return;
+      }
+      const digit = workspaceJumpDigit(event);
+      if (digit === null) return;
+      // Mod+1–9 jump straight to a workspace row: 1–8 pick the matching row
+      // among the sections currently expanded, 9 picks the last one. Collapsed
+      // sections hide their workspaces from the count, so the digits always
+      // match what the sidebar shows. The chord is consumed even without a
+      // match so the app-level thread-jump bindings never fire alongside.
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      const visibleWorkspaces = projects.flatMap((project) =>
+        query || !collapsedSections.has(`project:${project.id}`)
+          ? project.workspaces
+          : [],
+      );
+      const workspace =
+        digit === 9 ? visibleWorkspaces.at(-1) : visibleWorkspaces[digit - 1];
+      const target = workspace
+        ? pickWorkspaceThread(workspace, activeThreadId)
+        : null;
+      if (!target || target.id === activeThreadId) return;
+      actions.open(target.id);
+      onNavigate();
+    };
+    window.addEventListener("keydown", handleKeyDown, true);
+    return () => window.removeEventListener("keydown", handleKeyDown, true);
+  });
+
   function toggleSection(sectionId: string) {
     setCollapsedSections((current) => {
       const next = new Set(current);
@@ -546,6 +698,50 @@ export function ConductorSidebar({
       workspaceTitle: workspace.title,
       initialValue,
     });
+  }
+
+  async function requestArchive(workspace: ConductorWorkspace) {
+    if (!workspace.environmentId || archivePending) return;
+    const target = {
+      environmentId: workspace.environmentId,
+      workspaceTitle: workspace.title,
+    };
+    setArchiveError(null);
+    setArchivePending(true);
+    try {
+      const result = await rpc.call("archiveWorkspace", {
+        environmentId: target.environmentId,
+        confirmUncommittedChanges: false,
+      });
+      if (result.outcome === "confirmation_required") {
+        setArchiveTarget(target);
+      }
+    } catch (cause) {
+      setArchiveTarget(target);
+      setArchiveError(
+        cause instanceof Error ? cause.message : "Couldn’t archive workspace.",
+      );
+    } finally {
+      setArchivePending(false);
+    }
+  }
+
+  async function confirmArchive(target: ArchiveTarget) {
+    if (archivePending) return;
+    setArchivePending(true);
+    try {
+      await rpc.call("archiveWorkspace", {
+        environmentId: target.environmentId,
+        confirmUncommittedChanges: true,
+      });
+      setArchiveTarget(null);
+    } catch (cause) {
+      setArchiveError(
+        cause instanceof Error ? cause.message : "Couldn’t archive workspace.",
+      );
+    } finally {
+      setArchivePending(false);
+    }
   }
 
   function onDragEnd(event: DragEndEvent) {
@@ -610,6 +806,7 @@ export function ConductorSidebar({
                   project={project}
                   activeThreadId={activeThreadId}
                   collapsed={collapsed}
+                  archivePending={archivePending}
                   dragDisabled={Boolean(query) || projects.length < 2}
                   onToggle={() => toggleSection(sectionId)}
                   onCreate={() => {
@@ -620,6 +817,9 @@ export function ConductorSidebar({
                     onNavigate();
                   }}
                   onOpen={openThread}
+                  onRequestArchive={(workspace) => {
+                    void requestArchive(workspace);
+                  }}
                   onRequestRename={(workspace, scope) => {
                     void requestRename(workspace, scope).catch(() => undefined);
                   }}
@@ -708,12 +908,7 @@ export function ConductorSidebar({
                             <span className="block truncate text-xs font-medium text-sidebar-foreground">
                               {threadDisplayTitle(thread)}
                             </span>
-                            <span
-                              className="block truncate text-2xs text-muted-foreground"
-                              data-signal={signal}
-                            >
-                              {statusLabel}
-                            </span>
+                            <SignalStatus signal={signal} />
                           </span>
                         </div>
                       </ConversationActionMenu>
@@ -731,6 +926,17 @@ export function ConductorSidebar({
           </p>
         ) : null}
       </nav>
+      <ArchiveWorkspaceDialog
+        target={archiveTarget}
+        error={archiveError}
+        pending={archivePending}
+        onClose={() => {
+          if (archivePending) return;
+          setArchiveTarget(null);
+          setArchiveError(null);
+        }}
+        onConfirm={confirmArchive}
+      />
       <RenameWorkspaceDialog
         target={renameTarget}
         onClose={() => setRenameTarget(null)}
@@ -749,4 +955,16 @@ export function ConductorSidebar({
       />
     </>
   );
+}
+
+function workspaceJumpDigit(event: KeyboardEvent): number | null {
+  const match =
+    /^Digit([1-9])$/u.exec(event.code)?.[1] ??
+    (/^[1-9]$/u.test(event.key) ? event.key : null);
+  return match === null ? null : Number(match);
+}
+
+function isJumpBlockedTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) return false;
+  return target.closest('[role="dialog"], [role="menu"]') !== null;
 }

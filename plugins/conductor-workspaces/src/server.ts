@@ -71,6 +71,19 @@ export const conductorRpcContract = defineRpcContract({
     }),
     output: z.object({ renamed: z.literal(true) }),
   },
+  archiveWorkspace: {
+    input: z.object({
+      environmentId: z.string().min(1),
+      confirmUncommittedChanges: z.boolean(),
+    }),
+    output: z.discriminatedUnion("outcome", [
+      z.object({ outcome: z.literal("confirmation_required") }),
+      z.object({
+        outcome: z.literal("archived"),
+        archivedThreadIds: z.array(z.string()),
+      }),
+    ]),
+  },
   readReconciliation: {
     input: z.object({}),
     output: z.object({
@@ -92,6 +105,28 @@ interface LegacyWorkspaceRow {
   first_tab_thread_id: string;
   branch_name: string | null;
   environment_name: string | null;
+}
+
+interface WorkspaceArchiveStatus {
+  outcome: string;
+  workspace?: {
+    workingTree: {
+      hasUncommittedChanges: boolean;
+    };
+  };
+}
+
+export function workspaceArchiveGuard(
+  status: WorkspaceArchiveStatus,
+): "clean" | "uncommitted" {
+  if (status.outcome !== "available" || !status.workspace) {
+    throw new Error(
+      "Couldn’t check this workspace for uncommitted changes. Nothing was archived.",
+    );
+  }
+  return status.workspace.workingTree.hasUncommittedChanges
+    ? "uncommitted"
+    : "clean";
 }
 
 export default function plugin(bb: BbPluginApi) {
@@ -121,6 +156,22 @@ export default function plugin(bb: BbPluginApi) {
         });
       }
       return { renamed: true as const };
+    },
+    async archiveWorkspace({ environmentId, confirmUncommittedChanges }) {
+      if (!confirmUncommittedChanges) {
+        const status = await bb.sdk.environments.status({ environmentId });
+        if (workspaceArchiveGuard(status) === "uncommitted") {
+          return { outcome: "confirmation_required" as const };
+        }
+      }
+
+      const result = await bb.sdk.environments.archiveThreads({
+        environmentId,
+      });
+      return {
+        outcome: "archived" as const,
+        archivedThreadIds: result.archivedThreadIds,
+      };
     },
     async readReconciliation() {
       const legacyRows = db

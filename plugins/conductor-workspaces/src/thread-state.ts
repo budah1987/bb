@@ -41,13 +41,13 @@ export function workspaceSignal(
   return "idle";
 }
 
-export function signalLabel(signal: ConversationSignal): string {
+export function signalLabel(signal: ConversationSignal): string | null {
   switch (signal) {
     case "activity":
       return "Working";
     case "unread":
       return "Needs attention";
     case "idle":
-      return "Dormant";
+      return null;
   }
 }

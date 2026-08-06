@@ -256,31 +256,6 @@ function ConductorWorkspaceContextBar({
         openNewConversation(false);
         return;
       }
-      const digit = workspaceTabDigit(event);
-      if (digit !== null) {
-        // The app-level Mod+1–9 bindings jump between sidebar rows, which are
-        // whole workspaces in the Conductor projection. Inside a workspace the
-        // tab rail owns the chord instead: 1–8 pick the matching visible tab
-        // and 9 jumps to the last conversation. Unmatched digits are consumed
-        // too, so the chord never falls back to a workspace jump mid-flow.
-        event.preventDefault();
-        event.stopImmediatePropagation();
-        const { visible } = partitionWorkspaceThreads(
-          openThreads,
-          activeThreadId,
-          calculateVisibleTabCount({
-            compact: isCompactViewport,
-            railWidth: tabRailWidth,
-            threadCount: openThreads.length,
-          }),
-        );
-        const nextThread =
-          digit === 9 ? openThreads.at(-1) : visible[digit - 1];
-        if (!nextThread || nextThread.id === cycleThreadIdRef.current) return;
-        cycleThreadIdRef.current = nextThread.id;
-        actions.open(nextThread.id);
-        return;
-      }
       if (openThreads.length < 2) return;
       const offset =
         event.code === "BracketLeft" || event.key === "["
@@ -311,14 +286,11 @@ function ConductorWorkspaceContextBar({
     return () => window.removeEventListener("keydown", handleKeyDown, true);
   }, [
     actions,
-    activeThreadId,
     closeFocusedConversation,
-    isCompactViewport,
     openNewConversation,
     openThreads,
     renameThread,
     reopenClosedConversation,
-    tabRailWidth,
     workspace,
   ]);
 
@@ -460,13 +432,6 @@ function runWorkspaceTabTransition(navigate: () => void): void {
   void transition.finished.finally(() => {
     delete root.dataset.conductorTabTransition;
   });
-}
-
-function workspaceTabDigit(event: KeyboardEvent): number | null {
-  const match =
-    /^Digit([1-9])$/u.exec(event.code)?.[1] ??
-    (/^[1-9]$/u.test(event.key) ? event.key : null);
-  return match === null ? null : Number(match);
 }
 
 function isCycleBlockedTarget(target: EventTarget | null): boolean {

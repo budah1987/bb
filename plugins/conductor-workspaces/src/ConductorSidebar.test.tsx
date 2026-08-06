@@ -114,7 +114,7 @@ describe("ConductorSidebar", () => {
               indicator: "background-agent",
               indicatorLabel: "Background agent working",
             }),
-            thread("Dormant one-off", {
+            thread("Idle one-off", {
               projectId: "personal",
               environment: null,
               createdAt: 2,
@@ -167,11 +167,15 @@ describe("ConductorSidebar", () => {
       "Repo conversation",
     );
     expect(within(threadsSection).getByText("Working")).toBeDefined();
-    expect(within(threadsSection).getByText("Dormant")).toBeDefined();
+    expect(
+      within(threadsSection).queryByText("Dormant", { exact: true }),
+    ).toBeNull();
     expect(
       threadsSection.querySelector(".conductor-pixel-matrix--activity"),
     ).not.toBeNull();
-    expect(screen.getByText("Needs attention")).toBeDefined();
+    const attentionBadge = screen.getByText("Needs attention");
+    expect(attentionBadge.className).toContain("conductor-status-badge");
+    expect(attentionBadge.getAttribute("data-signal")).toBe("unread");
 
     fireEvent.click(workingLink, { metaKey: true });
     expect(rendered.sidebarActionCalls).toContainEqual({
@@ -451,6 +455,114 @@ describe("ConductorSidebar", () => {
     ).toBeNull();
   });
 
+  it("jumps to visible workspaces with Command+1-9, skipping collapsed sections", async () => {
+    let navigated = 0;
+    const rendered = renderSlot(
+      sidebar,
+      {
+        activeThreadId: null,
+        activeProjectId: null,
+        isCompactViewport: false,
+        onNavigate: () => (navigated += 1),
+        searchQuery: "",
+      },
+      {
+        sidebarThreads: {
+          status: "ready",
+          projects: [
+            { id: "personal", name: "Personal", isPersonal: true },
+            { id: "project-1", name: "Alpha", isPersonal: false },
+            { id: "project-2", name: "Beta", isPersonal: false },
+          ],
+          threads: [
+            thread("Alpha newest", {
+              updatedAt: 30,
+              environment: {
+                id: "environment-1a",
+                name: "Alpha newest workspace",
+                branchName: "feature/newest",
+                workspaceDisplayKind: "managed-worktree",
+              },
+            }),
+            thread("Alpha older", {
+              updatedAt: 20,
+              environment: {
+                id: "environment-1b",
+                name: "Alpha older workspace",
+                branchName: "feature/older",
+                workspaceDisplayKind: "managed-worktree",
+              },
+            }),
+            thread("Beta one", {
+              projectId: "project-2",
+              updatedAt: 10,
+              environment: {
+                id: "environment-2",
+                name: "Beta workspace",
+                branchName: "feature/beta",
+                workspaceDisplayKind: "managed-worktree",
+              },
+            }),
+            thread("Personal work", {
+              projectId: "personal",
+              environment: null,
+            }),
+          ],
+        },
+        rpc: {
+          readReconciliation: () => ({
+            legacyWorkspaces: [],
+            recordedSignature: null,
+          }),
+          recordReconciliation: () => ({ recorded: false }),
+        },
+      },
+    );
+
+    const alpha = await screen.findByRole("region", { name: "Alpha" });
+    const competingHandler = vi.fn();
+    window.addEventListener("keydown", competingHandler);
+
+    // Digits follow the rendered workspace order across repositories.
+    fireEvent.keyDown(window, { key: "2", code: "Digit2", metaKey: true });
+    expect(rendered.sidebarActionCalls.at(-1)).toEqual({
+      method: "open",
+      threadId: "Alpha older",
+      options: undefined,
+    });
+
+    // Command+9 reaches the last visible workspace.
+    fireEvent.keyDown(window, { key: "9", code: "Digit9", metaKey: true });
+    expect(rendered.sidebarActionCalls.at(-1)).toEqual({
+      method: "open",
+      threadId: "Beta one",
+      options: undefined,
+    });
+
+    // A digit without a matching workspace is consumed, not forwarded to the
+    // app-level thread-jump binding.
+    const callCount = rendered.sidebarActionCalls.length;
+    fireEvent.keyDown(window, { key: "5", code: "Digit5", metaKey: true });
+    expect(rendered.sidebarActionCalls.length).toBe(callCount);
+
+    // Collapsing a repository removes its workspaces from the digit order.
+    const alphaToggle = alpha.querySelector<HTMLButtonElement>(
+      "button[aria-controls]",
+    );
+    if (!alphaToggle) throw new Error("Alpha collapse toggle missing");
+    fireEvent.click(alphaToggle);
+    fireEvent.keyDown(window, { key: "1", code: "Digit1", metaKey: true });
+    expect(rendered.sidebarActionCalls.at(-1)).toEqual({
+      method: "open",
+      threadId: "Beta one",
+      options: undefined,
+    });
+
+    window.removeEventListener("keydown", competingHandler);
+    expect(competingHandler).not.toHaveBeenCalled();
+    expect(navigated).toBeGreaterThan(0);
+  });
+
   it("offers separate sidebar, branch, and folder rename actions for worktrees", async () => {
     const renameWorkspace = vi.fn(() => ({ renamed: true as const }));
     renderSlot(
@@ -507,6 +619,68 @@ describe("ConductorSidebar", () => {
         scope: "display",
         value: "Focused workspace",
       });
+    });
+  });
+
+  it("requires confirmation before archiving a workspace with uncommitted work", async () => {
+    const archiveWorkspace = vi
+      .fn()
+      .mockResolvedValueOnce({ outcome: "confirmation_required" as const })
+      .mockResolvedValueOnce({
+        outcome: "archived" as const,
+        archivedThreadIds: ["Repo work"],
+      });
+    renderSlot(
+      sidebar,
+      {
+        activeThreadId: null,
+        activeProjectId: null,
+        isCompactViewport: true,
+        onNavigate: () => undefined,
+        searchQuery: "",
+      },
+      {
+        sidebarThreads: {
+          status: "ready",
+          projects: [{ id: "project-1", name: "BB", isPersonal: false }],
+          threads: [thread("Repo work")],
+        },
+        rpc: {
+          archiveWorkspace,
+          readReconciliation: () => ({
+            legacyWorkspaces: [],
+            recordedSignature: null,
+          }),
+          recordReconciliation: () => ({ recorded: false }),
+        },
+      },
+    );
+
+    const workspace = await screen.findByRole("button", {
+      name: /Repository workspace/u,
+    });
+    fireEvent.contextMenu(workspace);
+    fireEvent.click(
+      await screen.findByRole("menuitem", { name: "Archive workspace" }),
+    );
+
+    expect(
+      await screen.findByRole("dialog", {
+        name: "Archive workspace with uncommitted work?",
+      }),
+    ).toBeDefined();
+    expect(archiveWorkspace).toHaveBeenNthCalledWith(1, {
+      environmentId: "environment-1",
+      confirmUncommittedChanges: false,
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Archive anyway" }));
+    await waitFor(() => {
+      expect(archiveWorkspace).toHaveBeenNthCalledWith(2, {
+        environmentId: "environment-1",
+        confirmUncommittedChanges: true,
+      });
+      expect(screen.queryByRole("dialog")).toBeNull();
     });
   });
 });
