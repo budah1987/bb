@@ -1,5 +1,5 @@
 const { spawn } = require("node:child_process");
-const { chmod, readFile, readdir, writeFile } = require("node:fs/promises");
+const { chmod, cp, readFile, readdir, writeFile } = require("node:fs/promises");
 const { createRequire } = require("node:module");
 const path = require("node:path");
 
@@ -8,6 +8,7 @@ const desktopPackageRoot = path.resolve(__dirname, "..");
 const NODE_MODULES_DIRECTORY = "node_modules";
 const NODE_PTY_PACKAGE_NAME = "node-pty";
 const BETTER_SQLITE3_PACKAGE_NAME = "better-sqlite3";
+const PARCEL_WATCHER_PACKAGE_NAME = "@parcel/watcher";
 const PACKAGED_NATIVE_PACKAGE_NAMES = [
   NODE_PTY_PACKAGE_NAME,
   BETTER_SQLITE3_PACKAGE_NAME,
@@ -198,6 +199,41 @@ async function prepareBetterSqlite3PackageDirectory(packageDirectory, options) {
   );
 }
 
+function parcelWatcherNativePackageName(arch) {
+  if (arch !== "arm64" && arch !== "x64") {
+    throw new Error(`Unsupported macOS @parcel/watcher architecture: ${arch}`);
+  }
+  return `@parcel/watcher-darwin-${arch}`;
+}
+
+async function copyPackagedParcelWatcherNativePackage(appOutDir, arch) {
+  const watcherDirectories = (
+    await findPackageDirectories(appOutDir, [PARCEL_WATCHER_PACKAGE_NAME])
+  ).get(PARCEL_WATCHER_PACKAGE_NAME);
+  if (watcherDirectories.length === 0) {
+    throw new Error(
+      `Unable to find ${PARCEL_WATCHER_PACKAGE_NAME} under ${appOutDir}`,
+    );
+  }
+
+  const nativePackageName = parcelWatcherNativePackageName(arch);
+  const requireFromDesktop = createRequire(
+    path.join(desktopPackageRoot, "package.json"),
+  );
+  const sourceDirectory = path.dirname(
+    requireFromDesktop.resolve(`${nativePackageName}/package.json`),
+  );
+  const targetDirectories = watcherDirectories.map((watcherDirectory) =>
+    path.join(path.dirname(watcherDirectory), path.basename(nativePackageName)),
+  );
+  await Promise.all(
+    targetDirectories.map((targetDirectory) =>
+      cp(sourceDirectory, targetDirectory, { force: true, recursive: true }),
+    ),
+  );
+  return targetDirectories;
+}
+
 async function preparePackagedNativeModules(appOutDir, options = {}) {
   if (!(await isDirectory(appOutDir))) {
     throw new Error(`Packaged app output does not exist: ${appOutDir}`);
@@ -218,8 +254,15 @@ async function preparePackagedNativeModules(appOutDir, options = {}) {
   // The Electron target is only known on the real afterPack path. Standalone
   // invocations (e.g. tests, manual node-pty repair) omit it and skip the fetch.
   if (options.electronVersion === undefined) {
-    return { betterSqlite3Directories: [], nodePtyDirectories };
+    return {
+      betterSqlite3Directories: [],
+      nodePtyDirectories,
+      parcelWatcherNativeDirectories: [],
+    };
   }
+
+  const parcelWatcherNativeDirectories =
+    await copyPackagedParcelWatcherNativePackage(appOutDir, options.arch);
 
   const betterSqlite3Directories = packageDirectories.get(
     BETTER_SQLITE3_PACKAGE_NAME,
@@ -238,7 +281,11 @@ async function preparePackagedNativeModules(appOutDir, options = {}) {
     ),
   );
 
-  return { betterSqlite3Directories, nodePtyDirectories };
+  return {
+    betterSqlite3Directories,
+    nodePtyDirectories,
+    parcelWatcherNativeDirectories,
+  };
 }
 
 function resolveElectronVersion() {
@@ -313,6 +360,8 @@ module.exports.findNativePackageDirectories = findNativePackageDirectories;
 module.exports.prepareNodePtyPackageDirectory = prepareNodePtyPackageDirectory;
 module.exports.prepareBetterSqlite3PackageDirectory =
   prepareBetterSqlite3PackageDirectory;
+module.exports.copyPackagedParcelWatcherNativePackage =
+  copyPackagedParcelWatcherNativePackage;
 module.exports.preparePackagedNativeModules = preparePackagedNativeModules;
 module.exports.resolveBetterSqlite3PrebuildArguments =
   resolveBetterSqlite3PrebuildArguments;

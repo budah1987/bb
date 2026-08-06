@@ -143,6 +143,22 @@ async function resolvePackagedAppBinary() {
   throw new Error(`No packaged ${appBundleName} found under ${releaseDir}`);
 }
 
+async function assertPackagedParcelWatcher(appBinary) {
+  const nativePackageName = `watcher-darwin-${process.arch}`;
+  const nativeBinaryPath = resolve(
+    appBinary,
+    "..",
+    "..",
+    "Resources",
+    "app.asar.unpacked",
+    "node_modules",
+    "@parcel",
+    nativePackageName,
+    "watcher.node",
+  );
+  await access(nativeBinaryPath);
+}
+
 async function startSmokeServer({ dataDir, expectedDesktopVersion }) {
   let resolvePreloadReady = () => {};
   const preloadReady = new Promise((resolvePromise) => {
@@ -359,6 +375,7 @@ async function smokePackagedApp() {
 
   const desktopVersion = await readDesktopPackageVersion();
   const appBinary = await resolvePackagedAppBinary();
+  await assertPackagedParcelWatcher(appBinary);
   const smokeRoot = await mkdtemp(join(tmpdir(), "bb-desktop-packaged-smoke-"));
   const dataDir = join(smokeRoot, "data");
   const userDataDir = join(smokeRoot, "user-data");
