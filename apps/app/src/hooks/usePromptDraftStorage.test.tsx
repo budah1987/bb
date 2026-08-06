@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import { act, cleanup, renderHook } from "@testing-library/react";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   usePromptDraftInputThreadIds,
   usePromptDraftStorage,
@@ -32,6 +32,7 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup();
+  vi.unstubAllGlobals();
 });
 
 describe("usePromptDraftStorage", () => {
@@ -97,6 +98,33 @@ describe("usePromptDraftStorage", () => {
     expect(window.localStorage.getItem(LEGACY_PROJECT_DRAFT_KEY)).toBe(
       storedDraft("project draft"),
     );
+  });
+
+  it("clears the existing quote-only new-thread draft once in the standalone PWA", () => {
+    vi.stubGlobal("matchMedia", (query: string) => ({
+      matches: query === "(display-mode: standalone)",
+    }));
+    window.localStorage.setItem(
+      NEW_THREAD_DRAFT_KEY,
+      storedDraft("> quoted line one\n> quoted line two\n"),
+    );
+
+    const { result } = renderHook(() =>
+      usePromptDraftStorage({ kind: "new-thread" }),
+    );
+
+    expect(result.current.text).toBe("");
+    expect(window.localStorage.getItem(NEW_THREAD_DRAFT_KEY)).toBeNull();
+
+    act(() => {
+      result.current.setDraft({
+        text: "> future quote\n",
+        mentions: [],
+        attachments: [],
+      });
+    });
+
+    expect(result.current.text).toBe("> future quote\n");
   });
 
   it("keeps thread follow-up drafts scoped to the thread", () => {

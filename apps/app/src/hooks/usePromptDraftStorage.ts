@@ -16,6 +16,9 @@ import {
 const PROMPT_DRAFT_STORAGE_PREFIX = "bb.promptbox.contents";
 const PROMPT_DRAFT_STORAGE_VERSION = "3";
 const PROMPT_DRAFT_PERSIST_DEBOUNCE_MS = 250;
+const NEW_THREAD_DRAFT_STORAGE_KEY = `${PROMPT_DRAFT_STORAGE_PREFIX}-draft-${PROMPT_DRAFT_STORAGE_VERSION}`;
+const CONDUCTOR_QUOTED_DRAFT_CLEANUP_KEY =
+  "bb.conductor.cleanup.quote-only-new-thread-draft-2026-08-05";
 
 export type PromptDraftScope =
   | { kind: "automation-edit"; automationId: string }
@@ -47,6 +50,42 @@ function normalizeStorageSegment(value: string): string {
   return encodeURIComponent(value.trim());
 }
 
+function isStandalonePwa(): boolean {
+  return (
+    typeof window.matchMedia === "function" &&
+    window.matchMedia("(display-mode: standalone)").matches
+  );
+}
+
+function clearConductorQuotedDraftOnce(
+  storageKey: string,
+  rawValue: string | null,
+): string | null {
+  if (
+    storageKey !== NEW_THREAD_DRAFT_STORAGE_KEY ||
+    !isStandalonePwa() ||
+    window.localStorage.getItem(CONDUCTOR_QUOTED_DRAFT_CLEANUP_KEY) !== null
+  ) {
+    return rawValue;
+  }
+
+  window.localStorage.setItem(CONDUCTOR_QUOTED_DRAFT_CLEANUP_KEY, "1");
+  const draft = parsePromptDraftStorage(rawValue);
+  const nonEmptyLines = draft.text
+    .split(/\r?\n/u)
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0);
+  const isQuoteOnlyDraft =
+    nonEmptyLines.length > 0 &&
+    nonEmptyLines.every((line) => line === ">" || line.startsWith("> "));
+  if (!isQuoteOnlyDraft) {
+    return rawValue;
+  }
+
+  window.localStorage.removeItem(storageKey);
+  return null;
+}
+
 function readPromptDraft(storageKey: string | null): PromptDraftState {
   if (!storageKey || typeof window === "undefined") {
     return EMPTY_PROMPT_DRAFT;
@@ -56,7 +95,10 @@ function readPromptDraft(storageKey: string | null): PromptDraftState {
     return promptDraftCache.get(storageKey)?.draft ?? EMPTY_PROMPT_DRAFT;
   }
 
-  const rawValue = window.localStorage.getItem(storageKey);
+  const rawValue = clearConductorQuotedDraftOnce(
+    storageKey,
+    window.localStorage.getItem(storageKey),
+  );
   const cachedEntry = promptDraftCache.get(storageKey);
   if (cachedEntry && cachedEntry.rawValue === rawValue) {
     return cachedEntry.draft;
