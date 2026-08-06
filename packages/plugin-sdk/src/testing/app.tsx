@@ -697,6 +697,14 @@ function collectRegistrations(
           title: requireNonEmptyString(kind, "title", registration.title),
           ...(description !== undefined ? { description } : {}),
           component: requireComponent(kind, registration.component),
+          ...(registration.experimental_contextBar !== undefined
+            ? {
+                experimental_contextBar: requireComponent(
+                  kind,
+                  registration.experimental_contextBar,
+                ),
+              }
+            : {}),
         });
       },
       experimental_threadHeaderAction(registration) {
@@ -1176,8 +1184,12 @@ export function renderSlot<
     archive(threadId) {
       sidebarActionCalls.push({ method: "archive", threadId });
     },
-    requestDelete(threadId) {
-      sidebarActionCalls.push({ method: "requestDelete", threadId });
+    requestDelete(threadId, deleteOptions) {
+      sidebarActionCalls.push({
+        method: "requestDelete",
+        threadId,
+        ...(deleteOptions ? { options: { ...deleteOptions } } : {}),
+      });
     },
   };
   const navigate: BbNavigate = {

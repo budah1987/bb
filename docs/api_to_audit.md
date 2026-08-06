@@ -44,7 +44,6 @@ Each label is capped at 80 characters and rendered as a truncating segment.
    only for non-MCP native plugin tools. Confirm that distinction stays sound
    as provider adapters and dynamic-tool provenance evolve.
 
-
 ## `experimental_NewThreadComposer` (`@bb/plugin-sdk/app`)
 
 **What it does.** The host-owned new-thread compose surface, the create-side
@@ -159,6 +158,16 @@ and a disabled or uninstalled plugin gets its list back when it returns.
 5. **Accessibility.** Confirm the host can still guarantee list semantics,
    focus order, and the mobile close behavior when a plugin owns the markup —
    `onNavigate` is currently the plugin's responsibility to call.
+6. **Compound style companion.** A registration may provide
+   `experimental_contextBar`, mounted below each visible thread header only
+   while that exact list is selected on the current client. Audit whether the
+   thread-list registration remains the right ownership boundary, how tall a
+   companion may grow, and whether future style-scoped commands or creation
+   flows belong on this same registration or a dedicated sidebar-style API.
+   Its `experimental_registerCloseHandler` prop lets the companion consume the
+   host's native close request before a secondary panel or desktop window does;
+   audit the boolean ownership protocol and whether close/reopen should become
+   host-owned tab primitives instead.
 
 ## `experimental_useSidebarThreads` / `experimental_useSidebarThreadActions` (`@bb/plugin-sdk/app`)
 
@@ -200,8 +209,11 @@ reimplementing it, and `indicatorLabel` carries the matching accessible string.
 6. **Action surface.** Destructive and dialog-bearing actions route through
    `useThreadActions()`, so `archive` closes panes and repairs the route, and
    `requestDelete` opens bb's confirmation rather than deleting silently.
-   Confirm that split (silent `rename`, host-confirmed delete) is the right
-   line, and decide whether bulk actions and undo belong here.
+   Its optional `experimental_fallbackThreadId` lets a plugin preserve a
+   workspace route after deleting the active thread. Confirm that split
+   (silent `rename`, host-confirmed delete) is the right line, whether the host
+   should validate ancestry before navigating to the fallback, and whether
+   bulk actions and undo belong here.
 7. **Permission.** Decide whether `archive` and `requestDelete` need any plugin
    permission gate beyond installation trust.
 8. **`experimental_useSidebarThreadPullRequest`.** Per-row and opt-in, because
@@ -213,6 +225,13 @@ reimplementing it, and `indicatorLabel` carries the matching accessible string.
    a sidebar of many distinct worktrees does not stampede the git host; and
    returning `null` for "lookup failed" (rather than an error) is the right
    failure for a row that should simply show nothing.
+9. **Locked same-environment creation.** `openNewThread` can receive
+   `experimental_sameEnvironment`, which seeds an existing `environmentId`
+   and can lock it, disabling project,
+   environment, worktree, and branch controls in the root composer. Audit the
+   missing-environment fallback, whether the lock needs visible explanatory
+   copy, and whether this should become a purpose-built host creation dialog.
+
 ## `app.slots.experimental_threadHeaderAction` (`@bb/plugin-sdk/app`)
 
 **What it does.** Renders a plugin component in the thread header's action row.

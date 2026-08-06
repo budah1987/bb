@@ -240,6 +240,9 @@ environment pull-request show <id>`. Diff commands require an explicit target
   and the matching merge-base or commit flags; all support `--json`.
 - `bb environment pull-request ready|draft|merge` manages pull-request state;
   `bb environment archive-threads` bulk-archives an environment's threads.
+- `bb environment rename <id> --branch <name>` renames a worktree's checked-out
+  branch; use `--folder <name>` instead to move it within its current parent.
+  Wait for active work in that environment to finish before either rename.
 - Spawned child threads inherit permission from explicit flags, then the
   parent thread's last execution, then project defaults.
 - Public permission modes are `accept-edits`, `auto`, and `full`.

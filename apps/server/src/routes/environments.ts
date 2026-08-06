@@ -1,5 +1,8 @@
 import path from "node:path";
-import { updateEnvironmentMetadata } from "@bb/db";
+import {
+  recordEnvironmentWorkspaceRename,
+  updateEnvironmentMetadata,
+} from "@bb/db";
 import {
   type GitBranchRefClassification,
   resolveEnvironmentWorkspaceDisplayKind,
@@ -181,14 +184,14 @@ function assertCanMarkPullRequestReady(
   pullRequest: ThreadPullRequest | null,
 ): void {
   if (!pullRequest) {
-    throw new ApiError(409, "pull_request_unavailable", "No pull request found");
-  }
-  if (pullRequest.state !== "draft") {
     throw new ApiError(
       409,
-      "invalid_request",
-      "Pull request is not a draft",
+      "pull_request_unavailable",
+      "No pull request found",
     );
+  }
+  if (pullRequest.state !== "draft") {
+    throw new ApiError(409, "invalid_request", "Pull request is not a draft");
   }
 }
 
@@ -196,14 +199,14 @@ function assertCanConvertPullRequestToDraft(
   pullRequest: ThreadPullRequest | null,
 ): void {
   if (!pullRequest) {
-    throw new ApiError(409, "pull_request_unavailable", "No pull request found");
-  }
-  if (pullRequest.state !== "open") {
     throw new ApiError(
       409,
-      "invalid_request",
-      "Pull request is not open",
+      "pull_request_unavailable",
+      "No pull request found",
     );
+  }
+  if (pullRequest.state !== "open") {
+    throw new ApiError(409, "invalid_request", "Pull request is not open");
   }
 }
 
@@ -211,7 +214,11 @@ function assertCanMergePullRequest(
   pullRequest: ThreadPullRequest | null,
 ): void {
   if (!pullRequest) {
-    throw new ApiError(409, "pull_request_unavailable", "No pull request found");
+    throw new ApiError(
+      409,
+      "pull_request_unavailable",
+      "No pull request found",
+    );
   }
   if (
     pullRequest.state !== "open" ||
@@ -295,6 +302,57 @@ export function registerEnvironmentRoutes(app: Hono, deps: AppDeps): void {
       deps.hub,
       environment.id,
       payload,
+    );
+    if (!updated) {
+      throw new ApiError(404, "environment_not_found", "Environment not found");
+    }
+    return context.json(updated);
+  });
+
+  post(routes.rename, async (context, payload) => {
+    const environment = requireReadyEnvironment(
+      deps.db,
+      context.req.param("id"),
+    );
+    if (!isWorktreeEnvironment(environment) || !environment.isGitRepo) {
+      throw new ApiError(
+        409,
+        "invalid_request",
+        "Only Git worktree environments can be renamed",
+      );
+    }
+    const target = requireWorkspaceCommandTarget(environment);
+    let result;
+    try {
+      result = await runLiveCommandAndWait(deps, {
+        hostId: target.hostId,
+        timeoutMs: COMMAND_TIMEOUT_MS,
+        command: {
+          type: "workspace.rename",
+          environmentId: target.environmentId,
+          workspaceContext: target.workspaceContext,
+          target: payload.target,
+          value: payload.value,
+        },
+      });
+    } catch (error) {
+      if (
+        error instanceof ApiError &&
+        ["environment_busy", "detached_head", "git_command_failed"].includes(
+          error.body.code,
+        )
+      ) {
+        throw new ApiError(409, error.body.code, error.body.message);
+      }
+      throw error;
+    }
+    const updated = recordEnvironmentWorkspaceRename(
+      deps.db,
+      deps.hub,
+      environment.id,
+      result.target === "branch"
+        ? { target: "branch", branchName: result.branchName }
+        : { target: "folder", path: result.path },
     );
     if (!updated) {
       throw new ApiError(404, "environment_not_found", "Environment not found");
@@ -420,10 +478,7 @@ export function registerEnvironmentRoutes(app: Hono, deps: AppDeps): void {
   });
 
   get(routes.diffFiles, async (context, query) => {
-    const target = resolveGitDiffWorkspaceTarget(
-      deps,
-      context.req.param("id"),
-    );
+    const target = resolveGitDiffWorkspaceTarget(deps, context.req.param("id"));
     if (target === null) {
       return context.json(NON_GIT_DIFF_NOT_APPLICABLE);
     }
@@ -484,10 +539,7 @@ export function registerEnvironmentRoutes(app: Hono, deps: AppDeps): void {
   });
 
   post(routes.diffPatch, async (context, payload) => {
-    const target = resolveGitDiffWorkspaceTarget(
-      deps,
-      context.req.param("id"),
-    );
+    const target = resolveGitDiffWorkspaceTarget(deps, context.req.param("id"));
     if (target === null) {
       return context.json(NON_GIT_DIFF_NOT_APPLICABLE);
     }

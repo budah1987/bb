@@ -7,7 +7,7 @@ const SIDEBAR_THREAD_SHORTCUT_TARGET_SELECTOR =
 export const MAX_SIDEBAR_THREAD_SHORTCUTS = 9;
 
 export interface SidebarThreadShortcutTarget {
-  element: HTMLAnchorElement;
+  element: HTMLElement;
   key: string;
   threadId: string;
 }
@@ -31,7 +31,7 @@ function collectSidebarThreadTargets(
     return [];
   }
 
-  const elements = root.querySelectorAll<HTMLAnchorElement>(
+  const elements = root.querySelectorAll<HTMLElement>(
     SIDEBAR_THREAD_SHORTCUT_TARGET_SELECTOR,
   );
   const targets: SidebarThreadShortcutTarget[] = [];

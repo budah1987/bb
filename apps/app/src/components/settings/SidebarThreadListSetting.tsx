@@ -57,14 +57,21 @@ export function SidebarThreadListSetting() {
           <Button
             variant="outline"
             size="sm"
-            className="min-w-40 justify-between"
+            className="h-9 w-full justify-between px-3 text-sm max-md:pointer-coarse:h-11 sm:h-8 sm:w-40 sm:text-xs"
             aria-label="Sidebar thread list"
           >
             <span className="min-w-0 truncate">{selected.title}</span>
-            <Icon name="ChevronDown" className="size-3.5 text-muted-foreground" />
+            <Icon
+              name="ChevronDown"
+              className="size-3.5 text-muted-foreground"
+            />
           </Button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="w-72">
+        <DropdownMenuContent
+          align="end"
+          className="w-72"
+          mobileTitle="Sidebar layout"
+        >
           {options.map((option) => (
             <DropdownMenuItem
               key={option.key}

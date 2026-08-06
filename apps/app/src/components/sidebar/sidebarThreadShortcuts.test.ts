@@ -6,8 +6,12 @@ import {
   getSidebarThreadShortcutTargets,
 } from "./sidebarThreadShortcuts";
 
-function appendShortcutTarget(root: HTMLElement, threadId?: string) {
-  const target = document.createElement("a");
+function appendShortcutTarget(
+  root: HTMLElement,
+  threadId?: string,
+  tagName: "a" | "button" = "a",
+) {
+  const target = document.createElement(tagName);
   target.dataset.sidebarThreadShortcutTarget = "";
   if (threadId) {
     target.dataset.sidebarThreadId = threadId;
@@ -39,4 +43,12 @@ describe("sidebar thread shortcuts", () => {
     expect(getSidebarThreadNavigationTargets(root)).toHaveLength(10);
   });
 
+  it("activates plugin-owned worktree buttons as shortcut targets", () => {
+    const root = document.createElement("aside");
+    const button = appendShortcutTarget(root, "thr_workspace", "button");
+
+    expect(getSidebarThreadShortcutTargets(root)).toEqual([
+      { element: button, key: "1", threadId: "thr_workspace" },
+    ]);
+  });
 });

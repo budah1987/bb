@@ -532,6 +532,10 @@ const SETTLED_RESPONSE_RESULT_FIXTURES: SettledResponseResultFixtures = {
     commitSubject: "Merge feature",
     merged: true,
   },
+  "workspace.rename": {
+    target: "branch",
+    branchName: "feature/renamed",
+  },
   "workspace.pull_request_action": {},
 };
 
@@ -1036,13 +1040,12 @@ describe("host-daemon local schemas", () => {
 });
 
 describe("host-daemon command schemas", () => {
-  // Version 75 makes Claude's sandbox network prompt grantable. A daemon on 74
-  // drops the "localSettings" suggestion that carries the grant, so it sends a
-  // permission_grant subject with an empty profile and the user cannot allow
-  // the prompt. The fix lives in the daemon's Claude bridge, so the bump is
-  // what moves an enrolled machine onto it.
-  it("uses protocol version 75 for grantable sandbox network prompts", () => {
-    expect(HOST_DAEMON_PROTOCOL_VERSION).toBe(75);
+  // Version 76 preserves version 75's grantable Claude sandbox network prompt
+  // and adds workspace rename commands. Older daemons either drop the prompt's
+  // localSettings grant or have no handler for rename, so the bump forces an
+  // update before the server relies on both behaviors.
+  it("uses protocol version 76 for workspace rename support", () => {
+    expect(HOST_DAEMON_PROTOCOL_VERSION).toBe(76);
   });
 
   it("binds Plan cancellation to a required turn id and typed result", () => {

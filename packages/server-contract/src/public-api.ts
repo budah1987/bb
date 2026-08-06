@@ -76,6 +76,7 @@ import type {
   EnvironmentDiffResponse,
   EnvironmentPathsQuery,
   EnvironmentPullRequestResponse,
+  RenameEnvironmentRequest,
   EnvironmentStatusQuery,
   EnvironmentStatusResponse,
   HostDirectoryListing,
@@ -236,6 +237,7 @@ import {
   environmentDiffPatchRequestSchema,
   environmentDiffQuerySchema,
   environmentPathsQuerySchema,
+  renameEnvironmentRequestSchema,
   environmentStatusQuerySchema,
   hostDirectoryQuerySchema,
   hostCloneDefaultPathQuerySchema,
@@ -762,6 +764,18 @@ export const publicApiRoutes = {
         updateEnvironmentRequestSchema,
       ),
       response: jsonResponse<Environment>(),
+    }),
+    rename: defineRoute({
+      path: "/environments/:id/rename",
+      method: "post",
+      request: jsonRequest<PathId, RenameEnvironmentRequest>(
+        renameEnvironmentRequestSchema,
+      ),
+      response: [
+        jsonResponse<Environment>(),
+        jsonResponse<ApiError>({ status: 404 }),
+        jsonResponse<ApiError>({ status: 409 }),
+      ],
     }),
     status: defineRoute({
       path: "/environments/:id/status",

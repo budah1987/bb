@@ -139,6 +139,10 @@ export interface RecordEnvironmentCurrentBranchInput {
   defaultBranch?: string | null;
 }
 
+export type RecordEnvironmentWorkspaceRenameInput =
+  | { target: "branch"; branchName: string }
+  | { target: "folder"; path: string };
+
 export interface ListRetiredLoadedEnvironmentIdsOnHostArgs {
   environmentIds: readonly string[];
   hostId: string;
@@ -258,6 +262,19 @@ export function recordEnvironmentCurrentBranch(
       ? { defaultBranch: input.defaultBranch }
       : {}),
   });
+}
+
+export function recordEnvironmentWorkspaceRename(
+  db: EnvironmentWriteConnection,
+  notifier: DbNotifier,
+  id: string,
+  input: RecordEnvironmentWorkspaceRenameInput,
+) {
+  return input.target === "branch"
+    ? updateEnvironmentMetadataRecord(db, notifier, id, {
+        branchName: input.branchName,
+      })
+    : updateEnvironmentMetadataRecord(db, notifier, id, { path: input.path });
 }
 
 export interface RecordProvisionedEnvironmentWorkspaceInput extends DiscoveredWorkspaceProperties {

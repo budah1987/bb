@@ -7,6 +7,7 @@ import {
   threadPullRequestSchema,
   workspaceDiffTargetSchema,
   workspaceStatusSchema,
+  workspaceFolderNameSchema,
 } from "@bb/domain";
 import { workspaceResolutionFailureSchema } from "@bb/host-daemon-contract";
 import { apiErrorSchema } from "../errors.js";
@@ -30,6 +31,18 @@ export const updateEnvironmentRequestSchema = z
   );
 export type UpdateEnvironmentRequest = z.infer<
   typeof updateEnvironmentRequestSchema
+>;
+
+export const renameEnvironmentRequestSchema = z.discriminatedUnion("target", [
+  z
+    .object({ target: z.literal("branch"), value: gitBranchNameSchema })
+    .strict(),
+  z
+    .object({ target: z.literal("folder"), value: workspaceFolderNameSchema })
+    .strict(),
+]);
+export type RenameEnvironmentRequest = z.infer<
+  typeof renameEnvironmentRequestSchema
 >;
 
 /**

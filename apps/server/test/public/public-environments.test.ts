@@ -168,6 +168,81 @@ describe("public environments", () => {
     });
   });
 
+  it("renames a worktree branch and folder through the daemon before updating metadata", async () => {
+    await withTestHarness(async (harness) => {
+      const { host } = seedHostSession(harness.deps, {
+        id: "host-worktree-rename",
+      });
+      const { project } = seedProjectWithSource(harness.deps, {
+        hostId: host.id,
+      });
+      const environment = seedEnvironment(harness.deps, {
+        hostId: host.id,
+        projectId: project.id,
+        path: "/tmp/original-worktree",
+        branchName: "feature/original",
+        workspaceProvisionType: "managed-worktree",
+      });
+
+      const branchResponsePromise = harness.app.request(
+        `/api/v1/environments/${environment.id}/rename`,
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            target: "branch",
+            value: "feature/renamed",
+          }),
+        },
+      );
+      const branchCommand = await waitForQueuedCommand(
+        harness,
+        ({ command }) =>
+          command.type === "workspace.rename" &&
+          command.environmentId === environment.id,
+      );
+      expect(branchCommand.command).toMatchObject({
+        target: "branch",
+        value: "feature/renamed",
+        workspaceContext: { workspacePath: "/tmp/original-worktree" },
+      });
+      await reportQueuedCommandSuccess(harness, branchCommand, {
+        target: "branch",
+        branchName: "feature/renamed",
+      });
+      expect((await branchResponsePromise).status).toBe(200);
+      expect(getEnvironment(harness.db, environment.id)).toMatchObject({
+        branchName: "feature/renamed",
+        path: "/tmp/original-worktree",
+      });
+
+      const folderResponsePromise = harness.app.request(
+        `/api/v1/environments/${environment.id}/rename`,
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ target: "folder", value: "renamed-worktree" }),
+        },
+      );
+      const folderCommand = await waitForQueuedCommand(
+        harness,
+        ({ command }) =>
+          command.type === "workspace.rename" &&
+          command.environmentId === environment.id &&
+          command.target === "folder",
+      );
+      await reportQueuedCommandSuccess(harness, folderCommand, {
+        target: "folder",
+        path: "/tmp/renamed-worktree",
+      });
+      expect((await folderResponsePromise).status).toBe(200);
+      expect(getEnvironment(harness.db, environment.id)).toMatchObject({
+        branchName: "feature/renamed",
+        path: "/tmp/renamed-worktree",
+      });
+    });
+  });
+
   it("rejects empty environment updates", async () => {
     await withTestHarness(async (harness) => {
       const response = await harness.app.request(

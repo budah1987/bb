@@ -72,6 +72,12 @@ interface EnvironmentUpdateCommandOptions {
   name?: string;
 }
 
+interface EnvironmentRenameCommandOptions {
+  branch?: string;
+  folder?: string;
+  json?: boolean;
+}
+
 interface EnvironmentSquashMergeCommandOptions {
   mergeBaseBranch: string;
   json?: boolean;
@@ -634,6 +640,36 @@ export function registerEnvironmentCommands(
           console.log(
             environment.name ? `Name: ${environment.name}` : "Name cleared",
           );
+        }
+      }),
+    );
+
+  environment
+    .command("rename <id>")
+    .description("Rename an environment worktree branch or folder")
+    .option("--branch <name>", "Rename the checked-out Git branch")
+    .option("--folder <name>", "Rename the worktree folder")
+    .option("--json", "Print machine-readable JSON output")
+    .action(
+      action(async (id: string, opts: EnvironmentRenameCommandOptions) => {
+        if ((opts.branch === undefined) === (opts.folder === undefined)) {
+          throw new Error("Provide exactly one of --branch or --folder.");
+        }
+        const environment = await createCliBbSdk(getUrl()).environments.rename(
+          opts.branch !== undefined
+            ? { environmentId: id, target: "branch", value: opts.branch }
+            : {
+                environmentId: id,
+                target: "folder",
+                value: opts.folder ?? "",
+              },
+        );
+        if (outputJson(opts, environment)) return;
+        console.log(`Environment ${environment.id} renamed`);
+        if (opts.branch !== undefined) {
+          console.log(`Branch: ${environment.branchName ?? opts.branch}`);
+        } else {
+          console.log(`Path: ${environment.path ?? "unavailable"}`);
         }
       }),
     );

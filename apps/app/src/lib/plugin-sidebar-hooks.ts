@@ -161,7 +161,29 @@ export function useSidebarThreadActions(): PluginSidebarThreadActions {
           // project the user last composed in.
           setRootComposeProjectId(projectId);
         }
-        const state = options?.focusPrompt ? { focusPrompt: true } : undefined;
+        const requestedEnvironmentId =
+          options?.experimental_sameEnvironment?.environmentId;
+        const canReuseEnvironment =
+          requestedEnvironmentId !== undefined &&
+          [...entriesById.values()].some(
+            (entry) =>
+              entry.environmentId === requestedEnvironmentId &&
+              (projectId === undefined || entry.projectId === projectId),
+          );
+        const state =
+          options?.focusPrompt || canReuseEnvironment
+            ? {
+                ...(options?.focusPrompt ? { focusPrompt: true } : {}),
+                ...(canReuseEnvironment
+                  ? {
+                      reuseEnvironmentId: requestedEnvironmentId,
+                      ...(options?.experimental_sameEnvironment?.locked
+                        ? { lockEnvironment: true }
+                        : {}),
+                    }
+                  : {}),
+              }
+            : undefined;
         navigate(
           projectId === undefined
             ? getRootComposeRoutePath()
@@ -186,10 +208,16 @@ export function useSidebarThreadActions(): PluginSidebarThreadActions {
       archive(threadId) {
         hostActions.archiveThreadAndChildren(requireEntry(threadId));
       },
-      requestDelete(threadId) {
+      requestDelete(threadId, options) {
         // Opens bb's delete dialog, which counts child threads and asks. The
         // plugin requests; the user confirms.
-        hostActions.requestDelete(requireEntry(threadId));
+        const fallbackThreadId = options?.experimental_fallbackThreadId;
+        hostActions.requestDelete(
+          requireEntry(threadId),
+          fallbackThreadId === undefined
+            ? undefined
+            : { fallbackThread: requireEntry(fallbackThreadId) },
+        );
       },
     }),
     [

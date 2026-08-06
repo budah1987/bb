@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAtom } from "jotai";
 import { atomWithStorage } from "jotai/utils";
@@ -66,6 +66,7 @@ import {
   type ThreadActionsMenuResponsiveAction,
 } from "@/components/thread/ThreadActionsMenu";
 import { PluginThreadHeaderActions } from "@/components/plugin/PluginThreadHeaderActions";
+import { PluginThreadContextBar } from "@/components/plugin/PluginThreadContextBar";
 import { ThreadWorkspaceOpenButton } from "@/components/thread/ThreadWorkspaceOpenButton";
 import {
   formatEnvironmentDisplay,
@@ -1253,7 +1254,17 @@ function ThreadDetailViewInternal(props: ThreadDetailViewInternalProps) {
     },
     [closeTerminal, removeFixedTerminalTab, threadId],
   );
+  const pluginThreadTabCloseHandlerRef = useRef<(() => boolean) | null>(null);
+  const handlePluginThreadTabCloseHandlerChange = useCallback(
+    (handler: (() => boolean) | null) => {
+      pluginThreadTabCloseHandlerRef.current = handler;
+    },
+    [],
+  );
   const handleCloseWindowRequest = useCallback(() => {
+    if (pluginThreadTabCloseHandlerRef.current?.()) {
+      return true;
+    }
     // Gate on the visible panel state, not the persisted flag: on compact
     // viewports the drawer can be dismissed while tabs stay persisted, and
     // Cmd+W must not consume hidden tabs.
@@ -2288,34 +2299,42 @@ function ThreadDetailViewInternal(props: ThreadDetailViewInternalProps) {
       />
     ) : undefined;
   const timelineHeader = (
-    <ThreadDetailHeader
-      actionsMenu={(includeResponsiveActions) => (
-        <ThreadActionsMenu
-          thread={thread}
-          triggerClassName={HEADER_ICON_BUTTON_CLASS}
-          align="end"
-          responsiveActions={
-            includeResponsiveActions ? responsiveHeaderActions : undefined
-          }
-        />
-      )}
-      childPillLabel={
-        isSideChatThread ? "side chat" : parentThreadId ? "child" : null
-      }
-      isSecondaryPanelOpen={isSecondaryPanelOpen}
-      onClosePane={onRequestClose ?? undefined}
-      onOpenThreadGitAction={gitActions.threadGitActionDialog.onOpen}
-      onToggleSecondaryPanel={toggleSecondaryPanel}
-      pluginActions={
-        <PluginThreadHeaderActions
-          threadId={thread.id}
-          projectId={thread.projectId}
-        />
-      }
-      threadHeaderGitActions={gitActions.threadHeaderGitActions}
-      threadTitle={threadTitle}
-      workspaceOpenButton={workspaceOpenButton}
-    />
+    <>
+      <ThreadDetailHeader
+        actionsMenu={(includeResponsiveActions) => (
+          <ThreadActionsMenu
+            thread={thread}
+            triggerClassName={HEADER_ICON_BUTTON_CLASS}
+            align="end"
+            responsiveActions={
+              includeResponsiveActions ? responsiveHeaderActions : undefined
+            }
+          />
+        )}
+        childPillLabel={
+          isSideChatThread ? "side chat" : parentThreadId ? "child" : null
+        }
+        isSecondaryPanelOpen={isSecondaryPanelOpen}
+        onClosePane={onRequestClose ?? undefined}
+        onOpenThreadGitAction={gitActions.threadGitActionDialog.onOpen}
+        onToggleSecondaryPanel={toggleSecondaryPanel}
+        pluginActions={
+          <PluginThreadHeaderActions
+            threadId={thread.id}
+            projectId={thread.projectId}
+          />
+        }
+        threadHeaderGitActions={gitActions.threadHeaderGitActions}
+        threadTitle={threadTitle}
+        workspaceOpenButton={workspaceOpenButton}
+      />
+      <PluginThreadContextBar
+        threadId={thread.id}
+        projectId={thread.projectId}
+        environmentId={thread.environmentId}
+        onCloseHandlerChange={handlePluginThreadTabCloseHandlerChange}
+      />
+    </>
   );
   const composerFooter = (
     <ThreadDetailPromptArea

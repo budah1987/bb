@@ -47,11 +47,12 @@ import { destroyPersistedBrowserViewsForThread } from "@/components/secondary-pa
 import { getThreadReadToggleAction } from "@/components/sidebar/threadReadState";
 import { getRootComposeRoutePath, getThreadRoutePath } from "@/lib/route-paths";
 import { getDesktopBrowserApi } from "@/lib/bb-desktop";
+import { resolveThreadDeleteNavigationTarget } from "./thread-delete-navigation";
 
 export interface ThreadActionsContextValue {
   archiveThreadAndChildren: (thread: Thread) => void;
   requestRename: (thread: Thread) => void;
-  requestDelete: (thread: Thread) => void;
+  requestDelete: (thread: Thread, options?: { fallbackThread: Thread }) => void;
   unarchiveThread: (thread: Thread) => void;
   togglePin: (thread: Thread) => void;
   toggleRead: (thread: Thread) => void;
@@ -78,6 +79,7 @@ interface ThreadActionsProviderProps {
 interface DeleteThreadActionRequest {
   childThreadsConfirmed: boolean;
   closeDialog: () => void;
+  fallbackThread?: Thread;
   thread: Thread;
 }
 
@@ -136,12 +138,16 @@ export function ThreadActionsProvider({
   }, []);
 
   const navigateAwayIfViewing = useCallback(
-    (thread: Thread) => {
-      if (viewedThreadIdRef.current === thread.id) {
-        // Push (not replace) so the back button still returns the user to the
-        // archived/deleted thread's URL if they want to re-open it.
-        navigate(getRootComposeRoutePath());
-      }
+    (thread: Thread, fallbackThread?: Thread) => {
+      const target = resolveThreadDeleteNavigationTarget({
+        viewedThreadId: viewedThreadIdRef.current ?? null,
+        deletedThread: thread,
+        ...(fallbackThread ? { fallbackThread } : {}),
+      });
+      if (!target) return;
+      // The fallback replaces the deleted route so Back cannot reopen it. The
+      // legacy compose fallback remains a push for callers without a sibling.
+      navigate(target.path, target.replace ? { replace: true } : undefined);
     },
     [navigate],
   );
@@ -245,6 +251,7 @@ export function ThreadActionsProvider({
     ({
       childThreadsConfirmed,
       closeDialog,
+      fallbackThread,
       thread,
     }: DeleteThreadActionRequest) => {
       deleteMutate(
@@ -260,7 +267,7 @@ export function ThreadActionsProvider({
             // to the surviving focused pane; single pane falls through to the
             // navigate-away.
             syncNavigationAfterClose(closePanesForThreads([thread.id]), () =>
-              navigateAwayIfViewing(thread),
+              navigateAwayIfViewing(thread, fallbackThread),
             );
           },
         },
@@ -275,14 +282,22 @@ export function ThreadActionsProvider({
   );
 
   const requestDelete = useCallback(
-    async (thread: Thread) => {
+    async (thread: Thread, options?: { fallbackThread: Thread }) => {
       const controller = claimThreadActionContextAbortController();
       const context = await loadThreadActionContext(thread, controller.signal);
       if (context === null || controller.signal.aborted) return;
       if (threadActionContextAbortRef.current === controller) {
         threadActionContextAbortRef.current = null;
       }
-      openDeleteDialog(buildDialogTargetFromContext({ thread }, context));
+      openDeleteDialog(
+        buildDialogTargetFromContext(
+          {
+            thread,
+            ...(options ? { fallbackThread: options.fallbackThread } : {}),
+          },
+          context,
+        ),
+      );
     },
     [
       claimThreadActionContextAbortController,
@@ -296,6 +311,9 @@ export function ThreadActionsProvider({
       performDelete({
         childThreadsConfirmed: target.childThreadCount !== undefined,
         closeDialog: closeDeleteDialog,
+        ...(target.fallbackThread
+          ? { fallbackThread: target.fallbackThread }
+          : {}),
         thread: target.thread,
       });
     },

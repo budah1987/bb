@@ -100,6 +100,10 @@ Making your repo work with bb:
     --name <name>                         Set display name
     --clear-name                          Clear display name
 
+  bb environment rename <id>              Rename a worktree branch or folder
+    --branch <name>                       Rename the checked-out Git branch
+    --folder <name>                       Move the worktree within its parent folder
+
   bb environment commit <id>              Create a commit in the environment
 
   bb environment squash-merge <id>        Squash-merge into a target branch

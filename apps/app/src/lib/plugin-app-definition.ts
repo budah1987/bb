@@ -226,6 +226,14 @@ export function collectPluginAppRegistrations(
           title: requireNonEmptyString(kind, "title", registration.title),
           ...(description !== undefined ? { description } : {}),
           component: requireComponent(kind, registration.component),
+          ...(registration.experimental_contextBar !== undefined
+            ? {
+                experimental_contextBar: requireComponent(
+                  kind,
+                  registration.experimental_contextBar,
+                ),
+              }
+            : {}),
         });
       },
       experimental_threadHeaderAction(registration) {

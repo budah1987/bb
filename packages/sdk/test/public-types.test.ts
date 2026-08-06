@@ -251,6 +251,7 @@ type ExpectedEnvironmentsKey =
   | "mergePullRequest"
   | "paths"
   | "pullRequest"
+  | "rename"
   | "squashMerge"
   | "status"
   | "update";

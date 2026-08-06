@@ -10,6 +10,22 @@ export const environmentStatusValues = [
 export const environmentStatusSchema = z.enum(environmentStatusValues);
 export type EnvironmentStatus = z.infer<typeof environmentStatusSchema>;
 
+export const workspaceFolderNameSchema = z
+  .string()
+  .trim()
+  .min(1)
+  .max(255)
+  .refine((value) => value !== "." && value !== "..", {
+    message: "Folder name cannot be . or ..",
+  })
+  .refine((value) => !/[\\/:*?"<>|\u0000-\u001f]/u.test(value), {
+    message: "Folder name contains characters that are not portable",
+  })
+  .refine((value) => !/[. ]$/u.test(value), {
+    message: "Folder name cannot end with a period or space",
+  });
+export type WorkspaceFolderName = z.infer<typeof workspaceFolderNameSchema>;
+
 export const WORKSPACE_PROVISION_TYPES = [
   "unmanaged",
   "managed-worktree",

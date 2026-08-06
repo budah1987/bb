@@ -263,11 +263,13 @@ export {
   listEnvironments,
   listEnvironmentsByIds,
   listRetiredLoadedEnvironmentIdsOnHost,
+  recordEnvironmentWorkspaceRename,
   updateEnvironmentMetadata,
 } from "./environments.js";
 export type {
   CreateEnvironmentInput,
   ListRetiredLoadedEnvironmentIdsOnHostArgs,
+  RecordEnvironmentWorkspaceRenameInput,
   UpdateEnvironmentMetadataInput,
 } from "./environments.js";
 

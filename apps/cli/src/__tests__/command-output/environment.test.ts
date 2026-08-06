@@ -861,4 +861,36 @@ describe("bb environment command output", () => {
       JSON.parse(String(vi.mocked(console.log).mock.calls[0]?.[0])),
     ).toEqual(environment);
   });
+
+  it("bb environment rename sends one explicit worktree rename scope", async () => {
+    const environment = fixtures.makeEnvironment({
+      id: "env-rename-branch",
+      projectId: "proj-1",
+      hostId: "host-1",
+      branchName: "feature/renamed",
+      createdAt: 1,
+      updatedAt: 2,
+    });
+    const post = vi.fn(async () => environment);
+    stubServerApi({ "v1.environments.:id.rename.$post": post });
+
+    await runCommand(
+      [
+        "environment",
+        "rename",
+        "env-rename-branch",
+        "--branch",
+        "feature/renamed",
+      ],
+      register,
+    );
+
+    expect(post).toHaveBeenCalledWith({
+      param: { id: "env-rename-branch" },
+      json: { target: "branch", value: "feature/renamed" },
+    });
+    expect(collectLogLines(vi.mocked(console.log))).toContain(
+      "Branch: feature/renamed",
+    );
+  });
 });

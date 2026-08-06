@@ -27,6 +27,12 @@ export type {
   StatusOptions,
 } from "./workspace.js";
 
+export { renameWorkspaceBranch, renameWorktreeFolder } from "./rename.js";
+export type {
+  RenameWorkspaceBranchArgs,
+  RenameWorktreeFolderArgs,
+} from "./rename.js";
+
 export {
   WorkspaceError,
   detectGitRepo,

@@ -92,6 +92,24 @@ describe("collectPluginAppRegistrations — experimental_threadHeaderAction", ()
 });
 
 describe("collectPluginAppRegistrations — experimental_threadList", () => {
+  it("collects the selected-style context bar", () => {
+    const definition = definePluginApp((app) => {
+      app.slots.experimental_threadList({
+        id: "workspaces",
+        title: "Workspaces",
+        component: Component,
+        experimental_contextBar: Component,
+      });
+    });
+
+    expect(collectPluginAppRegistrations(definition).threadLists![0]!).toEqual({
+      id: "workspaces",
+      title: "Workspaces",
+      component: Component,
+      experimental_contextBar: Component,
+    });
+  });
+
   it("collects a thread list with its optional fields", () => {
     const definition = definePluginApp((app) => {
       app.slots.experimental_threadList({

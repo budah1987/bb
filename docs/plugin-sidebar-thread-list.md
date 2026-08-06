@@ -54,6 +54,8 @@ interface PluginThreadListRegistration {
   /** One line under the title in the picker. */
   description?: string;
   component: ComponentType<PluginThreadListProps>;
+  /** Companion mounted below each pane header while this list is selected. */
+  experimental_contextBar?: ComponentType<PluginThreadContextBarProps>;
 }
 ```
 
@@ -75,6 +77,21 @@ interface PluginThreadListProps {
    * owns that field, so filter by this rather than shipping a second one.
    */
   searchQuery: string;
+}
+```
+
+The companion context bar receives the active workspace identity and can
+register a focused-tab close handler. The host calls that handler before its
+normal Cmd+W behavior, so a tab-owning companion can consume the command
+without allowing the desktop window to close.
+
+```ts
+interface PluginThreadContextBarProps {
+  threadId: string;
+  projectId: string;
+  environmentId: string | null;
+  isCompactViewport: boolean;
+  experimental_registerCloseHandler?: (handler: (() => boolean) | null) => void;
 }
 ```
 
@@ -213,8 +230,15 @@ experimental_useSidebarThreadActions(): PluginSidebarThreadActions;
 interface PluginSidebarThreadActions {
   /** Navigate to a thread. `split: true` opens it in the side pane. */
   open(threadId: string, options?: { split?: boolean }): void;
-  /** Go to the new-thread screen, optionally scoped to a project. */
-  openNewThread(options?: { projectId?: string; focusPrompt?: boolean }): void;
+  /** Go to the new-thread screen, optionally scoped to a project/environment. */
+  openNewThread(options?: {
+    projectId?: string;
+    focusPrompt?: boolean;
+    experimental_sameEnvironment?: {
+      environmentId: string;
+      locked: boolean;
+    };
+  }): void;
 
   setPinned(threadId: string, pinned: boolean): Promise<void>;
   setRead(threadId: string, read: boolean): Promise<void>;

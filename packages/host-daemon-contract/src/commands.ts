@@ -16,6 +16,7 @@ import {
   rawDiffFileStatSchema,
   workspaceDiffTargetSchema,
   workspaceStatusSchema,
+  workspaceFolderNameSchema,
   gitHostPullRequestSchema,
   clientTurnRequestIdSchema,
   gitBranchNameSchema,
@@ -35,7 +36,7 @@ import {
   providerCliStatusResponseSchema,
 } from "./local.js";
 
-export const HOST_DAEMON_PROTOCOL_VERSION = 75 as const;
+export const HOST_DAEMON_PROTOCOL_VERSION = 76 as const;
 
 export {
   BRANCH_LIST_LIMIT_MAX,
@@ -1090,6 +1091,23 @@ const workspaceSquashMergeCommandSchema = hostDaemonWorkspaceTargetSchema
   })
   .strict();
 
+const workspaceRenameCommandSchema = z.discriminatedUnion("target", [
+  hostDaemonWorkspaceTargetSchema
+    .extend({
+      type: z.literal("workspace.rename"),
+      target: z.literal("branch"),
+      value: gitBranchNameSchema,
+    })
+    .strict(),
+  hostDaemonWorkspaceTargetSchema
+    .extend({
+      type: z.literal("workspace.rename"),
+      target: z.literal("folder"),
+      value: workspaceFolderNameSchema,
+    })
+    .strict(),
+]);
+
 const fileReadResultSchema = z.object({
   path: z.string(),
   content: z.string(),
@@ -1358,6 +1376,10 @@ const workspaceCommitResultSchema = z.object({
 const workspaceSquashMergeResultSchema = workspaceCommitResultSchema.extend({
   merged: z.boolean(),
 });
+const workspaceRenameResultSchema = z.discriminatedUnion("target", [
+  z.object({ target: z.literal("branch"), branchName: gitBranchNameSchema }),
+  z.object({ target: z.literal("folder"), path: z.string().min(1) }),
+]);
 const workspacePullRequestActionResultSchema = z.object({}).strict();
 // ---------------------------------------------------------------------------
 // Provider usage limits (live read from the host's provider credentials)
@@ -1684,6 +1706,15 @@ export const hostDaemonCommandRegistry = {
     type: "workspace.squash_merge",
     schema: workspaceSquashMergeCommandSchema,
     resultSchema: workspaceSquashMergeResultSchema,
+    transport: "settled",
+    retryable: false,
+    flushEventsBeforeResult: false,
+    envLane: "write",
+  }),
+  "workspace.rename": defineHostDaemonCommandDescriptor({
+    type: "workspace.rename",
+    schema: workspaceRenameCommandSchema,
+    resultSchema: workspaceRenameResultSchema,
     transport: "settled",
     retryable: false,
     flushEventsBeforeResult: false,

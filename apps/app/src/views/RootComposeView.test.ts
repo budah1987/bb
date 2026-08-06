@@ -26,6 +26,7 @@ import {
   readSectionIdFromLocationState,
   readRootComposeSectionTargetFromLocationState,
   readInitialPromptFromLocationState,
+  readLockedReuseEnvironmentIdFromLocationState,
   requestRootComposePluginFocus,
   restorePromptDraftAfterOptionChange,
   resolveRootComposePanelThreadId,
@@ -40,6 +41,25 @@ import {
   resolveRootComposeProjectRouting,
   resolveRootComposeProviderRouting,
 } from "./root-compose-environment-selection";
+
+describe("locked reuse environment navigation", () => {
+  it("accepts only an explicit lock paired with a reusable environment", () => {
+    expect(
+      readLockedReuseEnvironmentIdFromLocationState({
+        reuseEnvironmentId: "env_1",
+        lockEnvironment: true,
+      }),
+    ).toBe("env_1");
+    expect(
+      readLockedReuseEnvironmentIdFromLocationState({
+        reuseEnvironmentId: "env_1",
+      }),
+    ).toBeNull();
+    expect(
+      readLockedReuseEnvironmentIdFromLocationState({ lockEnvironment: true }),
+    ).toBeNull();
+  });
+});
 
 describe("requestRootComposePluginFocus", () => {
   it("routes host focus through the subscriber that reveals the root composer", () => {

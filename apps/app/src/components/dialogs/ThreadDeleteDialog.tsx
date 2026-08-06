@@ -6,6 +6,8 @@ import {
 
 export interface ThreadDeleteDialogTarget {
   thread: Thread;
+  /** Thread to show if deletion removes the route currently being viewed. */
+  fallbackThread?: Thread;
   /** Present iff the thread has one or more non-deleted children. */
   childThreadCount?: number;
 }

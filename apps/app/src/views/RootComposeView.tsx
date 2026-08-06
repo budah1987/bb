@@ -521,6 +521,16 @@ function readReuseEnvironmentIdFromLocationState(
   return null;
 }
 
+export function readLockedReuseEnvironmentIdFromLocationState(
+  state: unknown,
+): string | null {
+  if (!state || typeof state !== "object") return null;
+  if (!("lockEnvironment" in state) || state.lockEnvironment !== true) {
+    return null;
+  }
+  return readReuseEnvironmentIdFromLocationState(state);
+}
+
 export function shouldNavigateAfterThreadCreate({
   isForkDraft,
   navigateToThreadAfterCreate,
@@ -844,6 +854,9 @@ export function RootComposeView() {
   const [forkSeed, setForkSeed] = useState<ForkThreadCreateSeed | null>(() =>
     readForkThreadCreateSeedFromLocationState(location.state),
   );
+  const [lockedReuseEnvironmentId, setLockedReuseEnvironmentId] = useState<
+    string | null
+  >(() => readLockedReuseEnvironmentIdFromLocationState(location.state));
   const hostsQuery = useHosts();
   const connectedHostIds = useMemo(
     () =>
@@ -1170,6 +1183,8 @@ export function RootComposeView() {
     const reuseEnvironmentId = readReuseEnvironmentIdFromLocationState(
       location.state,
     );
+    const nextLockedReuseEnvironmentId =
+      readLockedReuseEnvironmentIdFromLocationState(location.state);
     const nextForkSeed = readForkThreadCreateSeedFromLocationState(
       location.state,
     );
@@ -1187,6 +1202,7 @@ export function RootComposeView() {
     } else if (sectionTarget?.kind === "clear") {
       setRootComposeSectionId(null);
     }
+    setLockedReuseEnvironmentId(nextLockedReuseEnvironmentId);
     if (reuseEnvironmentId !== null) {
       setEnvironmentSelectionValue(encodeReuseValue(reuseEnvironmentId));
     }
@@ -1289,6 +1305,10 @@ export function RootComposeView() {
     () => parseEnvironmentValue(effectiveEnvironmentValue),
     [effectiveEnvironmentValue],
   );
+  const isEnvironmentLocked =
+    lockedReuseEnvironmentId !== null &&
+    parsedEnvironment?.type === "reuse" &&
+    parsedEnvironment.environmentId === lockedReuseEnvironmentId;
   // Provider-CLI eligibility follows the machine the thread will actually run
   // on — the selected host when the effective selection names one, otherwise
   // the primary. An outdated
@@ -3195,13 +3215,14 @@ export function RootComposeView() {
       worktreeDisabledReason: projectSourceWorktreeUnavailable
         ? PROJECT_SOURCE_WORKTREE_DISABLED_REASON
         : null,
-      disabled: isForkDraft,
+      disabled: isForkDraft || isEnvironmentLocked,
       ...(isProjectless
         ? {}
         : { onRequestMachineSetup: handleRequestMachineSetup }),
     }),
     [
       effectiveEnvironmentValue,
+      isEnvironmentLocked,
       isForkDraft,
       isProjectless,
       handleEnvironmentSelectionValueChange,
@@ -3222,9 +3243,10 @@ export function RootComposeView() {
           ? parsedEnvironment.environmentId
           : null,
       onChange: handleWorktreeChange,
-      disabled: isForkDraft,
+      disabled: isForkDraft || isEnvironmentLocked,
     };
   }, [
+    isEnvironmentLocked,
     isForkDraft,
     handleEnvironmentSelectionValueChange,
     parsedEnvironment,
@@ -3259,7 +3281,7 @@ export function RootComposeView() {
       optionDisabledTitle: branchUiState.mutationBlocker?.title,
       createDisabledReason: branchUiState.mutationBlocker?.label,
       createDisabledTitle: branchUiState.mutationBlocker?.title,
-      disabled: isForkDraft,
+      disabled: isForkDraft || isEnvironmentLocked,
       onChange: handlePromptBoxBranchChange,
       onClear: handlePromptBoxClearBranch,
       onCreate: handlePromptBoxCreateBranchFromSeed,
@@ -3271,6 +3293,7 @@ export function RootComposeView() {
       activeBranchesQuery.isFetching,
       branchOptions,
       branchEnvironmentMode,
+      isEnvironmentLocked,
       isForkDraft,
       priorityBranchOptions,
       projectSourceWorktreeUnavailable,
@@ -3433,7 +3456,8 @@ export function RootComposeView() {
             !quickCreateProject.isAvailable || quickCreateProject.isCreating,
           isCreating: quickCreateProject.isCreating,
         },
-        disabled: isForkDraft || isCopyingPromptAttachments,
+        disabled:
+          isForkDraft || isEnvironmentLocked || isCopyingPromptAttachments,
       }}
       execution={executionConfig}
     />

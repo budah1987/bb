@@ -5,6 +5,7 @@ import {
   pullRequestMergeActionResponseSchema,
   pullRequestReadyActionResponseSchema,
   squashMergeActionResponseSchema,
+  renameEnvironmentRequestSchema,
   updateEnvironmentRequestSchema,
 } from "@bb/server-contract";
 import type {
@@ -26,6 +27,7 @@ import type {
   PullRequestDraftActionResponse,
   PullRequestMergeActionResponse,
   PullRequestReadyActionResponse,
+  RenameEnvironmentRequest,
   SquashMergeActionResponse,
   EnvironmentStatusQuery,
   UpdateEnvironmentRequest,
@@ -66,6 +68,10 @@ type EnvironmentUpdateFields =
   | EnvironmentNameUpdate;
 
 export type EnvironmentUpdateArgs = EnvironmentUpdateFields & {
+  environmentId: string;
+};
+
+export type EnvironmentRenameArgs = RenameEnvironmentRequest & {
   environmentId: string;
 };
 
@@ -128,6 +134,7 @@ export type EnvironmentMarkPullRequestReadyResult =
 export type EnvironmentMergePullRequestResult = PullRequestMergeActionResponse;
 export type EnvironmentPathsResult = WorkspacePathListResponse;
 export type EnvironmentPullRequestResult = EnvironmentPullRequestResponse;
+export type EnvironmentRenameResult = Environment;
 export type EnvironmentSquashMergeResult = SquashMergeActionResponse;
 export type EnvironmentStatusResult = EnvironmentStatusResponse;
 export type EnvironmentUpdateResult = Environment;
@@ -148,6 +155,7 @@ export interface EnvironmentsArea {
   ): Promise<EnvironmentDiffPatchResult>;
   get(args: EnvironmentGetArgs): Promise<EnvironmentGetResult>;
   pullRequest(args: EnvironmentGetArgs): Promise<EnvironmentPullRequestResult>;
+  rename(args: EnvironmentRenameArgs): Promise<EnvironmentRenameResult>;
   markPullRequestDraft(
     args: EnvironmentActionArgs,
   ): Promise<EnvironmentMarkPullRequestDraftResult>;
@@ -350,6 +358,19 @@ export function createEnvironmentsArea(
           ...signalRequestArgs(input.signal),
         ),
       );
+    },
+    async rename(input) {
+      const request = renameEnvironmentRequestSchema.parse({
+        target: input.target,
+        value: input.value,
+      });
+      const body = await transport.readJson(
+        transport.api.v1.environments[":id"].rename.$post({
+          param: { id: input.environmentId },
+          json: request,
+        }),
+      );
+      return environmentSchema.parse(body);
     },
     async markPullRequestDraft(input) {
       const body = await transport.readJson(

@@ -112,6 +112,26 @@ export interface PluginThreadListProps {
 }
 
 /**
+ * Props passed to a selected thread-list provider's companion context bar.
+ * The host mounts one bar per visible pane, directly below that pane's normal
+ * thread header, and only while the provider is selected on this client.
+ */
+export interface PluginThreadContextBarProps {
+  threadId: string;
+  projectId: string;
+  environmentId: string | null;
+  isCompactViewport: boolean;
+  /**
+   * Registers the context bar's focused-tab close handler with the host. The
+   * handler must return true when it consumed the request. Pass null while the
+   * context bar has no closeable tab and on cleanup.
+   *
+   * Experimental: see docs/api_to_audit.md.
+   */
+  experimental_registerCloseHandler?: (handler: (() => boolean) | null) => void;
+}
+
+/**
  * Props passed to an `experimental_threadHeaderAction` component, rendered in
  * the thread header's action row.
  */
@@ -481,7 +501,19 @@ export interface PluginSidebarThreadActions {
    * Go to the new-thread screen. Passing `projectId` also makes that project
    * the composer's selection, so the thread is created where you asked.
    */
-  openNewThread(options?: { projectId?: string; focusPrompt?: boolean }): void;
+  openNewThread(options?: {
+    projectId?: string;
+    focusPrompt?: boolean;
+    /**
+     * Seed the composer to reuse one native environment and optionally keep
+     * its project/environment controls fixed. Experimental: see
+     * docs/api_to_audit.md.
+     */
+    experimental_sameEnvironment?: {
+      environmentId: string;
+      locked: boolean;
+    };
+  }): void;
   setPinned(threadId: string, pinned: boolean): Promise<void>;
   setRead(threadId: string, read: boolean): Promise<void>;
   /** Silent rename — no dialog. For inline editing in your own row. */
@@ -493,7 +525,16 @@ export interface PluginSidebarThreadActions {
    * is destructive and recursive, so the host owns the confirmation: there is
    * deliberately no silent `delete`.
    */
-  requestDelete(threadId: string): void;
+  requestDelete(
+    threadId: string,
+    options?: {
+      /**
+       * Thread the host should show when deletion removes the active route.
+       * Experimental: see docs/api_to_audit.md.
+       */
+      experimental_fallbackThreadId?: string;
+    },
+  ): void;
 }
 
 /**
@@ -582,6 +623,12 @@ export interface PluginThreadListRegistration {
   /** Optional one-line description under the title in that picker. */
   description?: string;
   component: ComponentType<PluginThreadListProps>;
+  /**
+   * Optional companion surface mounted below every visible thread header only
+   * while this list is the selected sidebar style on the current client.
+   * Experimental: see docs/api_to_audit.md.
+   */
+  experimental_contextBar?: ComponentType<PluginThreadContextBarProps>;
 }
 
 /**
