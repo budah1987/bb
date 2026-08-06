@@ -100,13 +100,13 @@ describe("usePromptDraftStorage", () => {
     );
   });
 
-  it("clears the existing quote-only new-thread draft once in the standalone PWA", () => {
+  it("clears the existing new-thread draft once in the standalone PWA", () => {
     vi.stubGlobal("matchMedia", (query: string) => ({
       matches: query === "(display-mode: standalone)",
     }));
     window.localStorage.setItem(
       NEW_THREAD_DRAFT_KEY,
-      storedDraft("> quoted line one\n> quoted line two\n"),
+      storedDraft("||||||||||||||||||||||||||||||||||||||||"),
     );
 
     const { result } = renderHook(() =>

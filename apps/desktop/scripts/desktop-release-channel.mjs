@@ -28,9 +28,9 @@ export function createDesktopReleaseConfig(channel) {
   }
 
   return {
-    appId: "dev.bb.desktop",
-    applicationName: "bb",
-    artifactName: "${productName}-${version}-${arch}.${ext}",
+    appId: "dev.bb.desktop.bbamir",
+    applicationName: "BBamir",
+    artifactName: "BBamir-${version}-${arch}.${ext}",
     iconFileName: "icon.png",
     macIconPath: "assets/icon.icns",
     releaseTag: "desktop-latest",

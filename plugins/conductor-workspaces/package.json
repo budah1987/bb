@@ -1,8 +1,8 @@
 {
   "name": "bb-plugin-conductor-workspaces",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "type": "module",
-  "description": "A Conductor-style repository, workspace, and conversation sidebar for BB.",
+  "description": "The BBamir repository, workspace, and conversation sidebar for BB.",
   "license": "MIT",
   "files": [
     "dist",
@@ -17,11 +17,11 @@
   ],
   "engines": {
     "node": ">=22.19.0",
-    "bb": ">=0.36.0-conductor.1",
+    "bb": ">=0.36.0-bbamir.1",
     "bbPluginSdk": "^0.4.1"
   },
   "bb": {
-    "name": "Conductor Workspaces",
+    "name": "BBamir Workspaces",
     "description": "Organize native BB environments as workspaces with shared conversation tabs.",
     "branding": {
       "icon": "PanelsTopLeft"

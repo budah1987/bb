@@ -34,7 +34,7 @@ describe("standalone plugin contract", () => {
     expect(dependencies["@bb/shared-ui"]).toBeUndefined();
     expect(Object.values(dependencies)).not.toContain("workspace:*");
     expect(manifest.engines).toMatchObject({
-      bb: ">=0.36.0-conductor.1",
+      bb: ">=0.36.0-bbamir.1",
       bbPluginSdk: "^0.4.1",
     });
 

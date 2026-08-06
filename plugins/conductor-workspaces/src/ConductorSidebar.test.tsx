@@ -142,12 +142,12 @@ describe("ConductorSidebar", () => {
     ).not.toBe(0);
     expect(
       screen
-        .getByRole("navigation", { name: "Conductor workspaces" })
+        .getByRole("navigation", { name: "BBamir workspaces" })
         .getAttribute("data-compact"),
     ).toBe("true");
     expect(
       screen
-        .getByRole("navigation", { name: "Conductor workspaces" })
+        .getByRole("navigation", { name: "BBamir workspaces" })
         .classList.contains("flex-1"),
     ).toBe(true);
     const workingLink = within(threadsSection).getByRole("link", {

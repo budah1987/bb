@@ -1,7 +1,7 @@
 export type DesktopReleaseChannel = "latest" | "nightly";
 
 export interface DesktopReleaseInfo {
-  applicationName: "bb" | "bb Nightly";
+  applicationName: "BBamir" | "bb Nightly";
   channel: DesktopReleaseChannel;
   iconFileName: "icon.png" | "icon-nightly.png";
   releaseTag: "desktop-latest" | "desktop-nightly";
@@ -15,7 +15,7 @@ export function createDesktopReleaseInfo(
   const releaseTag = nightly ? "desktop-nightly" : "desktop-latest";
 
   return {
-    applicationName: nightly ? "bb Nightly" : "bb",
+    applicationName: nightly ? "bb Nightly" : "BBamir",
     channel,
     iconFileName: nightly ? "icon-nightly.png" : "icon.png",
     releaseTag,

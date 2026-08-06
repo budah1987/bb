@@ -1,8 +1,8 @@
-# Conductor Workspaces
+# BBamir Workspaces
 
 An independently updateable BB plugin that projects native BB repositories,
-environments, and threads into a Conductor-style sidebar. It requires BB
-0.36.0-conductor.1 or newer because it uses the generic sidebar thread-list,
+environments, and threads into the BBamir sidebar. It requires BB
+0.36.0-bbamir.1 or newer because it uses the generic sidebar thread-list,
 thread context bar, close-handler, and environment rename APIs added for
 third-party sidebar providers.
 
@@ -19,7 +19,7 @@ Publish this directory as its own Git repository, then install its tracking
 bb plugin install 'git:https://github.com/<owner>/bb-plugin-conductor-workspaces.git@main'
 ```
 
-Choose **Conductor** under **Settings → Appearance → Sidebar** on each client.
+Choose **BBamir** under **Settings → Appearance → Sidebar** on each client.
 The desktop and mobile web apps load the same plugin bundle, but the sidebar
 choice is client-local so mobile can be enabled and tested independently.
 
@@ -41,7 +41,7 @@ The maintenance boundary is intentional:
 
 - BB core owns only generic plugin hooks, native environment rename behavior,
   and host-level shortcut interception. Those changes should be contributed to
-  upstream BB and contain no Conductor-specific policy.
+  upstream BB and contain no BBamir-specific policy.
 - This repository owns the layout, projection, activity animation, tab model,
   menus, gestures, and shortcuts. Normal BB releases do not overwrite it.
 - UI primitives under `components/ui/` are vendored source. They preserve BB's
@@ -53,7 +53,7 @@ The maintenance boundary is intentional:
   unpublished monorepo package.
 
 When BB ships a new version, update BB normally first. `bb plugin outdated`
-will report whether a compatible Conductor update exists; if BB changes a
+will report whether a compatible BBamir update exists; if BB changes a
 generic API, update the plugin's engine range and vendored UI components in one
 small plugin release rather than carrying a long-lived BB UI fork.
 
@@ -100,7 +100,7 @@ not need to commit generated bundles.
 The plugin upgrades the orphaned `conductor-workspaces` prototype in place.
 Its migration zero preserves the prototype's `workspaces` table, and projection
 version 2 treats those anchor threads as legacy organizers: they are hidden by
-the Conductor view but never deleted. Every other active thread is grouped by
+the BBamir view but never deleted. Every other active thread is grouped by
 `projectId + environmentId`; threads without an environment appear in an
 explicit **Local conversations** workspace.
 

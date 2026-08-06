@@ -588,7 +588,7 @@ export function ConductorSidebar({
       <nav
         className="conductor-sidebar flex min-h-0 flex-1 flex-col gap-1 px-1 pb-3"
         data-compact={isCompactViewport || undefined}
-        aria-label="Conductor workspaces"
+        aria-label="BBamir workspaces"
       >
         <DndContext
           sensors={sensors}

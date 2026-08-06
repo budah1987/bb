@@ -238,10 +238,7 @@ describe("electron-builder signing config", () => {
     );
 
     expect(Object.keys(packageJson.optionalDependencies ?? {})).not.toEqual(
-      expect.arrayContaining([
-        "@esbuild/darwin-arm64",
-        "@esbuild/darwin-x64",
-      ]),
+      expect.arrayContaining(["@esbuild/darwin-arm64", "@esbuild/darwin-x64"]),
     );
   });
 
@@ -458,6 +455,14 @@ describe("electron-builder signing config", () => {
       provider: "generic",
       url: nightlyRelease.updateReleaseBaseUrl,
     });
+  });
+
+  it("packages the stable fork as BBamir with its own app identity", async () => {
+    const { config } = await readResolvedConfig({});
+
+    expect(config.appId).toBe("dev.bb.desktop.bbamir");
+    expect(config.productName).toBe("BBamir");
+    expect(config.artifactName).toBe("BBamir-${version}-${arch}.${ext}");
   });
 
   it("rejects unknown desktop release channels", async () => {

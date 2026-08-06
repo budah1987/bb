@@ -9,7 +9,7 @@ import "./src/conductor.css";
 export default definePluginApp((app) => {
   app.slots.experimental_threadList({
     id: "conductor",
-    title: "Conductor",
+    title: "BBamir",
     description:
       "Repositories, isolated workspaces, and shared conversation tabs.",
     component: ConductorSidebar,

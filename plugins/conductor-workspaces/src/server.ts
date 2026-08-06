@@ -156,7 +156,7 @@ export default function plugin(bb: BbPluginApi) {
         report.duplicateConversations !== 0
       ) {
         throw new Error(
-          "Conductor reconciliation refused an incomplete projection.",
+          "BBamir reconciliation refused an incomplete projection.",
         );
       }
       const previous = db

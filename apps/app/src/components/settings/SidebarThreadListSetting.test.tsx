@@ -14,7 +14,7 @@ import {
 } from "@/lib/plugin-slots";
 import { SidebarThreadListSetting } from "./SidebarThreadListSetting";
 
-function ConductorSidebar() {
+function BbamirSidebar() {
   return null;
 }
 
@@ -36,9 +36,9 @@ describe("SidebarThreadListSetting", () => {
       threadLists: [
         {
           id: "conductor",
-          title: "Conductor",
+          title: "BBamir",
           description: "Repositories, workspaces, and conversation tabs.",
-          component: ConductorSidebar,
+          component: BbamirSidebar,
         },
       ],
       fileOpeners: [],
@@ -61,9 +61,9 @@ describe("SidebarThreadListSetting", () => {
     expect(
       await screen.findByRole("dialog", { name: "Sidebar layout" }),
     ).toBeDefined();
-    fireEvent.click(screen.getByRole("menuitem", { name: /Conductor/ }));
+    fireEvent.click(screen.getByRole("menuitem", { name: /BBamir/ }));
 
-    expect(trigger.textContent).toContain("Conductor");
+    expect(trigger.textContent).toContain("BBamir");
     expect(
       JSON.parse(
         window.localStorage.getItem("bb.sidebar.threadListProvider") ?? '""',
