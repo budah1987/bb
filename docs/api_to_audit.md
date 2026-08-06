@@ -235,7 +235,9 @@ reimplementing it, and `indicatorLabel` carries the matching accessible string.
    and can lock it, disabling project,
    environment, worktree, and branch controls in the root composer. Audit the
    missing-environment fallback, whether the lock needs visible explanatory
-   copy, and whether this should become a purpose-built host creation dialog.
+   copy, whether the workspace-scoped draft should remain isolated from the
+   ordinary root composer, and whether this should become a purpose-built host
+   creation dialog.
 
 ## `app.slots.experimental_threadHeaderAction` (`@bb/plugin-sdk/app`)
 

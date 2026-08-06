@@ -27,6 +27,7 @@ import {
   getProjectComposeRoutePath,
   getThreadRoutePath,
 } from "./route-paths";
+import { buildPluginWorkspaceDraftLocationState } from "./plugin-new-thread-draft";
 
 const EMPTY_THREADS: readonly PluginSidebarThread[] = [];
 const EMPTY_PROJECTS: readonly PluginSidebarProject[] = [];
@@ -163,25 +164,33 @@ export function useSidebarThreadActions(): PluginSidebarThreadActions {
         }
         const requestedEnvironmentId =
           options?.experimental_sameEnvironment?.environmentId;
-        const canReuseEnvironment =
+        const reusableEnvironmentEntry =
+          requestedEnvironmentId === undefined
+            ? undefined
+            : [...entriesById.values()].find(
+                (entry) =>
+                  entry.environmentId === requestedEnvironmentId &&
+                  (projectId === undefined || entry.projectId === projectId),
+              );
+        const sameEnvironmentState =
           requestedEnvironmentId !== undefined &&
-          [...entriesById.values()].some(
-            (entry) =>
-              entry.environmentId === requestedEnvironmentId &&
-              (projectId === undefined || entry.projectId === projectId),
-          );
+          reusableEnvironmentEntry !== undefined
+            ? {
+                reuseEnvironmentId: requestedEnvironmentId,
+                ...buildPluginWorkspaceDraftLocationState({
+                  environmentId: requestedEnvironmentId,
+                  projectId: projectId ?? reusableEnvironmentEntry.projectId,
+                }),
+                ...(options?.experimental_sameEnvironment?.locked
+                  ? { lockEnvironment: true }
+                  : {}),
+              }
+            : null;
         const state =
-          options?.focusPrompt || canReuseEnvironment
+          options?.focusPrompt || sameEnvironmentState !== null
             ? {
                 ...(options?.focusPrompt ? { focusPrompt: true } : {}),
-                ...(canReuseEnvironment
-                  ? {
-                      reuseEnvironmentId: requestedEnvironmentId,
-                      ...(options?.experimental_sameEnvironment?.locked
-                        ? { lockEnvironment: true }
-                        : {}),
-                    }
-                  : {}),
+                ...(sameEnvironmentState ?? {}),
               }
             : undefined;
         navigate(

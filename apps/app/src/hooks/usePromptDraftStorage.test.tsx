@@ -100,6 +100,34 @@ describe("usePromptDraftStorage", () => {
     );
   });
 
+  it("keeps a plugin workspace composer isolated from the ordinary new-thread draft", () => {
+    window.localStorage.setItem(
+      NEW_THREAD_DRAFT_KEY,
+      storedDraft("ordinary new-thread draft"),
+    );
+    const { result } = renderHook(() => ({
+      ordinary: usePromptDraftStorage({ kind: "new-thread" }),
+      workspace: usePromptDraftStorage({
+        kind: "plugin-new-thread",
+        key: "sidebar-workspace:proj_1:env_1",
+      }),
+    }));
+
+    expect(result.current.ordinary.text).toBe("ordinary new-thread draft");
+    expect(result.current.workspace.text).toBe("");
+
+    act(() => {
+      result.current.workspace.setDraft({
+        text: "workspace draft",
+        mentions: [],
+        attachments: [],
+      });
+    });
+
+    expect(result.current.workspace.text).toBe("workspace draft");
+    expect(result.current.ordinary.text).toBe("ordinary new-thread draft");
+  });
+
   it("clears the existing new-thread draft once in the standalone PWA", () => {
     vi.stubGlobal("matchMedia", (query: string) => ({
       matches: query === "(display-mode: standalone)",

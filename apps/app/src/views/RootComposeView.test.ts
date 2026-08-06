@@ -59,6 +59,14 @@ describe("locked reuse environment navigation", () => {
       readLockedReuseEnvironmentIdFromLocationState({ lockEnvironment: true }),
     ).toBeNull();
   });
+
+  it("treats a workspace draft key as single-use navigation state", () => {
+    expect(
+      hasSingleUseRootComposeTargetState({
+        pluginNewThreadDraftKey: "sidebar-workspace:proj_1:env_1",
+      }),
+    ).toBe(true);
+  });
 });
 
 describe("requestRootComposePluginFocus", () => {

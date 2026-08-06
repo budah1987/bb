@@ -108,6 +108,7 @@ import {
   requestComposerFocus,
   subscribeComposerFocusRequests,
 } from "@/lib/composer-focus-requests";
+import { readPluginNewThreadDraftKeyFromLocationState } from "@/lib/plugin-new-thread-draft";
 import {
   PluginComposerHostProvider,
   type PluginComposerHost,
@@ -615,6 +616,7 @@ export function hasSingleUseRootComposeTargetState(state: unknown): boolean {
   return (
     readRootComposeSectionTargetFromLocationState(state) !== null ||
     readReuseEnvironmentIdFromLocationState(state) !== null ||
+    readPluginNewThreadDraftKeyFromLocationState(state) !== null ||
     readForkThreadCreateSeedFromLocationState(state) !== null ||
     readThreadHandoffCreateSeedFromLocationState(state) !== null
   );
@@ -858,6 +860,9 @@ export function RootComposeView() {
   const [lockedReuseEnvironmentId, setLockedReuseEnvironmentId] = useState<
     string | null
   >(() => readLockedReuseEnvironmentIdFromLocationState(location.state));
+  const [pluginNewThreadDraftKey, setPluginNewThreadDraftKey] = useState<
+    string | null
+  >(() => readPluginNewThreadDraftKeyFromLocationState(location.state));
   const hostsQuery = useHosts();
   const connectedHostIds = useMemo(
     () =>
@@ -887,7 +892,11 @@ export function RootComposeView() {
     return new Map(hosts.map((host) => [host.id, host.name]));
   }, [hostsQuery.data]);
   const uploadPromptAttachment = useUploadPromptAttachment();
-  const promptDraft = usePromptDraftStorage({ kind: "new-thread" });
+  const promptDraft = usePromptDraftStorage(
+    pluginNewThreadDraftKey === null
+      ? { kind: "new-thread" }
+      : { kind: "plugin-new-thread", key: pluginNewThreadDraftKey },
+  );
   const promptTextEffects = useComposerTextEffects(promptDraft.storageKey);
   // Plugin useComposer() writes (from nav panels / homepage sections) target
   // the new-thread draft; surface + focus the composer when they ask.
@@ -1174,9 +1183,11 @@ export function RootComposeView() {
 
   // Seed transient picker state from navigation state: `reuseEnvironmentId`
   // (the "+" affordance on a worktree) seeds the env picker into reuse mode for
-  // that env. A fork seed also pins the first create request to the source
-  // thread/environment. This is single-use — clear location.state after applying
-  // so a refresh starts from persisted root-compose selection.
+  // that env, while `pluginNewThreadDraftKey` keeps its composer isolated from
+  // the ordinary new-thread draft. A fork seed also pins the first create
+  // request to the source thread/environment. This is single-use — clear
+  // location.state after applying so a refresh starts from persisted
+  // root-compose selection.
   useEffect(() => {
     const sectionTarget = readRootComposeSectionTargetFromLocationState(
       location.state,
@@ -1186,6 +1197,8 @@ export function RootComposeView() {
     );
     const nextLockedReuseEnvironmentId =
       readLockedReuseEnvironmentIdFromLocationState(location.state);
+    const nextPluginNewThreadDraftKey =
+      readPluginNewThreadDraftKeyFromLocationState(location.state);
     const nextForkSeed = readForkThreadCreateSeedFromLocationState(
       location.state,
     );
@@ -1204,6 +1217,9 @@ export function RootComposeView() {
       setRootComposeSectionId(null);
     }
     setLockedReuseEnvironmentId(nextLockedReuseEnvironmentId);
+    if (nextPluginNewThreadDraftKey !== null) {
+      setPluginNewThreadDraftKey(nextPluginNewThreadDraftKey);
+    }
     if (reuseEnvironmentId !== null) {
       setEnvironmentSelectionValue(encodeReuseValue(reuseEnvironmentId));
     }
