@@ -51,6 +51,30 @@ beforeAll(() => {
 
 beforeEach(() => window.localStorage.clear());
 
+function mockViewTransitions() {
+  vi.spyOn(window, "matchMedia").mockImplementation(
+    (query: string): MediaQueryList => ({
+      matches: false,
+      media: query,
+      onchange: null,
+      addListener: () => undefined,
+      removeListener: () => undefined,
+      addEventListener: () => undefined,
+      removeEventListener: () => undefined,
+      dispatchEvent: () => true,
+    }),
+  );
+  const startViewTransition = vi.fn((update: () => void) => {
+    update();
+    return { finished: Promise.resolve() };
+  });
+  Object.defineProperty(document, "startViewTransition", {
+    configurable: true,
+    value: startViewTransition,
+  });
+  return startViewTransition;
+}
+
 function thread(id: number): PluginSidebarThread {
   return {
     id: `thread-${id}`,
@@ -92,7 +116,9 @@ function thread(id: number): PluginSidebarThread {
 afterEach(() => {
   cleanup();
   vi.useRealTimers();
+  vi.restoreAllMocks();
   vi.unstubAllGlobals();
+  Reflect.deleteProperty(document, "startViewTransition");
 });
 
 describe("ConductorContextBar compact layout", () => {
@@ -425,6 +451,7 @@ describe("ConductorContextBar compact layout", () => {
   });
 
   it("uses Command+T for a new conversation in the current worktree", async () => {
+    const startViewTransition = mockViewTransitions();
     const rendered = renderSlot(
       contextBar,
       {
@@ -470,6 +497,7 @@ describe("ConductorContextBar compact layout", () => {
       },
     });
     expect(competingHandler).not.toHaveBeenCalled();
+    expect(startViewTransition).not.toHaveBeenCalled();
     expect(
       screen
         .getByRole("button", {
@@ -477,6 +505,52 @@ describe("ConductorContextBar compact layout", () => {
         })
         .getAttribute("aria-keyshortcuts"),
     ).toBe("Meta+T");
+  });
+
+  it("animates a pointer-created conversation", async () => {
+    const startViewTransition = mockViewTransitions();
+    const rendered = renderSlot(
+      contextBar,
+      {
+        threadId: "thread-1",
+        projectId: "project-1",
+        environmentId: "environment-1",
+        isCompactViewport: false,
+      },
+      {
+        sidebarThreads: {
+          status: "ready",
+          threads: [thread(1)],
+          projects: [{ id: "project-1", name: "BB", isPersonal: false }],
+        },
+        rpc: {
+          readReconciliation: () => ({
+            legacyWorkspaces: [],
+            recordedSignature: null,
+          }),
+        },
+      },
+    );
+    await screen.findByRole("navigation", { name: "Workspace conversations" });
+
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: "New conversation in this workspace",
+      }),
+    );
+
+    expect(startViewTransition).toHaveBeenCalledOnce();
+    expect(rendered.sidebarActionCalls).toContainEqual({
+      method: "openNewThread",
+      options: {
+        projectId: "project-1",
+        focusPrompt: true,
+        experimental_sameEnvironment: {
+          environmentId: "environment-1",
+          locked: true,
+        },
+      },
+    });
   });
 
   it("closes the focused tab and reopens it with Shift+Command+W", async () => {

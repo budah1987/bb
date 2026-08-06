@@ -434,12 +434,14 @@
     animation-delay: calc(var(--pixel-phase) * -70ms);
   }
 
-  .conductor-conversation-tab[data-new-conversation] {
+  html[data-conductor-tab-transition]
+    .conductor-conversation-tab[data-new-conversation] {
     animation: conductor-draft-tab-enter 250ms cubic-bezier(0.22, 1, 0.36, 1)
       both;
   }
 
-  .conductor-conversation-tab[data-new-conversation]::after {
+  html[data-conductor-tab-transition]
+    .conductor-conversation-tab[data-new-conversation]::after {
     transform-origin: left center;
     animation: conductor-draft-indicator-enter 250ms
       cubic-bezier(0.22, 1, 0.36, 1) both;

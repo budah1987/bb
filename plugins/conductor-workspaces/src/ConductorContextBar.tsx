@@ -123,22 +123,27 @@ function ConductorWorkspaceContextBar({
   const closedTabIdSet = new Set(closedTabIds);
   const openThreads =
     workspace?.threads.filter((thread) => !closedTabIdSet.has(thread.id)) ?? [];
-  const openNewConversation = useCallback(() => {
-    runWorkspaceTabTransition(() => {
-      actions.openNewThread({
-        projectId,
-        focusPrompt: true,
-        ...(environmentId
-          ? {
-              experimental_sameEnvironment: {
-                environmentId,
-                locked: true,
-              },
-            }
-          : {}),
-      });
-    });
-  }, [actions, environmentId, projectId]);
+  const openNewConversation = useCallback(
+    (animate: boolean) => {
+      const navigate = () => {
+        actions.openNewThread({
+          projectId,
+          focusPrompt: true,
+          ...(environmentId
+            ? {
+                experimental_sameEnvironment: {
+                  environmentId,
+                  locked: true,
+                },
+              }
+            : {}),
+        });
+      };
+      if (animate) runWorkspaceTabTransition(navigate);
+      else navigate();
+    },
+    [actions, environmentId, projectId],
+  );
 
   useLayoutEffect(() => {
     const rail = tabRailRef.current;
@@ -180,7 +185,7 @@ function ConductorWorkspaceContextBar({
       if (!fallback) return false;
       closeInFlightRef.current = true;
       cycleThreadIdRef.current = fallback.id;
-      runWorkspaceTabTransition(() => actions.open(fallback.id));
+      actions.open(fallback.id);
       return true;
     }
     // The thread route is also the workspace shell. Keep one tab open so a
@@ -248,7 +253,7 @@ function ConductorWorkspaceContextBar({
       if (event.code === "KeyT" || event.key.toLowerCase() === "t") {
         event.preventDefault();
         event.stopImmediatePropagation();
-        openNewConversation();
+        openNewConversation(false);
         return;
       }
       if (openThreads.length < 2) return;
@@ -395,7 +400,7 @@ function ConductorWorkspaceContextBar({
             aria-label="New conversation in this workspace"
             aria-keyshortcuts="Meta+T"
             title="New conversation (⌘T)"
-            onClick={openNewConversation}
+            onClick={() => openNewConversation(true)}
           >
             <Icon name="Plus" className="size-3.5" aria-hidden />
             {isCompactViewport ? null : <span>Conversation</span>}
