@@ -351,6 +351,8 @@ function WorkspaceRow({
   activeThreadId,
   archivePending,
   shortcutEnabled,
+  jumpShortcut,
+  showJumpShortcut,
   onOpen,
   onRequestArchive,
   onRequestRename,
@@ -359,6 +361,8 @@ function WorkspaceRow({
   activeThreadId: string | null;
   archivePending: boolean;
   shortcutEnabled: boolean;
+  jumpShortcut: { ariaKeyshortcuts: string; label: string } | null;
+  showJumpShortcut: boolean;
   onOpen: (threadId: string) => void;
   onRequestArchive: (workspace: ConductorWorkspace) => void;
   onRequestRename: (workspace: ConductorWorkspace, scope: RenameScope) => void;
@@ -386,6 +390,7 @@ function WorkspaceRow({
       data-sidebar-thread-id={isShortcutTarget ? target?.id : undefined}
       data-active={isActive || undefined}
       aria-current={isActive ? "page" : undefined}
+      aria-keyshortcuts={jumpShortcut?.ariaKeyshortcuts}
       onClick={() => target && onOpen(target.id)}
     >
       <PixelMatrix
@@ -404,7 +409,14 @@ function WorkspaceRow({
           <SignalStatus signal={signal} />
         </span>
       </span>
-      {unreadCount > 0 ? (
+      {showJumpShortcut && jumpShortcut ? (
+        <kbd
+          aria-hidden
+          className="pointer-events-none inline-flex shrink-0 items-center justify-center whitespace-nowrap rounded-sm bg-state-hover px-1.5 py-1 font-sans text-xs font-normal leading-none tabular-nums text-muted-foreground"
+        >
+          {jumpShortcut.label}
+        </kbd>
+      ) : unreadCount > 0 ? (
         <span className="text-2xs tabular-nums text-muted-foreground">
           {unreadCount}
         </span>
@@ -449,6 +461,8 @@ function ProjectSection({
   collapsed,
   archivePending,
   dragDisabled,
+  jumpShortcuts,
+  showJumpShortcuts,
   onToggle,
   onCreate,
   onOpen,
@@ -460,6 +474,11 @@ function ProjectSection({
   collapsed: boolean;
   archivePending: boolean;
   dragDisabled: boolean;
+  jumpShortcuts: ReadonlyMap<
+    string,
+    { ariaKeyshortcuts: string; label: string }
+  >;
+  showJumpShortcuts: boolean;
   onToggle: () => void;
   onCreate: () => void;
   onOpen: (threadId: string) => void;
@@ -526,6 +545,8 @@ function ProjectSection({
               activeThreadId={activeThreadId}
               archivePending={archivePending}
               shortcutEnabled={!collapsed}
+              jumpShortcut={jumpShortcuts.get(workspace.key) ?? null}
+              showJumpShortcut={showJumpShortcuts}
               onOpen={onOpen}
               onRequestArchive={onRequestArchive}
               onRequestRename={onRequestRename}
@@ -622,6 +643,27 @@ export function ConductorSidebar({
     }))
     .filter((project) => project.workspaces.length > 0);
 
+  const visibleWorkspaces = projects.flatMap((project) =>
+    query || !collapsedSections.has(`project:${project.id}`)
+      ? project.workspaces
+      : [],
+  );
+  // Digit assignments mirror the jump handler below: 1–8 in visible order and
+  // 9 for the last row. Held long enough, the chord modifier reveals them as
+  // pills — the same affordance bb's own chrome uses for its shortcuts.
+  const jumpShortcutByWorkspaceKey = new Map<
+    string,
+    { ariaKeyshortcuts: string; label: string }
+  >(
+    visibleWorkspaces.flatMap((workspace, index) => {
+      const digit = workspaceJumpDigitForIndex(index, visibleWorkspaces.length);
+      return digit === null
+        ? []
+        : [[workspace.key, jumpShortcutPresentation(digit)] as const];
+    }),
+  );
+  const showJumpShortcuts = useShortcutHintModifierHeld();
+
   const jumpDialogOpen =
     renameTarget !== null || renameThread !== null || archiveTarget !== null;
   useEffect(() => {
@@ -646,11 +688,6 @@ export function ConductorSidebar({
       // match so the app-level thread-jump bindings never fire alongside.
       event.preventDefault();
       event.stopImmediatePropagation();
-      const visibleWorkspaces = projects.flatMap((project) =>
-        query || !collapsedSections.has(`project:${project.id}`)
-          ? project.workspaces
-          : [],
-      );
       const workspace =
         digit === 9 ? visibleWorkspaces.at(-1) : visibleWorkspaces[digit - 1];
       const target = workspace
@@ -808,6 +845,8 @@ export function ConductorSidebar({
                   collapsed={collapsed}
                   archivePending={archivePending}
                   dragDisabled={Boolean(query) || projects.length < 2}
+                  jumpShortcuts={jumpShortcutByWorkspaceKey}
+                  showJumpShortcuts={showJumpShortcuts}
                   onToggle={() => toggleSection(sectionId)}
                   onCreate={() => {
                     actions.openNewThread({
@@ -962,6 +1001,92 @@ function workspaceJumpDigit(event: KeyboardEvent): number | null {
     /^Digit([1-9])$/u.exec(event.code)?.[1] ??
     (/^[1-9]$/u.test(event.key) ? event.key : null);
   return match === null ? null : Number(match);
+}
+
+function workspaceJumpDigitForIndex(
+  index: number,
+  count: number,
+): number | null {
+  if (count >= 9 && index === count - 1) return 9;
+  return index < 8 ? index + 1 : null;
+}
+
+function isMacPlatform(): boolean {
+  return (
+    typeof navigator !== "undefined" &&
+    /Mac|iPhone|iPad|iPod/u.test(navigator.platform)
+  );
+}
+
+function jumpShortcutPresentation(digit: number): {
+  ariaKeyshortcuts: string;
+  label: string;
+} {
+  return isMacPlatform()
+    ? { ariaKeyshortcuts: `Meta+${digit}`, label: `⌘ ${digit}` }
+    : { ariaKeyshortcuts: `Control+${digit}`, label: `Ctrl + ${digit}` };
+}
+
+// Mirrors the hold-to-reveal behavior of bb's own shortcut hints: the bare
+// chord modifier held for a beat reveals the hints; any other key or modifier
+// dismisses them so ordinary chords never flash them.
+const SHORTCUT_HINT_HOLD_DELAY_MS = 700;
+
+function useShortcutHintModifierHeld(): boolean {
+  const [held, setHeld] = useState(false);
+
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    let active = false;
+    const clear = () => {
+      if (timer !== null) {
+        clearTimeout(timer);
+        timer = null;
+      }
+      if (active) {
+        active = false;
+        setHeld(false);
+      }
+    };
+    const isHintModifier = (key: string) =>
+      key === "Control" || (isMacPlatform() && key === "Meta");
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (!isHintModifier(event.key)) {
+        clear();
+        return;
+      }
+      if (timer !== null || active) return;
+      const otherModifierHeld =
+        event.shiftKey ||
+        event.altKey ||
+        (event.key === "Meta" ? event.ctrlKey : event.metaKey);
+      if (otherModifierHeld) {
+        clear();
+        return;
+      }
+      timer = setTimeout(() => {
+        timer = null;
+        active = true;
+        setHeld(true);
+      }, SHORTCUT_HINT_HOLD_DELAY_MS);
+    };
+    const handleKeyUp = (event: KeyboardEvent) => {
+      if (isHintModifier(event.key)) clear();
+    };
+    const handleBlur = () => clear();
+
+    window.addEventListener("keydown", handleKeyDown);
+    window.addEventListener("keyup", handleKeyUp);
+    window.addEventListener("blur", handleBlur);
+    return () => {
+      if (timer !== null) clearTimeout(timer);
+      window.removeEventListener("keydown", handleKeyDown);
+      window.removeEventListener("keyup", handleKeyUp);
+      window.removeEventListener("blur", handleBlur);
+    };
+  }, []);
+
+  return held;
 }
 
 function isJumpBlockedTarget(target: EventTarget | null): boolean {

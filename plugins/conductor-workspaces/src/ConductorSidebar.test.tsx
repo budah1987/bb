@@ -563,6 +563,71 @@ describe("ConductorSidebar", () => {
     expect(navigated).toBeGreaterThan(0);
   });
 
+  it("reveals workspace jump shortcuts while the chord modifier is held", async () => {
+    renderSlot(
+      sidebar,
+      {
+        activeThreadId: null,
+        activeProjectId: null,
+        isCompactViewport: false,
+        onNavigate: () => undefined,
+        searchQuery: "",
+      },
+      {
+        sidebarThreads: {
+          status: "ready",
+          projects: [
+            { id: "personal", name: "Personal", isPersonal: true },
+            { id: "project-1", name: "Alpha", isPersonal: false },
+          ],
+          threads: [
+            thread("Alpha newest", {
+              updatedAt: 30,
+              environment: {
+                id: "environment-1a",
+                name: "Alpha newest workspace",
+                branchName: "feature/newest",
+                workspaceDisplayKind: "managed-worktree",
+              },
+            }),
+            thread("Alpha older", {
+              updatedAt: 20,
+              environment: {
+                id: "environment-1b",
+                name: "Alpha older workspace",
+                branchName: "feature/older",
+                workspaceDisplayKind: "managed-worktree",
+              },
+            }),
+          ],
+        },
+        rpc: {
+          readReconciliation: () => ({
+            legacyWorkspaces: [],
+            recordedSignature: null,
+          }),
+          recordReconciliation: () => ({ recorded: false }),
+        },
+      },
+    );
+
+    // jsdom is not a Mac platform, so the chord modifier is Control.
+    const row = await screen.findByRole("button", {
+      name: /Alpha newest workspace/u,
+    });
+    expect(row.getAttribute("aria-keyshortcuts")).toBe("Control+1");
+    expect(screen.queryByText("Ctrl + 1")).toBeNull();
+
+    vi.useFakeTimers();
+    fireEvent.keyDown(window, { key: "Control", ctrlKey: true });
+    act(() => vi.advanceTimersByTime(700));
+    expect(screen.getByText("Ctrl + 1")).toBeDefined();
+    expect(screen.getByText("Ctrl + 2")).toBeDefined();
+
+    fireEvent.keyUp(window, { key: "Control" });
+    expect(screen.queryByText("Ctrl + 1")).toBeNull();
+  });
+
   it("offers separate sidebar, branch, and folder rename actions for worktrees", async () => {
     const renameWorkspace = vi.fn(() => ({ renamed: true as const }));
     renderSlot(
