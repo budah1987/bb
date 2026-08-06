@@ -1,0 +1,502 @@
+// @vitest-environment jsdom
+import {
+  afterEach,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+} from "vitest";
+import {
+  act,
+  cleanup,
+  fireEvent,
+  screen,
+  waitFor,
+} from "@testing-library/react";
+import { loadPluginApp, renderSlot } from "@bb/plugin-sdk/testing/app";
+import type { PluginSidebarThread } from "@bb/plugin-sdk/app";
+
+const app = await loadPluginApp(() => import("../app"));
+const contextComponent = app.threadLists[0]?.experimental_contextBar;
+if (!contextComponent)
+  throw new Error("Conductor context bar was not registered");
+const contextBar = {
+  component: contextComponent,
+};
+
+beforeAll(() => {
+  Object.defineProperty(window, "matchMedia", {
+    configurable: true,
+    value: (query: string): MediaQueryList => ({
+      matches: true,
+      media: query,
+      onchange: null,
+      addListener: () => undefined,
+      removeListener: () => undefined,
+      addEventListener: () => undefined,
+      removeEventListener: () => undefined,
+      dispatchEvent: () => true,
+    }),
+  });
+});
+
+beforeEach(() => window.localStorage.clear());
+
+function thread(id: number): PluginSidebarThread {
+  return {
+    id: `thread-${id}`,
+    projectId: "project-1",
+    title: `Conversation ${id}`,
+    titleFallback: null,
+    parentThreadId: null,
+    sectionId: null,
+    originKind: null,
+    originPluginId: null,
+    providerId: "codex",
+    hasPendingInteraction: false,
+    activity: {
+      workflows: 0,
+      backgroundAgents: 0,
+      backgroundCommands: 0,
+      planMode: 0,
+      goals: 0,
+    },
+    indicator: "none",
+    indicatorLabel: null,
+    isUnread: false,
+    isPinned: false,
+    isArchived: false,
+    environment: {
+      id: "environment-1",
+      name: "Mobile workspace",
+      branchName: "qa/mobile",
+      workspaceDisplayKind: "managed-worktree",
+    },
+    host: null,
+    createdAt: id,
+    updatedAt: id,
+    lastReadAt: id,
+    latestAttentionAt: id,
+  };
+}
+
+afterEach(() => {
+  cleanup();
+  vi.useRealTimers();
+  vi.unstubAllGlobals();
+});
+
+describe("ConductorContextBar compact layout", () => {
+  it("keeps two readable tabs and moves the rest into a working overflow", async () => {
+    const threads = [1, 2, 3, 4, 5, 6].map(thread);
+    const rendered = renderSlot(
+      contextBar,
+      {
+        threadId: "thread-6",
+        projectId: "project-1",
+        environmentId: "environment-1",
+        isCompactViewport: true,
+      },
+      {
+        sidebarThreads: {
+          status: "ready",
+          threads,
+          projects: [{ id: "project-1", name: "BB", isPersonal: false }],
+        },
+        rpc: {
+          readReconciliation: () => ({
+            legacyWorkspaces: [],
+            recordedSignature: null,
+          }),
+        },
+      },
+    );
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole("button", { name: "Conversation 1" }),
+      ).toBeDefined();
+    });
+    expect(
+      screen.getByRole("button", { name: "Conversation 6" }),
+    ).toBeDefined();
+    expect(screen.queryByRole("button", { name: "Conversation 2" })).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "4 more" }));
+    fireEvent.click(
+      await screen.findByRole("menuitem", { name: "Conversation 2" }),
+    );
+    expect(rendered.sidebarActionCalls).toContainEqual({
+      method: "open",
+      threadId: "thread-2",
+      options: undefined,
+    });
+
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: "New conversation in this workspace",
+      }),
+    );
+    expect(rendered.sidebarActionCalls).toContainEqual({
+      method: "openNewThread",
+      options: {
+        projectId: "project-1",
+        focusPrompt: true,
+        experimental_sameEnvironment: {
+          environmentId: "environment-1",
+          locked: true,
+        },
+      },
+    });
+  });
+
+  it("shows more tabs as the conversation rail grows", async () => {
+    let observer: ResizeObserverMock | undefined;
+    class ResizeObserverMock implements ResizeObserver {
+      constructor(private readonly callback: ResizeObserverCallback) {
+        observer = this;
+      }
+
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+
+      trigger() {
+        this.callback([], this);
+      }
+    }
+    vi.stubGlobal("ResizeObserver", ResizeObserverMock);
+
+    const threads = [1, 2, 3, 4, 5, 6].map(thread);
+    renderSlot(
+      contextBar,
+      {
+        threadId: "thread-6",
+        projectId: "project-1",
+        environmentId: "environment-1",
+        isCompactViewport: false,
+      },
+      {
+        sidebarThreads: {
+          status: "ready",
+          threads,
+          projects: [{ id: "project-1", name: "BB", isPersonal: false }],
+        },
+        rpc: {
+          readReconciliation: () => ({
+            legacyWorkspaces: [],
+            recordedSignature: null,
+          }),
+        },
+      },
+    );
+
+    const rail = await screen.findByRole("navigation", {
+      name: "Workspace conversations",
+    });
+    Object.defineProperty(rail, "clientWidth", {
+      configurable: true,
+      value: 360,
+    });
+    act(() => observer?.trigger());
+    expect(screen.getByRole("button", { name: "5 more" })).toBeDefined();
+
+    Object.defineProperty(rail, "clientWidth", {
+      configurable: true,
+      value: 1_000,
+    });
+    act(() => observer?.trigger());
+    expect(screen.queryByRole("button", { name: /more/u })).toBeNull();
+    expect(
+      screen.getByRole("button", { name: "Conversation 3" }),
+    ).toBeDefined();
+  });
+
+  it("renames and requests deletion from a tab context menu", async () => {
+    const rendered = renderSlot(
+      contextBar,
+      {
+        threadId: "thread-2",
+        projectId: "project-1",
+        environmentId: "environment-1",
+        isCompactViewport: false,
+      },
+      {
+        sidebarThreads: {
+          status: "ready",
+          threads: [thread(1), thread(2)],
+          projects: [{ id: "project-1", name: "BB", isPersonal: false }],
+        },
+        rpc: {
+          readReconciliation: () => ({
+            legacyWorkspaces: [],
+            recordedSignature: null,
+          }),
+        },
+      },
+    );
+
+    const tab = await screen.findByRole("button", { name: "Conversation 1" });
+    fireEvent.contextMenu(tab);
+    fireEvent.click(await screen.findByRole("menuitem", { name: "Rename…" }));
+    const input = await screen.findByRole("textbox", {
+      name: "Conversation name",
+    });
+    fireEvent.change(input, { target: { value: "Renamed conversation" } });
+    fireEvent.click(screen.getByRole("button", { name: "Rename" }));
+    await waitFor(() => {
+      expect(rendered.sidebarActionCalls).toContainEqual({
+        method: "rename",
+        threadId: "thread-1",
+        title: "Renamed conversation",
+      });
+    });
+
+    fireEvent.contextMenu(tab);
+    fireEvent.click(await screen.findByRole("menuitem", { name: "Delete…" }));
+    expect(rendered.sidebarActionCalls).toContainEqual({
+      method: "requestDelete",
+      threadId: "thread-1",
+      options: { experimental_fallbackThreadId: "thread-2" },
+    });
+  });
+
+  it("opens tab actions on a mobile long press", async () => {
+    vi.useFakeTimers();
+    const rendered = renderSlot(
+      contextBar,
+      {
+        threadId: "thread-2",
+        projectId: "project-1",
+        environmentId: "environment-1",
+        isCompactViewport: true,
+      },
+      {
+        sidebarThreads: {
+          status: "ready",
+          threads: [thread(1), thread(2)],
+          projects: [{ id: "project-1", name: "BB", isPersonal: false }],
+        },
+        rpc: {
+          readReconciliation: () => ({
+            legacyWorkspaces: [],
+            recordedSignature: null,
+          }),
+        },
+      },
+    );
+
+    const tab = screen.getByRole("button", { name: "Conversation 1" });
+    fireEvent.pointerDown(tab, {
+      pointerType: "touch",
+      clientX: 24,
+      clientY: 24,
+    });
+    act(() => vi.advanceTimersByTime(700));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Archive" }));
+    expect(rendered.sidebarActionCalls).toContainEqual({
+      method: "archive",
+      threadId: "thread-1",
+    });
+  });
+
+  it("cycles left and right through every conversation in the workspace", async () => {
+    const threads = [1, 2, 3, 4, 5, 6].map(thread);
+    const rendered = renderSlot(
+      contextBar,
+      {
+        threadId: "thread-6",
+        projectId: "project-1",
+        environmentId: "environment-1",
+        isCompactViewport: true,
+      },
+      {
+        sidebarThreads: {
+          status: "ready",
+          threads,
+          projects: [{ id: "project-1", name: "BB", isPersonal: false }],
+        },
+        rpc: {
+          readReconciliation: () => ({
+            legacyWorkspaces: [],
+            recordedSignature: null,
+          }),
+        },
+      },
+    );
+
+    await screen.findByRole("navigation", { name: "Workspace conversations" });
+    fireEvent.keyDown(window, {
+      key: "]",
+      code: "BracketRight",
+      metaKey: true,
+    });
+    fireEvent.keyDown(window, {
+      key: "]",
+      code: "BracketRight",
+      metaKey: true,
+    });
+    const composer = document.createElement("textarea");
+    document.body.append(composer);
+    composer.focus();
+    fireEvent.keyDown(composer, {
+      key: "[",
+      code: "BracketLeft",
+      metaKey: true,
+    });
+    composer.remove();
+
+    expect(rendered.sidebarActionCalls.slice(-3)).toEqual([
+      { method: "open", threadId: "thread-1", options: undefined },
+      { method: "open", threadId: "thread-2", options: undefined },
+      { method: "open", threadId: "thread-1", options: undefined },
+    ]);
+  });
+
+  it("uses Command+T for a new conversation in the current worktree", async () => {
+    const rendered = renderSlot(
+      contextBar,
+      {
+        threadId: "thread-1",
+        projectId: "project-1",
+        environmentId: "environment-1",
+        isCompactViewport: false,
+      },
+      {
+        sidebarThreads: {
+          status: "ready",
+          threads: [thread(1)],
+          projects: [{ id: "project-1", name: "BB", isPersonal: false }],
+        },
+        rpc: {
+          readReconciliation: () => ({
+            legacyWorkspaces: [],
+            recordedSignature: null,
+          }),
+        },
+      },
+    );
+    await screen.findByRole("navigation", { name: "Workspace conversations" });
+    const competingHandler = vi.fn();
+    window.addEventListener("keydown", competingHandler);
+
+    fireEvent.keyDown(window, {
+      key: "t",
+      code: "KeyT",
+      metaKey: true,
+    });
+    window.removeEventListener("keydown", competingHandler);
+
+    expect(rendered.sidebarActionCalls).toContainEqual({
+      method: "openNewThread",
+      options: {
+        projectId: "project-1",
+        focusPrompt: true,
+        experimental_sameEnvironment: {
+          environmentId: "environment-1",
+          locked: true,
+        },
+      },
+    });
+    expect(competingHandler).not.toHaveBeenCalled();
+    expect(
+      screen
+        .getByRole("button", {
+          name: "New conversation in this workspace",
+        })
+        .getAttribute("aria-keyshortcuts"),
+    ).toBe("Meta+T");
+  });
+
+  it("closes the focused tab and reopens it with Shift+Command+W", async () => {
+    let closeHandler: (() => boolean) | null = null;
+    const rendered = renderSlot(
+      contextBar,
+      {
+        threadId: "thread-2",
+        projectId: "project-1",
+        environmentId: "environment-1",
+        isCompactViewport: false,
+        experimental_registerCloseHandler: (handler) => {
+          closeHandler = handler;
+        },
+      },
+      {
+        sidebarThreads: {
+          status: "ready",
+          threads: [thread(1), thread(2), thread(3)],
+          projects: [{ id: "project-1", name: "BB", isPersonal: false }],
+        },
+        rpc: {
+          readReconciliation: () => ({
+            legacyWorkspaces: [],
+            recordedSignature: null,
+          }),
+        },
+      },
+    );
+
+    await waitFor(() => expect(closeHandler).not.toBeNull());
+    let handled = false;
+    act(() => {
+      handled = closeHandler?.() ?? false;
+    });
+    expect(handled).toBe(true);
+    expect(rendered.sidebarActionCalls.at(-1)).toEqual({
+      method: "open",
+      threadId: "thread-3",
+      options: undefined,
+    });
+
+    fireEvent.keyDown(window, {
+      key: "W",
+      code: "KeyW",
+      metaKey: true,
+      shiftKey: true,
+    });
+    expect(rendered.sidebarActionCalls.at(-1)).toEqual({
+      method: "open",
+      threadId: "thread-2",
+      options: undefined,
+    });
+  });
+
+  it("consumes closing the last workspace tab without leaving its route", async () => {
+    let closeHandler: (() => boolean) | null = null;
+    const rendered = renderSlot(
+      contextBar,
+      {
+        threadId: "thread-1",
+        projectId: "project-1",
+        environmentId: "environment-1",
+        isCompactViewport: false,
+        experimental_registerCloseHandler: (handler) => {
+          closeHandler = handler;
+        },
+      },
+      {
+        sidebarThreads: {
+          status: "ready",
+          threads: [thread(1)],
+          projects: [{ id: "project-1", name: "BB", isPersonal: false }],
+        },
+        rpc: {
+          readReconciliation: () => ({
+            legacyWorkspaces: [],
+            recordedSignature: null,
+          }),
+        },
+      },
+    );
+
+    await waitFor(() => expect(closeHandler).not.toBeNull());
+    let handled = false;
+    act(() => {
+      handled = closeHandler?.() ?? false;
+    });
+    expect(handled).toBe(true);
+    expect(rendered.sidebarActionCalls).toEqual([]);
+  });
+});
