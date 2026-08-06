@@ -1,0 +1,35 @@
+{
+  "name": "bb-plugin-md-editor",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Edit Markdown files inside BB with preview and source modes.",
+  "engines": {
+    "bb": ">=0.36"
+  },
+  "bb": {
+    "name": "Markdown Editor",
+    "description": "Edit Markdown files inside BB with compare-and-swap saves.",
+    "branding": {
+      "icon": "FileText"
+    },
+    "server": "./server.ts",
+    "app": "./app.tsx"
+  },
+  "keywords": [
+    "bb-plugin"
+  ],
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "zod": "^4.3.6"
+  },
+  "devDependencies": {
+    "@bb/plugin-sdk": "workspace:*",
+    "@types/node": "^22.0.0",
+    "@types/react": "^19.0.0",
+    "react": "^19.0.0",
+    "typescript": "npm:@typescript/typescript6@^6.0.2"
+  }
+}
