@@ -874,11 +874,19 @@ export function registerProjectRoutes(app: Hono, deps: AppDeps): void {
       context.req.param("id"),
       query.path,
     );
+    const mimeType = attachment.mimeType ?? "application/octet-stream";
+    const headers: Record<string, string> = {
+      "content-type": mimeType,
+      "x-content-type-options": "nosniff",
+    };
+    if (mimeType === "text/html") {
+      const filename = path.posix.basename(query.path) || "attachment.html";
+      headers["content-disposition"] =
+        `attachment; filename*=UTF-8''${encodeURIComponent(filename)}`;
+    }
     return new Response(new Uint8Array(attachment.content), {
       status: 200,
-      headers: {
-        "content-type": attachment.mimeType ?? "application/octet-stream",
-      } as HeadersInit,
+      headers,
     });
   });
 }

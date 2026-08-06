@@ -5,6 +5,11 @@ import type {
   PromptTextMention,
 } from "@bb/domain";
 import type { ComposerView } from "@bb/plugin-sdk";
+import {
+  isSupportedPromptAttachment,
+  PROMPT_ATTACHMENT_ACCEPT,
+  PROMPT_ATTACHMENT_FORMAT_SUMMARY,
+} from "@bb/server-contract";
 import type { Node as ProseMirrorNode, Slice } from "@tiptap/pm/model";
 import { TextSelection } from "@tiptap/pm/state";
 import { EditorContent, useEditor, type Editor } from "@tiptap/react";
@@ -413,6 +418,21 @@ interface PromptEditorSelectionRevealArgs {
 interface ParsedRichClipboardValue {
   hasMentions: boolean;
   value: PromptEditorValue;
+}
+
+function unsupportedAttachmentNames(files: readonly File[]): string[] {
+  return files
+    .filter(
+      (file) =>
+        !isSupportedPromptAttachment({ name: file.name, mimeType: file.type }),
+    )
+    .map((file) => file.name);
+}
+
+function unsupportedAttachmentMessage(names: readonly string[]): string {
+  const uniqueNames = [...new Set(names)];
+  const label = uniqueNames.length === 1 ? "file" : "files";
+  return `Unsupported ${label}: ${uniqueNames.join(", ")}. Supported formats: ${PROMPT_ATTACHMENT_FORMAT_SUMMARY}.`;
 }
 
 type ZenModeUpdate =
@@ -1164,6 +1184,9 @@ export function PromptBoxInternal({
   const [expandedImageIndex, setExpandedImageIndex] = useState<number | null>(
     null,
   );
+  const [localAttachmentError, setLocalAttachmentError] = useState<
+    string | null
+  >(null);
   const [activeHistoryIndex, setActiveHistoryIndex] = useState<number | null>(
     null,
   );
@@ -1518,8 +1541,22 @@ export function PromptBoxInternal({
             .filter((file): file is File => file !== null);
 
           if (attachFiles && pastedFiles.length > 0) {
+            const rejectedNames = unsupportedAttachmentNames(pastedFiles);
+            const acceptedFiles = pastedFiles.filter((file) =>
+              isSupportedPromptAttachment({
+                name: file.name,
+                mimeType: file.type,
+              }),
+            );
+            setLocalAttachmentError(
+              rejectedNames.length > 0
+                ? unsupportedAttachmentMessage(rejectedNames)
+                : null,
+            );
             event.preventDefault();
-            void attachFiles(pastedFiles);
+            if (acceptedFiles.length > 0) {
+              void attachFiles(acceptedFiles);
+            }
             return true;
           }
 
@@ -2319,7 +2356,18 @@ export function PromptBoxInternal({
   const emitAttachmentFiles = useCallback(
     (files: File[]) => {
       if (!onAttachFiles || files.length === 0) return;
-      void onAttachFiles(files);
+      const rejectedNames = unsupportedAttachmentNames(files);
+      const acceptedFiles = files.filter((file) =>
+        isSupportedPromptAttachment({ name: file.name, mimeType: file.type }),
+      );
+      setLocalAttachmentError(
+        rejectedNames.length > 0
+          ? unsupportedAttachmentMessage(rejectedNames)
+          : null,
+      );
+      if (acceptedFiles.length > 0) {
+        void onAttachFiles(acceptedFiles);
+      }
     },
     [onAttachFiles],
   );
@@ -2772,6 +2820,7 @@ export function PromptBoxInternal({
       <input
         ref={attachmentInputRef}
         type="file"
+        accept={PROMPT_ATTACHMENT_ACCEPT}
         multiple
         className="hidden"
         onChange={handleAttachmentInputChange}
@@ -2974,9 +3023,9 @@ export function PromptBoxInternal({
                   onRemoveAttachment={onRemoveAttachment}
                 />
 
-                {attachmentError ? (
+                {(localAttachmentError ?? attachmentError) ? (
                   <div className="mx-3 mb-1 mt-1 text-xs text-destructive">
-                    {attachmentError}
+                    {localAttachmentError ?? attachmentError}
                   </div>
                 ) : null}
               </div>

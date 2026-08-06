@@ -262,6 +262,7 @@ function renderPromptBox(
     mentionTriggers?: TypeaheadConfig["mention"]["triggers"];
     mentionSuggestions?: TypeaheadConfig["mention"]["suggestions"];
     commandSuggestions?: TypeaheadConfig["command"]["suggestions"];
+    attachments?: PromptBoxProps["attachments"];
   } = {},
 ) {
   const changes: PromptChange[] = [];
@@ -292,7 +293,7 @@ function renderPromptBox(
           onCommandQueryChange,
         })}
         mentionMenuPlacement="bottom"
-        attachments={{}}
+        attachments={options.attachments ?? {}}
         promptActions={promptActions}
         promptBoxRef={promptBoxRef}
       />
@@ -2047,6 +2048,34 @@ describe("PromptBoxInternal prompt actions", () => {
     await waitFor(() =>
       expect(screen.queryByRole("menu", { name: "Prompt actions" })).toBeNull(),
     );
+  });
+
+  it("attaches supported clipboard files and skips unsupported formats", async () => {
+    const onAttachFiles = vi.fn();
+    const { promptBoxRef } = renderPromptBox("", {
+      attachments: { onAttachFiles },
+    });
+
+    await focusPromptEnd(promptBoxRef);
+    const htmlFile = new File(["<main>Docs</main>"], "docs.html", {
+      type: "text/html",
+    });
+    const archiveFile = new File(["archive"], "docs.zip", {
+      type: "application/zip",
+    });
+    fireEvent.paste(getPromptEditorElement(), {
+      clipboardData: {
+        items: [
+          { kind: "file", getAsFile: () => htmlFile },
+          { kind: "file", getAsFile: () => archiveFile },
+        ],
+        getData: () => "",
+      },
+    });
+
+    await waitFor(() => expect(onAttachFiles).toHaveBeenCalledOnce());
+    expect(onAttachFiles).toHaveBeenCalledWith([htmlFile]);
+    expect(screen.getByText(/Unsupported file: docs\.zip/u)).toBeTruthy();
   });
 
   it("inserts the skills trigger with no trailing space", async () => {

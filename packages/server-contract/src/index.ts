@@ -4,6 +4,7 @@ export * from "./common.js";
 export * from "./errors.js";
 export * from "./public-api.js";
 export * from "./thread-timeline.js";
+export * from "./prompt-attachments.js";
 
 export { typedRoutes } from "@bb/hono-typed-routes";
 

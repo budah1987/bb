@@ -1,4 +1,8 @@
 import { useCallback, useState } from "react";
+import {
+  isSupportedPromptAttachment,
+  PROMPT_ATTACHMENT_FORMAT_SUMMARY,
+} from "@bb/server-contract";
 import { useUploadPromptAttachment } from "@/hooks/mutations/project-mutations";
 import type { PromptDraftAttachment } from "@/lib/prompt-draft";
 import type { InlineQueuedMessageEditState } from "./useInlineQueuedMessageEditing";
@@ -32,6 +36,40 @@ interface AttachmentOperationState {
 
 interface InlineAttachmentOperationState extends AttachmentOperationState {
   editSessionId: number | null;
+}
+
+interface AttachmentFileSelection {
+  accepted: File[];
+  rejectedNames: string[];
+}
+
+function selectSupportedFiles(files: readonly File[]): AttachmentFileSelection {
+  const accepted: File[] = [];
+  const rejectedNames: string[] = [];
+  for (const file of files) {
+    if (isSupportedPromptAttachment({ name: file.name, mimeType: file.type })) {
+      accepted.push(file);
+    } else {
+      rejectedNames.push(file.name);
+    }
+  }
+  return { accepted, rejectedNames };
+}
+
+function attachmentOperationError(
+  rejectedNames: readonly string[],
+  failedNames: readonly string[],
+): string | null {
+  const messages: string[] = [];
+  if (rejectedNames.length > 0) {
+    messages.push(
+      `Unsupported attachment format: ${[...new Set(rejectedNames)].join(", ")}. Supported formats: ${PROMPT_ATTACHMENT_FORMAT_SUMMARY}.`,
+    );
+  }
+  if (failedNames.length > 0) {
+    messages.push(`Failed to attach: ${failedNames.join(", ")}`);
+  }
+  return messages.length > 0 ? messages.join(" ") : null;
 }
 
 /**
@@ -75,13 +113,21 @@ export function useComposerAttachmentUploads({
   const handleAttachBottomFiles = useCallback(
     async (files: File[]) => {
       if (files.length === 0) return;
+      const { accepted, rejectedNames } = selectSupportedFiles(files);
+      if (accepted.length === 0) {
+        setBottomOperation((current) => ({
+          ...current,
+          error: attachmentOperationError(rejectedNames, []),
+        }));
+        return;
+      }
       setBottomOperation((current) => ({
-        error: null,
+        error: attachmentOperationError(rejectedNames, []),
         pendingCount: current.pendingCount + 1,
       }));
       const failedFiles: string[] = [];
       try {
-        for (const file of files) {
+        for (const file of accepted) {
           try {
             const uploaded = await uploadPromptAttachment.mutateAsync({
               projectId,
@@ -95,9 +141,8 @@ export function useComposerAttachmentUploads({
       } finally {
         setBottomOperation((current) => ({
           error:
-            failedFiles.length > 0
-              ? `Failed to attach: ${failedFiles.join(", ")}`
-              : current.error,
+            attachmentOperationError(rejectedNames, failedFiles) ??
+            current.error,
           pendingCount: Math.max(0, current.pendingCount - 1),
         }));
       }
@@ -107,11 +152,20 @@ export function useComposerAttachmentUploads({
   const handleAttachInlineFiles = useCallback(
     async (files: File[]) => {
       if (!inlineEditingQueuedMessage || files.length === 0) return;
+      const { accepted, rejectedNames } = selectSupportedFiles(files);
+      if (accepted.length === 0) {
+        setInlineOperation((current) => ({
+          ...current,
+          editSessionId: inlineEditingQueuedMessage.editSessionId,
+          error: attachmentOperationError(rejectedNames, []),
+        }));
+        return;
+      }
       const { editSessionId, ownerThreadId, queuedMessageId } =
         inlineEditingQueuedMessage;
       setInlineOperation((current) => ({
         editSessionId,
-        error: null,
+        error: attachmentOperationError(rejectedNames, []),
         pendingCount:
           current.editSessionId === editSessionId
             ? current.pendingCount + 1
@@ -119,7 +173,7 @@ export function useComposerAttachmentUploads({
       }));
       const failedFiles: string[] = [];
       try {
-        for (const file of files) {
+        for (const file of accepted) {
           try {
             const uploaded = await uploadPromptAttachment.mutateAsync({
               projectId,
@@ -152,10 +206,10 @@ export function useComposerAttachmentUploads({
             ? {
                 editSessionId,
                 error:
-                  failedFiles.length > 0 &&
                   inlineEditingQueuedMessageRef.current?.editSessionId ===
-                    editSessionId
-                    ? `Failed to attach: ${failedFiles.join(", ")}`
+                  editSessionId
+                    ? (attachmentOperationError(rejectedNames, failedFiles) ??
+                      current.error)
                     : current.error,
                 pendingCount: Math.max(0, current.pendingCount - 1),
               }

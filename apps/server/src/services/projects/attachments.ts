@@ -14,7 +14,11 @@ import {
 } from "node:path";
 import { resolveContainedPath } from "@bb/process-utils";
 import type { PromptInput } from "@bb/domain";
-import type { UploadedPromptAttachment } from "@bb/server-contract";
+import {
+  PROMPT_ATTACHMENT_FORMAT_SUMMARY,
+  promptAttachmentKind,
+  type UploadedPromptAttachment,
+} from "@bb/server-contract";
 import mimeTypes from "mime-types";
 import { ApiError } from "../../errors.js";
 
@@ -142,7 +146,19 @@ export async function storeAttachment(
   projectId: string,
   file: File,
 ): Promise<UploadedPromptAttachment> {
-  const isImage = (file.type || "").startsWith("image/");
+  const attachmentKind = promptAttachmentKind({
+    name: file.name,
+    mimeType: file.type,
+  });
+  if (attachmentKind === null) {
+    throw new ApiError(
+      415,
+      "unsupported_media_type",
+      `Unsupported attachment format. Supported formats: ${PROMPT_ATTACHMENT_FORMAT_SUMMARY}.`,
+    );
+  }
+
+  const isImage = attachmentKind === "localImage";
   const sizeLimit = isImage ? IMAGE_LIMIT_BYTES : FILE_LIMIT_BYTES;
   if (file.size > sizeLimit) {
     throw new ApiError(

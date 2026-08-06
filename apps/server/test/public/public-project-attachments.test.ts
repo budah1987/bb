@@ -39,8 +39,8 @@ describe("public project attachments", () => {
         },
         {
           bytes: new Uint8Array([0, 255, 1, 128, 13, 10]),
-          filename: "payload.bin",
-          mimeType: "application/x-bb-binary",
+          filename: "payload.pdf",
+          mimeType: "application/pdf",
           type: "localFile" as const,
         },
       ];
@@ -72,6 +72,26 @@ describe("public project attachments", () => {
           fixture.bytes,
         );
       }
+
+      const htmlResponse = await upload(
+        harness.app,
+        project.id,
+        new File(
+          ["<script>document.body.textContent = 'unsafe'</script>"],
+          "brief.html",
+          { type: "text/html" },
+        ),
+      );
+      const htmlAttachment = uploadedPromptAttachmentSchema.parse(
+        await readJson(htmlResponse),
+      );
+      const htmlContent = await harness.app.request(
+        `/api/v1/projects/${project.id}/attachments/content?path=${encodeURIComponent(htmlAttachment.path)}`,
+      );
+      expect(htmlContent.headers.get("x-content-type-options")).toBe("nosniff");
+      expect(htmlContent.headers.get("content-disposition")).toContain(
+        "attachment",
+      );
     });
   });
 
@@ -99,14 +119,26 @@ describe("public project attachments", () => {
       const oversizedFile = await upload(
         harness.app,
         project.id,
-        new File([new Uint8Array(25 * 1024 * 1024 + 1)], "huge-archive.bin", {
-          type: "application/octet-stream",
+        new File([new Uint8Array(25 * 1024 * 1024 + 1)], "huge-document.pdf", {
+          type: "application/pdf",
         }),
       );
       expect(oversizedFile.status).toBe(400);
       await expect(readJson(oversizedFile)).resolves.toEqual({
         code: "invalid_request",
         message: "Attachment exceeds 25MB limit",
+      });
+
+      const unsupported = await upload(
+        harness.app,
+        project.id,
+        new File(["not supported"], "archive.zip", {
+          type: "application/zip",
+        }),
+      );
+      expect(unsupported.status).toBe(415);
+      await expect(readJson(unsupported)).resolves.toMatchObject({
+        code: "unsupported_media_type",
       });
 
       const ambiguous = await upload(
