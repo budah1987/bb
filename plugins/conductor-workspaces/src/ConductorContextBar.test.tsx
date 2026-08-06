@@ -450,6 +450,61 @@ describe("ConductorContextBar compact layout", () => {
     ]);
   });
 
+  it("selects visible tabs with Command+1–8 and the last conversation with Command+9", async () => {
+    const threads = [1, 2, 3, 4, 5, 6].map(thread);
+    const rendered = renderSlot(
+      contextBar,
+      {
+        threadId: "thread-1",
+        projectId: "project-1",
+        environmentId: "environment-1",
+        isCompactViewport: true,
+      },
+      {
+        sidebarThreads: {
+          status: "ready",
+          threads,
+          projects: [{ id: "project-1", name: "BB", isPersonal: false }],
+        },
+        rpc: {
+          readReconciliation: () => ({
+            legacyWorkspaces: [],
+            recordedSignature: null,
+          }),
+        },
+      },
+    );
+
+    await screen.findByRole("navigation", { name: "Workspace conversations" });
+    const competingHandler = vi.fn();
+    window.addEventListener("keydown", competingHandler);
+
+    // Compact layout keeps two visible tabs; Command+2 selects the second.
+    fireEvent.keyDown(window, { key: "2", code: "Digit2", metaKey: true });
+    expect(rendered.sidebarActionCalls.at(-1)).toEqual({
+      method: "open",
+      threadId: "thread-2",
+      options: undefined,
+    });
+
+    // Command+9 always reaches the last conversation, even from the overflow.
+    fireEvent.keyDown(window, { key: "9", code: "Digit9", metaKey: true });
+    expect(rendered.sidebarActionCalls.at(-1)).toEqual({
+      method: "open",
+      threadId: "thread-6",
+      options: undefined,
+    });
+
+    // A digit without a matching visible tab is consumed, not forwarded to the
+    // app-level workspace-jump binding.
+    const callCount = rendered.sidebarActionCalls.length;
+    fireEvent.keyDown(window, { key: "5", code: "Digit5", metaKey: true });
+    expect(rendered.sidebarActionCalls.length).toBe(callCount);
+
+    window.removeEventListener("keydown", competingHandler);
+    expect(competingHandler).not.toHaveBeenCalled();
+  });
+
   it("uses Command+T for a new conversation in the current worktree", async () => {
     const startViewTransition = mockViewTransitions();
     const rendered = renderSlot(
