@@ -1,0 +1,38 @@
+{
+  "task_id": "relay-msh62492-6b8f19",
+  "provider": "opus",
+  "provider_family": "claude",
+  "model": "opus",
+  "executable": "/Users/amir/.local/share/claude/versions/2.1.223",
+  "role": "implementation",
+  "objective": "Implement FOUNDATION ONLY for BB's standalone compact PWA navigation in the shared workspace. Read and obey AGENTS.md. Do not invoke Model Relay. Preserve .context/ and .impeccable.md. Use apply_patch for edits.\n\nScope:\n1. Add one tested useStandaloneCompactPwa capability/helper using @bb/shared-ui compact viewport plus (display-mode: standalone), with safe iOS navigator.standalone fallback. No unsafe internal casts; parse at browser boundary.\n2. Add a validated compact Command Center navigation state contract (return path/pane metadata as needed) and a pure policy deciding when new-thread/root route reconciliation must preserve the existing split layout.\n3. Apply that policy in SplitThreadArea: only a validated standalone-compact Command Center commit to \"/\" skips reconcileLayoutForContent. Preview isn't part of this stage. Direct \"/\" and every non-standalone route keep current behavior. Add positive preservation and negative gate tests.\n4. In sidebar.tsx, disable existing global right-swipe and wheel-to-open only when the capability is true. Button opening and Vaul swipe-to-close stay. Compact Safari-tab behavior remains. Add a test for PWA suppression and preserve existing browser swipe test.\n5. Do not implement workspace swipe/transition UI yet. Do not change server/daemon contracts.\n6. Run focused tests and pnpm exec turbo run typecheck --filter=@bb/app. Follow AGENTS Turbo rules. Report files, checks, exact limitations.\n\nAcceptance:\n- capability covers matchMedia standalone and iOS fallback;\n- validated intent cannot be accidentally triggered by arbitrary location state;\n- preserved layout keeps pane count/content/focus when Command Center route commits;\n- non-standalone root reconcile still focuses/replaces exactly as today;\n- PWA sidebar swipe and wheel cannot open, browser compact swipe still can;\n- typecheck passes or evidence is reported.",
+  "workspace": "/Users/amir/.bb/personal-workspaces/env_nmzzybtr78/bb",
+  "mode": "workspace_write",
+  "context_files": [
+    "AGENTS.md",
+    "apps/app/src/components/ui/sidebar.tsx",
+    "apps/app/src/components/ui/sidebar.test.tsx",
+    "apps/app/src/views/thread-detail/SplitThreadArea.tsx",
+    "apps/app/src/views/thread-detail/SplitThreadArea.test.tsx",
+    "apps/app/src/views/thread-detail/splitThreadNavigation.ts",
+    "apps/app/src/views/thread-detail/splitThreadNavigation.test.ts",
+    "packages/shared-ui/src/components/ui/hooks/use-compact-viewport.tsx",
+    "packages/shared-ui/src/components/ui/hooks/use-media-query.ts"
+  ],
+  "acceptance_checks": [
+    "Standalone compact capability and tests exist.",
+    "Validated Command Center intent preserves split layout only in standalone compact mode.",
+    "Negative non-standalone reconciliation regression test exists.",
+    "Standalone compact sidebar workspace swipe/wheel opening is disabled while compact browser behavior is preserved.",
+    "@bb/app Turbo typecheck and focused tests pass or exact blockers are reported.",
+    "No unrelated or server/daemon files are changed."
+  ],
+  "external_write_targets": [],
+  "workflow_id": null,
+  "stage_id": null,
+  "depends_on_task_ids": [],
+  "parent_model": "sol",
+  "route_reason": "Restarted as a bounded foundation stage after the initial broad Opus run stalled before writing.",
+  "auth_mode": "claude.ai",
+  "created_at": "2026-08-06T07:00:17.030Z"
+}

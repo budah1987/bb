@@ -8,6 +8,7 @@ import {
 } from "react";
 import {
   DndContext,
+  DragOverlay,
   KeyboardSensor,
   PointerSensor,
   closestCenter,
@@ -79,6 +80,19 @@ import {
   RenameConversationDialog,
   pickDeleteFallbackThread,
 } from "./ConversationActions";
+import {
+  loadProjectCustomizations,
+  patchProjectCustomization,
+  saveProjectCustomizations,
+  type ProjectCustomization,
+} from "./project-customizations";
+import { ProjectGlyphIcon } from "./project-icons";
+import {
+  ProjectIconDialog,
+  RenameProjectDialog,
+  type ProjectIconTarget,
+  type ProjectRenameTarget,
+} from "./ProjectCustomizationDialogs";
 
 type RenameScope = "display" | "branch" | "folder";
 
@@ -95,6 +109,11 @@ interface ArchiveTarget {
 }
 
 const WORKSPACE_DND_PREFIX = "workspace:";
+
+type DragState = {
+  activeId: string;
+  overId: string | null;
+};
 
 function workspaceDndId(workspaceKey: string): string {
   return `${WORKSPACE_DND_PREFIX}${workspaceKey}`;
@@ -323,6 +342,7 @@ function SignalStatus({
 
 function SectionHeader({
   title,
+  icon,
   contentId,
   collapsed,
   signal,
@@ -332,6 +352,7 @@ function SectionHeader({
   dragHandle,
 }: {
   title: string;
+  icon?: ReactNode;
   contentId: string;
   collapsed: boolean;
   signal: ReturnType<typeof workspaceSignal>;
@@ -356,6 +377,7 @@ function SectionHeader({
           className="conductor-section-caret size-3 text-muted-foreground"
           aria-hidden
         />
+        {icon}
         <span className="min-w-0 flex-1 truncate text-left">{title}</span>
         <PixelMatrix
           signal={signal}
@@ -381,6 +403,7 @@ function WorkspaceRow({
   activeThreadId,
   archivePending,
   dragDisabled,
+  isDropTarget,
   shortcutEnabled,
   jumpShortcut,
   showJumpShortcut,
@@ -392,6 +415,7 @@ function WorkspaceRow({
   activeThreadId: string | null;
   archivePending: boolean;
   dragDisabled: boolean;
+  isDropTarget: boolean;
   shortcutEnabled: boolean;
   jumpShortcut: { ariaKeyshortcuts: string; label: string } | null;
   showJumpShortcut: boolean;
@@ -480,6 +504,8 @@ function WorkspaceRow({
       ref={setNodeRef}
       style={style}
       className="conductor-workspace-sortable-row group/workspace flex min-w-0 items-center"
+      data-dragging={isDragging || undefined}
+      data-drop-target={isDropTarget || undefined}
     >
       {row}
       <button
@@ -528,12 +554,97 @@ function WorkspaceRow({
   );
 }
 
+function WorkspaceDragPreview({
+  workspace,
+}: {
+  workspace: ConductorWorkspace;
+}) {
+  const signal = workspaceSignal(workspace.threads);
+  const statusLabel = signalLabel(signal);
+
+  return (
+    <div className="conductor-workspace-drag-preview" aria-hidden>
+      <div className="conductor-workspace-row">
+        <PixelMatrix
+          signal={signal}
+          label={statusLabel ? `${statusLabel} workspace` : undefined}
+        />
+        <span className="min-w-0 flex-1 text-left">
+          <span className="block truncate text-xs font-medium text-sidebar-foreground">
+            {workspace.title}
+          </span>
+          <span className="block truncate text-2xs text-muted-foreground">
+            {workspace.branchName ??
+              `${workspace.threads.length} conversation${workspace.threads.length === 1 ? "" : "s"}`}
+          </span>
+        </span>
+        <Icon
+          name="DragDropVertical"
+          className="size-3.5 shrink-0 text-primary"
+          aria-hidden
+        />
+      </div>
+    </div>
+  );
+}
+
+function ProjectDragPreview({
+  project,
+  customization,
+}: {
+  project: ConductorProject;
+  customization: ProjectCustomization | undefined;
+}) {
+  const signal = workspaceSignal(
+    project.workspaces.flatMap((workspace) => workspace.threads),
+  );
+  const projectLabel =
+    customization?.name ?? project.repositoryName ?? project.name;
+  const projectIcon = customization?.icon ?? null;
+
+  return (
+    <div className="conductor-project-drag-preview" aria-hidden>
+      {projectIcon ? (
+        projectIcon.kind === "emoji" ? (
+          <span className="conductor-project-glyph conductor-project-glyph--emoji">
+            {projectIcon.value}
+          </span>
+        ) : (
+          <ProjectGlyphIcon
+            name={projectIcon.name}
+            className="conductor-project-glyph"
+            aria-hidden
+          />
+        )
+      ) : (
+        <Icon
+          name="Folder"
+          className="size-3.5 text-muted-foreground"
+          aria-hidden
+        />
+      )}
+      <span className="min-w-0 flex-1 truncate text-xs font-medium text-sidebar-foreground">
+        {projectLabel}
+      </span>
+      <PixelMatrix signal={signal} />
+      <Icon
+        name="DragDropVertical"
+        className="size-3.5 shrink-0 text-muted-foreground"
+        aria-hidden
+      />
+    </div>
+  );
+}
+
 function ProjectSection({
   project,
+  customization,
   activeThreadId,
   collapsed,
   archivePending,
   dragDisabled,
+  isDropTarget,
+  dropTargetWorkspaceKey,
   workspaceDragDisabled,
   jumpShortcuts,
   showJumpShortcuts,
@@ -542,12 +653,17 @@ function ProjectSection({
   onOpen,
   onRequestArchive,
   onRequestRename,
+  onRequestRenameProject,
+  onRequestChangeIcon,
 }: {
   project: ConductorProject;
+  customization: ProjectCustomization | undefined;
   activeThreadId: string | null;
   collapsed: boolean;
   archivePending: boolean;
   dragDisabled: boolean;
+  isDropTarget: boolean;
+  dropTargetWorkspaceKey: string | null;
   workspaceDragDisabled: boolean;
   jumpShortcuts: ReadonlyMap<
     string,
@@ -559,6 +675,8 @@ function ProjectSection({
   onOpen: (threadId: string) => void;
   onRequestArchive: (workspace: ConductorWorkspace) => void;
   onRequestRename: (workspace: ConductorWorkspace, scope: RenameScope) => void;
+  onRequestRenameProject: () => void;
+  onRequestChangeIcon: () => void;
 }) {
   const {
     attributes,
@@ -574,44 +692,85 @@ function ProjectSection({
     transition,
     position: isDragging ? "relative" : undefined,
     zIndex: isDragging ? 100 : undefined,
-    opacity: isDragging ? 0.82 : undefined,
+    opacity: isDragging ? 0.24 : undefined,
   };
   const contentId = `conductor-project-${project.id}`;
   const signal = workspaceSignal(
     project.workspaces.flatMap((workspace) => workspace.threads),
   );
-  const projectLabel = project.repositoryName ?? project.name;
+  const projectLabel =
+    customization?.name ?? project.repositoryName ?? project.name;
+  const projectIcon = customization?.icon ?? null;
+  const projectIconNode = projectIcon ? (
+    projectIcon.kind === "emoji" ? (
+      <span
+        className="conductor-project-glyph conductor-project-glyph--emoji"
+        aria-hidden
+      >
+        {projectIcon.value}
+      </span>
+    ) : (
+      <ProjectGlyphIcon
+        name={projectIcon.name}
+        className="conductor-project-glyph"
+        aria-hidden
+      />
+    )
+  ) : null;
 
   return (
     <section
       ref={setNodeRef}
       style={style}
-      className="min-w-0"
+      className="conductor-project-sortable min-w-0"
+      data-dragging={isDragging || undefined}
+      data-drop-target={isDropTarget || undefined}
       aria-label={projectLabel}
     >
-      <SectionHeader
-        title={projectLabel}
-        contentId={contentId}
-        collapsed={collapsed}
-        signal={signal}
-        onToggle={onToggle}
-        onCreate={onCreate}
-        createLabel={`New workspace in ${projectLabel}`}
-        dragHandle={
-          <button
-            ref={setActivatorNodeRef}
-            type="button"
-            className="conductor-drag-handle"
-            aria-label={`Reorder ${projectLabel}`}
-            title={`Reorder ${projectLabel}`}
-            disabled={dragDisabled}
-            {...attributes}
-            {...listeners}
-          >
-            <Icon name="DragDropVertical" className="size-3.5" aria-hidden />
-          </button>
-        }
-      />
+      <ContextMenu>
+        <ContextMenuTrigger asChild>
+          <div className="min-w-0">
+            <SectionHeader
+              title={projectLabel}
+              icon={projectIconNode}
+              contentId={contentId}
+              collapsed={collapsed}
+              signal={signal}
+              onToggle={onToggle}
+              onCreate={onCreate}
+              createLabel={`New workspace in ${projectLabel}`}
+              dragHandle={
+                <button
+                  ref={setActivatorNodeRef}
+                  type="button"
+                  className="conductor-drag-handle"
+                  aria-label={`Reorder ${projectLabel}`}
+                  title={`Reorder ${projectLabel}`}
+                  disabled={dragDisabled}
+                  {...attributes}
+                  {...listeners}
+                >
+                  <Icon
+                    name="DragDropVertical"
+                    className="size-3.5"
+                    aria-hidden
+                  />
+                </button>
+              }
+            />
+          </div>
+        </ContextMenuTrigger>
+        <ContextMenuContent aria-label={`${projectLabel} actions`}>
+          <ContextMenuItem onSelect={onRequestRenameProject}>
+            <Icon name="Edit" aria-hidden />
+            Rename…
+          </ContextMenuItem>
+          <ContextMenuItem onSelect={onRequestChangeIcon}>
+            <Icon name="Palette" aria-hidden />
+            Change icon…
+          </ContextMenuItem>
+        </ContextMenuContent>
+      </ContextMenu>
       <SectionContent id={contentId} collapsed={collapsed}>
         <SortableContext
           items={project.workspaces.map((workspace) =>
@@ -629,6 +788,7 @@ function ProjectSection({
                 dragDisabled={
                   workspaceDragDisabled || project.workspaces.length < 2
                 }
+                isDropTarget={dropTargetWorkspaceKey === workspace.key}
                 shortcutEnabled={!collapsed}
                 jumpShortcut={jumpShortcuts.get(workspace.key) ?? null}
                 showJumpShortcut={showJumpShortcuts}
@@ -659,6 +819,7 @@ export function ConductorSidebar({
   );
   const [projectOrder, setProjectOrder] = useState(loadProjectOrder);
   const [workspaceOrders, setWorkspaceOrders] = useState(loadWorkspaceOrders);
+  const [dragState, setDragState] = useState<DragState | null>(null);
   const [archiveTarget, setArchiveTarget] = useState<ArchiveTarget | null>(
     null,
   );
@@ -668,6 +829,13 @@ export function ConductorSidebar({
   const [renameThread, setRenameThread] = useState<PluginSidebarThread | null>(
     null,
   );
+  const [customizations, setCustomizations] = useState(
+    loadProjectCustomizations,
+  );
+  const [renameProjectTarget, setRenameProjectTarget] =
+    useState<ProjectRenameTarget | null>(null);
+  const [projectIconTarget, setProjectIconTarget] =
+    useState<ProjectIconTarget | null>(null);
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
     useSensor(KeyboardSensor, {
@@ -749,6 +917,7 @@ export function ConductorSidebar({
           return [
             project.name,
             project.repositoryName ?? "",
+            customizations[project.id]?.name ?? "",
             workspace.title,
             workspace.branchName ?? "",
             ...workspace.threads.map(threadDisplayTitle),
@@ -778,8 +947,54 @@ export function ConductorSidebar({
   );
   const showJumpShortcuts = useShortcutHintModifierHeld();
 
+  const activeWorkspaceKey = dragState
+    ? workspaceKeyFromDndId(dragState.activeId)
+    : null;
+  const overWorkspaceKey = dragState?.overId
+    ? workspaceKeyFromDndId(dragState.overId)
+    : null;
+  const activeWorkspaceProjectId = activeWorkspaceKey
+    ? projection.projects.find((project) =>
+        project.workspaces.some(
+          (workspace) => workspace.key === activeWorkspaceKey,
+        ),
+      )?.id
+    : null;
+  const overWorkspaceProjectId = overWorkspaceKey
+    ? projection.projects.find((project) =>
+        project.workspaces.some(
+          (workspace) => workspace.key === overWorkspaceKey,
+        ),
+      )?.id
+    : null;
+  const dropTargetWorkspaceKey =
+    activeWorkspaceProjectId &&
+    activeWorkspaceProjectId === overWorkspaceProjectId &&
+    overWorkspaceKey !== activeWorkspaceKey
+      ? overWorkspaceKey
+      : null;
+  const draggedWorkspace = activeWorkspaceKey
+    ? projection.projects
+        .flatMap((project) => project.workspaces)
+        .find((workspace) => workspace.key === activeWorkspaceKey)
+    : null;
+  const draggedProject = dragState?.activeId
+    ? (projects.find((project) => project.id === dragState.activeId) ?? null)
+    : null;
+  const dropTargetProjectId =
+    draggedProject &&
+    dragState?.overId &&
+    dragState.overId !== draggedProject.id &&
+    projects.some((project) => project.id === dragState.overId)
+      ? dragState.overId
+      : null;
+
   const jumpDialogOpen =
-    renameTarget !== null || renameThread !== null || archiveTarget !== null;
+    renameTarget !== null ||
+    renameThread !== null ||
+    archiveTarget !== null ||
+    renameProjectTarget !== null ||
+    projectIconTarget !== null;
   useEffect(() => {
     if (jumpDialogOpen) return;
 
@@ -828,6 +1043,38 @@ export function ConductorSidebar({
   function openThread(threadId: string) {
     actions.open(threadId);
     onNavigate();
+  }
+
+  function updateCustomization(
+    projectId: string,
+    patch: Partial<ProjectCustomization>,
+  ) {
+    setCustomizations((current) => {
+      const next = patchProjectCustomization(current, projectId, patch);
+      saveProjectCustomizations(next);
+      return next;
+    });
+  }
+
+  function requestRenameProject(project: ConductorProject) {
+    const defaultName = project.repositoryName ?? project.name;
+    const customName = customizations[project.id]?.name ?? null;
+    setRenameProjectTarget({
+      projectId: project.id,
+      defaultName,
+      currentName: customName ?? defaultName,
+      hasOverride: customName !== null,
+    });
+  }
+
+  function requestChangeProjectIcon(project: ConductorProject) {
+    const customization = customizations[project.id];
+    setProjectIconTarget({
+      projectId: project.id,
+      projectLabel:
+        customization?.name ?? project.repositoryName ?? project.name,
+      currentIcon: customization?.icon ?? null,
+    });
   }
 
   async function requestRename(
@@ -951,6 +1198,11 @@ export function ConductorSidebar({
     });
   }
 
+  function onDragEndWithFeedback(event: DragEndEvent) {
+    setDragState(null);
+    onDragEnd(event);
+  }
+
   if (state.status === "loading" || isLoading) {
     return (
       <p className="px-3 py-6 text-xs text-muted-foreground">
@@ -979,7 +1231,17 @@ export function ConductorSidebar({
         <DndContext
           sensors={sensors}
           collisionDetection={closestCenter}
-          onDragEnd={onDragEnd}
+          onDragStart={({ active }) =>
+            setDragState({ activeId: String(active.id), overId: null })
+          }
+          onDragOver={({ active, over }) =>
+            setDragState({
+              activeId: String(active.id),
+              overId: over ? String(over.id) : null,
+            })
+          }
+          onDragCancel={() => setDragState(null)}
+          onDragEnd={onDragEndWithFeedback}
         >
           <SortableContext
             items={projects.map((project) => project.id)}
@@ -994,10 +1256,13 @@ export function ConductorSidebar({
                 <ProjectSection
                   key={project.id}
                   project={project}
+                  customization={customizations[project.id]}
                   activeThreadId={activeThreadId}
                   collapsed={collapsed}
                   archivePending={archivePending}
                   dragDisabled={Boolean(query) || projects.length < 2}
+                  isDropTarget={dropTargetProjectId === project.id}
+                  dropTargetWorkspaceKey={dropTargetWorkspaceKey}
                   workspaceDragDisabled={Boolean(query)}
                   jumpShortcuts={jumpShortcutByWorkspaceKey}
                   showJumpShortcuts={showJumpShortcuts}
@@ -1017,10 +1282,27 @@ export function ConductorSidebar({
                   onRequestRename={(workspace, scope) => {
                     void requestRename(workspace, scope).catch(() => undefined);
                   }}
+                  onRequestRenameProject={() => requestRenameProject(project)}
+                  onRequestChangeIcon={() => requestChangeProjectIcon(project)}
                 />
               );
             })}
           </SortableContext>
+          <DragOverlay
+            dropAnimation={{
+              duration: 160,
+              easing: "cubic-bezier(0.2, 0, 0, 1)",
+            }}
+          >
+            {draggedProject ? (
+              <ProjectDragPreview
+                project={draggedProject}
+                customization={customizations[draggedProject.id]}
+              />
+            ) : draggedWorkspace ? (
+              <WorkspaceDragPreview workspace={draggedWorkspace} />
+            ) : null}
+          </DragOverlay>
         </DndContext>
 
         {projection.personalProjectId &&
@@ -1146,6 +1428,16 @@ export function ConductorSidebar({
         thread={renameThread}
         onClose={() => setRenameThread(null)}
         onRename={(target, title) => actions.rename(target.id, title)}
+      />
+      <RenameProjectDialog
+        target={renameProjectTarget}
+        onClose={() => setRenameProjectTarget(null)}
+        onRename={(projectId, name) => updateCustomization(projectId, { name })}
+      />
+      <ProjectIconDialog
+        target={projectIconTarget}
+        onClose={() => setProjectIconTarget(null)}
+        onSelect={(projectId, icon) => updateCustomization(projectId, { icon })}
       />
     </>
   );

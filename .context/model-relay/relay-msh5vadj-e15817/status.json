@@ -1,0 +1,33 @@
+{
+  "task_id": "relay-msh5vadj-e15817",
+  "state": "canceled",
+  "run_number": 1,
+  "effective_role": "implementation",
+  "stage_id": null,
+  "route_reason": "User explicitly requested Model Relay construction; frontend-only implementation of the approved PWA plan.",
+  "external_write_targets": [],
+  "session_id": null,
+  "writer_lock_token": "15474008965773c6edc9268c",
+  "queued_at": "2026-08-06T06:54:58.377Z",
+  "runs": [
+    {
+      "run_number": 1,
+      "effective_role": "implementation",
+      "stage_id": null,
+      "route_reason": "User explicitly requested Model Relay construction; frontend-only implementation of the approved PWA plan.",
+      "external_write_targets": [],
+      "state": "canceled",
+      "queued_at": "2026-08-06T06:54:58.377Z",
+      "session_id": null,
+      "pid": 68648,
+      "process_group_id": 68648,
+      "started_at": "2026-08-06T06:54:58.406Z",
+      "canceled_at": "2026-08-06T06:59:49.645Z"
+    }
+  ],
+  "updated_at": "2026-08-06T06:59:49.645Z",
+  "pid": 68648,
+  "process_group_id": 68648,
+  "started_at": "2026-08-06T06:54:58.406Z",
+  "canceled_at": "2026-08-06T06:59:49.645Z"
+}
