@@ -152,7 +152,7 @@ describe("mobile sidebar text-selection arbitration", () => {
 });
 
 describe("standalone compact PWA sidebar", () => {
-  it("opens from the leading edge while page swipes and wheel stay silent", () => {
+  it("keeps every page swipe silent, including the leading edge", () => {
     stubStandaloneDisplayMode();
     renderSelectableSwipeHarness();
     const prose = screen.getByText("Selectable message prose");
@@ -166,11 +166,7 @@ describe("standalone compact PWA sidebar", () => {
     fireTouch(prose, "touchstart", createTouch(12, 160));
     fireTouch(window, "touchmove", createTouch(180, 164));
 
-    const edgeSwipePanel = document.querySelector('[data-sidebar="panel"]');
-    expect(edgeSwipePanel).not.toBeNull();
-    expect(edgeSwipePanel?.getAttribute("data-vaul-drawer-direction")).toBe(
-      "left",
-    );
+    expect(document.querySelector('[data-sidebar="panel"]')).toBeNull();
   });
 
   it("keeps the explicit sidebar button available", () => {

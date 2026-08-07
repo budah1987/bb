@@ -6,7 +6,6 @@ import { Drawer as DrawerPrimitive } from "vaul";
 
 import { useIsCompactViewport } from "@bb/shared-ui/hooks/use-compact-viewport";
 import { useStandaloneCompactPwa } from "@/hooks/useStandaloneCompactPwa";
-import { isCompactPwaSidebarEdgeSwipe } from "@/lib/compact-pwa-gesture-zones";
 import {
   getSwipeSelectionRoot,
   hasExpandedTextSelectionWithin,
@@ -716,9 +715,9 @@ const SidebarInset = React.forwardRef<
     setSuppressMobileOpenAnimation,
     setSuppressMobileCloseAnimation,
   } = useSidebar();
-  // The installed compact app gives the sidebar a narrow leading-edge gesture;
-  // swipes begun in the page remain workspace navigation. Browser tabs keep
-  // their existing inset swipe, and Vaul owns swipe-to-close once open.
+  // The installed compact app keeps the sidebar button-only so every page
+  // swipe belongs to workspace navigation. Browser tabs keep their existing
+  // inset swipe, and Vaul owns swipe-to-close once the sidebar is open.
   const isStandaloneCompactPwa = useStandaloneCompactPwa();
   const swipeSessionRef = React.useRef<SidebarInsetSwipeSession | null>(null);
   const removeSwipeListenersRef = React.useRef<(() => void) | null>(null);
@@ -972,6 +971,7 @@ const SidebarInset = React.forwardRef<
       if (
         event.defaultPrevented ||
         !isCompactViewport ||
+        isStandaloneCompactPwa ||
         openMobile ||
         event.touches.length !== 1 ||
         !isSidebarInsetSwipeTarget(event.target) ||
@@ -983,9 +983,7 @@ const SidebarInset = React.forwardRef<
       const touch = event.touches.item(0);
       if (
         touch == null ||
-        (isStandaloneCompactPwa
-          ? !isCompactPwaSidebarEdgeSwipe(touch.clientX)
-          : touch.clientX < SIDEBAR_MOBILE_SWIPE_BROWSER_EDGE_GUARD_PX)
+        touch.clientX < SIDEBAR_MOBILE_SWIPE_BROWSER_EDGE_GUARD_PX
       ) {
         return;
       }
@@ -1033,12 +1031,11 @@ const SidebarInset = React.forwardRef<
       if (
         event.defaultPrevented ||
         !isCompactViewport ||
+        isStandaloneCompactPwa ||
         openMobile ||
         event.pointerType !== "touch" ||
         event.button !== 0 ||
-        (isStandaloneCompactPwa
-          ? !isCompactPwaSidebarEdgeSwipe(event.clientX)
-          : event.clientX < SIDEBAR_MOBILE_SWIPE_BROWSER_EDGE_GUARD_PX) ||
+        event.clientX < SIDEBAR_MOBILE_SWIPE_BROWSER_EDGE_GUARD_PX ||
         swipeSessionRef.current !== null ||
         !isSidebarInsetSwipeTarget(event.target) ||
         shouldIgnoreSidebarSwipeTarget(event.target)

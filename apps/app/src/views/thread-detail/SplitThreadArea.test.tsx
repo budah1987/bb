@@ -2564,7 +2564,7 @@ describe("SplitThreadArea", () => {
       expect(locationPath()).toBe(threadPath("thr-b"));
     });
 
-    it("reserves the leading edge for global sidebar navigation", async () => {
+    it("opens the Command Center from a long leading-edge swipe", async () => {
       renderSplitArea({
         path: threadPath("thr-b"),
         layout: twoPaneLayout("pane-2"),
@@ -2575,8 +2575,10 @@ describe("SplitThreadArea", () => {
       dragTo(900, { from: 12 });
       firePointer(window, "pointerup", 900);
 
-      expect(previewSurface()).toBeNull();
-      expect(locationPath()).toBe(threadPath("thr-b"));
+      await waitFor(() => expect(locationPath()).toBe("/"));
+      expect(screen.getByTestId("command-center-state").textContent).toBe(
+        `${threadPath("thr-b")}|pane-2`,
+      );
     });
 
     it("releases the horizontal touch policy while a text editor is focused", async () => {

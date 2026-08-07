@@ -3,7 +3,6 @@ import type { PointerEvent as ReactPointerEvent, ReactNode } from "react";
 import { flushSync } from "react-dom";
 import { useMediaQuery } from "@bb/shared-ui/hooks/use-media-query";
 import { isBlockingOverlayOpen } from "@/lib/swipe-gesture-targets";
-import { isCompactPwaSidebarEdgeSwipe } from "@/lib/compact-pwa-gesture-zones";
 import type { PaneContent, PaneNode } from "@/lib/split-layout";
 import { CompactWorkspacePreviewSurface } from "./CompactWorkspacePreviewSurface";
 import {
@@ -363,7 +362,6 @@ export function CompactWorkspaceSwipeHost({
       event.defaultPrevented ||
       event.pointerType !== "touch" ||
       event.button !== 0 ||
-      isCompactPwaSidebarEdgeSwipe(event.clientX) ||
       sessionRef.current !== null ||
       settleTimerRef.current !== null ||
       isBlockingOverlayOpen(host.ownerDocument) ||
