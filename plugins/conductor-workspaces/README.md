@@ -13,7 +13,7 @@ data, so switching back to BB's standard sidebar is lossless.
 ## Use in BBamir
 
 The authoritative source lives at `plugins/conductor-workspaces` on the
-`conductor/main` branch of `budah1987/bb`. From a BBamir checkout, install the
+`bbamir/main` branch of `budah1987/bb`. From a BBamir checkout, install the
 local directory:
 
 ```sh
@@ -36,7 +36,7 @@ The maintenance boundary is intentional:
   and host-level shortcut interception. Those changes should be contributed to
   upstream BB and contain no BBamir-specific policy.
 - This directory owns the layout, projection, activity animation, tab model,
-  menus, gestures, and shortcuts. Merging upstream BB into `conductor/main`
+  menus, gestures, and shortcuts. Merging upstream BB into `bbamir/main`
   preserves those changes as ordinary BBamir commits.
 - UI primitives under `components/ui/` are vendored source. They preserve BB's
   theme and responsive drawer behavior without importing the private
@@ -47,7 +47,7 @@ The maintenance boundary is intentional:
   unpublished monorepo package.
 
 When BB ships a new version, fast-forward the fork's `main` branch and merge it
-into `conductor/main`. If BB changes a generic API, update the plugin's engine
+into `bbamir/main`. If BB changes a generic API, update the plugin's engine
 range and vendored UI components in the same BBamir change.
 
 To refresh a vendored component against the BB release declared in
