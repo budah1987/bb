@@ -33,6 +33,8 @@ const EXPECTED_BACKEND_ROOT_TYPE_EXPORTS = [
   "PluginAgentToolResult",
   "PluginAgentToolSelection",
   "PluginBackground",
+  "PluginBackgroundActivityItem",
+  "PluginBackgroundActivityProvider",
   "PluginCli",
   "PluginCliCommandInfo",
   "PluginCliContext",

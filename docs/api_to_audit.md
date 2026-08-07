@@ -5,6 +5,20 @@ entry here (see [AGENTS.md](../AGENTS.md), "Plugin API"). Dropping the prefix
 is the deliberate stabilization step: audit the entry, rename project-wide,
 and delete the entry in the same change.
 
+## `bb.ui.experimental_contributeBackgroundActivity(provider)`
+
+Lets one plugin contribute its live agent and command work to BB's existing
+thread activity card and sidebar status. The provider is synchronous and must
+answer from an in-memory cache because BB calls it while projecting timelines.
+
+Before stabilization, audit:
+
+- whether a synchronous provider remains appropriate as activity sources grow;
+- arbitration, ordering, and limits when several plugins contribute work;
+- lifecycle cleanup across plugin reload, disable, and failure;
+- whether the item kinds and optional detail cover the intended integrations;
+- accessibility and presentation behavior across the activity card and sidebar.
+
 ## `PluginContentScriptContext.experimental_setThreadRowStatus`
 
 Lets a plugin-lifetime content script set or clear one of its own status

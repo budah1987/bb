@@ -33,7 +33,7 @@
     "bb-plugin"
   ],
   "scripts": {
-    "build": "bb plugin build",
+    "build": "pnpm -C ../.. exec node --conditions=source --import tsx scripts/build-workspace-plugin.mjs conductor-workspaces",
     "test": "vitest run --config vitest.config.ts",
     "typecheck": "tsc --noEmit"
   },
@@ -50,6 +50,8 @@
     "zod": "^4.3.6"
   },
   "devDependencies": {
+    "@bb/plugin-build": "workspace:*",
+    "@bb/plugin-sdk": "workspace:*",
     "@radix-ui/react-context-menu": "^2.3.3",
     "@radix-ui/react-dialog": "^1.1.19",
     "@radix-ui/react-dropdown-menu": "^2.1.20",

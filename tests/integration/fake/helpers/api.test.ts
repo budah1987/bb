@@ -10,6 +10,7 @@ function makeEnvironment(overrides: EnvironmentOverrides = {}): Environment {
     branchName: "bb/thread",
     createdAt: 1,
     defaultBranch: "main",
+    githubAccountLogin: null,
     hostId: "host-1",
     id: "env-test",
     name: null,

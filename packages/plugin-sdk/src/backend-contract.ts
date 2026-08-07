@@ -610,7 +610,9 @@ export interface PluginUi {
    * agents and share their grouping, ordering and priority. At most one
    * provider per plugin.
    */
-  contributeBackgroundActivity(provider: PluginBackgroundActivityProvider): void;
+  experimental_contributeBackgroundActivity(
+    provider: PluginBackgroundActivityProvider,
+  ): void;
   /**
    * Register a mention provider for the shipped app's composer (design §4.9).
    * Providers default to the `@` trigger and may opt into `#`, `$`, `!`, or

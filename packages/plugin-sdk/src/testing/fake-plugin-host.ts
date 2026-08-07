@@ -15,6 +15,7 @@ import type {
   PluginAgentToolResult,
   PluginAgents,
   PluginBackground,
+  PluginBackgroundActivityProvider,
   PluginCli,
   PluginCliCommandInfo,
   PluginCliContext,
@@ -282,7 +283,6 @@ export interface FakeAgentToolRecord {
     ctx: PluginAgentToolContext,
   ): PluginAgentToolResult | Promise<PluginAgentToolResult>;
 }
-
 
 export interface FakeMentionProviderRecord {
   id: string;
@@ -1602,10 +1602,11 @@ function createFakePluginHostInternal(
 
   // --- ui ---
   const mentionProviders: FakeMentionProviderRecord[] = [];
-  let backgroundActivityProvider: PluginBackgroundActivityProvider | null = null;
+  let backgroundActivityProvider: PluginBackgroundActivityProvider | null =
+    null;
   const ui: PluginUi = {
     requestInput,
-    contributeBackgroundActivity(provider) {
+    experimental_contributeBackgroundActivity(provider) {
       assertLive();
       if (backgroundActivityProvider) {
         throw new Error("a background activity provider is already registered");

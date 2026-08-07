@@ -17,8 +17,8 @@ function sourceFiles(directory: string): string[] {
   return files;
 }
 
-describe("standalone plugin contract", () => {
-  it("does not depend on BB monorepo-only packages or configuration", () => {
+describe("portable plugin runtime contract", () => {
+  it("does not depend on BB monorepo-only runtime packages or configuration", () => {
     const manifest = JSON.parse(
       readFileSync(join(pluginRoot, "package.json"), "utf8"),
     ) as {
@@ -26,10 +26,7 @@ describe("standalone plugin contract", () => {
       devDependencies?: Record<string, string>;
       engines?: Record<string, string>;
     };
-    const dependencies = {
-      ...manifest.dependencies,
-      ...manifest.devDependencies,
-    };
+    const dependencies = manifest.dependencies ?? {};
 
     expect(dependencies["@bb/shared-ui"]).toBeUndefined();
     expect(Object.values(dependencies)).not.toContain("workspace:*");

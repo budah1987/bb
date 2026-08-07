@@ -281,7 +281,6 @@ export interface PluginMentionProviderRecord {
   ) => { context: string } | Promise<{ context: string }>;
 }
 
-
 /** Runtime record of a registered background service. */
 export interface PluginBackgroundServiceRecord {
   name: string;
@@ -430,7 +429,8 @@ export interface PluginApiHandle {
   /** Mention providers recorded by `bb.ui.registerMentionProvider`. */
   mentionProviders: PluginMentionProviderRecord[];
   /**
-   * Live background work from `bb.ui.contributeBackgroundActivity` (at most
+   * Live background work from
+   * `bb.ui.experimental_contributeBackgroundActivity` (at most
    * one; null when none). Read on the thread timeline path, so its `list` is
    * synchronous by contract.
    */
@@ -1132,10 +1132,11 @@ export function createPluginApi(options: {
   };
 
   const mentionProviders: PluginMentionProviderRecord[] = [];
-  let backgroundActivityProvider: PluginBackgroundActivityProvider | null = null;
+  let backgroundActivityProvider: PluginBackgroundActivityProvider | null =
+    null;
   const ui: PluginUi = {
     requestInput,
-    contributeBackgroundActivity(provider) {
+    experimental_contributeBackgroundActivity(provider) {
       assertLive();
       if (backgroundActivityProvider) {
         throw new Error("a background activity provider is already registered");
