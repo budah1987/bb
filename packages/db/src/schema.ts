@@ -442,6 +442,7 @@ export const environments = sqliteTable(
     baseBranch: text("base_branch"),
     defaultBranch: text("default_branch"),
     mergeBaseBranch: text("merge_base_branch"),
+    githubAccountLogin: text("github_account_login"),
     destroyAttemptId: text("destroy_attempt_id"),
     workspaceProvisionType: text("workspace_provision_type")
       .$type<WorkspaceProvisionType>()

@@ -23,6 +23,7 @@ import {
 } from "@bb/domain";
 import type {
   DiscoverReposResult,
+  GithubAccountCatalog,
   GithubPullRequestCatalog,
   GithubRepositoryCatalog,
   ProviderUsageResponse,
@@ -154,6 +155,7 @@ import type {
   SystemProvidersQuery,
   OnboardingAgentOverview,
   OnboardingTelemetryEvent,
+  SystemGithubAccountsQuery,
   SystemGithubPullRequestsQuery,
   SystemGithubRepositoriesQuery,
   SystemOnboardingReposQuery,
@@ -278,6 +280,7 @@ import {
   setQueuedMessageGroupBoundaryRequestSchema,
   sendQueuedMessageRequestSchema,
   systemExecutionOptionsQuerySchema,
+  systemGithubAccountsQuerySchema,
   systemGithubPullRequestsQuerySchema,
   systemGithubRepositoriesQuerySchema,
   systemProvidersQuerySchema,
@@ -1432,6 +1435,14 @@ export const publicApiRoutes = {
         systemGithubRepositoriesQuerySchema,
       ),
       response: jsonResponse<GithubRepositoryCatalog>(),
+    }),
+    githubAccounts: defineRoute({
+      path: "/system/github/accounts",
+      method: "get",
+      request: optionalQueryRequest<EmptyInput, SystemGithubAccountsQuery>(
+        systemGithubAccountsQuerySchema,
+      ),
+      response: jsonResponse<GithubAccountCatalog>(),
     }),
     githubPullRequests: defineRoute({
       path: "/system/github/pull-requests",

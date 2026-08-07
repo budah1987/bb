@@ -61,5 +61,6 @@ export {
   getPullRequestForBranch,
   parseGitHostPullRequest,
   type GitHostPullRequestLookup,
+  type GitHostCommandOptions,
   type GitHostPullRequestCreateOptions,
 } from "./git-host.js";

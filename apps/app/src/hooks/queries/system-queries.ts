@@ -13,6 +13,7 @@ import type {
 } from "@bb/server-contract";
 import type {
   DiscoverReposResult,
+  GithubAccountCatalog,
   GithubPullRequestCatalog,
   GithubRepositoryCatalog,
   ProviderCliStatusResponse,
@@ -32,6 +33,7 @@ import {
   onboardingReposQueryKey,
   systemConfigQueryKey,
   systemExecutionOptionsQueryKey,
+  systemGithubAccountsQueryKey,
   systemGithubRepositoriesQueryKey,
   systemGithubPullRequestsQueryKey,
   systemUsageLimitsQueryKey,
@@ -270,6 +272,25 @@ export function useSystemUsageLimits(args: UseSystemUsageLimitsArgs = {}) {
 
 export interface UseGithubRepositoriesArgs extends QueryOptions {
   hostId?: string;
+}
+
+export interface UseGithubAccountsArgs extends QueryOptions {
+  hostId?: string;
+}
+
+/** Lightweight authenticated-account list for identity selectors. */
+export function useGithubAccounts(args: UseGithubAccountsArgs = {}) {
+  const hostId = args.hostId ?? null;
+  return useQuery<GithubAccountCatalog>({
+    queryKey: systemGithubAccountsQueryKey(hostId),
+    queryFn: ({ signal }) =>
+      sdk.system.githubAccounts({
+        ...(args.hostId === undefined ? {} : { hostId: args.hostId }),
+        signal,
+      }),
+    enabled: args.enabled ?? true,
+    staleTime: 60_000,
+  });
 }
 
 /**

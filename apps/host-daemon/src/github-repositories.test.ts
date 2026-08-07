@@ -1,9 +1,68 @@
 import { describe, expect, it } from "vitest";
 import {
+  getGithubAccountCatalog,
+  getGithubAccountEnvironment,
   getGithubPullRequestCatalog,
   getGithubRepositoryCatalog,
   type GithubCommandRunner,
 } from "./github-repositories.js";
+
+describe("GitHub accounts", () => {
+  it("lists authenticated accounts without querying repositories", async () => {
+    const run: GithubCommandRunner = async (_file, args) => {
+      expect(args).toEqual(["auth", "status", "--json", "hosts"]);
+      return {
+        stdout: JSON.stringify({
+          hosts: {
+            "github.com": [
+              {
+                state: "success",
+                active: true,
+                host: "github.com",
+                login: "amirghst",
+              },
+              {
+                state: "success",
+                active: false,
+                host: "github.com",
+                login: "budah1987",
+              },
+            ],
+          },
+        }),
+        stderr: "",
+      };
+    };
+
+    await expect(getGithubAccountCatalog({ env: {}, run })).resolves.toEqual({
+      accounts: [
+        { active: true, host: "github.com", login: "amirghst" },
+        { active: false, host: "github.com", login: "budah1987" },
+      ],
+    });
+  });
+
+  it("resolves a selected account to an operation-scoped token", async () => {
+    const run: GithubCommandRunner = async (_file, args) => {
+      expect(args).toEqual([
+        "auth",
+        "token",
+        "--hostname",
+        "github.com",
+        "--user",
+        "budah1987",
+      ]);
+      return { stdout: "personal-token\n", stderr: "" };
+    };
+
+    await expect(
+      getGithubAccountEnvironment({ env: {}, login: "budah1987", run }),
+    ).resolves.toEqual({
+      GH_HOST: "github.com",
+      GH_TOKEN: "personal-token",
+    });
+  });
+});
 
 function repositoryPage(
   repositories: Array<{

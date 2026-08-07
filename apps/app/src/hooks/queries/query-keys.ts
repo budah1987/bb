@@ -62,6 +62,7 @@ export const SYSTEM_CLI_SKILLS_QUERY_KEY = "systemCliSkills";
 export const SYSTEM_VERSION_QUERY_KEY = "systemVersion";
 export const HOST_PROVIDER_CLI_STATUS_QUERY_KEY = "hostProviderCliStatus";
 export const SYSTEM_USAGE_LIMITS_QUERY_KEY = "systemUsageLimits";
+export const SYSTEM_GITHUB_ACCOUNTS_QUERY_KEY = "systemGithubAccounts";
 export const SYSTEM_GITHUB_REPOSITORIES_QUERY_KEY = "systemGithubRepositories";
 export const SYSTEM_GITHUB_PULL_REQUESTS_QUERY_KEY = "systemGithubPullRequests";
 export const ONBOARDING_AGENTS_QUERY_KEY = "onboardingAgents";
@@ -450,6 +451,10 @@ export type HostProviderCliStatusQueryKey = readonly [
 ];
 export type SystemUsageLimitsQueryKey = readonly [
   typeof SYSTEM_USAGE_LIMITS_QUERY_KEY,
+  string | null,
+];
+export type SystemGithubAccountsQueryKey = readonly [
+  typeof SYSTEM_GITHUB_ACCOUNTS_QUERY_KEY,
   string | null,
 ];
 export type SystemGithubRepositoriesQueryKey = readonly [
@@ -1101,6 +1106,12 @@ export function systemGithubRepositoriesQueryKey(
   hostId: string | null,
 ): SystemGithubRepositoriesQueryKey {
   return [SYSTEM_GITHUB_REPOSITORIES_QUERY_KEY, hostId];
+}
+
+export function systemGithubAccountsQueryKey(
+  hostId: string | null,
+): SystemGithubAccountsQueryKey {
+  return [SYSTEM_GITHUB_ACCOUNTS_QUERY_KEY, hostId];
 }
 
 export function systemGithubPullRequestsQueryKey(

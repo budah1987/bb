@@ -5,6 +5,7 @@ import type {
 } from "@bb/domain";
 import type {
   DiscoverReposResult,
+  GithubAccountCatalog,
   GithubPullRequestCatalog,
   GithubRepositoryCatalog,
   ProviderUsageResponse,
@@ -20,6 +21,7 @@ import type {
   SystemInstallCliSkillsResponse,
   OnboardingAgentOverview,
   OnboardingTelemetryEvent,
+  SystemGithubAccountsQuery,
   SystemGithubPullRequestsQuery,
   SystemGithubRepositoriesQuery,
   SystemOnboardingReposQuery,
@@ -83,9 +85,13 @@ export type SystemUpdateExperimentsResult = Experiments;
 export type SystemUpdateGeneralSettingsResult = AppSettings;
 export type SystemUpdateKeyboardSettingsResult = AppKeybindingOverrides;
 export type SystemUsageLimitsResult = ProviderUsageResponse;
+export type SystemGithubAccountsResult = GithubAccountCatalog;
 export type SystemGithubRepositoriesResult = GithubRepositoryCatalog;
 export type SystemGithubPullRequestsResult = GithubPullRequestCatalog;
 export interface SystemOnboardingArgs extends SystemOnboardingReposQuery {
+  signal?: AbortSignal;
+}
+export interface SystemGithubAccountsArgs extends SystemGithubAccountsQuery {
   signal?: AbortSignal;
 }
 export type SystemOnboardingAgentsResult = OnboardingAgentOverview;
@@ -131,6 +137,10 @@ export interface SystemArea {
   onboardingRepos(
     args?: SystemOnboardingArgs,
   ): Promise<SystemOnboardingReposResult>;
+  /** GitHub accounts authenticated on the environment's host machine. */
+  githubAccounts(
+    args?: SystemGithubAccountsArgs,
+  ): Promise<SystemGithubAccountsResult>;
   /** Repositories visible to every authenticated GitHub account on a machine. */
   githubRepositories(
     args?: SystemGithubRepositoriesArgs,
@@ -261,6 +271,14 @@ export function createSystemArea(args: CreateSdkAreaArgs): SystemArea {
     async githubRepositories(input = {}) {
       return transport.readJson(
         transport.api.v1.system.github.repositories.$get(
+          { query: { hostId: input.hostId } },
+          ...signalRequestArgs(input.signal),
+        ),
+      );
+    },
+    async githubAccounts(input = {}) {
+      return transport.readJson(
+        transport.api.v1.system.github.accounts.$get(
           { query: { hostId: input.hostId } },
           ...signalRequestArgs(input.signal),
         ),

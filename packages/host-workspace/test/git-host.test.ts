@@ -267,6 +267,29 @@ describe("runPullRequestActionForBranch", () => {
       name: "WorkspaceError",
     });
   });
+
+  it("uses the selected account environment for PR mutations", async () => {
+    mockGhSuccess();
+
+    await runPullRequestActionForBranch({
+      cwd: "/tmp/workspace",
+      branch: "bb/pr-actions",
+      action: { operation: "ready" },
+      env: { GH_HOST: "github.com", GH_TOKEN: "personal-token" },
+    });
+
+    expect(execFileMock).toHaveBeenCalledWith(
+      "gh",
+      ["pr", "ready", "--", "bb/pr-actions"],
+      expect.objectContaining({
+        env: expect.objectContaining({
+          GH_HOST: "github.com",
+          GH_TOKEN: "personal-token",
+        }),
+      }),
+      expect.any(Function),
+    );
+  });
 });
 
 describe("createPullRequestForBranch", () => {
@@ -320,6 +343,41 @@ describe("createPullRequestForBranch", () => {
       expect.objectContaining({ cwd: "/tmp/workspace", timeout: 60_000 }),
       expect.any(Function),
     );
+  });
+
+  it("uses the selected account for both push and PR creation", async () => {
+    execFileMock.mockImplementation(
+      (
+        file: string,
+        args: readonly string[],
+        _options: object,
+        callback: (error: Error | null, stdout: string, stderr: string) => void,
+      ) => {
+        const isView = file === "gh" && args[1] === "view";
+        callback(null, isView ? ghJson() : "", "");
+      },
+    );
+
+    await createPullRequestForBranch({
+      cwd: "/tmp/workspace",
+      branch: "bb/pr-create",
+      baseBranch: "main",
+      body: "Ships the new workflow",
+      draft: false,
+      title: "Add pull request workflow",
+      env: { GH_HOST: "github.com", GH_TOKEN: "work-token" },
+    });
+
+    for (const call of execFileMock.mock.calls) {
+      expect(call[2]).toEqual(
+        expect.objectContaining({
+          env: expect.objectContaining({
+            GH_HOST: "github.com",
+            GH_TOKEN: "work-token",
+          }),
+        }),
+      );
+    }
   });
 });
 

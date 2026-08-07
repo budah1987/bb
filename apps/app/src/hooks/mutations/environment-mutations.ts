@@ -122,13 +122,23 @@ export function useUpdateEnvironment() {
       showErrorToast: false,
     },
     mutationFn: ({ id, ...request }: UpdateEnvironmentMutationRequest) => {
+      if (request.githubAccountLogin !== undefined) {
+        return sdk.environments.update({
+          environmentId: id,
+          githubAccountLogin: request.githubAccountLogin,
+          ...(request.mergeBaseBranch === undefined
+            ? {}
+            : { mergeBaseBranch: request.mergeBaseBranch }),
+          ...(request.name === undefined ? {} : { name: request.name }),
+        });
+      }
       if (request.name !== undefined) {
         return sdk.environments.update({
           environmentId: id,
           name: request.name,
-          ...(request.mergeBaseBranch !== undefined
-            ? { mergeBaseBranch: request.mergeBaseBranch }
-            : {}),
+          ...(request.mergeBaseBranch === undefined
+            ? {}
+            : { mergeBaseBranch: request.mergeBaseBranch }),
         });
       }
       if (request.mergeBaseBranch !== undefined) {

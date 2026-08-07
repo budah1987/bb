@@ -22,6 +22,7 @@ function makeEnvironment(overrides: EnvironmentOverrides = {}): Environment {
     isWorktree: true,
     managed: true,
     mergeBaseBranch: null,
+    githubAccountLogin: null,
     path: "/tmp/workspace",
     projectId: "project-1",
     status: "ready",

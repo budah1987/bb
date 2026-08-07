@@ -35,6 +35,68 @@ function rawPullRequest(
 }
 
 describe("public environment action regressions", () => {
+  it("persists a GitHub account and scopes PR lookups to it", async () => {
+    await withTestHarness(async (harness) => {
+      const { host } = seedHostSession(harness.deps, {
+        id: "host-github-account",
+      });
+      const { project } = seedProjectWithSource(harness.deps, {
+        hostId: host.id,
+      });
+      const environment = seedEnvironment(harness.deps, {
+        hostId: host.id,
+        projectId: project.id,
+        path: "/tmp/github-account-env",
+        workspaceProvisionType: "managed-worktree",
+      });
+
+      const updatePromise = harness.app.request(
+        `/api/v1/environments/${environment.id}`,
+        {
+          method: "PATCH",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ githubAccountLogin: "budah1987" }),
+        },
+      );
+      const accountCommand = await waitForQueuedCommand(
+        harness,
+        ({ command }) => command.type === "github.account_catalog",
+      );
+      await reportQueuedCommandSuccess(harness, accountCommand, {
+        accounts: [
+          { active: true, host: "github.com", login: "amirghst" },
+          { active: false, host: "github.com", login: "budah1987" },
+        ],
+      });
+
+      const updateResponse = await updatePromise;
+      expect(updateResponse.status).toBe(200);
+      await expect(readJson(updateResponse)).resolves.toMatchObject({
+        githubAccountLogin: "budah1987",
+      });
+
+      const pullRequestPromise = harness.app.request(
+        `/api/v1/environments/${environment.id}/pull-request`,
+      );
+      const pullRequestCommand = await waitForQueuedCommand(
+        harness,
+        ({ command }) => command.type === "workspace.pull_request",
+      );
+      expect(pullRequestCommand.command).toMatchObject({
+        githubAccountLogin: "budah1987",
+      });
+      await reportQueuedCommandSuccess(harness, pullRequestCommand, {
+        outcome: "absent",
+      });
+
+      const pullRequestResponse = await pullRequestPromise;
+      expect(pullRequestResponse.status).toBe(200);
+      await expect(readJson(pullRequestResponse)).resolves.toEqual({
+        outcome: "absent",
+      });
+    });
+  });
+
   it("prepares pull request metadata for an unmanaged git checkout", async () => {
     await withTestHarness(async (harness) => {
       const { host } = seedHostSession(harness.deps, {

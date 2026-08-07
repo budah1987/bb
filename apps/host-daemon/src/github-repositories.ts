@@ -1,6 +1,7 @@
 import { execFile } from "node:child_process";
 import type {
   GithubAccount,
+  GithubAccountCatalog,
   GithubPullRequest,
   GithubPullRequestCatalog,
   GithubRepository,
@@ -139,6 +140,58 @@ function parseAccounts(raw: string): GithubAccount[] {
     }
     return [{ host: row.host, login: row.login, active: row.active }];
   });
+}
+
+async function listGithubAccounts(args: {
+  env: NodeJS.ProcessEnv;
+  ghPath: string;
+  run: GithubCommandRunner;
+}): Promise<GithubAccount[]> {
+  const status = await args.run(
+    args.ghPath,
+    ["auth", "status", "--json", "hosts"],
+    { env: args.env, timeoutMs: COMMAND_TIMEOUT_MS },
+  );
+  return parseAccounts(status.stdout);
+}
+
+export async function getGithubAccountCatalog(args: {
+  env: NodeJS.ProcessEnv;
+  ghPath?: string;
+  run?: GithubCommandRunner;
+}): Promise<GithubAccountCatalog> {
+  const accounts = await listGithubAccounts({
+    env: args.env,
+    ghPath: args.ghPath ?? "gh",
+    run: args.run ?? runCommand,
+  });
+  if (accounts.length === 0) {
+    throw new Error(
+      "No authenticated github.com account was found. Run `gh auth login` first.",
+    );
+  }
+  return { accounts };
+}
+
+export async function getGithubAccountEnvironment(args: {
+  env: NodeJS.ProcessEnv;
+  login: string | null;
+  ghPath?: string;
+  run?: GithubCommandRunner;
+}): Promise<NodeJS.ProcessEnv | undefined> {
+  if (args.login === null) return undefined;
+  const account: GithubAccount = {
+    active: false,
+    host: GITHUB_HOST,
+    login: args.login,
+  };
+  const token = await tokenForAccount({
+    account,
+    env: args.env,
+    ghPath: args.ghPath ?? "gh",
+    run: args.run ?? runCommand,
+  });
+  return { GH_HOST: account.host, GH_TOKEN: token };
 }
 
 function optionalNestedString(value: unknown, key: string): string | null {
@@ -333,11 +386,7 @@ export async function getGithubPullRequestCatalog(args: {
 }): Promise<GithubPullRequestCatalog> {
   const run = args.run ?? runCommand;
   const ghPath = args.ghPath ?? "gh";
-  const status = await run(ghPath, ["auth", "status", "--json", "hosts"], {
-    env: args.env,
-    timeoutMs: COMMAND_TIMEOUT_MS,
-  });
-  const accounts = parseAccounts(status.stdout);
+  const accounts = await listGithubAccounts({ env: args.env, ghPath, run });
   const account = accounts.find((candidate) => candidate.active) ?? accounts[0];
   if (!account) {
     throw new Error(
@@ -382,11 +431,7 @@ export async function getGithubRepositoryCatalog(args: {
 }): Promise<GithubRepositoryCatalog> {
   const run = args.run ?? runCommand;
   const ghPath = args.ghPath ?? "gh";
-  const status = await run(ghPath, ["auth", "status", "--json", "hosts"], {
-    env: args.env,
-    timeoutMs: COMMAND_TIMEOUT_MS,
-  });
-  const accounts = parseAccounts(status.stdout);
+  const accounts = await listGithubAccounts({ env: args.env, ghPath, run });
   if (accounts.length === 0) {
     throw new Error(
       "No authenticated github.com account was found. Run `gh auth login` first.",

@@ -36,7 +36,8 @@ import {
   providerCliStatusResponseSchema,
 } from "./local.js";
 
-export const HOST_DAEMON_PROTOCOL_VERSION = 79 as const;
+export const HOST_DAEMON_PROTOCOL_VERSION = 80 as const;
+export const githubAccountLoginSchema = z.string().trim().min(1).max(255);
 
 export {
   BRANCH_LIST_LIMIT_MAX,
@@ -1050,6 +1051,7 @@ const workspaceDiffPatchCommandSchema = hostDaemonWorkspaceTargetSchema.extend({
 const workspacePullRequestCommandSchema =
   hostDaemonWorkspaceTargetSchema.extend({
     type: z.literal("workspace.pull_request"),
+    githubAccountLogin: githubAccountLoginSchema.nullable().default(null),
   });
 
 const workspacePullRequestCreateCommandSchema = hostDaemonWorkspaceTargetSchema
@@ -1058,6 +1060,7 @@ const workspacePullRequestCreateCommandSchema = hostDaemonWorkspaceTargetSchema
     baseBranch: gitBranchNameSchema,
     body: z.string(),
     draft: z.boolean(),
+    githubAccountLogin: githubAccountLoginSchema.nullable().default(null),
     title: z.string().trim().min(1),
   })
   .strict();
@@ -1067,6 +1070,7 @@ const pullRequestMergeMethodSchema = z.enum(["merge", "squash", "rebase"]);
 const workspacePullRequestReadyCommandSchema = hostDaemonWorkspaceTargetSchema
   .extend({
     type: z.literal("workspace.pull_request_action"),
+    githubAccountLogin: githubAccountLoginSchema.nullable().default(null),
     operation: z.literal("ready"),
   })
   .strict();
@@ -1074,6 +1078,7 @@ const workspacePullRequestReadyCommandSchema = hostDaemonWorkspaceTargetSchema
 const workspacePullRequestDraftCommandSchema = hostDaemonWorkspaceTargetSchema
   .extend({
     type: z.literal("workspace.pull_request_action"),
+    githubAccountLogin: githubAccountLoginSchema.nullable().default(null),
     operation: z.literal("draft"),
   })
   .strict();
@@ -1081,6 +1086,7 @@ const workspacePullRequestDraftCommandSchema = hostDaemonWorkspaceTargetSchema
 const workspacePullRequestMergeCommandSchema = hostDaemonWorkspaceTargetSchema
   .extend({
     type: z.literal("workspace.pull_request_action"),
+    githubAccountLogin: githubAccountLoginSchema.nullable().default(null),
     operation: z.literal("merge"),
     method: pullRequestMergeMethodSchema,
   })
@@ -1481,11 +1487,16 @@ const providerUsageCommandSchema = z
 export const githubAccountSchema = z
   .object({
     host: z.string().min(1),
-    login: z.string().min(1),
+    login: githubAccountLoginSchema,
     active: z.boolean(),
   })
   .strict();
 export type GithubAccount = z.infer<typeof githubAccountSchema>;
+
+export const githubAccountCatalogSchema = z
+  .object({ accounts: z.array(githubAccountSchema).min(1) })
+  .strict();
+export type GithubAccountCatalog = z.infer<typeof githubAccountCatalogSchema>;
 
 export const githubRepositorySchema = z
   .object({
@@ -1541,6 +1552,10 @@ export type GithubPullRequestCatalog = z.infer<
 
 const githubRepositoryCatalogCommandSchema = z
   .object({ type: z.literal("github.repository_catalog") })
+  .strict();
+
+const githubAccountCatalogCommandSchema = z
+  .object({ type: z.literal("github.account_catalog") })
   .strict();
 
 const githubPullRequestCatalogCommandSchema = z
@@ -2081,6 +2096,15 @@ export const hostDaemonCommandRegistry = {
     type: "github.repository_catalog",
     schema: githubRepositoryCatalogCommandSchema,
     resultSchema: githubRepositoryCatalogSchema,
+    transport: "onlineRpc",
+    retryable: true,
+    flushEventsBeforeResult: false,
+    envLane: null,
+  }),
+  "github.account_catalog": defineHostDaemonCommandDescriptor({
+    type: "github.account_catalog",
+    schema: githubAccountCatalogCommandSchema,
+    resultSchema: githubAccountCatalogSchema,
     transport: "onlineRpc",
     retryable: true,
     flushEventsBeforeResult: false,

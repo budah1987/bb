@@ -393,6 +393,7 @@ export function makeEnvironment(
     baseBranch: BRANCH_NAMES.default,
     defaultBranch: BRANCH_NAMES.default,
     mergeBaseBranch: null,
+    githubAccountLogin: null,
     status: "ready",
     createdAt: 0,
     updatedAt: 100,

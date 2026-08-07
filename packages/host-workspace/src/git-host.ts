@@ -48,6 +48,11 @@ const GH_PR_VIEW_JSON_FIELDS = [
 interface GetPullRequestForBranchArgs {
   cwd: string;
   branch: string;
+  env?: NodeJS.ProcessEnv;
+}
+
+export interface GitHostCommandOptions {
+  env?: NodeJS.ProcessEnv;
 }
 
 export type GitHostPullRequestMergeMethod = "merge" | "squash" | "rebase";
@@ -69,11 +74,13 @@ interface RunPullRequestActionForBranchArgs {
   cwd: string;
   branch: string;
   action: GitHostPullRequestAction;
+  env?: NodeJS.ProcessEnv;
 }
 
 interface CreatePullRequestForBranchArgs extends GitHostPullRequestCreateOptions {
   branch: string;
   cwd: string;
+  env?: NodeJS.ProcessEnv;
 }
 
 type JsonObject = Record<string, unknown>;
@@ -325,6 +332,15 @@ function trimGhOutput(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
 }
 
+function resolveGitHostProcessEnv(
+  env: NodeJS.ProcessEnv | undefined,
+): NodeJS.ProcessEnv {
+  return {
+    ...sanitizeInheritedChildProcessEnv({ env: process.env }),
+    ...env,
+  };
+}
+
 function createGitHostCommandFailedError(
   args: string[],
   error: unknown,
@@ -439,7 +455,7 @@ export async function getPullRequestForBranch(
       {
         cwd: args.cwd,
         encoding: "utf8",
-        env: sanitizeInheritedChildProcessEnv({ env: process.env }),
+        env: resolveGitHostProcessEnv(args.env),
         timeout: GH_PR_VIEW_TIMEOUT_MS,
         maxBuffer: GH_PR_VIEW_MAX_BUFFER_BYTES,
       },
@@ -469,6 +485,7 @@ export async function runPullRequestActionForBranch(
       cwd: args.cwd,
       branch: args.branch,
       ...args.action,
+      ...(args.env === undefined ? {} : { env: args.env }),
     });
   }
   const ghArgs = buildPullRequestActionArgs(args.action, args.branch);
@@ -476,7 +493,7 @@ export async function runPullRequestActionForBranch(
     await execFileAsync("gh", ghArgs, {
       cwd: args.cwd,
       encoding: "utf8",
-      env: sanitizeInheritedChildProcessEnv({ env: process.env }),
+      env: resolveGitHostProcessEnv(args.env),
       timeout: GH_PR_ACTION_TIMEOUT_MS,
       maxBuffer: GH_PR_ACTION_MAX_BUFFER_BYTES,
     });
@@ -496,6 +513,7 @@ export async function createPullRequestForBranch(
 ): Promise<GitHostPullRequest> {
   await runGit(["push", "--set-upstream", "origin", "HEAD"], {
     cwd: args.cwd,
+    ...(args.env === undefined ? {} : { env: args.env }),
     timeoutMs: GIT_PUSH_TIMEOUT_MS,
   });
 
@@ -516,7 +534,7 @@ export async function createPullRequestForBranch(
     await execFileAsync("gh", ghArgs, {
       cwd: args.cwd,
       encoding: "utf8",
-      env: sanitizeInheritedChildProcessEnv({ env: process.env }),
+      env: resolveGitHostProcessEnv(args.env),
       timeout: GH_PR_ACTION_TIMEOUT_MS,
       maxBuffer: GH_PR_ACTION_MAX_BUFFER_BYTES,
     });
@@ -527,6 +545,7 @@ export async function createPullRequestForBranch(
   const result = await getPullRequestForBranch({
     cwd: args.cwd,
     branch: args.branch,
+    ...(args.env === undefined ? {} : { env: args.env }),
   });
   if (result.outcome === "found") {
     return result.pullRequest;

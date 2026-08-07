@@ -1251,6 +1251,7 @@ function repairBranchLocalQueuedGroupingBeforeInitialThreadSections(
 }
 
 const STAGED_CONNECT_MACHINE_ID_COLUMN = "_bb_connect_machine_id_pending";
+const STAGED_GITHUB_ACCOUNT_LOGIN_COLUMN = "_bb_github_account_login_pending";
 
 function stageExistingConnectMachineIdColumn(
   db: DbConnection,
@@ -1291,6 +1292,48 @@ function restoreStagedConnectMachineIdColumn(db: DbConnection): void {
   db.$client.exec(
     `UPDATE hosts SET connect_machine_id = ${STAGED_CONNECT_MACHINE_ID_COLUMN};
      ALTER TABLE hosts DROP COLUMN ${STAGED_CONNECT_MACHINE_ID_COLUMN};`,
+  );
+}
+
+function stageExistingGithubAccountLoginColumn(
+  db: DbConnection,
+  migrationsFolder: string,
+): boolean {
+  if (
+    !tableExists(db, "__drizzle_migrations") ||
+    !tableExists(db, "environments") ||
+    !columnExists(db, "environments", "github_account_login")
+  ) {
+    return false;
+  }
+
+  const migration = requireExpectedAppliedMigration(
+    readExpectedAppliedMigrations(migrationsFolder),
+    "0086_orange_anthem",
+  );
+  if (readAppliedMigrationCreatedAts(db).has(migration.createdAt)) {
+    return false;
+  }
+
+  db.$client.exec(
+    `ALTER TABLE environments RENAME COLUMN github_account_login TO ${STAGED_GITHUB_ACCOUNT_LOGIN_COLUMN}`,
+  );
+  return true;
+}
+
+function restoreStagedGithubAccountLoginColumn(db: DbConnection): void {
+  if (!columnExists(db, "environments", STAGED_GITHUB_ACCOUNT_LOGIN_COLUMN)) {
+    return;
+  }
+  if (!columnExists(db, "environments", "github_account_login")) {
+    db.$client.exec(
+      `ALTER TABLE environments RENAME COLUMN ${STAGED_GITHUB_ACCOUNT_LOGIN_COLUMN} TO github_account_login`,
+    );
+    return;
+  }
+  db.$client.exec(
+    `UPDATE environments SET github_account_login = ${STAGED_GITHUB_ACCOUNT_LOGIN_COLUMN};
+     ALTER TABLE environments DROP COLUMN ${STAGED_GITHUB_ACCOUNT_LOGIN_COLUMN};`,
   );
 }
 
@@ -1497,10 +1540,17 @@ export function migrate(db: DbConnection, options: MigrateOptions = {}): void {
       db,
       migrationsFolder,
     );
+    const stagedGithubAccountLogin = stageExistingGithubAccountLoginColumn(
+      db,
+      migrationsFolder,
+    );
     try {
       drizzleMigrate(db, { migrationsFolder });
     } finally {
       if (stagedConnectMachineId) restoreStagedConnectMachineIdColumn(db);
+      if (stagedGithubAccountLogin) {
+        restoreStagedGithubAccountLoginColumn(db);
+      }
     }
     applyReorderedCleanupMigrations(db, migrationsFolder);
     applyQueuedMessageGroupingSchema(db);

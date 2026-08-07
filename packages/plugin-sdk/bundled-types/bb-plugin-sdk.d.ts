@@ -221,6 +221,7 @@ declare const environmentSchema: z$1.ZodObject<{
     baseBranch: z$1.ZodNullable<z$1.ZodString>;
     defaultBranch: z$1.ZodNullable<z$1.ZodString>;
     mergeBaseBranch: z$1.ZodNullable<z$1.ZodString>;
+    githubAccountLogin: z$1.ZodNullable<z$1.ZodString>;
     status: z$1.ZodEnum<{
         error: "error";
         provisioning: "provisioning";
@@ -2739,6 +2740,7 @@ declare const registrySkillInstallResponseSchema: z$1.ZodObject<{
 type RegistrySkillInstallResponse = z$1.infer<typeof registrySkillInstallResponseSchema>;
 
 declare const updateEnvironmentRequestSchema: z$1.ZodObject<{
+    githubAccountLogin: z$1.ZodOptional<z$1.ZodNullable<z$1.ZodString>>;
     mergeBaseBranch: z$1.ZodOptional<z$1.ZodNullable<z$1.ZodString>>;
     name: z$1.ZodOptional<z$1.ZodNullable<z$1.ZodString>>;
 }, z$1.core.$strip>;
@@ -2857,8 +2859,8 @@ declare const environmentDiffFileResponseSchema: z$1.ZodObject<{
     path: z$1.ZodString;
     content: z$1.ZodString;
     contentEncoding: z$1.ZodEnum<{
-        utf8: "utf8";
         base64: "base64";
+        utf8: "utf8";
     }>;
     mimeType: z$1.ZodOptional<z$1.ZodString>;
     sizeBytes: z$1.ZodNumber;
@@ -2965,10 +2967,10 @@ declare const pullRequestCreateActionResponseSchema: z$1.ZodObject<{
         mergeability: z$1.ZodObject<{
             state: z$1.ZodEnum<{
                 unknown: "unknown";
-                blocked: "blocked";
                 draft: "draft";
                 mergeable: "mergeable";
                 conflicts: "conflicts";
+                blocked: "blocked";
             }>;
             mergeStateStatus: z$1.ZodNullable<z$1.ZodEnum<{
                 BEHIND: "BEHIND";
@@ -2988,13 +2990,13 @@ declare const pullRequestCreateActionResponseSchema: z$1.ZodObject<{
         }, z$1.core.$strict>;
         attention: z$1.ZodEnum<{
             none: "none";
-            blocked: "blocked";
             draft: "draft";
             merged: "merged";
             closed: "closed";
             changes_requested: "changes_requested";
             review_requested: "review_requested";
             conflicts: "conflicts";
+            blocked: "blocked";
             checks_failed: "checks_failed";
             checks_pending: "checks_pending";
             ready_to_merge: "ready_to_merge";
@@ -3197,10 +3199,10 @@ declare const environmentPullRequestResponseSchema: z$1.ZodDiscriminatedUnion<[z
         mergeability: z$1.ZodObject<{
             state: z$1.ZodEnum<{
                 unknown: "unknown";
-                blocked: "blocked";
                 draft: "draft";
                 mergeable: "mergeable";
                 conflicts: "conflicts";
+                blocked: "blocked";
             }>;
             mergeStateStatus: z$1.ZodNullable<z$1.ZodEnum<{
                 BEHIND: "BEHIND";
@@ -3220,13 +3222,13 @@ declare const environmentPullRequestResponseSchema: z$1.ZodDiscriminatedUnion<[z
         }, z$1.core.$strict>;
         attention: z$1.ZodEnum<{
             none: "none";
-            blocked: "blocked";
             draft: "draft";
             merged: "merged";
             closed: "closed";
             changes_requested: "changes_requested";
             review_requested: "review_requested";
             conflicts: "conflicts";
+            blocked: "blocked";
             checks_failed: "checks_failed";
             checks_pending: "checks_pending";
             ready_to_merge: "ready_to_merge";
@@ -3461,6 +3463,14 @@ declare const providerUsageResponseSchema: z$1.ZodObject<{
     }, z$1.core.$strip>], "status">;
 }, z$1.core.$strip>;
 type ProviderUsageResponse = z$1.infer<typeof providerUsageResponseSchema>;
+declare const githubAccountCatalogSchema: z$1.ZodObject<{
+    accounts: z$1.ZodArray<z$1.ZodObject<{
+        host: z$1.ZodString;
+        login: z$1.ZodString;
+        active: z$1.ZodBoolean;
+    }, z$1.core.$strict>>;
+}, z$1.core.$strict>;
+type GithubAccountCatalog = z$1.infer<typeof githubAccountCatalogSchema>;
 declare const githubRepositoryCatalogSchema: z$1.ZodObject<{
     accounts: z$1.ZodArray<z$1.ZodObject<{
         host: z$1.ZodString;
@@ -3659,16 +3669,16 @@ declare const hostDaemonCommandRegistry: {
             permissionScope: z$1.ZodLiteral<"workspace">;
             approvalReviewer: z$1.ZodLiteral<"user">;
             permissionEscalation: z$1.ZodEnum<{
-                ask: "ask";
                 deny: "deny";
+                ask: "ask";
             }>;
         }, z$1.core.$strip>, z$1.ZodObject<{
             permissionMode: z$1.ZodLiteral<"auto">;
             permissionScope: z$1.ZodLiteral<"workspace">;
             approvalReviewer: z$1.ZodLiteral<"automatic">;
             permissionEscalation: z$1.ZodEnum<{
-                ask: "ask";
                 deny: "deny";
+                ask: "ask";
             }>;
         }, z$1.core.$strip>, z$1.ZodObject<{
             permissionMode: z$1.ZodLiteral<"full">;
@@ -3753,8 +3763,8 @@ declare const hostDaemonCommandRegistry: {
                     }>;
                     origin: z$1.ZodEnum<{
                         builtin: "builtin";
-                        project: "project";
                         user: "user";
+                        project: "project";
                     }>;
                     label: z$1.ZodString;
                     argumentHint: z$1.ZodNullable<z$1.ZodString>;
@@ -3834,8 +3844,8 @@ declare const hostDaemonCommandRegistry: {
                     }>;
                     origin: z$1.ZodEnum<{
                         builtin: "builtin";
-                        project: "project";
                         user: "user";
+                        project: "project";
                     }>;
                     label: z$1.ZodString;
                     argumentHint: z$1.ZodNullable<z$1.ZodString>;
@@ -3927,8 +3937,8 @@ declare const hostDaemonCommandRegistry: {
                     }>;
                     origin: z$1.ZodEnum<{
                         builtin: "builtin";
-                        project: "project";
                         user: "user";
+                        project: "project";
                     }>;
                     label: z$1.ZodString;
                     argumentHint: z$1.ZodNullable<z$1.ZodString>;
@@ -4008,8 +4018,8 @@ declare const hostDaemonCommandRegistry: {
                     }>;
                     origin: z$1.ZodEnum<{
                         builtin: "builtin";
-                        project: "project";
                         user: "user";
+                        project: "project";
                     }>;
                     label: z$1.ZodString;
                     argumentHint: z$1.ZodNullable<z$1.ZodString>;
@@ -4072,16 +4082,16 @@ declare const hostDaemonCommandRegistry: {
             permissionScope: z$1.ZodLiteral<"workspace">;
             approvalReviewer: z$1.ZodLiteral<"user">;
             permissionEscalation: z$1.ZodEnum<{
-                ask: "ask";
                 deny: "deny";
+                ask: "ask";
             }>;
         }, z$1.core.$strip>, z$1.ZodObject<{
             permissionMode: z$1.ZodLiteral<"auto">;
             permissionScope: z$1.ZodLiteral<"workspace">;
             approvalReviewer: z$1.ZodLiteral<"automatic">;
             permissionEscalation: z$1.ZodEnum<{
-                ask: "ask";
                 deny: "deny";
+                ask: "ask";
             }>;
         }, z$1.core.$strip>, z$1.ZodObject<{
             permissionMode: z$1.ZodLiteral<"full">;
@@ -4190,12 +4200,13 @@ declare const hostDaemonCommandRegistry: {
                     personal: "personal";
                 }>;
             }, z$1.core.$strip>;
+            projectId: z$1.ZodString;
+            providerThreadId: z$1.ZodString;
+            providerId: z$1.ZodString;
             instructionMode: z$1.ZodEnum<{
                 replace: "replace";
                 append: "append";
             }>;
-            projectId: z$1.ZodString;
-            providerId: z$1.ZodString;
             acpLaunchSpec: z$1.ZodOptional<z$1.ZodObject<{
                 displayName: z$1.ZodString;
                 command: z$1.ZodString;
@@ -4313,7 +4324,6 @@ declare const hostDaemonCommandRegistry: {
                 skillFilePath: z$1.ZodString;
             }, z$1.core.$strict>], "kind">>;
             disallowedTools: z$1.ZodOptional<z$1.ZodArray<z$1.ZodString>>;
-            providerThreadId: z$1.ZodString;
         }, z$1.core.$strict>;
         target: z$1.ZodDiscriminatedUnion<[z$1.ZodObject<{
             mode: z$1.ZodLiteral<"start">;
@@ -4326,8 +4336,8 @@ declare const hostDaemonCommandRegistry: {
         }, z$1.core.$strip>], "mode">;
     }, z$1.core.$strict>, z$1.ZodObject<{
         appliedAs: z$1.ZodEnum<{
-            steer: "steer";
             "new-turn": "new-turn";
+            steer: "steer";
         }>;
     }, z$1.core.$strip>, "settled", false>;
     "thread.stop": HostDaemonCommandDescriptor<"thread.stop", z$1.ZodObject<{
@@ -4368,16 +4378,16 @@ declare const hostDaemonCommandRegistry: {
             permissionScope: z$1.ZodLiteral<"workspace">;
             approvalReviewer: z$1.ZodLiteral<"user">;
             permissionEscalation: z$1.ZodEnum<{
-                ask: "ask";
                 deny: "deny";
+                ask: "ask";
             }>;
         }, z$1.core.$strip>, z$1.ZodObject<{
             permissionMode: z$1.ZodLiteral<"auto">;
             permissionScope: z$1.ZodLiteral<"workspace">;
             approvalReviewer: z$1.ZodLiteral<"automatic">;
             permissionEscalation: z$1.ZodEnum<{
-                ask: "ask";
                 deny: "deny";
+                ask: "ask";
             }>;
         }, z$1.core.$strip>, z$1.ZodObject<{
             permissionMode: z$1.ZodLiteral<"full">;
@@ -4486,12 +4496,13 @@ declare const hostDaemonCommandRegistry: {
                     personal: "personal";
                 }>;
             }, z$1.core.$strip>;
+            projectId: z$1.ZodString;
+            providerThreadId: z$1.ZodString;
+            providerId: z$1.ZodString;
             instructionMode: z$1.ZodEnum<{
                 replace: "replace";
                 append: "append";
             }>;
-            projectId: z$1.ZodString;
-            providerId: z$1.ZodString;
             acpLaunchSpec: z$1.ZodOptional<z$1.ZodObject<{
                 displayName: z$1.ZodString;
                 command: z$1.ZodString;
@@ -4609,7 +4620,6 @@ declare const hostDaemonCommandRegistry: {
                 skillFilePath: z$1.ZodString;
             }, z$1.core.$strict>], "kind">>;
             disallowedTools: z$1.ZodOptional<z$1.ZodArray<z$1.ZodString>>;
-            providerThreadId: z$1.ZodString;
         }, z$1.core.$strict>;
     }, z$1.core.$strict>, z$1.ZodObject<{
         cleared: z$1.ZodBoolean;
@@ -4886,6 +4896,7 @@ declare const hostDaemonCommandRegistry: {
             }>;
         }, z$1.core.$strip>;
         type: z$1.ZodLiteral<"workspace.pull_request_action">;
+        githubAccountLogin: z$1.ZodDefault<z$1.ZodNullable<z$1.ZodString>>;
         operation: z$1.ZodLiteral<"ready">;
     }, z$1.core.$strict>, z$1.ZodObject<{
         environmentId: z$1.ZodString;
@@ -4898,6 +4909,7 @@ declare const hostDaemonCommandRegistry: {
             }>;
         }, z$1.core.$strip>;
         type: z$1.ZodLiteral<"workspace.pull_request_action">;
+        githubAccountLogin: z$1.ZodDefault<z$1.ZodNullable<z$1.ZodString>>;
         operation: z$1.ZodLiteral<"draft">;
     }, z$1.core.$strict>, z$1.ZodObject<{
         environmentId: z$1.ZodString;
@@ -4910,6 +4922,7 @@ declare const hostDaemonCommandRegistry: {
             }>;
         }, z$1.core.$strip>;
         type: z$1.ZodLiteral<"workspace.pull_request_action">;
+        githubAccountLogin: z$1.ZodDefault<z$1.ZodNullable<z$1.ZodString>>;
         operation: z$1.ZodLiteral<"merge">;
         method: z$1.ZodEnum<{
             merge: "merge";
@@ -4931,6 +4944,7 @@ declare const hostDaemonCommandRegistry: {
         baseBranch: z$1.ZodString;
         body: z$1.ZodString;
         draft: z$1.ZodBoolean;
+        githubAccountLogin: z$1.ZodDefault<z$1.ZodNullable<z$1.ZodString>>;
         title: z$1.ZodString;
     }, z$1.core.$strict>, z$1.ZodObject<{
         pullRequest: z$1.ZodObject<{
@@ -4957,9 +4971,9 @@ declare const hostDaemonCommandRegistry: {
                 conclusion: z$1.ZodNullable<z$1.ZodEnum<{
                     unknown: "unknown";
                     success: "success";
+                    skipped: "skipped";
                     cancelled: "cancelled";
                     failure: "failure";
-                    skipped: "skipped";
                     neutral: "neutral";
                     timed_out: "timed_out";
                     action_required: "action_required";
@@ -5111,8 +5125,8 @@ declare const hostDaemonCommandRegistry: {
                 skill: "skill";
             }>;
             origin: z$1.ZodEnum<{
-                project: "project";
                 user: "user";
+                project: "project";
             }>;
             description: z$1.ZodNullable<z$1.ZodString>;
             argumentHint: z$1.ZodNullable<z$1.ZodString>;
@@ -5599,6 +5613,15 @@ declare const hostDaemonCommandRegistry: {
             account: "account";
         }>;
     }, z$1.core.$strict>, "onlineRpc", true>;
+    "github.account_catalog": HostDaemonCommandDescriptor<"github.account_catalog", z$1.ZodObject<{
+        type: z$1.ZodLiteral<"github.account_catalog">;
+    }, z$1.core.$strict>, z$1.ZodObject<{
+        accounts: z$1.ZodArray<z$1.ZodObject<{
+            host: z$1.ZodString;
+            login: z$1.ZodString;
+            active: z$1.ZodBoolean;
+        }, z$1.core.$strict>>;
+    }, z$1.core.$strict>, "onlineRpc", true>;
     "github.pull_request_catalog": HostDaemonCommandDescriptor<"github.pull_request_catalog", z$1.ZodObject<{
         type: z$1.ZodLiteral<"github.pull_request_catalog">;
         repository: z$1.ZodString;
@@ -6003,6 +6026,7 @@ declare const hostDaemonCommandRegistry: {
             }>;
         }, z$1.core.$strip>;
         type: z$1.ZodLiteral<"workspace.pull_request">;
+        githubAccountLogin: z$1.ZodDefault<z$1.ZodNullable<z$1.ZodString>>;
     }, z$1.core.$strict>, z$1.ZodDiscriminatedUnion<[z$1.ZodObject<{
         outcome: z$1.ZodLiteral<"available">;
         pullRequest: z$1.ZodObject<{
@@ -6029,9 +6053,9 @@ declare const hostDaemonCommandRegistry: {
                 conclusion: z$1.ZodNullable<z$1.ZodEnum<{
                     unknown: "unknown";
                     success: "success";
+                    skipped: "skipped";
                     cancelled: "cancelled";
                     failure: "failure";
-                    skipped: "skipped";
                     neutral: "neutral";
                     timed_out: "timed_out";
                     action_required: "action_required";
@@ -6257,11 +6281,11 @@ type HostProviderCliInstallEvent = ProviderCliInstallEvent;
 declare const pluginUpdateCheckEntrySchema: z$1.ZodObject<{
     id: z$1.ZodString;
     outcome: z$1.ZodEnum<{
+        unavailable: "unavailable";
         incompatible: "incompatible";
         current: "current";
         "update-available": "update-available";
         pinned: "pinned";
-        unavailable: "unavailable";
     }>;
     devMode: z$1.ZodOptional<z$1.ZodLiteral<true>>;
     installed: z$1.ZodObject<{
@@ -6328,11 +6352,11 @@ declare const installedPluginSchema: z$1.ZodObject<{
     sourceDisplay: z$1.ZodString;
     updateState: z$1.ZodObject<{
         outcome: z$1.ZodOptional<z$1.ZodEnum<{
+            unavailable: "unavailable";
             incompatible: "incompatible";
             current: "current";
             "update-available": "update-available";
             pinned: "pinned";
-            unavailable: "unavailable";
         }>>;
         availableVersion: z$1.ZodOptional<z$1.ZodString>;
         blockedVersion: z$1.ZodOptional<z$1.ZodString>;
@@ -6432,11 +6456,11 @@ declare const pluginListResponseSchema: z$1.ZodObject<{
         sourceDisplay: z$1.ZodString;
         updateState: z$1.ZodObject<{
             outcome: z$1.ZodOptional<z$1.ZodEnum<{
+                unavailable: "unavailable";
                 incompatible: "incompatible";
                 current: "current";
                 "update-available": "update-available";
                 pinned: "pinned";
-                unavailable: "unavailable";
             }>>;
             availableVersion: z$1.ZodOptional<z$1.ZodString>;
             blockedVersion: z$1.ZodOptional<z$1.ZodString>;
@@ -6538,11 +6562,11 @@ declare const pluginReloadResponseSchema: z$1.ZodObject<{
         sourceDisplay: z$1.ZodString;
         updateState: z$1.ZodObject<{
             outcome: z$1.ZodOptional<z$1.ZodEnum<{
+                unavailable: "unavailable";
                 incompatible: "incompatible";
                 current: "current";
                 "update-available": "update-available";
                 pinned: "pinned";
-                unavailable: "unavailable";
             }>>;
             availableVersion: z$1.ZodOptional<z$1.ZodString>;
             blockedVersion: z$1.ZodOptional<z$1.ZodString>;
@@ -6814,6 +6838,11 @@ declare const systemUsageLimitsQuerySchema: z$1.ZodObject<{
     hostId: z$1.ZodOptional<z$1.ZodString>;
 }, z$1.core.$strip>;
 type SystemUsageLimitsQuery = z$1.infer<typeof systemUsageLimitsQuerySchema>;
+/** Omission reads GitHub credentials from the primary machine. */
+declare const systemGithubAccountsQuerySchema: z$1.ZodObject<{
+    hostId: z$1.ZodOptional<z$1.ZodString>;
+}, z$1.core.$strip>;
+type SystemGithubAccountsQuery = z$1.infer<typeof systemGithubAccountsQuerySchema>;
 /** Omission reads GitHub credentials from the primary machine. */
 declare const systemGithubRepositoriesQuerySchema: z$1.ZodObject<{
     hostId: z$1.ZodOptional<z$1.ZodString>;
@@ -9272,6 +9301,7 @@ declare const threadWithIncludesResponseSchema: z$1.ZodObject<{
         baseBranch: z$1.ZodNullable<z$1.ZodString>;
         defaultBranch: z$1.ZodNullable<z$1.ZodString>;
         mergeBaseBranch: z$1.ZodNullable<z$1.ZodString>;
+        githubAccountLogin: z$1.ZodNullable<z$1.ZodString>;
         status: z$1.ZodEnum<{
             error: "error";
             provisioning: "provisioning";
@@ -11500,15 +11530,23 @@ interface EnvironmentGetArgs extends EnvironmentActionArgs {
 }
 type EnvironmentMergeBaseBranchUpdateValue = Exclude<UpdateEnvironmentRequest["mergeBaseBranch"], undefined>;
 type EnvironmentNameUpdateValue = Exclude<UpdateEnvironmentRequest["name"], undefined>;
+type EnvironmentGithubAccountUpdateValue = Exclude<UpdateEnvironmentRequest["githubAccountLogin"], undefined>;
 interface EnvironmentMergeBaseBranchUpdate {
+    githubAccountLogin?: EnvironmentGithubAccountUpdateValue;
     mergeBaseBranch: EnvironmentMergeBaseBranchUpdateValue;
     name?: EnvironmentNameUpdateValue;
 }
 interface EnvironmentNameUpdate {
+    githubAccountLogin?: EnvironmentGithubAccountUpdateValue;
     mergeBaseBranch?: EnvironmentMergeBaseBranchUpdateValue;
     name: EnvironmentNameUpdateValue;
 }
-type EnvironmentUpdateFields = EnvironmentMergeBaseBranchUpdate | EnvironmentNameUpdate;
+interface EnvironmentGithubAccountUpdate {
+    githubAccountLogin: EnvironmentGithubAccountUpdateValue;
+    mergeBaseBranch?: EnvironmentMergeBaseBranchUpdateValue;
+    name?: EnvironmentNameUpdateValue;
+}
+type EnvironmentUpdateFields = EnvironmentMergeBaseBranchUpdate | EnvironmentNameUpdate | EnvironmentGithubAccountUpdate;
 type EnvironmentUpdateArgs = EnvironmentUpdateFields & {
     environmentId: string;
 };
@@ -12282,9 +12320,13 @@ type SystemUpdateExperimentsResult = Experiments;
 type SystemUpdateGeneralSettingsResult = AppSettings;
 type SystemUpdateKeyboardSettingsResult = AppKeybindingOverrides;
 type SystemUsageLimitsResult = ProviderUsageResponse;
+type SystemGithubAccountsResult = GithubAccountCatalog;
 type SystemGithubRepositoriesResult = GithubRepositoryCatalog;
 type SystemGithubPullRequestsResult = GithubPullRequestCatalog;
 interface SystemOnboardingArgs extends SystemOnboardingReposQuery {
+    signal?: AbortSignal;
+}
+interface SystemGithubAccountsArgs extends SystemGithubAccountsQuery {
     signal?: AbortSignal;
 }
 type SystemOnboardingAgentsResult = OnboardingAgentOverview;
@@ -12315,6 +12357,8 @@ interface SystemArea {
     onboardingAgents(args?: SystemOnboardingArgs): Promise<SystemOnboardingAgentsResult>;
     /** Candidate projects discovered on the host, ranked for onboarding. */
     onboardingRepos(args?: SystemOnboardingArgs): Promise<SystemOnboardingReposResult>;
+    /** GitHub accounts authenticated on the environment's host machine. */
+    githubAccounts(args?: SystemGithubAccountsArgs): Promise<SystemGithubAccountsResult>;
     /** Repositories visible to every authenticated GitHub account on a machine. */
     githubRepositories(args?: SystemGithubRepositoriesArgs): Promise<SystemGithubRepositoriesResult>;
     /** Open pull requests for one GitHub repository. */

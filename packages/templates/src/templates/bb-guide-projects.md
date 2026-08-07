@@ -33,6 +33,9 @@ A project maps to a code repository. All threads belong to a project.
 
 Discovery:
 
+  bb project github-accounts                List authenticated GitHub accounts
+    --machine <id-or-name>                   Machine whose accounts to use
+    --host <id-or-name>                      Alias for --machine
   bb project github-repositories            List the repository intersection
     --machine <id-or-name>                   Machine whose GitHub accounts to use
     --host <id-or-name>                      Alias for --machine

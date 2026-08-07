@@ -332,6 +332,7 @@ type ExpectedSystemKey =
   | "cliSkillsStatus"
   | "config"
   | "executionOptions"
+  | "githubAccounts"
   | "githubRepositories"
   | "githubPullRequests"
   | "installCliSkills"

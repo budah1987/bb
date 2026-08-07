@@ -44,6 +44,7 @@ import {
 } from "../services/system/onboarding.js";
 import { getProviderUsageLimits } from "../services/system/usage-limits.js";
 import {
+  getGithubAccounts,
   getGithubPullRequests,
   getGithubRepositories,
 } from "../services/system/github-repositories.js";
@@ -295,6 +296,10 @@ export function registerSystemRoutes(
 
   get(routes.githubRepositories, async (context, query) =>
     context.json(await getGithubRepositories(deps, query)),
+  );
+
+  get(routes.githubAccounts, async (context, query) =>
+    context.json(await getGithubAccounts(deps, query)),
   );
 
   get(routes.githubPullRequests, async (context, query) =>

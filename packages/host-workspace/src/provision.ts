@@ -21,7 +21,10 @@ import type {
   SquashMergeResult,
 } from "./workspace.js";
 import { Workspace } from "./workspace.js";
-import type { GitHostPullRequestLookup } from "./git-host.js";
+import type {
+  GitHostCommandOptions,
+  GitHostPullRequestLookup,
+} from "./git-host.js";
 import {
   withCheckoutMutationAdmission,
   withCheckoutMutationLock,
@@ -163,9 +166,12 @@ export interface HostWorkspace {
   getDiff(options?: DiffOptions): Promise<DiffResult>;
   diffFiles(args: DiffFilesArgs): Promise<DiffFilesResult>;
   diffPatch(args: DiffPatchArgs): Promise<DiffPatchEntry[]>;
-  getPullRequest(): Promise<GitHostPullRequestLookup>;
+  getPullRequest(
+    options?: GitHostCommandOptions,
+  ): Promise<GitHostPullRequestLookup>;
   runPullRequestAction(
     action: PullRequestActionOptions,
+    options?: GitHostCommandOptions,
   ): Promise<void | GitHostPullRequest>;
   listBranches(): Promise<string[]>;
   listFiles(): Promise<string[]>;
@@ -275,14 +281,17 @@ class ProvisionedHostWorkspace implements HostWorkspace {
     return this.ws.diffPatch(args);
   }
 
-  getPullRequest(): Promise<GitHostPullRequestLookup> {
-    return this.ws.getPullRequest();
+  getPullRequest(
+    options?: GitHostCommandOptions,
+  ): Promise<GitHostPullRequestLookup> {
+    return this.ws.getPullRequest(options);
   }
 
   runPullRequestAction(
     action: PullRequestActionOptions,
+    options?: GitHostCommandOptions,
   ): Promise<void | GitHostPullRequest> {
-    return this.ws.runPullRequestAction(action);
+    return this.ws.runPullRequestAction(action, options);
   }
 
   listBranches(): Promise<string[]> {

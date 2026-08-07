@@ -158,6 +158,7 @@ const OPTIONAL_SERVER_FIELD_GROUPS: readonly OptionalServerFieldGroup[] = [
     reason:
       "Environment PATCH requests omit metadata fields that should be left unchanged; null explicitly clears nullable values.",
     fields: [
+      "updateEnvironmentRequestSchema.githubAccountLogin",
       "updateEnvironmentRequestSchema.mergeBaseBranch",
       "updateEnvironmentRequestSchema.name",
     ],
@@ -507,6 +508,11 @@ describe("git branch name contract", () => {
     expect(
       updateEnvironmentRequestSchema.safeParse({
         mergeBaseBranch: "origin/main",
+      }).success,
+    ).toBe(true);
+    expect(
+      updateEnvironmentRequestSchema.safeParse({
+        githubAccountLogin: "budah1987",
       }).success,
     ).toBe(true);
     expect(
@@ -1045,6 +1051,13 @@ describe("server-contract canonical schemas", () => {
       }),
     ).toEqual({
       mergeBaseBranch: null,
+    });
+    expect(
+      updateEnvironmentRequestSchema.parse({
+        githubAccountLogin: "  budah1987  ",
+      }),
+    ).toEqual({
+      githubAccountLogin: "budah1987",
     });
     expect(
       updateEnvironmentRequestSchema.parse({

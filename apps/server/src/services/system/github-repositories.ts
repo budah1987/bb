@@ -1,8 +1,10 @@
 import type {
+  GithubAccountCatalog,
   GithubPullRequestCatalog,
   GithubRepositoryCatalog,
 } from "@bb/host-daemon-contract";
 import type {
+  SystemGithubAccountsQuery,
   SystemGithubPullRequestsQuery,
   SystemGithubRepositoriesQuery,
 } from "@bb/server-contract";
@@ -13,6 +15,20 @@ import {
   assertUsableHostId,
   requirePrimaryHostId,
 } from "../hosts/primary-host.js";
+
+/** Reads authenticated account identities without moving credentials off-host. */
+export async function getGithubAccounts(
+  deps: AppDeps,
+  query: SystemGithubAccountsQuery,
+): Promise<GithubAccountCatalog> {
+  const hostId = query.hostId ?? requirePrimaryHostId(deps);
+  assertUsableHostId(deps, { hostId });
+  return callHostRetryableOnlineRpc(deps, {
+    hostId,
+    timeoutMs: COMMAND_TIMEOUT_MS,
+    command: { type: "github.account_catalog" },
+  });
+}
 
 /**
  * Reads GitHub accounts and their repository intersection from one machine.

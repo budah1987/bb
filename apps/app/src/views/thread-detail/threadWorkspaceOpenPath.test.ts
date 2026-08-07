@@ -26,6 +26,7 @@ function makeEnvironment(overrides: Partial<Environment> = {}): Environment {
     isWorktree: true,
     managed: true,
     mergeBaseBranch: "main",
+    githubAccountLogin: null,
     path: "/tmp/workspace",
     projectId: "project-1",
     status: "ready",

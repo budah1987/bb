@@ -12,6 +12,7 @@ import path from "node:path";
 import {
   getPullRequestForBranch,
   runPullRequestActionForBranch,
+  type GitHostCommandOptions,
   type GitHostPullRequestAction,
   type GitHostPullRequestLookup,
 } from "./git-host.js";
@@ -635,7 +636,9 @@ export class Workspace {
    * surface as "unavailable". Never throws — see
    * {@link getPullRequestForBranch}.
    */
-  async getPullRequest(): Promise<GitHostPullRequestLookup> {
+  async getPullRequest(
+    options: GitHostCommandOptions = {},
+  ): Promise<GitHostPullRequestLookup> {
     // A vanished workspace (deleted worktree dir) means the lookup cannot
     // run; without this check getCurrentBranch folds it into "no branch" and
     // the missing workspace would masquerade as "no PR exists".
@@ -649,11 +652,16 @@ export class Workspace {
     if (!branch) {
       return { outcome: "none" };
     }
-    return getPullRequestForBranch({ cwd: this.path, branch });
+    return getPullRequestForBranch({
+      cwd: this.path,
+      branch,
+      ...(options.env === undefined ? {} : { env: options.env }),
+    });
   }
 
   async runPullRequestAction(
     action: PullRequestActionOptions,
+    options: GitHostCommandOptions = {},
   ): Promise<void | GitHostPullRequest> {
     const branch = await getCurrentBranch(this.path);
     if (!branch) {
@@ -662,7 +670,12 @@ export class Workspace {
         "Cannot update pull request from a detached workspace",
       );
     }
-    return runPullRequestActionForBranch({ cwd: this.path, branch, action });
+    return runPullRequestActionForBranch({
+      cwd: this.path,
+      branch,
+      action,
+      ...(options.env === undefined ? {} : { env: options.env }),
+    });
   }
 
   async getStatus(options: StatusOptions = {}): Promise<WorkspaceStatus> {

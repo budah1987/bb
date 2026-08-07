@@ -9,7 +9,10 @@ import {
   workspaceStatusSchema,
   workspaceFolderNameSchema,
 } from "@bb/domain";
-import { workspaceResolutionFailureSchema } from "@bb/host-daemon-contract";
+import {
+  githubAccountLoginSchema,
+  workspaceResolutionFailureSchema,
+} from "@bb/host-daemon-contract";
 import { apiErrorSchema } from "../errors.js";
 import {
   branchListQuerySchema,
@@ -21,12 +24,16 @@ export const environmentNameSchema = z.string().trim().min(1).max(80);
 export const updateEnvironmentRequestSchema = z
   .object({
     // Omitted fields are left unchanged. `null` clears the configured value.
+    githubAccountLogin: githubAccountLoginSchema.nullable(),
     mergeBaseBranch: gitBranchNameSchema.nullable(),
     name: environmentNameSchema.nullable(),
   })
   .partial()
   .refine(
-    (value) => value.mergeBaseBranch !== undefined || value.name !== undefined,
+    (value) =>
+      value.githubAccountLogin !== undefined ||
+      value.mergeBaseBranch !== undefined ||
+      value.name !== undefined,
     "At least one field must be provided",
   );
 export type UpdateEnvironmentRequest = z.infer<

@@ -16,6 +16,7 @@ function createEnvironment(): Environment {
     isWorktree: true,
     managed: true,
     mergeBaseBranch: null,
+    githubAccountLogin: null,
     name: "Renamed environment",
     path: "/tmp/project",
     projectId: "proj_1",

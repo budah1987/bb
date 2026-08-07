@@ -354,6 +354,34 @@ export function registerProjectCommands(
     );
 
   project
+    .command("github-accounts")
+    .description("List authenticated GitHub accounts")
+    .option("--machine <id-or-name>", "Machine whose GitHub accounts to use")
+    .option("--host <id-or-name>", "Alias for --machine")
+    .option("--json", "Print machine-readable JSON output")
+    .action(
+      action(async (opts: GithubRepositoryCommandOptions) => {
+        const target = resolveMachineTargetOption(opts);
+        const hostId =
+          target === undefined
+            ? undefined
+            : await resolveMachineHostId({
+                serverUrl: getUrl(),
+                target,
+              });
+        const catalog = await createCliBbSdk(getUrl()).system.githubAccounts(
+          hostId === undefined ? {} : { hostId },
+        );
+        if (outputJson(opts, catalog)) return;
+        for (const account of catalog.accounts) {
+          console.log(
+            `@${account.login}\t${account.host}${account.active ? "\tactive" : ""}`,
+          );
+        }
+      }),
+    );
+
+  project
     .command("github-repositories")
     .description(
       "List repositories visible to every authenticated GitHub account",

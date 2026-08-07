@@ -43,6 +43,24 @@ describe("bb project command output", () => {
     expect(help).toContain("Alias for --machine");
   });
 
+  it("lists authenticated GitHub accounts and the active default", async () => {
+    const get = vi.fn(async () => ({
+      accounts: [
+        { active: true, host: "github.com", login: "amirghst" },
+        { active: false, host: "github.com", login: "budah1987" },
+      ],
+    }));
+    stubServerApi({ "v1.system.github.accounts.$get": get });
+
+    await runCommand(["project", "github-accounts"], register);
+
+    expect(get).toHaveBeenCalledWith({ query: {} });
+    expect(collectLogLines(vi.mocked(console.log))).toEqual([
+      "@amirghst\tgithub.com\tactive",
+      "@budah1987\tgithub.com",
+    ]);
+  });
+
   it("uploads binary bytes read on a remote CLI machine with explicit metadata", async () => {
     const clientDir = await mkdtemp(join(tmpdir(), "bb-cli-attachment-"));
     try {

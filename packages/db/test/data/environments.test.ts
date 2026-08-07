@@ -38,6 +38,26 @@ function createNotifierSpy(): DbNotifier {
 }
 
 describe("environments", () => {
+  it("persists a GitHub account selection as environment metadata", () => {
+    const { db, host, project } = setup();
+    const environment = createEnvironment(db, noopNotifier, {
+      projectId: project.id,
+      hostId: host.id,
+      workspaceProvisionType: "managed-worktree",
+      status: "ready",
+    });
+    const notifier = createNotifierSpy();
+
+    const updated = updateEnvironmentMetadata(db, notifier, environment.id, {
+      githubAccountLogin: "amirghst",
+    });
+
+    expect(updated?.githubAccountLogin).toBe("amirghst");
+    expect(notifier.notifyEnvironment).toHaveBeenCalledWith(environment.id, [
+      "metadata-changed",
+    ]);
+  });
+
   it("emits metadata-changed when merge base branch changes", () => {
     const { db, host, project } = setup();
     const environment = createEnvironment(db, noopNotifier, {

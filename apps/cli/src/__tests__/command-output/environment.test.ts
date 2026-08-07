@@ -711,6 +711,38 @@ describe("bb environment command output", () => {
     );
   });
 
+  it("bb environment update selects a GitHub account", async () => {
+    const environment = fixtures.makeEnvironment({
+      id: "env-github-account",
+      projectId: "proj-1",
+      hostId: "host-1",
+      githubAccountLogin: "budah1987",
+      createdAt: 1,
+      updatedAt: 2,
+    });
+    const patch = vi.fn(async () => environment);
+    stubServerApi({ "v1.environments.:id.$patch": patch });
+
+    await runCommand(
+      [
+        "environment",
+        "update",
+        "env-github-account",
+        "--github-account",
+        "budah1987",
+      ],
+      register,
+    );
+
+    expect(patch).toHaveBeenCalledWith({
+      param: { id: "env-github-account" },
+      json: { githubAccountLogin: "budah1987" },
+    });
+    expect(collectLogLines(vi.mocked(console.log))).toContain(
+      "GitHub account: @budah1987",
+    );
+  });
+
   it("bb environment update clears the merge base branch", async () => {
     const environment = fixtures.makeEnvironment({
       id: "env-update-2",

@@ -65,8 +65,10 @@ interface EnvironmentDiffPatchCommandOptions extends EnvironmentDiffCommandOptio
 }
 
 interface EnvironmentUpdateCommandOptions {
+  clearGithubAccount?: boolean;
   clearMergeBaseBranch?: boolean;
   clearName?: boolean;
+  githubAccount?: string;
   json?: boolean;
   mergeBaseBranch?: string;
   name?: string;
@@ -274,6 +276,23 @@ function buildEnvironmentUpdateArgs({
   id,
   opts,
 }: BuildEnvironmentUpdateArgsInput): EnvironmentUpdateArgs {
+  const githubAccountLogin = opts.clearGithubAccount
+    ? null
+    : opts.githubAccount;
+  const mergeBaseBranch = opts.clearMergeBaseBranch
+    ? null
+    : opts.mergeBaseBranch;
+  const name = opts.clearName ? null : opts.name;
+
+  if (githubAccountLogin !== undefined) {
+    return {
+      environmentId: id,
+      githubAccountLogin,
+      ...(mergeBaseBranch !== undefined ? { mergeBaseBranch } : {}),
+      ...(name !== undefined ? { name } : {}),
+    };
+  }
+
   if (opts.clearMergeBaseBranch === true) {
     if (opts.clearName === true) {
       return { environmentId: id, mergeBaseBranch: null, name: null };
@@ -304,7 +323,7 @@ function buildEnvironmentUpdateArgs({
   }
 
   throw new Error(
-    "No changes requested. Provide --merge-base-branch, --clear-merge-base-branch, --name, or --clear-name.",
+    "No changes requested. Provide --github-account, --clear-github-account, --merge-base-branch, --clear-merge-base-branch, --name, or --clear-name.",
   );
 }
 
@@ -344,6 +363,9 @@ export function registerEnvironmentCommands(
         }
         if (env.mergeBaseBranch) {
           console.log(`  Merge base: ${env.mergeBaseBranch}`);
+        }
+        if (env.githubAccountLogin) {
+          console.log(`  GitHub account: @${env.githubAccountLogin}`);
         }
         console.log(`  Git repo: ${env.isGitRepo}`);
         console.log(`  Worktree: ${env.isWorktree}`);
@@ -590,6 +612,11 @@ export function registerEnvironmentCommands(
   environment
     .command("update <id>")
     .description("Update environment metadata")
+    .option("--github-account <login>", "GitHub account for this environment")
+    .option(
+      "--clear-github-account",
+      "Follow the active GitHub CLI account instead",
+    )
     .option(
       "--merge-base-branch <branch>",
       "Set the merge-base branch override",
@@ -604,6 +631,14 @@ export function registerEnvironmentCommands(
         const hasClearMergeBaseBranch = opts.clearMergeBaseBranch === true;
         const hasName = opts.name !== undefined;
         const hasClearName = opts.clearName === true;
+        const hasGithubAccount = opts.githubAccount !== undefined;
+        const hasClearGithubAccount = opts.clearGithubAccount === true;
+
+        if (hasGithubAccount && hasClearGithubAccount) {
+          throw new Error(
+            "Cannot combine --github-account with --clear-github-account.",
+          );
+        }
 
         if (hasMergeBaseBranch && hasClearMergeBaseBranch) {
           throw new Error(
@@ -620,10 +655,12 @@ export function registerEnvironmentCommands(
           !hasMergeBaseBranch &&
           !hasClearMergeBaseBranch &&
           !hasName &&
-          !hasClearName
+          !hasClearName &&
+          !hasGithubAccount &&
+          !hasClearGithubAccount
         ) {
           throw new Error(
-            "No changes requested. Provide --merge-base-branch, --clear-merge-base-branch, --name, or --clear-name.",
+            "No changes requested. Provide --github-account, --clear-github-account, --merge-base-branch, --clear-merge-base-branch, --name, or --clear-name.",
           );
         }
 
@@ -644,6 +681,13 @@ export function registerEnvironmentCommands(
         if (hasClearName || hasName) {
           console.log(
             environment.name ? `Name: ${environment.name}` : "Name cleared",
+          );
+        }
+        if (hasClearGithubAccount || hasGithubAccount) {
+          console.log(
+            environment.githubAccountLogin
+              ? `GitHub account: @${environment.githubAccountLogin}`
+              : "GitHub account follows the GitHub CLI default",
           );
         }
       }),

@@ -98,6 +98,7 @@ export const environmentSchema = z.object({
   baseBranch: z.string().nullable(),
   defaultBranch: z.string().nullable(),
   mergeBaseBranch: z.string().nullable(),
+  githubAccountLogin: z.string().nullable(),
   status: environmentStatusSchema,
   createdAt: z.number(),
   updatedAt: z.number(),

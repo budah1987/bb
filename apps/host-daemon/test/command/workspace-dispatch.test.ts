@@ -123,6 +123,7 @@ describe("workspace command dispatch", () => {
     const presentResult = await dispatchOnlineRpcCommand(
       {
         type: "workspace.pull_request",
+        githubAccountLogin: null,
         environmentId: "env-1",
         workspaceContext: {
           workspacePath: "/tmp/env-1",
@@ -137,6 +138,7 @@ describe("workspace command dispatch", () => {
     const absentResult = await dispatchOnlineRpcCommand(
       {
         type: "workspace.pull_request",
+        githubAccountLogin: null,
         environmentId: "env-1",
         workspaceContext: {
           workspacePath: "/tmp/env-1",
@@ -154,6 +156,7 @@ describe("workspace command dispatch", () => {
     const unavailableResult = await dispatchOnlineRpcCommand(
       {
         type: "workspace.pull_request",
+        githubAccountLogin: null,
         environmentId: "env-1",
         workspaceContext: {
           workspacePath: "/tmp/env-1",
@@ -194,6 +197,7 @@ describe("workspace command dispatch", () => {
     const result = await dispatchOnlineRpcCommand(
       {
         type: "workspace.pull_request",
+        githubAccountLogin: null,
         environmentId: "env-non-git-pr",
         workspaceContext: {
           workspacePath: "/tmp/non-git-pr-env",
@@ -217,6 +221,7 @@ describe("workspace command dispatch", () => {
       dispatchCommand(
         {
           type: "workspace.pull_request_action",
+          githubAccountLogin: null,
           operation: "ready",
           environmentId: "env-1",
           workspaceContext: {
@@ -235,6 +240,7 @@ describe("workspace command dispatch", () => {
       dispatchCommand(
         {
           type: "workspace.pull_request_action",
+          githubAccountLogin: null,
           operation: "draft",
           environmentId: "env-1",
           workspaceContext: {
@@ -253,6 +259,7 @@ describe("workspace command dispatch", () => {
       dispatchCommand(
         {
           type: "workspace.pull_request_action",
+          githubAccountLogin: null,
           operation: "merge",
           method: "rebase",
           environmentId: "env-1",
@@ -281,6 +288,7 @@ describe("workspace command dispatch", () => {
       dispatchCommand(
         {
           type: "workspace.pull_request_create",
+          githubAccountLogin: null,
           environmentId: "env-1",
           workspaceContext: {
             workspacePath: "/tmp/env-1",

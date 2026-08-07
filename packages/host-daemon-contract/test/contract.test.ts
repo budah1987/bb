@@ -361,6 +361,9 @@ const ONLINE_RPC_RESPONSE_RESULT_FIXTURES: OnlineRpcResponseResultFixtures = {
     claudeCode: { status: "unauthenticated" },
     cursor: { status: "not_installed" },
   },
+  "github.account_catalog": {
+    accounts: [{ host: "github.com", login: "octocat", active: true }],
+  },
   "github.repository_catalog": {
     accounts: [{ host: "github.com", login: "octocat", active: true }],
     repositories: [
@@ -1093,10 +1096,10 @@ describe("host-daemon local schemas", () => {
 });
 
 describe("host-daemon command schemas", () => {
-  // Version 78 adds pull-request catalog and checkout payloads. Older daemons
-  // cannot safely parse or execute these commands, so the bump forces an update.
-  it("uses protocol version 78 for GitHub workflow support", () => {
-    expect(HOST_DAEMON_PROTOCOL_VERSION).toBe(79);
+  // Version 80 scopes GitHub PR commands to an authenticated account. Older
+  // daemons would reject the added wire field, so the bump forces an update.
+  it("uses protocol version 80 for account-scoped GitHub workflows", () => {
+    expect(HOST_DAEMON_PROTOCOL_VERSION).toBe(80);
   });
 
   it("binds Plan cancellation to a required turn id and typed result", () => {

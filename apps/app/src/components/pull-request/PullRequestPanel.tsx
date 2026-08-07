@@ -11,6 +11,7 @@ import type {
   ThreadPullRequest,
   WorkspaceStatus,
 } from "@bb/domain";
+import type { GithubAccount } from "@bb/host-daemon-contract";
 import type {
   EnvironmentPullRequestResponse,
   PullRequestMergeMethod,
@@ -21,6 +22,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@bb/shared-ui/dropdown-menu";
@@ -63,6 +65,8 @@ export interface PullRequestPanelProps {
   baseBranchOptions: readonly string[];
   defaultBaseBranch: string;
   isActionPending: boolean;
+  githubAccounts: readonly GithubAccount[];
+  isGithubAccountLoading: boolean;
   isLoading: boolean;
   onArchive: () => void;
   onAskAgentToFix: (check: GitHostPullRequestCheck) => void;
@@ -72,13 +76,107 @@ export interface PullRequestPanelProps {
   onGenerateMetadata: (
     baseBranch: string,
   ) => Promise<PullRequestMetadataSuggestion>;
+  onGithubAccountChange: (login: string) => void;
   onMarkReady: () => void;
   onMerge: (method: PullRequestMergeMethod) => void;
   onRefresh: () => void;
   onReviewChanges: () => void;
   pullRequestResponse: EnvironmentPullRequestResponse | undefined;
+  selectedGithubAccountLogin: string | null;
   threadTitle: string;
   workspaceStatus: WorkspaceStatus | undefined;
+}
+
+function GithubAccountPicker({
+  accounts,
+  disabled,
+  isLoading,
+  onChange,
+  value,
+}: {
+  accounts: readonly GithubAccount[];
+  disabled: boolean;
+  isLoading: boolean;
+  onChange: (login: string) => void;
+  value: string | null;
+}) {
+  const selectedAccount =
+    accounts.find((account) => account.login === value) ?? null;
+  const triggerLabel = isLoading
+    ? "Loading accounts…"
+    : selectedAccount
+      ? `@${selectedAccount.login}`
+      : "No GitHub account";
+
+  return (
+    <div className="grid gap-1.5">
+      <span className="text-xs font-medium text-foreground">
+        GitHub account
+      </span>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button
+            type="button"
+            variant="outline"
+            className="min-h-11 w-full justify-between bg-transparent px-3 font-normal active:scale-[0.96] motion-reduce:transition-none"
+            disabled={disabled || isLoading || accounts.length === 0}
+            aria-label="Choose GitHub account"
+          >
+            <span className="flex min-w-0 items-center gap-2">
+              <Icon
+                name={isLoading ? "Spinner" : "Github"}
+                className={cn("size-4 shrink-0", isLoading && "animate-spin")}
+                aria-hidden="true"
+              />
+              <span className="truncate">{triggerLabel}</span>
+            </span>
+            <Icon
+              name="ChevronDown"
+              className="size-4 shrink-0 text-muted-foreground"
+              aria-hidden="true"
+            />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent
+          align="start"
+          className="w-[var(--radix-dropdown-menu-trigger-width)] min-w-64"
+          mobileTitle="GitHub account"
+        >
+          <DropdownMenuLabel>Use for this worktree</DropdownMenuLabel>
+          {accounts.map((account) => (
+            <DropdownMenuItem
+              key={`${account.host}:${account.login}`}
+              className="min-h-11 gap-2"
+              onSelect={() => onChange(account.login)}
+            >
+              <Icon
+                name="Github"
+                className="size-4 shrink-0 text-muted-foreground"
+                aria-hidden="true"
+              />
+              <span className="min-w-0 flex-1 truncate">@{account.login}</span>
+              {account.active ? (
+                <span className="text-xs text-muted-foreground">
+                  CLI default
+                </span>
+              ) : null}
+              <Icon
+                name="Check"
+                className={cn(
+                  "size-4 shrink-0 text-foreground",
+                  account.login === value ? "opacity-100" : "opacity-0",
+                )}
+                aria-hidden="true"
+              />
+            </DropdownMenuItem>
+          ))}
+        </DropdownMenuContent>
+      </DropdownMenu>
+      <p className="text-xs leading-5 text-muted-foreground text-pretty">
+        Used for pushes, pull requests, checks, and merges in this worktree.
+      </p>
+    </div>
+  );
 }
 
 function ExternalLink({ href, label }: { href: string; label: string }) {
@@ -226,22 +324,30 @@ function CreatePullRequestForm({
   baseBranchOptions,
   defaultBaseBranch,
   isActionPending,
+  githubAccounts,
+  isGithubAccountLoading,
   onCommitChanges,
   onCreate,
   onGenerateMetadata,
+  onGithubAccountChange,
   onReviewChanges,
   threadTitle,
+  selectedGithubAccountLogin,
   workspaceStatus,
 }: Pick<
   PullRequestPanelProps,
   | "baseBranchOptions"
   | "defaultBaseBranch"
   | "isActionPending"
+  | "githubAccounts"
+  | "isGithubAccountLoading"
   | "onCommitChanges"
   | "onCreate"
   | "onGenerateMetadata"
+  | "onGithubAccountChange"
   | "onReviewChanges"
   | "threadTitle"
+  | "selectedGithubAccountLogin"
   | "workspaceStatus"
 >) {
   const [title, setTitle] = useState(threadTitle);
@@ -385,6 +491,14 @@ function CreatePullRequestForm({
             </div>
           </div>
         ) : null}
+
+        <GithubAccountPicker
+          accounts={githubAccounts}
+          disabled={isActionPending}
+          isLoading={isGithubAccountLoading}
+          onChange={onGithubAccountChange}
+          value={selectedGithubAccountLogin}
+        />
 
         <label className="grid gap-1.5 text-xs font-medium text-foreground">
           Title
@@ -560,23 +674,31 @@ function PullRequestActions({
 }
 
 function PullRequestDetails({
+  githubAccounts,
+  isGithubAccountLoading,
   isActionPending,
   onArchive,
   onAskAgentToFix,
   onConvertToDraft,
+  onGithubAccountChange,
   onMarkReady,
   onMerge,
   onRefresh,
   pullRequest,
+  selectedGithubAccountLogin,
 }: Pick<
   PullRequestPanelProps,
   | "isActionPending"
+  | "githubAccounts"
+  | "isGithubAccountLoading"
   | "onArchive"
   | "onAskAgentToFix"
   | "onConvertToDraft"
+  | "onGithubAccountChange"
   | "onMarkReady"
   | "onMerge"
   | "onRefresh"
+  | "selectedGithubAccountLogin"
 > & { pullRequest: ThreadPullRequest }) {
   const signals = useMemo(
     () => [
@@ -626,6 +748,15 @@ function PullRequestDetails({
                 aria-hidden="true"
               />
             </Button>
+          </div>
+          <div className="mt-4">
+            <GithubAccountPicker
+              accounts={githubAccounts}
+              disabled={isActionPending}
+              isLoading={isGithubAccountLoading}
+              onChange={onGithubAccountChange}
+              value={selectedGithubAccountLogin}
+            />
           </div>
         </header>
 

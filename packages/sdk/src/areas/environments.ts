@@ -56,20 +56,33 @@ type EnvironmentNameUpdateValue = Exclude<
   UpdateEnvironmentRequest["name"],
   undefined
 >;
+type EnvironmentGithubAccountUpdateValue = Exclude<
+  UpdateEnvironmentRequest["githubAccountLogin"],
+  undefined
+>;
 
 interface EnvironmentMergeBaseBranchUpdate {
+  githubAccountLogin?: EnvironmentGithubAccountUpdateValue;
   mergeBaseBranch: EnvironmentMergeBaseBranchUpdateValue;
   name?: EnvironmentNameUpdateValue;
 }
 
 interface EnvironmentNameUpdate {
+  githubAccountLogin?: EnvironmentGithubAccountUpdateValue;
   mergeBaseBranch?: EnvironmentMergeBaseBranchUpdateValue;
   name: EnvironmentNameUpdateValue;
 }
 
+interface EnvironmentGithubAccountUpdate {
+  githubAccountLogin: EnvironmentGithubAccountUpdateValue;
+  mergeBaseBranch?: EnvironmentMergeBaseBranchUpdateValue;
+  name?: EnvironmentNameUpdateValue;
+}
+
 type EnvironmentUpdateFields =
   | EnvironmentMergeBaseBranchUpdate
-  | EnvironmentNameUpdate;
+  | EnvironmentNameUpdate
+  | EnvironmentGithubAccountUpdate;
 
 export type EnvironmentUpdateArgs = EnvironmentUpdateFields & {
   environmentId: string;
@@ -203,6 +216,9 @@ function environmentUpdateJson(
   args: EnvironmentUpdateArgs,
 ): UpdateEnvironmentRequest {
   const request: UpdateEnvironmentRequest = {};
+  if (args.githubAccountLogin !== undefined) {
+    request.githubAccountLogin = args.githubAccountLogin;
+  }
   if (args.mergeBaseBranch !== undefined) {
     request.mergeBaseBranch = args.mergeBaseBranch;
   }

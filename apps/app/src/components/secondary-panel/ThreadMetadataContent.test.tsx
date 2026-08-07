@@ -52,6 +52,7 @@ function makeEnvironment(overrides: Partial<Environment> = {}): Environment {
     baseBranch: "main",
     defaultBranch: "main",
     mergeBaseBranch: null,
+    githubAccountLogin: null,
     status: "ready",
     createdAt: 0,
     updatedAt: 0,

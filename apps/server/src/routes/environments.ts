@@ -48,6 +48,7 @@ const PULL_REQUEST_CREATE_TIMEOUT_MS = 3 * 60_000;
 import { requireWorkspaceCommandTarget } from "../services/environments/workspace-command-target.js";
 import { callEnvironmentWorkspaceStatus } from "../services/environments/workspace-status.js";
 import { assembleThreadPullRequest } from "../services/environments/pull-request.js";
+import { getGithubAccounts } from "../services/system/github-repositories.js";
 import {
   requireAvailableWorkspaceDiff,
   requireAvailableWorkspaceStatus,
@@ -169,12 +170,14 @@ function isWorktreeEnvironment(environment: Environment): boolean {
 async function getPullRequestForWorkspaceTarget(
   deps: AppDeps,
   target: ReturnType<typeof requireWorkspaceCommandTarget>,
+  githubAccountLogin: string | null,
 ): Promise<ThreadPullRequest | null> {
   const result = await callHostRetryableOnlineRpc(deps, {
     hostId: target.hostId,
     timeoutMs: COMMAND_TIMEOUT_MS,
     command: {
       type: "workspace.pull_request",
+      githubAccountLogin,
       environmentId: target.environmentId,
       workspaceContext: target.workspaceContext,
     },
@@ -299,13 +302,35 @@ export function registerEnvironmentRoutes(app: Hono, deps: AppDeps): void {
     context.json(requireEnvironment(deps.db, context.req.param("id"))),
   );
 
-  patch(routes.update, (context, payload) => {
+  patch(routes.update, async (context, payload) => {
     const environment = requireEnvironment(deps.db, context.req.param("id"));
+    let metadata = payload;
+    if (
+      payload.githubAccountLogin !== undefined &&
+      payload.githubAccountLogin !== null
+    ) {
+      const catalog = await getGithubAccounts(deps, {
+        hostId: environment.hostId,
+      });
+      const account = catalog.accounts.find(
+        (candidate) =>
+          candidate.login.toLocaleLowerCase() ===
+          payload.githubAccountLogin?.toLocaleLowerCase(),
+      );
+      if (!account) {
+        throw new ApiError(
+          400,
+          "invalid_request",
+          `GitHub account @${payload.githubAccountLogin} is not authenticated on this machine`,
+        );
+      }
+      metadata = { ...payload, githubAccountLogin: account.login };
+    }
     const updated = updateEnvironmentMetadata(
       deps.db,
       deps.hub,
       environment.id,
-      payload,
+      metadata,
     );
     if (!updated) {
       throw new ApiError(404, "environment_not_found", "Environment not found");
@@ -428,6 +453,7 @@ export function registerEnvironmentRoutes(app: Hono, deps: AppDeps): void {
       timeoutMs: COMMAND_TIMEOUT_MS,
       command: {
         type: "workspace.pull_request",
+        githubAccountLogin: environment.githubAccountLogin,
         environmentId: target.environmentId,
         workspaceContext: target.workspaceContext,
       },
@@ -845,6 +871,7 @@ export function registerEnvironmentRoutes(app: Hono, deps: AppDeps): void {
         const pullRequest = await getPullRequestForWorkspaceTarget(
           deps,
           target,
+          environment.githubAccountLogin,
         );
         assertCanMarkPullRequestReady(pullRequest);
 
@@ -854,6 +881,7 @@ export function registerEnvironmentRoutes(app: Hono, deps: AppDeps): void {
             timeoutMs: COMMAND_TIMEOUT_MS,
             command: {
               type: "workspace.pull_request_action",
+              githubAccountLogin: environment.githubAccountLogin,
               operation: "ready",
               environmentId: target.environmentId,
               workspaceContext: target.workspaceContext,
@@ -918,6 +946,7 @@ export function registerEnvironmentRoutes(app: Hono, deps: AppDeps): void {
         const existingPullRequest = await getPullRequestForWorkspaceTarget(
           deps,
           target,
+          environment.githubAccountLogin,
         );
         if (existingPullRequest) {
           throw new ApiError(
@@ -933,6 +962,7 @@ export function registerEnvironmentRoutes(app: Hono, deps: AppDeps): void {
             timeoutMs: PULL_REQUEST_CREATE_TIMEOUT_MS,
             command: {
               type: "workspace.pull_request_create",
+              githubAccountLogin: environment.githubAccountLogin,
               environmentId: target.environmentId,
               workspaceContext: target.workspaceContext,
               baseBranch: payload.options.baseBranch,
@@ -962,6 +992,7 @@ export function registerEnvironmentRoutes(app: Hono, deps: AppDeps): void {
         const pullRequest = await getPullRequestForWorkspaceTarget(
           deps,
           target,
+          environment.githubAccountLogin,
         );
         assertCanConvertPullRequestToDraft(pullRequest);
 
@@ -971,6 +1002,7 @@ export function registerEnvironmentRoutes(app: Hono, deps: AppDeps): void {
             timeoutMs: COMMAND_TIMEOUT_MS,
             command: {
               type: "workspace.pull_request_action",
+              githubAccountLogin: environment.githubAccountLogin,
               operation: "draft",
               environmentId: target.environmentId,
               workspaceContext: target.workspaceContext,
@@ -995,6 +1027,7 @@ export function registerEnvironmentRoutes(app: Hono, deps: AppDeps): void {
         const pullRequest = await getPullRequestForWorkspaceTarget(
           deps,
           target,
+          environment.githubAccountLogin,
         );
         assertCanMergePullRequest(pullRequest);
 
@@ -1004,6 +1037,7 @@ export function registerEnvironmentRoutes(app: Hono, deps: AppDeps): void {
             timeoutMs: COMMAND_TIMEOUT_MS,
             command: {
               type: "workspace.pull_request_action",
+              githubAccountLogin: environment.githubAccountLogin,
               operation: "merge",
               method: payload.options.method,
               environmentId: target.environmentId,

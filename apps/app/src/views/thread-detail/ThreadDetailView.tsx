@@ -82,7 +82,10 @@ import { useCreateThreadInWorktree } from "@/hooks/useCreateThreadInWorktree";
 import { useHostDaemon } from "@/hooks/useHostDaemon";
 import { useLocalOpenTargets } from "@/hooks/useLocalOpenTargets";
 import { selectPrimaryHost, useHosts } from "@/hooks/queries/host-queries";
-import { useSystemConfig } from "@/hooks/queries/system-queries";
+import {
+  useGithubAccounts,
+  useSystemConfig,
+} from "@/hooks/queries/system-queries";
 import { useConnectionAwareQueryState } from "@/hooks/queries/connection-aware-query-state";
 import {
   useCloseThreadTerminal,
@@ -1513,8 +1516,52 @@ function ThreadDetailViewInternal(props: ThreadDetailViewInternalProps) {
   const pullRequestQuery = useEnvironmentPullRequest(thread?.environmentId, {
     enabled: canUseGitUi && environment !== undefined,
   });
+  const githubAccountsQuery = useGithubAccounts({
+    ...(environment?.hostId === undefined
+      ? {}
+      : { hostId: environment.hostId }),
+    enabled:
+      canUseGitUi &&
+      environment !== undefined &&
+      openFixedSecondaryTab?.kind === "pull-request",
+  });
+  const githubAccounts = githubAccountsQuery.data?.accounts ?? [];
+  const selectedGithubAccountLogin =
+    environment?.githubAccountLogin ??
+    githubAccounts.find((account) => account.active)?.login ??
+    githubAccounts[0]?.login ??
+    null;
   const pullRequest = getEnvironmentPullRequestFromResponse(
     pullRequestQuery.data,
+  );
+  const handleGithubAccountChange = useCallback(
+    async (login: string) => {
+      const environmentId = thread?.environmentId;
+      if (!environmentId || environment?.githubAccountLogin === login) return;
+      const toastId = appToast.loading(`Switching to @${login}`);
+      try {
+        await updateEnvironment.mutateAsync({
+          id: environmentId,
+          githubAccountLogin: login,
+        });
+        await pullRequestQuery.refetch();
+        appToast.success(`Using @${login} for this worktree`, { id: toastId });
+      } catch (error) {
+        appToast.error("Failed to switch GitHub account", {
+          id: toastId,
+          description: getMutationErrorMessage({
+            error,
+            fallbackMessage: `Could not use @${login}`,
+          }),
+        });
+      }
+    },
+    [
+      environment?.githubAccountLogin,
+      pullRequestQuery,
+      thread?.environmentId,
+      updateEnvironment,
+    ],
   );
   const handlePullRequestCreate = useCallback(
     async (input: PullRequestCreateInput) => {
@@ -2256,6 +2303,21 @@ function ThreadDetailViewInternal(props: ThreadDetailViewInternalProps) {
     },
     [openWorkspaceFile],
   );
+  const threadTitle = thread ? getThreadDisplayTitle(thread) : "";
+  const handleGeneratePullRequestMetadata = useCallback(
+    async (baseBranch: string): Promise<PullRequestMetadataSuggestion> => {
+      if (!thread?.environmentId) {
+        return { body: "", title: threadTitle };
+      }
+      const result = await sdk.environments.generatePullRequestMetadata({
+        environmentId: thread.environmentId,
+        baseBranch,
+        fallbackTitle: threadTitle,
+      });
+      return { body: result.body, title: result.title };
+    },
+    [thread?.environmentId, threadTitle],
+  );
 
   if (threadQueryState.status === "loading") {
     return (
@@ -2332,21 +2394,6 @@ function ThreadDetailViewInternal(props: ThreadDetailViewInternalProps) {
     workspaceUnavailable,
     workspaceDeleted: isWorkspaceDeleted,
   });
-  const threadTitle = getThreadDisplayTitle(thread);
-  const handleGeneratePullRequestMetadata = useCallback(
-    async (baseBranch: string): Promise<PullRequestMetadataSuggestion> => {
-      if (!thread.environmentId) {
-        return { body: "", title: threadTitle };
-      }
-      const result = await sdk.environments.generatePullRequestMetadata({
-        environmentId: thread.environmentId,
-        baseBranch,
-        fallbackTitle: threadTitle,
-      });
-      return { body: result.body, title: result.title };
-    },
-    [thread.environmentId, threadTitle],
-  );
   const responsiveWorkspaceActions: ThreadActionsMenuResponsiveAction[] =
     workspaceOpenPath && preferredDirectoryTarget
       ? [
@@ -2593,10 +2640,13 @@ function ThreadDetailViewInternal(props: ThreadDetailViewInternalProps) {
         ]),
       ]}
       defaultBaseBranch={workspaceStatus?.branch.defaultBranch ?? "main"}
+      githubAccounts={githubAccounts}
       isActionPending={
         requestEnvironmentAction.isPending ||
-        archiveEnvironmentThreads.isPending
+        archiveEnvironmentThreads.isPending ||
+        updateEnvironment.isPending
       }
+      isGithubAccountLoading={githubAccountsQuery.isLoading}
       isLoading={pullRequestQuery.isLoading}
       onArchive={() => void handlePullRequestArchive()}
       onAskAgentToFix={(check) =>
@@ -2606,11 +2656,13 @@ function ThreadDetailViewInternal(props: ThreadDetailViewInternalProps) {
       onCommitChanges={() => void gitActions.handleCommitThread()}
       onCreate={(input) => void handlePullRequestCreate(input)}
       onGenerateMetadata={handleGeneratePullRequestMetadata}
+      onGithubAccountChange={(login) => void handleGithubAccountChange(login)}
       onMarkReady={() => void handlePullRequestReady()}
       onMerge={(method) => void handlePullRequestMerge(method)}
       onRefresh={() => void pullRequestQuery.refetch()}
       onReviewChanges={openSecondaryPanelDiffPanel}
       pullRequestResponse={pullRequestQuery.data}
+      selectedGithubAccountLogin={selectedGithubAccountLogin}
       threadTitle={threadTitle}
       workspaceStatus={workspaceStatus}
     />

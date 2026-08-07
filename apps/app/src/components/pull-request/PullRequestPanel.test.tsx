@@ -77,7 +77,12 @@ function renderPanel(
     <PullRequestPanel
       baseBranchOptions={["main", "release"]}
       defaultBaseBranch="main"
+      githubAccounts={[
+        { active: true, host: "github.com", login: "amirghst" },
+        { active: false, host: "github.com", login: "budah1987" },
+      ]}
       isActionPending={false}
+      isGithubAccountLoading={false}
       isLoading={false}
       onArchive={onArchive}
       onAskAgentToFix={onAskAgentToFix}
@@ -88,11 +93,13 @@ function renderPanel(
         body: "",
         title: "Ship the PR workflow",
       })}
+      onGithubAccountChange={noop}
       onMarkReady={noop}
       onMerge={noop}
       onRefresh={noop}
       onReviewChanges={noop}
       pullRequestResponse={pullRequestResponse}
+      selectedGithubAccountLogin="amirghst"
       threadTitle="Ship the PR workflow"
       workspaceStatus={undefined}
       {...overrides}
@@ -139,6 +146,24 @@ function pullRequest(
 }
 
 describe("PullRequestPanel", () => {
+  it("switches the GitHub account used by the worktree", () => {
+    const onGithubAccountChange = vi.fn();
+    renderPanel({ outcome: "absent" }, { onGithubAccountChange });
+
+    fireEvent.pointerDown(
+      screen.getByRole("button", { name: "Choose GitHub account" }),
+      { button: 0 },
+    );
+    fireEvent.click(screen.getByRole("menuitem", { name: /@budah1987/ }));
+
+    expect(onGithubAccountChange).toHaveBeenCalledWith("budah1987");
+    expect(
+      screen.getByText(
+        "Used for pushes, pull requests, checks, and merges in this worktree.",
+      ),
+    ).toBeTruthy();
+  });
+
   it("creates a PR from the thread title and selected base branch", () => {
     const { onCreate } = renderPanel({ outcome: "absent" });
 

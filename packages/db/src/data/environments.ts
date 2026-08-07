@@ -30,6 +30,7 @@ export interface CreateEnvironmentInput {
   baseBranch?: string | null;
   defaultBranch?: string | null;
   mergeBaseBranch?: string | null;
+  githubAccountLogin?: string | null;
   status?: EnvironmentStatus;
 }
 
@@ -55,6 +56,7 @@ export function createEnvironment(
       baseBranch: input.baseBranch ?? null,
       defaultBranch: input.defaultBranch ?? null,
       mergeBaseBranch: input.mergeBaseBranch ?? null,
+      githubAccountLogin: input.githubAccountLogin ?? null,
       workspaceProvisionType: input.workspaceProvisionType,
       status: input.status ?? "provisioning",
       createdAt: now,
@@ -119,6 +121,7 @@ interface EnvironmentMetadataUpdateColumns {
   isGitRepo?: boolean;
   isWorktree?: boolean;
   mergeBaseBranch?: string | null;
+  githubAccountLogin?: string | null;
   name?: string | null;
   path?: string | null;
 }
@@ -130,6 +133,7 @@ interface EnvironmentMetadataChangeArgs {
 }
 
 export interface UpdateEnvironmentMetadataInput {
+  githubAccountLogin?: string | null;
   mergeBaseBranch?: string | null;
   name?: string | null;
 }
@@ -188,6 +192,9 @@ function buildEnvironmentMetadataUpdateSet(
   if ("branchName" in input) set.branchName = input.branchName;
   if ("defaultBranch" in input) set.defaultBranch = input.defaultBranch;
   if ("mergeBaseBranch" in input) set.mergeBaseBranch = input.mergeBaseBranch;
+  if ("githubAccountLogin" in input) {
+    set.githubAccountLogin = input.githubAccountLogin;
+  }
   if ("name" in input) set.name = input.name;
   return set;
 }
@@ -209,6 +216,8 @@ function environmentMetadataChanged(
       args.updated.defaultBranch !== args.existing.defaultBranch) ||
     ("mergeBaseBranch" in args.metadata &&
       args.updated.mergeBaseBranch !== args.existing.mergeBaseBranch) ||
+    ("githubAccountLogin" in args.metadata &&
+      args.updated.githubAccountLogin !== args.existing.githubAccountLogin) ||
     ("name" in args.metadata && args.updated.name !== args.existing.name)
   );
 }

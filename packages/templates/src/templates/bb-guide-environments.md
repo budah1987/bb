@@ -95,6 +95,8 @@ Making your repo work with bb:
     --sha <sha>                           Required for commit
 
   bb environment update <id>              Update environment metadata
+    --github-account <login>              Use this account for GitHub operations
+    --clear-github-account                Follow the active GitHub CLI account
     --merge-base-branch <branch>          Set merge-base branch override
     --clear-merge-base-branch             Clear merge-base override
     --name <name>                         Set display name
@@ -130,7 +132,8 @@ Every inspection command accepts an arbitrary environment ID and supports
 prints UTF-8 content directly and labels base64 binary content; diff and patch
 truncation markers are preserved.
 Pull-request inspection includes each check run, its result, and its details
-URL when GitHub provides one.
+URL when GitHub provides one. A saved GitHub account is scoped to the
+environment and is used for pushes, PR lookup and creation, checks, and merges.
 
 Remote access (bb connect):
 

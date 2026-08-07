@@ -57,6 +57,8 @@ import {
 } from "./codex-chatgpt-client.js";
 import { discoverRepos } from "./command-handlers/discover-repos.js";
 import {
+  getGithubAccountCatalog,
+  getGithubAccountEnvironment,
   getGithubPullRequestCatalog,
   getGithubRepositoryCatalog,
 } from "./github-repositories.js";
@@ -407,18 +409,31 @@ const commandHandlers: CommandHandlerMap = {
       runtimeManager: options.runtimeManager,
       workspaceContext: command.workspaceContext,
     });
+    const githubEnv = await getGithubAccountEnvironment({
+      env: options.runtimeManager.getShellEnv(),
+      login: command.githubAccountLogin,
+    });
     switch (command.operation) {
       case "ready":
-        await entry.workspace.runPullRequestAction({ operation: "ready" });
+        await entry.workspace.runPullRequestAction(
+          { operation: "ready" },
+          githubEnv === undefined ? {} : { env: githubEnv },
+        );
         break;
       case "draft":
-        await entry.workspace.runPullRequestAction({ operation: "draft" });
+        await entry.workspace.runPullRequestAction(
+          { operation: "draft" },
+          githubEnv === undefined ? {} : { env: githubEnv },
+        );
         break;
       case "merge":
-        await entry.workspace.runPullRequestAction({
-          operation: "merge",
-          method: command.method,
-        });
+        await entry.workspace.runPullRequestAction(
+          {
+            operation: "merge",
+            method: command.method,
+          },
+          githubEnv === undefined ? {} : { env: githubEnv },
+        );
         break;
       default: {
         const _exhaustive: never = command;
@@ -436,13 +451,20 @@ const commandHandlers: CommandHandlerMap = {
       runtimeManager: options.runtimeManager,
       workspaceContext: command.workspaceContext,
     });
-    const pullRequest = await entry.workspace.runPullRequestAction({
-      operation: "create",
-      baseBranch: command.baseBranch,
-      body: command.body,
-      draft: command.draft,
-      title: command.title,
+    const githubEnv = await getGithubAccountEnvironment({
+      env: options.runtimeManager.getShellEnv(),
+      login: command.githubAccountLogin,
     });
+    const pullRequest = await entry.workspace.runPullRequestAction(
+      {
+        operation: "create",
+        baseBranch: command.baseBranch,
+        body: command.body,
+        draft: command.draft,
+        title: command.title,
+      },
+      githubEnv === undefined ? {} : { env: githubEnv },
+    );
     if (!pullRequest) {
       throw new Error("Pull request creation returned no pull request");
     }
@@ -493,6 +515,10 @@ const onlineRpcHandlers: OnlineRpcHandlerMap = {
   "known_acp_agents.status": async (command) =>
     getKnownAcpAgentsStatus({ agents: command.agents }),
   "provider.usage": async () => getProviderUsage(),
+  "github.account_catalog": async (_command, options) =>
+    getGithubAccountCatalog({
+      env: options.runtimeManager.getShellEnv(),
+    }),
   "github.repository_catalog": async (_command, options) =>
     getGithubRepositoryCatalog({
       env: options.runtimeManager.getShellEnv(),
@@ -651,7 +677,13 @@ const onlineRpcHandlers: OnlineRpcHandlerMap = {
         ? { outcome: "absent" }
         : { outcome: "unavailable", message: resolution.failure.message };
     }
-    const lookup = await resolution.entry.workspace.getPullRequest();
+    const githubEnv = await getGithubAccountEnvironment({
+      env: options.runtimeManager.getShellEnv(),
+      login: command.githubAccountLogin,
+    });
+    const lookup = await resolution.entry.workspace.getPullRequest(
+      githubEnv === undefined ? {} : { env: githubEnv },
+    );
     switch (lookup.outcome) {
       case "found":
         return { outcome: "available", pullRequest: lookup.pullRequest };

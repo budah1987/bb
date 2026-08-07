@@ -39,6 +39,7 @@ function makeEnvironment(overrides: EnvironmentOverrides = {}): Environment {
     branchName: null,
     defaultBranch: null,
     mergeBaseBranch: null,
+    githubAccountLogin: null,
     status: "ready",
     createdAt: 1,
     updatedAt: 2,
@@ -587,6 +588,34 @@ describe("@bb/sdk", () => {
     ]);
   });
 
+  it("lists GitHub accounts from an explicit machine", async () => {
+    const catalog = {
+      accounts: [
+        { active: true, host: "github.com", login: "amirghst" },
+        { active: false, host: "github.com", login: "budah1987" },
+      ],
+    };
+    const queue = createFetchQueue([{ body: catalog }]);
+    const sdk = createBbSdk({
+      transport: createHttpTransport({
+        baseUrl: "http://bb.test",
+        fetch: queue.fetch,
+        runtime: "node",
+      }),
+    });
+
+    await expect(
+      sdk.system.githubAccounts({ hostId: "host_remote" }),
+    ).resolves.toEqual(catalog);
+    expect(queue.requests).toEqual([
+      {
+        bodyText: undefined,
+        method: "GET",
+        url: "http://bb.test/api/v1/system/github/accounts?hostId=host_remote",
+      },
+    ]);
+  });
+
   it("routes thread list calls through the HTTP transport", async () => {
     const queue = createFetchQueue([{ body: [] }]);
     const sdk = createBbSdk({
@@ -928,6 +957,7 @@ describe("@bb/sdk", () => {
   it("updates environment metadata through the HTTP transport", async () => {
     const environment = makeEnvironment({
       id: "env_update",
+      githubAccountLogin: "amirghst",
       name: "Review workspace",
       mergeBaseBranch: "release",
     });
@@ -943,6 +973,7 @@ describe("@bb/sdk", () => {
     await expect(
       sdk.environments.update({
         environmentId: "env_update",
+        githubAccountLogin: "amirghst",
         mergeBaseBranch: "release",
         name: "Review workspace",
       }),
@@ -951,6 +982,7 @@ describe("@bb/sdk", () => {
     expect(queue.requests).toEqual([
       {
         bodyText: JSON.stringify({
+          githubAccountLogin: "amirghst",
           mergeBaseBranch: "release",
           name: "Review workspace",
         }),
