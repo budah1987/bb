@@ -1096,8 +1096,9 @@ describe("host-daemon local schemas", () => {
 });
 
 describe("host-daemon command schemas", () => {
-  // Version 80 scopes GitHub PR commands to an authenticated account. Older
-  // daemons would reject the added wire field, so the bump forces an update.
+  // Version 80 includes live workspace metadata refresh and scopes GitHub PR
+  // commands to an authenticated account. Older daemons do not support the
+  // added messages and fields, so the bump forces an update.
   it("uses protocol version 80 for account-scoped GitHub workflows", () => {
     expect(HOST_DAEMON_PROTOCOL_VERSION).toBe(80);
   });
@@ -3196,6 +3197,30 @@ describe("host-daemon session schemas", () => {
       type: "environment-change",
       environmentId: "env_123",
       change: "thread-storage-changed",
+    });
+
+    expect(
+      hostDaemonDaemonWsMessageSchema.parse({
+        type: "environment-metadata-change",
+        environmentId: "env_123",
+        workspace: {
+          path: "/tmp/workspace",
+          isGitRepo: true,
+          isWorktree: false,
+          branchName: "main",
+          defaultBranch: "main",
+        },
+      }),
+    ).toEqual({
+      type: "environment-metadata-change",
+      environmentId: "env_123",
+      workspace: {
+        path: "/tmp/workspace",
+        isGitRepo: true,
+        isWorktree: false,
+        branchName: "main",
+        defaultBranch: "main",
+      },
     });
 
     expect(

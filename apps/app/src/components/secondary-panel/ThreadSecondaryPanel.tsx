@@ -25,6 +25,8 @@ import { cn } from "@bb/shared-ui/lib/utils";
 import {
   PANEL_COLLAPSE_TRANSITION_CLASS,
   PANEL_RESIZE_HIT_AREA_MARGINS,
+  PANEL_RESIZE_HANDLE_LAYER_CLASS,
+  PANEL_RESIZE_HIT_TARGET_CLASS,
 } from "./panelTransitionTokens";
 import { SECONDARY_PANEL_TOP_CHROME_BACKGROUND_CLASS } from "./panelChromeClasses";
 import { resolveConversationCollapseControl } from "./panelToggleControlState";
@@ -149,13 +151,6 @@ interface CollapsedPanelTrafficLightReserveArgs {
   /** The compact drawer layout (never the window's top-left surface). */
   renderAsDrawer: boolean;
   /**
-   * True inside the split-workspace host — the only surface where the panel
-   * itself owns the window's flush top-left corner while the conversation is
-   * collapsed. Inline (non-split) thread detail keeps a full-width header on the
-   * traffic-light row above the panel, so it needs no reserve here.
-   */
-  isInSplitHost: boolean;
-  /**
    * Whether the main app sidebar is showing. `null` when the sidebar context is
    * absent (e.g. tests) — treated as showing, so no reserve is applied. The
    * sidebar hosts the traffic lights in its own top strip while open.
@@ -172,23 +167,31 @@ interface CollapsedPanelTrafficLightReserveArgs {
 /**
  * Left-padding class that clears the macOS traffic-light safe area for the
  * secondary panel's leading top-chrome toolbar, or `false` when no reserve is
- * needed. The reserve applies only when the panel is the window's flush
- * top-left surface (split host, conversation collapsed) while the main sidebar
- * is collapsed and the lights are visible — the collapsed-left / expanded-right
- * case from BB-46. See {@link MACOS_COLLAPSED_TOP_LEFT_RESERVE_CLASS}
+ * needed. The reserve applies when the panel is the window's flush top-left
+ * surface — the conversation is collapsed — while the main sidebar is collapsed
+ * and the lights are visible: the collapsed-left / expanded-right case from
+ * BB-46. It lands the leading controls on the same x = 120px as
+ * AppPageHeader's own reserve. See {@link MACOS_COLLAPSED_TOP_LEFT_RESERVE_CLASS}
  * for the geometry.
+ *
+ * Collapsing hands the panel the top-left on BOTH thread surfaces, so this does
+ * not test for the split host. Either way the conversation column collapses to
+ * zero width — the split host sets its layout to [0, panel], inline thread
+ * detail sizes the timeline panel to 0 — and the thread header rides inside
+ * that column, so nothing is left on the title-bar row but this toolbar. The
+ * split host reserved correctly because it satisfied the host gate; inline
+ * thread detail, identical in layout, did not, which left its tab strip
+ * sitting under the traffic lights.
  */
 export function resolveCollapsedPanelTrafficLightReserveClassName({
   isConversationCollapsed,
   renderAsDrawer,
-  isInSplitHost,
   isSidebarShowing,
   reserveMacosTrafficLights,
 }: CollapsedPanelTrafficLightReserveArgs): string | false {
   const reserves =
     isConversationCollapsed &&
     !renderAsDrawer &&
-    isInSplitHost &&
     isSidebarShowing === false &&
     reserveMacosTrafficLights;
   return reserves && MACOS_COLLAPSED_TOP_LEFT_RESERVE_CLASS;
@@ -519,14 +522,13 @@ export function ThreadSecondaryPanel({
   const desktopWindowState = useDesktopWindowState();
   const isSidebarShowing = useOptionalIsSidebarShowing();
   // The panel reserves the traffic-light safe area only when it is the window's
-  // flush top-left surface (split-workspace host, conversation collapsed) with
-  // the main sidebar collapsed and the lights visible. See
+  // flush top-left surface (conversation collapsed) with the main sidebar
+  // collapsed and the lights visible. See
   // resolveCollapsedPanelTrafficLightReserveClassName.
   const collapsedPanelTrafficLightReserveClassName =
     resolveCollapsedPanelTrafficLightReserveClassName({
       isConversationCollapsed,
       renderAsDrawer,
-      isInSplitHost: hostLayout !== null,
       isSidebarShowing,
       reserveMacosTrafficLights: shouldReserveMacosTrafficLights({
         desktopInfo,
@@ -633,8 +635,9 @@ export function ThreadSecondaryPanel({
           <div
             className={cn(
               "flex min-w-0 flex-1 items-center gap-1",
-              // When this panel owns the window's top-left (split host, sidebar
-              // collapsed, conversation collapsed), reserve the traffic-light
+              // When this panel owns the window's top-left (conversation
+              // collapsed, on either thread surface, with the sidebar
+              // collapsed), reserve the traffic-light
               // safe area so the leading controls clear the lights and the
               // pinned sidebar trigger. The padding must animate on the SAME
               // timing/easing as the panel's collapse slide
@@ -1018,15 +1021,16 @@ function SecondaryPanelResizeHandle({
       onDragging={onDragging}
       hitAreaMargins={PANEL_RESIZE_HIT_AREA_MARGINS}
       className={cn(
-        "group relative shrink-0 overflow-visible transition-[width,opacity,background-color] before:absolute before:inset-y-0 before:-left-1.5 before:-right-1.5 before:content-['']",
+        "group relative shrink-0 overflow-visible transition-[width,opacity,background-color]",
+        PANEL_RESIZE_HANDLE_LAYER_CLASS,
         PANEL_COLLAPSE_TRANSITION_CLASS,
         isConversationCollapsed ? "cursor-default" : "cursor-col-resize",
         matchesSplitDividers
           ? [
               // Match SplitDivider: a one-pixel vertical seam that warms on
-              // hover/drag while the wide pseudo-element keeps it easy to
-              // grab. Collapses away with the panel.
-              "z-[5] bg-border-seam hover:bg-ring/40",
+              // hover/drag while the overlapping child keeps it easy to grab.
+              // Collapses away with the panel.
+              "bg-border-seam hover:bg-ring/40",
               isOpen && !isConversationCollapsed
                 ? "w-px opacity-100"
                 : "pointer-events-none w-0 opacity-0",
@@ -1048,6 +1052,11 @@ function SecondaryPanelResizeHandle({
       )}
       aria-label="Resize thread and right panel"
     >
+      <span
+        aria-hidden
+        data-panel-resize-hit-target=""
+        className={PANEL_RESIZE_HIT_TARGET_CLASS}
+      />
       {matchesSplitDividers ? null : (
         /*
           The panel's persistent left border lives on the content (aside
