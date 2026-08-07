@@ -4,7 +4,6 @@ import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { renderToString } from "react-dom/server";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { CompactViewportOverrideProvider } from "@bb/shared-ui/hooks/use-compact-viewport";
-import { STANDALONE_DISPLAY_MODE_QUERY } from "@/hooks/useStandaloneCompactPwa";
 import {
   Sidebar,
   SidebarInset,
@@ -47,32 +46,18 @@ function fireTouch(
   fireEvent(target, event);
 }
 
-function renderSelectableSwipeHarness() {
+function renderMobileSidebarHarness() {
   render(
     <CompactViewportOverrideProvider isCompactViewport>
       <SidebarProvider>
         <SidebarTrigger />
         <Sidebar>Sidebar content</Sidebar>
         <SidebarInset>
-          <div data-sidebar-swipe-selectable>Selectable message prose</div>
+          <div>Selectable message prose</div>
         </SidebarInset>
       </SidebarProvider>
     </CompactViewportOverrideProvider>,
   );
-}
-
-/** jsdom's polyfilled matchMedia always reports false, i.e. a browser tab. */
-function stubStandaloneDisplayMode() {
-  vi.stubGlobal("matchMedia", (query: string) => ({
-    matches: query === STANDALONE_DISPLAY_MODE_QUERY,
-    media: query,
-    onchange: null,
-    addListener: () => {},
-    removeListener: () => {},
-    addEventListener: () => {},
-    removeEventListener: () => {},
-    dispatchEvent: () => false,
-  }));
 }
 
 function OptionalSidebarProbe() {
@@ -103,78 +88,44 @@ describe("SidebarTrigger", () => {
   });
 });
 
-describe("mobile sidebar text-selection arbitration", () => {
-  it("opens from a right swipe that starts over selectable message prose", () => {
-    renderSelectableSwipeHarness();
+describe("mobile sidebar access", () => {
+  it("does not open from touch, pointer, or wheel gestures", () => {
+    renderMobileSidebarHarness();
     const prose = screen.getByText("Selectable message prose");
 
     fireTouch(prose, "touchstart", createTouch(120, 160));
     fireTouch(window, "touchmove", createTouch(260, 164));
-
-    expect(document.querySelector('[data-sidebar="panel"]')).not.toBeNull();
-  });
-
-  it("opens from a wheel swipe that crosses the browser-tab distance", () => {
-    renderSelectableSwipeHarness();
-
-    fireEvent.wheel(screen.getByText("Selectable message prose"), {
+    fireEvent.pointerDown(prose, {
+      button: 0,
+      clientX: 120,
+      clientY: 160,
+      pointerId: 1,
+      pointerType: "touch",
+    });
+    fireEvent.pointerMove(window, {
+      clientX: 260,
+      clientY: 164,
+      pointerId: 1,
+      pointerType: "touch",
+    });
+    fireEvent.pointerUp(window, {
+      clientX: 260,
+      clientY: 164,
+      pointerId: 1,
+      pointerType: "touch",
+    });
+    fireEvent.wheel(prose, {
       clientX: 200,
       deltaX: 140,
       deltaY: 0,
     });
 
-    expect(document.querySelector('[data-sidebar="panel"]')).not.toBeNull();
-  });
-
-  it("cancels a pending prose swipe when native text selection begins", () => {
-    let hasSelection = false;
-    let selectionNode: Node | null = null;
-    vi.spyOn(document, "getSelection").mockImplementation(() =>
-      hasSelection
-        ? ({
-            anchorNode: selectionNode,
-            focusNode: selectionNode,
-            isCollapsed: false,
-          } as Selection)
-        : null,
-    );
-    renderSelectableSwipeHarness();
-    const prose = screen.getByText("Selectable message prose");
-    selectionNode = prose.firstChild;
-
-    fireTouch(prose, "touchstart", createTouch(120, 160));
-    hasSelection = true;
-    fireEvent(document, new Event("selectionchange"));
-    fireTouch(window, "touchmove", createTouch(260, 164));
-
-    expect(document.querySelector('[data-sidebar="panel"]')).toBeNull();
-  });
-});
-
-describe("standalone compact PWA sidebar", () => {
-  it("keeps every page swipe silent, including the leading edge", () => {
-    stubStandaloneDisplayMode();
-    renderSelectableSwipeHarness();
-    const prose = screen.getByText("Selectable message prose");
-
-    fireTouch(prose, "touchstart", createTouch(120, 160));
-    fireTouch(window, "touchmove", createTouch(260, 164));
-    fireEvent.wheel(prose, { clientX: 200, deltaX: 140, deltaY: 0 });
-
-    expect(document.querySelector('[data-sidebar="panel"]')).toBeNull();
-
-    fireTouch(prose, "touchstart", createTouch(12, 160));
-    fireTouch(window, "touchmove", createTouch(180, 164));
-
     expect(document.querySelector('[data-sidebar="panel"]')).toBeNull();
   });
 
   it("keeps the explicit sidebar button available", () => {
-    stubStandaloneDisplayMode();
-    renderSelectableSwipeHarness();
+    renderMobileSidebarHarness();
 
-    // The explicit affordance is unaffected, and the open drawer keeps Vaul's
-    // own swipe-to-close.
     fireEvent.click(screen.getByRole("button", { name: "Toggle Sidebar" }));
 
     const panel = document.querySelector('[data-sidebar="panel"]');

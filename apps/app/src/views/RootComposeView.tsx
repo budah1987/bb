@@ -71,6 +71,7 @@ import { NewTabPage } from "@/components/secondary-panel/NewTabPage";
 import { EmptyStatePanel } from "@bb/shared-ui/empty-state";
 import { Icon } from "@bb/shared-ui/icon";
 import { PageShell } from "@/components/ui/page-shell.js";
+import { OverflowFade } from "@/components/ui/overflow-fade.js";
 import { Button } from "@bb/shared-ui/button";
 import { useIsCompactViewport } from "@bb/shared-ui/hooks/use-compact-viewport";
 import { usePointerCoarse } from "@bb/shared-ui/hooks/use-pointer-coarse";
@@ -208,7 +209,7 @@ import {
   resolveRootComposeProjectRouting,
   resolveRootComposeProviderRouting,
 } from "./root-compose-environment-selection";
-import { RootComposeMobileRecents } from "./RootComposeMobileRecents";
+import { RootComposeMobileSessions } from "./RootComposeMobileSessions";
 import { RootComposeEmptyWelcome } from "./RootComposeEmptyWelcome";
 import { useThreadStorageViewer } from "@/components/secondary-panel/useThreadStorageViewer";
 import {
@@ -437,7 +438,7 @@ export function requestRootComposePluginFocus(storageKey: string | null): void {
   requestComposerFocus(storageKey);
 }
 
-interface BuildMobileRecentThreadsArgs {
+interface BuildMobileSessionThreadsArgs {
   sidebarNavigation: SidebarBootstrapResponse | undefined;
 }
 
@@ -671,9 +672,9 @@ export function shouldReplaceInitialPromptFromLocationState(
   );
 }
 
-export function buildMobileRecentThreads({
+export function buildMobileSessionThreads({
   sidebarNavigation,
-}: BuildMobileRecentThreadsArgs): ThreadListEntry[] {
+}: BuildMobileSessionThreadsArgs): ThreadListEntry[] {
   if (!sidebarNavigation) return [];
 
   const threads: ThreadListEntry[] = [
@@ -1340,9 +1341,9 @@ export function RootComposeView() {
     seedInitialPrompt,
   ]);
 
-  const mobileRecentThreads = useMemo(
+  const mobileSessionThreads = useMemo(
     () =>
-      buildMobileRecentThreads({
+      buildMobileSessionThreads({
         sidebarNavigation: sidebarNavigationQuery.data,
       }),
     [sidebarNavigationQuery.data],
@@ -1694,7 +1695,7 @@ export function RootComposeView() {
     ...(workflowBranchHostId === null ? {} : { hostId: workflowBranchHostId }),
     enabled: githubWorkflowOpen && selectedGithubRepository.length > 0,
   });
-  const mobileRecentProjectNamesById = useMemo(() => {
+  const mobileSessionProjectNamesById = useMemo(() => {
     const namesById = new Map<string, string>();
     const navigation = sidebarNavigationQuery.data;
     if (!navigation) return namesById;
@@ -3669,6 +3670,7 @@ export function RootComposeView() {
       isSubmitting={createThread.isPending}
       disabled={isSubmitDisabled}
       zenModeStorageKey={rootComposeZenModeStorageKey}
+      mobileQuickComposer
       history={historyConfig}
       typeahead={typeaheadConfig}
       attachments={attachmentsConfig}
@@ -3794,13 +3796,20 @@ export function RootComposeView() {
             />
           ) : (
             <>
-              {promptBox}
-              <RootComposeMobileRecents
+              <RootComposeMobileSessions
                 highlightedThreadId={lastCreatedThreadId}
-                projectNamesById={mobileRecentProjectNamesById}
+                projectNamesById={mobileSessionProjectNamesById}
                 showCreatingRow={createThread.isPending}
-                threads={mobileRecentThreads}
+                threads={mobileSessionThreads}
               />
+              <div className="sticky bottom-0 z-10 -mx-1 mt-4 bg-background/95 px-1 pb-[max(0.25rem,env(safe-area-inset-bottom))] pt-2 backdrop-blur-sm md:static md:mx-0 md:mt-0 md:bg-transparent md:p-0 md:backdrop-blur-none">
+                <OverflowFade
+                  placement="above"
+                  tone="background"
+                  className="md:hidden"
+                />
+                {promptBox}
+              </div>
             </>
           )}
         </RootComposeSecondaryContent>

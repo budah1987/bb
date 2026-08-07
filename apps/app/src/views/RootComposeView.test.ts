@@ -17,7 +17,7 @@ import { getProjectStoredPromptAttachmentPaths } from "@/lib/prompt-draft";
 import { THREAD_HANDOFF_CREATE_SEED_LOCATION_STATE_KEY } from "@/lib/thread-handoff-request";
 import {
   buildRootComposeTerminalSessions,
-  buildMobileRecentThreads,
+  buildMobileSessionThreads,
   canCreateRootComposeTerminal,
   hasPromptBranchSelectionChanged,
   hasPromptOptionValueChanged,
@@ -220,7 +220,7 @@ function makeProjectBranchesResponse(
   };
 }
 
-describe("buildMobileRecentThreads", () => {
+describe("buildMobileSessionThreads", () => {
   it("includes visible projectless and project threads, excluding hidden side chats", () => {
     const sidebarNavigation: SidebarBootstrapResponse = {
       sections: [],
@@ -271,7 +271,7 @@ describe("buildMobileRecentThreads", () => {
       ],
     };
 
-    const threadIds = buildMobileRecentThreads({ sidebarNavigation }).map(
+    const threadIds = buildMobileSessionThreads({ sidebarNavigation }).map(
       (thread) => thread.id,
     );
 

@@ -1,6 +1,7 @@
 import {
   memo,
   useCallback,
+  useEffect,
   useImperativeHandle,
   useMemo,
   useRef,
@@ -39,6 +40,8 @@ import {
 } from "@/components/promptbox/PromptBoxInternal";
 import { usePromptVoice } from "@/components/promptbox/usePromptVoice";
 import { useOptionalPaneContext } from "@/views/thread-detail/PaneContext";
+import { useIsCompactViewport } from "@bb/shared-ui/hooks/use-compact-viewport";
+import { cn } from "@bb/shared-ui/lib/utils";
 import {
   BranchPicker,
   type BranchPickerMenuKind,
@@ -73,6 +76,8 @@ import {
 } from "./effective-prompt-mode";
 
 const NEW_THREAD_PROMPT_BOX_MIN_HEIGHT = 80;
+const OPEN_COMPOSER_OVERLAY_TRIGGER_SELECTOR =
+  '[aria-haspopup][aria-expanded="true"]';
 const DEFAULT_NEW_THREAD_COMPOSER_SCOPE = {
   kind: "new-thread",
   projectId: null,
@@ -187,6 +192,8 @@ export interface NewThreadPromptBoxUIProps {
   zenModeStorageKey: string;
   /** Overrides the default new-thread placeholder copy. */
   placeholder?: string;
+  /** Collapse to a one-line, thumb-zone composer until focused on mobile. */
+  mobileQuickComposer?: boolean;
 
   history: HistoryConfig;
   typeahead: TypeaheadConfig;
@@ -237,6 +244,7 @@ export const NewThreadPromptBoxUI = memo(function NewThreadPromptBoxUI({
   textEffects,
   zenModeStorageKey,
   placeholder: placeholderOverride,
+  mobileQuickComposer = false,
   history,
   typeahead,
   attachments,
@@ -246,6 +254,37 @@ export const NewThreadPromptBoxUI = memo(function NewThreadPromptBoxUI({
   execution,
 }: NewThreadPromptBoxUIProps) {
   const promptBoxRef = useRef<PromptBoxHandle>(null);
+  const composerShellRef = useRef<HTMLDivElement>(null);
+  const isCompactViewport = useIsCompactViewport();
+  const [mobileComposerExpanded, setMobileComposerExpanded] = useState(false);
+  const isMobileQuickComposerCompact =
+    mobileQuickComposer && isCompactViewport && !mobileComposerExpanded;
+  const expandMobileComposer = useCallback(() => {
+    if (!mobileQuickComposer || mobileComposerExpanded) return;
+    promptBoxRef.current?.captureHeightForLayoutChange();
+    setMobileComposerExpanded(true);
+  }, [mobileComposerExpanded, mobileQuickComposer]);
+  useEffect(() => {
+    if (!mobileQuickComposer || !isCompactViewport) return;
+    const handleDocumentInteraction = (event: Event) => {
+      const shell = composerShellRef.current;
+      const target = event.target;
+      if (!shell || !(target instanceof Node) || shell.contains(target)) return;
+      if (shell.querySelector(OPEN_COMPOSER_OVERLAY_TRIGGER_SELECTOR)) return;
+      promptBoxRef.current?.captureHeightForLayoutChange();
+      setMobileComposerExpanded(false);
+    };
+    document.addEventListener("pointerdown", handleDocumentInteraction, true);
+    document.addEventListener("focusin", handleDocumentInteraction, true);
+    return () => {
+      document.removeEventListener(
+        "pointerdown",
+        handleDocumentInteraction,
+        true,
+      );
+      document.removeEventListener("focusin", handleDocumentInteraction, true);
+    };
+  }, [isCompactViewport, mobileQuickComposer]);
   // Scope Cmd+Shift+C to the focused split pane (see FollowUpPromptBox). The
   // new-thread composer is always a pane's primary composer.
   const isFocusedPane = useOptionalPaneContext()?.isFocused ?? true;
@@ -307,10 +346,14 @@ export const NewThreadPromptBoxUI = memo(function NewThreadPromptBoxUI({
   });
   return (
     <div
+      ref={composerShellRef}
       data-app-composer=""
       data-app-composer-role="primary"
       data-promptbox-shell=""
+      data-mobile-quick-composer={mobileQuickComposer ? "" : undefined}
       className="w-full"
+      onFocusCapture={expandMobileComposer}
+      onPointerDownCapture={expandMobileComposer}
     >
       <PluginComposerViewProvider value={composerView}>
         <PluginComposerHostProvider value={pluginComposerHost ?? null}>
@@ -344,6 +387,14 @@ export const NewThreadPromptBoxUI = memo(function NewThreadPromptBoxUI({
               layout: "root-compose",
               storageKey: zenModeStorageKey,
             }}
+            compact={
+              mobileQuickComposer && isCompactViewport
+                ? {
+                    isCompact: isMobileQuickComposerCompact,
+                    placeholder: "Ask anything…",
+                  }
+                : undefined
+            }
             minHeight={NEW_THREAD_PROMPT_BOX_MIN_HEIGHT}
             placeholder={placeholder}
             header={modeConfig.header}
@@ -356,7 +407,12 @@ export const NewThreadPromptBoxUI = memo(function NewThreadPromptBoxUI({
           reproduces the 4px gap main got from a
           `space-y-1` wrapper in RootComposeView (now gone since the
           standalone project row was removed). */}
-      <div className="mt-1 flex items-center justify-between gap-2 px-3.5">
+      <div
+        className={cn(
+          "mt-1 flex items-center justify-between gap-2 px-3.5",
+          isMobileQuickComposerCompact && "hidden",
+        )}
+      >
         <div className="flex min-w-0 flex-1 items-center gap-1">
           {project ? (
             <ProjectSelector

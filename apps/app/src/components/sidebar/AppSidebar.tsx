@@ -7,8 +7,10 @@ import {
 } from "react";
 import { cn } from "@bb/shared-ui/lib/utils";
 import { THREAD_JUMP_APP_COMMAND_IDS } from "@bb/domain";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
+import { useStore } from "jotai";
 import { Icon } from "@bb/shared-ui/icon";
+import { Button } from "@bb/shared-ui/button";
 import { COARSE_POINTER_CHILD_ICON_BUTTON_CLASS } from "@bb/shared-ui/coarse-pointer-sizing";
 import { usePointerCoarse } from "@bb/shared-ui/hooks/use-pointer-coarse";
 import { OverflowFade } from "@/components/ui/overflow-fade.js";
@@ -22,7 +24,11 @@ import {
   useCloseMobileSidebar,
   useSidebar,
 } from "@/components/ui/sidebar.js";
-import { ProjectList, ProjectListActionButtons } from "./ProjectList";
+import {
+  PROJECT_LIST_ACTION_BUTTON_CLASS,
+  ProjectList,
+  ProjectListActionButtons,
+} from "./ProjectList";
 import { PluginThreadList } from "./PluginThreadList";
 import { useThreadListProvider } from "./threadListProvider";
 import { PluginNavSidebarItems } from "@/components/plugin/PluginNavSidebarItems";
@@ -61,6 +67,12 @@ import {
   useIndexedAppCommandHandlers,
 } from "@/components/commands/AppCommandProvider";
 import { useRouteState } from "@/hooks/useRouteState";
+import {
+  createCommandCenterNavigation,
+  type CommandCenterNavigation,
+} from "@/lib/command-center-navigation";
+import { splitLayoutAtom } from "@/lib/split-layout/atoms";
+import type { SplitLayout } from "@/lib/split-layout";
 
 const NEW_THREAD_PANE_CONTENT = { kind: "new-thread" } as const;
 
@@ -91,6 +103,51 @@ export function isThreadSearchKeyboardEventTarget(
   return target.closest('[role="option"]') !== null;
 }
 
+export function createSidebarCommandCenterNavigation({
+  layout,
+  returnPath,
+}: {
+  layout: SplitLayout | null;
+  returnPath: string;
+}): CommandCenterNavigation | undefined {
+  if (layout === null) return undefined;
+  return createCommandCenterNavigation({
+    returnPath,
+    returnPaneId: layout.focusedPaneId,
+  });
+}
+
+export function MobileCommandCenterSidebarAction({
+  isActive,
+  onSelect,
+}: {
+  isActive: boolean;
+  onSelect: () => void;
+}) {
+  return (
+    <div
+      data-testid="app-sidebar-command-center"
+      className="hidden shrink-0 px-2 pb-2 max-md:block pointer-coarse:block"
+    >
+      <Button
+        type="button"
+        size="sm"
+        variant="ghost"
+        className={cn(
+          PROJECT_LIST_ACTION_BUTTON_CLASS,
+          "w-full",
+          isActive && "bg-sidebar-accent text-sidebar-accent-foreground",
+        )}
+        aria-current={isActive ? "page" : undefined}
+        onClick={onSelect}
+      >
+        <Icon name="GridView" aria-hidden="true" />
+        <span className="min-w-0 truncate text-left">Command Center</span>
+      </Button>
+    </div>
+  );
+}
+
 export function AppSidebar({
   onResizeMouseDown,
   isResizing,
@@ -103,8 +160,10 @@ export function AppSidebar({
   // replaces the chrome around it: the New-thread button, the search field,
   // the plugin nav rows, and the footer stay host-rendered in every sidebar.
   const threadListProvider = useThreadListProvider();
-  const { threadId: activeThreadId } = useRouteState();
+  const { threadId: activeThreadId, isRootView } = useRouteState();
+  const location = useLocation();
   const navigate = useNavigate();
+  const store = useStore();
   const threadSplitsEnabled = useThreadSplitsEnabled();
   const newThreadSplit = usePaneContentSplitDrag({
     content: NEW_THREAD_PANE_CONTENT,
@@ -209,6 +268,20 @@ export function AppSidebar({
       state: { focusPrompt: true },
     });
   }, [closeOnMobile, navigate]);
+
+  const handleCommandCenter = useCallback(() => {
+    closeOnMobile();
+    if (isRootView) return;
+
+    const state = createSidebarCommandCenterNavigation({
+      layout: store.get(splitLayoutAtom),
+      returnPath: `${location.pathname}${location.search}${location.hash}`,
+    });
+    void navigate(
+      getRootComposeRoutePath(),
+      state === undefined ? undefined : { state },
+    );
+  }, [closeOnMobile, isRootView, location, navigate, store]);
 
   const showThreadShortcuts = useCallback(() => {
     const targets = getSidebarThreadShortcutTargets(sidebarRef.current);
@@ -421,6 +494,10 @@ export function AppSidebar({
             }}
           />
         </div>
+        <MobileCommandCenterSidebarAction
+          isActive={isRootView}
+          onSelect={handleCommandCenter}
+        />
         <PluginNavSidebarItems
           onNavigate={closeOnMobile}
           splitEnabled={threadSplitsEnabled}
