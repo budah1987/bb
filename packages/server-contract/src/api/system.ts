@@ -105,6 +105,22 @@ export type SystemUsageLimitsQuery = z.infer<
   typeof systemUsageLimitsQuerySchema
 >;
 
+/** Omission reads GitHub credentials from the primary machine. */
+export const systemGithubRepositoriesQuerySchema = z.object({
+  hostId: z.string().min(1).optional(),
+});
+export type SystemGithubRepositoriesQuery = z.infer<
+  typeof systemGithubRepositoriesQuerySchema
+>;
+
+export const systemGithubPullRequestsQuerySchema = z.object({
+  repository: z.string().regex(/^[\w.-]+\/[\w.-]+$/u),
+  hostId: z.string().min(1).optional(),
+});
+export type SystemGithubPullRequestsQuery = z.infer<
+  typeof systemGithubPullRequestsQuerySchema
+>;
+
 export interface SystemVoiceTranscriptionForm {
   [key: string]: string | Blob;
 }

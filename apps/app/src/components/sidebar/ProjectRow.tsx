@@ -20,6 +20,7 @@ import type {
   ProjectResponse,
 } from "@bb/server-contract";
 import { NavLink, useNavigate } from "react-router-dom";
+import { parseGithubRepositoryName } from "@/lib/github-repository";
 import { useCreateThreadInWorktree } from "@/hooks/useCreateThreadInWorktree";
 import {
   usePromptDraftHasInput,
@@ -2281,6 +2282,8 @@ function ProjectRowComponent({
     }
     return getCollapsedChildActivity(projectThreads, draftThreadIds);
   }, [draftThreadIds, isCollapsed, projectThreads, threadListState.status]);
+  const projectLabel =
+    parseGithubRepositoryName(project.gitRemoteUrl) ?? project.name;
   const projectActions = (
     <>
       {headerActions ? (
@@ -2336,7 +2339,7 @@ function ProjectRowComponent({
             type="button"
             variant="ghost"
             size="icon"
-            aria-label={`New thread in ${project.name}`}
+            aria-label={`New thread in ${projectLabel}`}
             disabled={!onCreateProjectThread}
             onClick={(event) => {
               event.stopPropagation();
@@ -2364,7 +2367,7 @@ function ProjectRowComponent({
     >
       <div data-sidebar-sticky-project-item="">
         <TopLevelSidebarSection
-          label={project.name}
+          label={projectLabel}
           actions={projectActions}
           actionsAlwaysVisible
           actionsMobileAlways

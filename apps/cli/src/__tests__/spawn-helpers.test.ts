@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   buildSpawnEnvironment,
+  parsePullRequestNumber,
   looksLikePath,
   requireHostId,
 } from "../commands/thread/spawn.js";
@@ -201,7 +202,66 @@ describe("buildSpawnEnvironment", () => {
         baseBranch: "main",
         hostId: HOST_ID,
       }),
-    ).toThrow("--base-branch requires --new-environment worktree");
+    ).toThrow(
+      "--base-branch requires --new-environment worktree or --branch-name",
+    );
+  });
+
+  it("returns an explicit named branch for managed worktrees", () => {
+    const result = buildSpawnEnvironment({
+      defaultPersonalWorkspace: false,
+      newEnvironmentKind: "worktree",
+      hostId: HOST_ID,
+      baseBranch: "main",
+      branchName: "feature/navigation",
+    });
+    expect(result).toMatchObject({
+      workspace: {
+        type: "managed-worktree",
+        baseBranch: { kind: "named", name: "main" },
+        branchName: "feature/navigation",
+      },
+    });
+  });
+
+  it("returns pull-request checkout for unmanaged workspaces", () => {
+    const result = buildSpawnEnvironment({
+      defaultPersonalWorkspace: false,
+      environmentValue: "/absolute/workspace",
+      hostId: HOST_ID,
+      branchName: "pr-17-navigation",
+      pullRequestNumber: 17,
+    });
+    expect(result).toMatchObject({
+      workspace: {
+        type: "unmanaged",
+        path: "/absolute/workspace",
+        branch: {
+          kind: "pull-request",
+          number: 17,
+          name: "pr-17-navigation",
+        },
+      },
+    });
+  });
+
+  it("returns named branch checkout for unmanaged workspaces", () => {
+    const result = buildSpawnEnvironment({
+      defaultPersonalWorkspace: false,
+      hostId: HOST_ID,
+      baseBranch: "main",
+      branchName: "fix/navigation",
+    });
+    expect(result).toMatchObject({
+      workspace: {
+        type: "unmanaged",
+        branch: {
+          kind: "new",
+          baseBranch: "main",
+          name: "fix/navigation",
+        },
+      },
+    });
   });
 
   it("returns unmanaged host with path for path-like --environment", () => {
@@ -256,6 +316,15 @@ describe("buildSpawnEnvironment", () => {
         baseBranch: { kind: "default" },
       },
     });
+  });
+});
+
+describe("parsePullRequestNumber", () => {
+  it("accepts positive integers and rejects invalid input", () => {
+    expect(parsePullRequestNumber("42")).toBe(42);
+    expect(parsePullRequestNumber(undefined)).toBeUndefined();
+    expect(() => parsePullRequestNumber("0")).toThrow("positive integer");
+    expect(() => parsePullRequestNumber("1.5")).toThrow("positive integer");
   });
 });
 

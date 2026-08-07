@@ -455,6 +455,69 @@ describe("ConductorSidebar", () => {
     ).toBeNull();
   });
 
+  it("uses persisted workspace order within each repository", async () => {
+    window.localStorage.setItem(
+      "bb.conductor.workspace-order.v1",
+      JSON.stringify({
+        "project-1": ["project-1:environment-2", "project-1:environment-1"],
+      }),
+    );
+    renderSlot(
+      sidebar,
+      {
+        activeThreadId: null,
+        activeProjectId: null,
+        isCompactViewport: false,
+        onNavigate: () => undefined,
+        searchQuery: "",
+      },
+      {
+        sidebarThreads: {
+          status: "ready",
+          projects: [{ id: "project-1", name: "Alpha", isPersonal: false }],
+          threads: [
+            thread("Alpha workspace", {
+              environment: {
+                id: "environment-1",
+                name: "Alpha workspace",
+                branchName: "feature/alpha",
+                workspaceDisplayKind: "managed-worktree",
+              },
+            }),
+            thread("Beta workspace", {
+              environment: {
+                id: "environment-2",
+                name: "Beta workspace",
+                branchName: "feature/beta",
+                workspaceDisplayKind: "managed-worktree",
+              },
+            }),
+          ],
+        },
+        rpc: {
+          readReconciliation: () => ({
+            legacyWorkspaces: [],
+            recordedSignature: null,
+          }),
+          recordReconciliation: () => ({ recorded: false }),
+        },
+      },
+    );
+
+    const repository = await screen.findByRole("region", { name: "Alpha" });
+    const beta = within(repository).getByRole("button", {
+      name: /Beta workspace/u,
+    });
+    const alpha = within(repository).getByRole("button", {
+      name: /Alpha workspace/u,
+    });
+    expect(
+      beta.compareDocumentPosition(alpha) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).not.toBe(0);
+    const betaHandle = within(repository).getByTitle("Reorder Beta workspace");
+    expect(betaHandle.getAttribute("aria-roledescription")).toBe("sortable");
+  });
+
   it("jumps to visible workspaces with Command+1-9, skipping collapsed sections", async () => {
     let navigated = 0;
     const rendered = renderSlot(

@@ -10,6 +10,8 @@ import {
 } from "react";
 import type { Host, ProjectSource, PromptTextMention } from "@bb/domain";
 import type { ComposerView } from "@bb/plugin-sdk";
+import { Button } from "@bb/shared-ui/button";
+import { Icon } from "@bb/shared-ui/icon";
 import type { ComposerTextEffectSource } from "@/lib/composer-text-effects";
 import { PluginComposerBanners } from "@/components/plugin/PluginComposerBanners";
 import {
@@ -146,6 +148,7 @@ export interface NewThreadProjectConfig {
   allowNoProject?: boolean;
   createProject?: ProjectSelectorCreateProjectConfig;
   disabled?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }
 
 export interface NewThreadModeConfig {
@@ -153,6 +156,11 @@ export interface NewThreadModeConfig {
   branch: NewThreadBranchConfig;
   worktree: NewThreadWorktreeConfig;
   permission: ExecutionPermissionConfig;
+  githubWorkflow?: {
+    label: string;
+    onOpen: () => void;
+    disabled?: boolean;
+  };
   /** Slot rendered above the prompt box card, matching the follow-up banner stack. */
   banner?: ReactNode;
   /** Slot rendered inside the prompt box card, above the text area.
@@ -358,6 +366,7 @@ export const NewThreadPromptBoxUI = memo(function NewThreadPromptBoxUI({
               allowNoProject={project.allowNoProject ?? false}
               createProject={project.createProject}
               disabled={project.disabled}
+              onOpenChange={project.onOpenChange}
               className="shrink-0"
             />
           ) : null}
@@ -366,6 +375,7 @@ export const NewThreadPromptBoxUI = memo(function NewThreadPromptBoxUI({
               environment={modeConfig.environment}
               branch={modeConfig.branch}
               worktree={modeConfig.worktree}
+              githubWorkflow={modeConfig.githubWorkflow}
             />
           ) : (
             <ProjectlessMachineSlot environment={modeConfig.environment} />
@@ -391,12 +401,14 @@ interface ThreadEnvSlotProps {
   environment: NewThreadEnvironmentConfig;
   branch: NewThreadBranchConfig;
   worktree: NewThreadWorktreeConfig;
+  githubWorkflow?: NewThreadModeConfig["githubWorkflow"];
 }
 
 export function ThreadEnvSlot({
   environment,
   branch,
   worktree,
+  githubWorkflow,
 }: ThreadEnvSlotProps) {
   const parsedEnvironment = useMemo(
     () => parseEnvironmentValue(environment.value),
@@ -460,6 +472,19 @@ export function ThreadEnvSlot({
           onChange={worktree.onChange}
           disabled={worktree.disabled}
         />
+      ) : null}
+      {githubWorkflow ? (
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          disabled={githubWorkflow.disabled}
+          onClick={githubWorkflow.onOpen}
+          className="h-7 shrink-0 gap-1.5 px-2 text-xs text-muted-foreground"
+        >
+          <Icon name="FolderGit" className="size-3.5" aria-hidden />
+          <span className="max-w-44 truncate">{githubWorkflow.label}</span>
+        </Button>
       ) : null}
     </>
   );
@@ -555,6 +580,7 @@ export interface NewThreadConnectedModeConfig {
   branch: NewThreadConnectedBranchConfig;
   worktree: NewThreadWorktreeConfig;
   permission: ExecutionPermissionConfig;
+  githubWorkflow?: NewThreadModeConfig["githubWorkflow"];
   banner?: ReactNode;
   header?: ReactNode;
 }
@@ -665,6 +691,7 @@ function ConnectedThreadModeBranch({
         branch: uiBranch,
         worktree: threadConfig.worktree,
         permission: threadConfig.permission,
+        githubWorkflow: threadConfig.githubWorkflow,
         banner: threadConfig.banner,
         header: threadConfig.header,
       }}

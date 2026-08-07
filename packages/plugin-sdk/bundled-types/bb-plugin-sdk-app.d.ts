@@ -186,6 +186,11 @@ declare const createThreadEnvironmentArgsSchema: z.ZodDiscriminatedUnion<[z.ZodO
         }, z.core.$strict>, z.ZodObject<{
             kind: z.ZodLiteral<"new">;
             baseBranch: z.ZodString;
+            name: z.ZodOptional<z.ZodString>;
+        }, z.core.$strict>, z.ZodObject<{
+            kind: z.ZodLiteral<"pull-request">;
+            number: z.ZodNumber;
+            name: z.ZodString;
         }, z.core.$strict>], "kind">>;
     }, z.core.$strip>, z.ZodObject<{
         type: z.ZodLiteral<"managed-worktree">;
@@ -195,6 +200,8 @@ declare const createThreadEnvironmentArgsSchema: z.ZodDiscriminatedUnion<[z.ZodO
         }, z.core.$strip>, z.ZodObject<{
             kind: z.ZodLiteral<"default">;
         }, z.core.$strip>], "kind">;
+        branchName: z.ZodOptional<z.ZodString>;
+        pullRequestNumber: z.ZodOptional<z.ZodNumber>;
     }, z.core.$strip>, z.ZodObject<{
         type: z.ZodLiteral<"personal">;
     }, z.core.$strip>], "type">;
@@ -650,6 +657,11 @@ interface PluginSidebarProject {
     name: string;
     /** True for the implicit personal project. */
     isPersonal: boolean;
+    /**
+     * Canonical git remote configured for this project, or null when the project
+     * is not backed by a remote repository.
+     */
+    experimental_gitRemoteUrl?: string | null;
 }
 interface PluginSidebarThreadsState {
     status: "loading" | "ready" | "error";
@@ -687,6 +699,8 @@ interface PluginSidebarThreadActions {
             environmentId: string;
             locked: boolean;
         };
+        /** Open bb's GitHub branch / pull-request workflow chooser. */
+        experimental_startGithubWorkflow?: boolean;
     }): void;
     setPinned(threadId: string, pinned: boolean): Promise<void>;
     setRead(threadId: string, read: boolean): Promise<void>;

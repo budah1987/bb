@@ -36,6 +36,8 @@ interface ThreadSpawnCommandOptions {
   environment?: string;
   newEnvironment?: string;
   baseBranch?: string;
+  branchName?: string;
+  pullRequest?: string;
   parentThread?: string;
   provider?: string;
   model?: string;
@@ -64,6 +66,17 @@ export function requireHostId(hostId: string | null): string {
     throw new Error("Cannot reach local host daemon. Is it running?");
   }
   return hostId;
+}
+
+export function parsePullRequestNumber(
+  value: string | undefined,
+): number | undefined {
+  if (value === undefined) return undefined;
+  const number = Number(value);
+  if (!Number.isInteger(number) || number <= 0) {
+    throw new Error("--pull-request must be a positive integer.");
+  }
+  return number;
 }
 
 function resolveSpawnEnvironmentValue(flagValue?: string): string | undefined {
@@ -103,10 +116,14 @@ export function buildSpawnEnvironment(args: {
   newEnvironmentKind?: string;
   hostId: string | null;
   baseBranch?: string;
+  branchName?: string;
+  pullRequestNumber?: number;
 }): EnvironmentArgs {
   const environmentValue = args.environmentValue?.trim();
   const newEnvironmentKind = args.newEnvironmentKind?.trim();
   const trimmedBaseBranch = args.baseBranch?.trim();
+  const branchName = args.branchName?.trim();
+  const pullRequestNumber = args.pullRequestNumber;
   const baseBranch: BaseBranchSpec = trimmedBaseBranch
     ? { kind: "named", name: trimmedBaseBranch }
     : { kind: "default" };
@@ -114,15 +131,52 @@ export function buildSpawnEnvironment(args: {
   if (environmentValue && newEnvironmentKind) {
     throw new Error("Cannot combine --environment with --new-environment.");
   }
-  if (trimmedBaseBranch && newEnvironmentKind !== "worktree") {
-    throw new Error("--base-branch requires --new-environment worktree.");
+  if (
+    environmentValue &&
+    !looksLikePath(environmentValue) &&
+    (branchName || pullRequestNumber !== undefined || trimmedBaseBranch)
+  ) {
+    throw new Error(
+      "Branch and pull-request flags cannot be combined with an existing environment ID.",
+    );
+  }
+  if (pullRequestNumber !== undefined && trimmedBaseBranch) {
+    throw new Error("--pull-request cannot be combined with --base-branch.");
+  }
+  if (
+    branchName &&
+    newEnvironmentKind !== "worktree" &&
+    pullRequestNumber === undefined &&
+    !trimmedBaseBranch
+  ) {
+    throw new Error(
+      "--branch-name requires --base-branch unless --pull-request or --new-environment worktree is used.",
+    );
+  }
+  if (
+    args.defaultPersonalWorkspace &&
+    (branchName || pullRequestNumber !== undefined || trimmedBaseBranch)
+  ) {
+    throw new Error(
+      "Branch and pull-request flags require a repository-backed project.",
+    );
+  }
+  if (trimmedBaseBranch && newEnvironmentKind !== "worktree" && !branchName) {
+    throw new Error(
+      "--base-branch requires --new-environment worktree or --branch-name.",
+    );
   }
   if (newEnvironmentKind) {
     if (newEnvironmentKind === "worktree") {
       return {
         type: "host",
         hostId: requireHostId(args.hostId),
-        workspace: { type: "managed-worktree", baseBranch },
+        workspace: {
+          type: "managed-worktree",
+          baseBranch,
+          ...(branchName ? { branchName } : {}),
+          ...(pullRequestNumber === undefined ? {} : { pullRequestNumber }),
+        },
       };
     }
     throw new Error(
@@ -137,17 +191,53 @@ export function buildSpawnEnvironment(args: {
         workspace: { type: "personal" },
       };
     }
+    const unmanagedBranch =
+      pullRequestNumber !== undefined
+        ? {
+            kind: "pull-request" as const,
+            number: pullRequestNumber,
+            name: branchName || `pr-${pullRequestNumber}`,
+          }
+        : branchName && trimmedBaseBranch
+          ? {
+              kind: "new" as const,
+              name: branchName,
+              baseBranch: trimmedBaseBranch,
+            }
+          : undefined;
     return {
       type: "host",
       hostId: requireHostId(args.hostId),
-      workspace: { type: "unmanaged", path: null },
+      workspace: {
+        type: "unmanaged",
+        path: null,
+        ...(unmanagedBranch ? { branch: unmanagedBranch } : {}),
+      },
     };
   }
   if (looksLikePath(environmentValue)) {
+    const unmanagedBranch =
+      pullRequestNumber !== undefined
+        ? {
+            kind: "pull-request" as const,
+            number: pullRequestNumber,
+            name: branchName || `pr-${pullRequestNumber}`,
+          }
+        : branchName && trimmedBaseBranch
+          ? {
+              kind: "new" as const,
+              name: branchName,
+              baseBranch: trimmedBaseBranch,
+            }
+          : undefined;
     return {
       type: "host",
       hostId: requireHostId(args.hostId),
-      workspace: { type: "unmanaged", path: environmentValue },
+      workspace: {
+        type: "unmanaged",
+        path: environmentValue,
+        ...(unmanagedBranch ? { branch: unmanagedBranch } : {}),
+      },
     };
   }
   return {
@@ -178,7 +268,15 @@ export function registerSpawnCommand(
     )
     .option(
       "--base-branch <branch>",
-      "Base branch for new managed worktrees. Omit to let bb choose the project's default worktree base.",
+      "Base branch for a new worktree or a named branch in the current checkout.",
+    )
+    .option(
+      "--branch-name <branch>",
+      "Explicit branch name for a new worktree, current checkout, or pull request.",
+    )
+    .option(
+      "--pull-request <number>",
+      "Fetch this GitHub pull request head before the thread starts.",
     )
     .option(
       "--machine <id-or-name>",
@@ -264,6 +362,8 @@ export function registerSpawnCommand(
           newEnvironmentKind: opts.newEnvironment,
           hostId,
           baseBranch: opts.baseBranch,
+          branchName: opts.branchName,
+          pullRequestNumber: parsePullRequestNumber(opts.pullRequest),
         });
         const reasoningLevel = parseReasoningLevel(opts.reasoningLevel);
         const serviceTier = parseServiceTier(opts.serviceTier);

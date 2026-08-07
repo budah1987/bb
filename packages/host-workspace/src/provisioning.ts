@@ -52,6 +52,8 @@ export interface CreateWorkspaceArgs {
    * the daemon).
    */
   baseBranch: string | null;
+  /** GitHub pull request head to use as the worktree start point. */
+  pullRequestNumber?: number;
   /** Setup script timeout in ms. Controlled by the server. */
   timeoutMs: number;
   /** Resolved user-shell PATH for the setup script. */
@@ -333,6 +335,53 @@ async function fetchRemoteBaseBranch(args: {
   }
 }
 
+async function fetchPullRequestBase(args: {
+  sourcePath: string;
+  number: number;
+  onProgress: ProgressCallback | undefined;
+  signal: AbortSignal | undefined;
+}): Promise<string> {
+  const startedAt = Date.now();
+  const localRef = `refs/bb/pull/${args.number}/head`;
+  emitStep({
+    onProgress: args.onProgress,
+    key: "git-fetch-pull-request-started",
+    text: `Fetching pull request #${args.number}`,
+    status: "started",
+    startedAt,
+  });
+  try {
+    await runGit(
+      [
+        "fetch",
+        "--quiet",
+        "origin",
+        `+refs/pull/${args.number}/head:${localRef}`,
+      ],
+      { cwd: args.sourcePath, signal: args.signal },
+    );
+    emitStep({
+      onProgress: args.onProgress,
+      key: "git-fetch-pull-request-completed",
+      text: `Fetched pull request #${args.number}`,
+      status: "completed",
+      startedAt,
+      metadata: { durationMs: Date.now() - startedAt },
+    });
+    return localRef;
+  } catch (error) {
+    emitStep({
+      onProgress: args.onProgress,
+      key: "git-fetch-pull-request-failed",
+      text: `Failed to fetch pull request #${args.number}`,
+      status: "failed",
+      startedAt,
+      metadata: { durationMs: Date.now() - startedAt },
+    });
+    throw error;
+  }
+}
+
 export async function createWorktree(
   args: CreateWorkspaceArgs,
 ): Promise<{ path: string }> {
@@ -346,7 +395,14 @@ export async function createWorktree(
 
   throwIfProvisionAborted(args.signal);
   const baseBranch =
-    args.baseBranch ?? (await readDefaultBranch(args.sourcePath));
+    args.pullRequestNumber === undefined
+      ? (args.baseBranch ?? (await readDefaultBranch(args.sourcePath)))
+      : await fetchPullRequestBase({
+          sourcePath: args.sourcePath,
+          number: args.pullRequestNumber,
+          onProgress: args.onProgress,
+          signal: args.signal,
+        });
   if (!baseBranch) {
     throw new WorkspaceError(
       "missing_default_branch",
@@ -354,12 +410,14 @@ export async function createWorktree(
     );
   }
   throwIfProvisionAborted(args.signal);
-  await fetchRemoteBaseBranch({
-    sourcePath: args.sourcePath,
-    baseBranch,
-    onProgress: args.onProgress,
-    signal: args.signal,
-  });
+  if (args.pullRequestNumber === undefined) {
+    await fetchRemoteBaseBranch({
+      sourcePath: args.sourcePath,
+      baseBranch,
+      onProgress: args.onProgress,
+      signal: args.signal,
+    });
+  }
 
   const gitArgs = [
     "worktree",

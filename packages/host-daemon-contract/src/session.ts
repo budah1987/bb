@@ -421,6 +421,8 @@ const hostDaemonOnlineRpcResponseSuccessSchema = z.discriminatedUnion(
     onlineRpcResponseSuccessSchemaFor("provider.list_models"),
     onlineRpcResponseSuccessSchemaFor("known_acp_agents.status"),
     onlineRpcResponseSuccessSchemaFor("provider.usage"),
+    onlineRpcResponseSuccessSchemaFor("github.repository_catalog"),
+    onlineRpcResponseSuccessSchemaFor("github.pull_request_catalog"),
     onlineRpcResponseSuccessSchemaFor("provider_cli.status"),
     onlineRpcResponseSuccessSchemaFor("provider_cli.install"),
     onlineRpcResponseSuccessSchemaFor("workspace.discover_repos"),

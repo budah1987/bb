@@ -19,6 +19,11 @@ import {
 export interface ProjectSelectorOption {
   id: string;
   name: string;
+  githubRepository?: {
+    nameWithOwner: string;
+    accessibleBy: readonly string[];
+    activeAccount: string | null;
+  };
 }
 
 export interface ProjectSelectorCreateProjectConfig {
@@ -52,6 +57,7 @@ export interface ProjectSelectorProps {
   defaultOpen?: boolean;
   /** Whether the menu blocks page interaction. Defaults to Radix's true. */
   modal?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }
 
 export function ProjectSelector({
@@ -64,13 +70,18 @@ export function ProjectSelector({
   className,
   defaultOpen,
   modal,
+  onOpenChange,
 }: ProjectSelectorProps) {
   const selected = value !== null ? projects.find((p) => p.id === value) : null;
   // When allowNoProject is false and the caller's value doesn't match any
   // project (shouldn't happen in normal use), the trigger falls back to the
   // first project so it's never blank.
   const fallback = !allowNoProject && !selected ? projects[0] : null;
-  const triggerLabel = selected?.name ?? fallback?.name ?? "Work in a project";
+  const selectedOption = selected ?? fallback;
+  const triggerLabel =
+    selectedOption?.githubRepository?.nameWithOwner ??
+    selectedOption?.name ??
+    "Work in a project";
   const compactTriggerLabel = selected?.name ?? fallback?.name ?? "No project";
   const triggerIcon = selected || fallback ? "Folder" : "FolderPlus";
   const createProjectAction = createProject;
@@ -81,7 +92,11 @@ export function ProjectSelector({
     projects.length > 0 && (Boolean(createProjectAction) || allowNoProject);
 
   return (
-    <DropdownMenu defaultOpen={defaultOpen} modal={modal}>
+    <DropdownMenu
+      defaultOpen={defaultOpen}
+      modal={modal}
+      onOpenChange={onOpenChange}
+    >
       <DropdownMenuTrigger asChild disabled={disabled}>
         <Button
           type="button"
@@ -120,32 +135,54 @@ export function ProjectSelector({
           )}
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" side="bottom" className="w-52">
-        <DropdownMenuLabel>Project</DropdownMenuLabel>
+      <DropdownMenuContent align="start" side="bottom" className="w-72">
+        <DropdownMenuLabel>Repository</DropdownMenuLabel>
         {projects.map((project) => (
           <DropdownMenuItem
             key={project.id}
             onSelect={() => onChange(project.id)}
+            className="items-start py-2"
           >
             <Icon
               name="Folder"
-              className="size-4 text-muted-foreground"
+              className="mt-0.5 size-4 shrink-0 text-muted-foreground"
               aria-hidden
             />
-            {project.name}
+            <span className="min-w-0 flex-1">
+              <span className="block truncate">
+                <bdi>
+                  {project.githubRepository?.nameWithOwner ?? project.name}
+                </bdi>
+              </span>
+              {project.githubRepository &&
+              project.githubRepository.accessibleBy.length > 0 ? (
+                <span className="mt-0.5 flex min-w-0 flex-wrap items-center gap-1 text-xs text-muted-foreground">
+                  <span>Access</span>
+                  {project.githubRepository.accessibleBy.map((login) => (
+                    <span
+                      key={login}
+                      className="inline-flex max-w-full items-center gap-1 rounded-full bg-muted px-1.5 py-0.5 leading-none"
+                    >
+                      <bdi className="truncate">@{login}</bdi>
+                      {login === project.githubRepository?.activeAccount ? (
+                        <span className="text-foreground">active</span>
+                      ) : null}
+                    </span>
+                  ))}
+                </span>
+              ) : null}
+            </span>
             <Icon
               name="Check"
               className={cn(
-                "ml-auto size-4",
+                "ml-auto mt-0.5 size-4 shrink-0",
                 project.id === value ? "opacity-100" : "opacity-0",
               )}
               aria-hidden
             />
           </DropdownMenuItem>
         ))}
-        {showActionSeparator ? (
-          <DropdownMenuSeparator />
-        ) : null}
+        {showActionSeparator ? <DropdownMenuSeparator /> : null}
         {createProjectAction ? (
           <DropdownMenuItem
             disabled={createProjectAction.disabled}

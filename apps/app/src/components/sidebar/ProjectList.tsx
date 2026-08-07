@@ -1578,13 +1578,18 @@ function ProjectListComponent({
     [reorderPinnedThreadMutate],
   );
   const openRootComposeForProject = useCallback(
-    (projectId: string, sectionId?: string) => {
+    (
+      projectId: string,
+      sectionId?: string,
+      startGithubWorkflow: boolean = false,
+    ) => {
       setRootComposeProjectId(projectId);
       onProjectSelect?.();
       navigate(getRootComposeRoutePath(), {
         state: {
           focusPrompt: true,
           ...(sectionId ? { sectionId } : {}),
+          ...(startGithubWorkflow ? { startGithubWorkflow: true } : {}),
         },
       });
     },
@@ -1592,7 +1597,7 @@ function ProjectListComponent({
   );
   const handleCreateProjectThread = useCallback(
     (projectId: string) => {
-      openRootComposeForProject(projectId);
+      openRootComposeForProject(projectId, undefined, true);
     },
     [openRootComposeForProject],
   );

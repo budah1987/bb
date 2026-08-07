@@ -1,0 +1,39 @@
+:root {
+  --motion-fast: 120ms;
+  --motion-base: 180ms;
+  --motion-slow: 280ms;
+
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --ease-enter: cubic-bezier(0, 0, 0.2, 1);
+  --ease-exit: cubic-bezier(0.4, 0, 1, 1);
+}
+
+.t-page-slide {
+  position: relative;
+  overflow: hidden;
+}
+
+.t-page-slide > .page {
+  position: absolute;
+  inset: 0;
+  transition:
+    transform var(--motion-slow) var(--ease-standard),
+    opacity var(--motion-base) var(--ease-standard);
+}
+
+.t-page-slide > .page[data-state="active"] {
+  transform: translateX(0);
+  opacity: 1;
+}
+
+.t-page-slide > .page[data-state="inactive"] {
+  transform: translateX(100%);
+  opacity: 0;
+  pointer-events: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .t-page-slide > .page {
+    transition: none;
+  }
+}

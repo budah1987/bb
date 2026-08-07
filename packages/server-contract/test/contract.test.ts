@@ -60,6 +60,15 @@ const OPTIONAL_SERVER_FIELD_GROUPS: readonly OptionalServerFieldGroup[] = [
   },
   {
     reason:
+      "GitHub workflow fields are present only for a user-named branch or pull-request start; omission preserves server-generated branch naming and ordinary base-branch worktrees.",
+    fields: [
+      "createThreadRequestSchema.environment.workspace.branch.name",
+      "createThreadRequestSchema.environment.workspace.branchName",
+      "createThreadRequestSchema.environment.workspace.pullRequestNumber",
+    ],
+  },
+  {
+    reason:
       "Personal workspace requests may omit hostId so the server can use the default connected local host.",
     fields: ["createThreadRequestSchema.environment.hostId"],
   },

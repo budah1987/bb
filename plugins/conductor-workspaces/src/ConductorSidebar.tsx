@@ -58,10 +58,14 @@ import {
 import {
   loadCollapsedSections,
   loadProjectOrder,
+  loadWorkspaceOrders,
   moveProjectId,
   orderProjectIds,
+  orderWorkspaceKeys,
+  moveWorkspaceKey,
   saveCollapsedSections,
   saveProjectOrder,
+  saveWorkspaceOrders,
 } from "./sidebar-preferences";
 import {
   conversationSignal,
@@ -88,6 +92,32 @@ interface RenameTarget {
 interface ArchiveTarget {
   environmentId: string;
   workspaceTitle: string;
+}
+
+const WORKSPACE_DND_PREFIX = "workspace:";
+
+function workspaceDndId(workspaceKey: string): string {
+  return `${WORKSPACE_DND_PREFIX}${workspaceKey}`;
+}
+
+function workspaceKeyFromDndId(value: string): string | null {
+  return value.startsWith(WORKSPACE_DND_PREFIX)
+    ? value.slice(WORKSPACE_DND_PREFIX.length)
+    : null;
+}
+
+function workspaceOrdersEqual(
+  left: Readonly<Record<string, readonly string[]>>,
+  right: Readonly<Record<string, readonly string[]>>,
+): boolean {
+  const leftKeys = Object.keys(left);
+  const rightKeys = Object.keys(right);
+  if (leftKeys.length !== rightKeys.length) return false;
+  return leftKeys.every(
+    (key) =>
+      right[key] !== undefined &&
+      left[key]?.join("\u0000") === right[key]?.join("\u0000"),
+  );
 }
 
 const renameCopy: Record<
@@ -350,6 +380,7 @@ function WorkspaceRow({
   workspace,
   activeThreadId,
   archivePending,
+  dragDisabled,
   shortcutEnabled,
   jumpShortcut,
   showJumpShortcut,
@@ -360,6 +391,7 @@ function WorkspaceRow({
   workspace: ConductorWorkspace;
   activeThreadId: string | null;
   archivePending: boolean;
+  dragDisabled: boolean;
   shortcutEnabled: boolean;
   jumpShortcut: { ariaKeyshortcuts: string; label: string } | null;
   showJumpShortcut: boolean;
@@ -381,6 +413,25 @@ function WorkspaceRow({
     displayKind === "managed-worktree" || displayKind === "unmanaged-worktree";
   const isShortcutTarget =
     shortcutEnabled && isWorktree && Boolean(workspace.environmentId && target);
+  const {
+    attributes,
+    isDragging,
+    listeners,
+    setActivatorNodeRef,
+    setNodeRef,
+    transform,
+    transition,
+  } = useSortable({
+    id: workspaceDndId(workspace.key),
+    disabled: dragDisabled,
+  });
+  const style: CSSProperties = {
+    transform: CSS.Translate.toString(transform),
+    transition,
+    position: isDragging ? "relative" : undefined,
+    zIndex: isDragging ? 100 : undefined,
+    opacity: isDragging ? 0.82 : undefined,
+  };
 
   const row = (
     <button
@@ -424,10 +475,32 @@ function WorkspaceRow({
     </button>
   );
 
-  if (!isWorktree || !workspace.environmentId) return row;
+  const sortableRow = (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className="conductor-workspace-sortable-row group/workspace flex min-w-0 items-center"
+    >
+      {row}
+      <button
+        ref={setActivatorNodeRef}
+        type="button"
+        className="conductor-drag-handle"
+        aria-label="Reorder workspace"
+        title={`Reorder ${workspace.title}`}
+        disabled={dragDisabled}
+        {...attributes}
+        {...listeners}
+      >
+        <Icon name="DragDropVertical" className="size-3.5" aria-hidden />
+      </button>
+    </div>
+  );
+
+  if (!isWorktree || !workspace.environmentId) return sortableRow;
   return (
     <ContextMenu>
-      <ContextMenuTrigger asChild>{row}</ContextMenuTrigger>
+      <ContextMenuTrigger asChild>{sortableRow}</ContextMenuTrigger>
       <ContextMenuContent aria-label={`${workspace.title} actions`}>
         <ContextMenuItem onSelect={() => onRequestRename(workspace, "display")}>
           <Icon name="Edit" aria-hidden />
@@ -461,6 +534,7 @@ function ProjectSection({
   collapsed,
   archivePending,
   dragDisabled,
+  workspaceDragDisabled,
   jumpShortcuts,
   showJumpShortcuts,
   onToggle,
@@ -474,6 +548,7 @@ function ProjectSection({
   collapsed: boolean;
   archivePending: boolean;
   dragDisabled: boolean;
+  workspaceDragDisabled: boolean;
   jumpShortcuts: ReadonlyMap<
     string,
     { ariaKeyshortcuts: string; label: string }
@@ -505,29 +580,30 @@ function ProjectSection({
   const signal = workspaceSignal(
     project.workspaces.flatMap((workspace) => workspace.threads),
   );
+  const projectLabel = project.repositoryName ?? project.name;
 
   return (
     <section
       ref={setNodeRef}
       style={style}
       className="min-w-0"
-      aria-label={project.name}
+      aria-label={projectLabel}
     >
       <SectionHeader
-        title={project.name}
+        title={projectLabel}
         contentId={contentId}
         collapsed={collapsed}
         signal={signal}
         onToggle={onToggle}
         onCreate={onCreate}
-        createLabel={`New workspace in ${project.name}`}
+        createLabel={`New workspace in ${projectLabel}`}
         dragHandle={
           <button
             ref={setActivatorNodeRef}
             type="button"
             className="conductor-drag-handle"
-            aria-label={`Reorder ${project.name}`}
-            title={`Reorder ${project.name}`}
+            aria-label={`Reorder ${projectLabel}`}
+            title={`Reorder ${projectLabel}`}
             disabled={dragDisabled}
             {...attributes}
             {...listeners}
@@ -537,22 +613,32 @@ function ProjectSection({
         }
       />
       <SectionContent id={contentId} collapsed={collapsed}>
-        <div className="space-y-0.5">
-          {project.workspaces.map((workspace) => (
-            <WorkspaceRow
-              key={workspace.key}
-              workspace={workspace}
-              activeThreadId={activeThreadId}
-              archivePending={archivePending}
-              shortcutEnabled={!collapsed}
-              jumpShortcut={jumpShortcuts.get(workspace.key) ?? null}
-              showJumpShortcut={showJumpShortcuts}
-              onOpen={onOpen}
-              onRequestArchive={onRequestArchive}
-              onRequestRename={onRequestRename}
-            />
-          ))}
-        </div>
+        <SortableContext
+          items={project.workspaces.map((workspace) =>
+            workspaceDndId(workspace.key),
+          )}
+          strategy={verticalListSortingStrategy}
+        >
+          <div className="space-y-0.5">
+            {project.workspaces.map((workspace) => (
+              <WorkspaceRow
+                key={workspace.key}
+                workspace={workspace}
+                activeThreadId={activeThreadId}
+                archivePending={archivePending}
+                dragDisabled={
+                  workspaceDragDisabled || project.workspaces.length < 2
+                }
+                shortcutEnabled={!collapsed}
+                jumpShortcut={jumpShortcuts.get(workspace.key) ?? null}
+                showJumpShortcut={showJumpShortcuts}
+                onOpen={onOpen}
+                onRequestArchive={onRequestArchive}
+                onRequestRename={onRequestRename}
+              />
+            ))}
+          </div>
+        </SortableContext>
       </SectionContent>
     </section>
   );
@@ -572,6 +658,7 @@ export function ConductorSidebar({
     loadCollapsedSections,
   );
   const [projectOrder, setProjectOrder] = useState(loadProjectOrder);
+  const [workspaceOrders, setWorkspaceOrders] = useState(loadWorkspaceOrders);
   const [archiveTarget, setArchiveTarget] = useState<ArchiveTarget | null>(
     null,
   );
@@ -614,6 +701,22 @@ export function ConductorSidebar({
     saveProjectOrder(normalized);
   }, [projectOrder, projection.projects]);
 
+  useEffect(() => {
+    if (state.status !== "ready" || isLoading) return;
+    const normalized = Object.fromEntries(
+      projection.projects.map((project) => [
+        project.id,
+        orderWorkspaceKeys(
+          project.workspaces.map((workspace) => workspace.key),
+          workspaceOrders[project.id] ?? [],
+        ),
+      ]),
+    );
+    if (workspaceOrdersEqual(normalized, workspaceOrders)) return;
+    setWorkspaceOrders(normalized);
+    saveWorkspaceOrders(normalized);
+  }, [isLoading, projection.projects, state.status, workspaceOrders]);
+
   const query = searchQuery.trim().toLocaleLowerCase();
   const personalThreads = projection.personalThreads.filter((thread) =>
     query
@@ -631,15 +734,26 @@ export function ConductorSidebar({
     .filter((project): project is ConductorProject => project !== undefined)
     .map((project) => ({
       ...project,
-      workspaces: project.workspaces.filter((workspace) => {
-        if (!query) return true;
-        return [
-          project.name,
-          workspace.title,
-          workspace.branchName ?? "",
-          ...workspace.threads.map(threadDisplayTitle),
-        ].some((value) => value.toLocaleLowerCase().includes(query));
-      }),
+      workspaces: orderWorkspaceKeys(
+        project.workspaces.map((workspace) => workspace.key),
+        workspaceOrders[project.id] ?? [],
+      )
+        .map((workspaceKey) =>
+          project.workspaces.find(
+            (workspace) => workspace.key === workspaceKey,
+          ),
+        )
+        .filter((workspace): workspace is ConductorWorkspace => {
+          if (!workspace) return false;
+          if (!query) return true;
+          return [
+            project.name,
+            project.repositoryName ?? "",
+            workspace.title,
+            workspace.branchName ?? "",
+            ...workspace.threads.map(threadDisplayTitle),
+          ].some((value) => value.toLocaleLowerCase().includes(query));
+        }),
     }))
     .filter((project) => project.workspaces.length > 0);
 
@@ -782,6 +896,45 @@ export function ConductorSidebar({
   }
 
   function onDragEnd(event: DragEndEvent) {
+    const activeWorkspaceKey = workspaceKeyFromDndId(String(event.active.id));
+    const overWorkspaceKey = event.over
+      ? workspaceKeyFromDndId(String(event.over.id))
+      : null;
+    if (
+      activeWorkspaceKey &&
+      overWorkspaceKey &&
+      activeWorkspaceKey !== overWorkspaceKey
+    ) {
+      const activeProject = projection.projects.find((project) =>
+        project.workspaces.some(
+          (workspace) => workspace.key === activeWorkspaceKey,
+        ),
+      );
+      const overProject = projection.projects.find((project) =>
+        project.workspaces.some(
+          (workspace) => workspace.key === overWorkspaceKey,
+        ),
+      );
+      if (!activeProject || activeProject.id !== overProject?.id) return;
+      setWorkspaceOrders((current) => {
+        const availableKeys = activeProject.workspaces.map(
+          (workspace) => workspace.key,
+        );
+        const normalized = orderWorkspaceKeys(
+          availableKeys,
+          current[activeProject.id] ?? [],
+        );
+        const next = moveWorkspaceKey(
+          normalized,
+          activeWorkspaceKey,
+          overWorkspaceKey,
+        );
+        const nextOrders = { ...current, [activeProject.id]: next };
+        saveWorkspaceOrders(nextOrders);
+        return nextOrders;
+      });
+      return;
+    }
     if (!event.over || event.active.id === event.over.id) return;
     setProjectOrder((current) => {
       const normalized = orderProjectIds(
@@ -845,6 +998,7 @@ export function ConductorSidebar({
                   collapsed={collapsed}
                   archivePending={archivePending}
                   dragDisabled={Boolean(query) || projects.length < 2}
+                  workspaceDragDisabled={Boolean(query)}
                   jumpShortcuts={jumpShortcutByWorkspaceKey}
                   showJumpShortcuts={showJumpShortcuts}
                   onToggle={() => toggleSection(sectionId)}
@@ -852,6 +1006,7 @@ export function ConductorSidebar({
                     actions.openNewThread({
                       projectId: project.id,
                       focusPrompt: true,
+                      experimental_startGithubWorkflow: true,
                     });
                     onNavigate();
                   }}

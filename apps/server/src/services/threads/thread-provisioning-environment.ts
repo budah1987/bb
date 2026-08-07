@@ -237,6 +237,8 @@ interface ManagedEnvironmentPlanArgs {
   hostId: string;
   sourcePath: string;
   baseBranch: BaseBranchSpec;
+  branchName?: string;
+  pullRequestNumber?: number;
   thread: Thread;
   workspaceProvisionType: "managed-worktree";
 }
@@ -485,8 +487,7 @@ async function resolveMetadataIfNeeded(
           if (
             !titledThread ||
             !environment ||
-            (titledThread.status !== "active" &&
-              titledThread.status !== "idle")
+            (titledThread.status !== "active" && titledThread.status !== "idle")
           ) {
             return;
           }
@@ -704,14 +705,10 @@ function createPreparedProvisioningEnvironment(
         );
       }
 
-      const environment = createEnvironment(
-        tx,
-        deps.hub,
-        {
-          ...args.environmentInput,
-          status: "ready",
-        },
-      );
+      const environment = createEnvironment(tx, deps.hub, {
+        ...args.environmentInput,
+        status: "ready",
+      });
       if (args.thread.environmentId !== environment.id) {
         updateThread(tx, deps.hub, args.thread.id, {
           environmentId: environment.id,
@@ -753,12 +750,22 @@ function buildUnmanagedCheckout(
     };
   }
 
+  if (args.branch.kind === "pull-request") {
+    return {
+      kind: "pull-request",
+      name: args.branch.name,
+      number: args.branch.number,
+    };
+  }
+
   return {
     kind: "new",
-    name: buildManagedBranchName({
-      branchSlug: args.context.request.branchSlug,
-      threadId: args.thread.id,
-    }),
+    name:
+      args.branch.name ??
+      buildManagedBranchName({
+        branchSlug: args.context.request.branchSlug,
+        threadId: args.thread.id,
+      }),
     baseBranch: args.branch.baseBranch,
   };
 }
@@ -846,11 +853,16 @@ function buildManagedEnvironmentPlan(
     },
     buildRequest: ({ context, environment }) => {
       const command = buildEnvironmentProvisionCommand({
-        branchName: buildManagedBranchName({
-          branchSlug: context.request.branchSlug,
-          threadId: args.thread.id,
-        }),
+        branchName:
+          args.branchName ??
+          buildManagedBranchName({
+            branchSlug: context.request.branchSlug,
+            threadId: args.thread.id,
+          }),
         baseBranch: args.baseBranch,
+        ...(args.pullRequestNumber === undefined
+          ? {}
+          : { pullRequestNumber: args.pullRequestNumber }),
         environmentId: environment.id,
         hostId: args.hostId,
         initiator: {
@@ -925,6 +937,8 @@ async function resolveEnvironmentCreationPlan(
         hostId: args.intent.hostId,
         sourcePath: args.intent.sourcePath,
         baseBranch: args.intent.baseBranch,
+        branchName: args.intent.branchName,
+        pullRequestNumber: args.intent.pullRequestNumber,
         thread: args.thread,
         workspaceProvisionType: args.intent.workspaceProvisionType,
       });
@@ -994,13 +1008,14 @@ function requestCheckoutUnmanagedEnvironmentProvision(
         threadId: args.thread.id,
         context,
       });
-      const requestedOutcome = applyLoggedEnvironmentLifecycleEventInTransaction(
-        { db: tx, logger: deps.logger },
-        {
-          environmentId: args.environment.id,
-          event: { type: "provision.requested" },
-        },
-      );
+      const requestedOutcome =
+        applyLoggedEnvironmentLifecycleEventInTransaction(
+          { db: tx, logger: deps.logger },
+          {
+            environmentId: args.environment.id,
+            event: { type: "provision.requested" },
+          },
+        );
       if (requestedOutcome.applied) {
         deps.hub.notifyEnvironment(
           args.environment.id,
@@ -1102,13 +1117,14 @@ async function requestPreparedEnvironmentProvision(
         context,
         environment,
       });
-      const requestedOutcome = applyLoggedEnvironmentLifecycleEventInTransaction(
-        { db: tx, logger: deps.logger },
-        {
-          environmentId: environment.id,
-          event: { type: "provision.requested" },
-        },
-      );
+      const requestedOutcome =
+        applyLoggedEnvironmentLifecycleEventInTransaction(
+          { db: tx, logger: deps.logger },
+          {
+            environmentId: environment.id,
+            event: { type: "provision.requested" },
+          },
+        );
       if (requestedOutcome.applied) {
         deps.hub.notifyEnvironment(environment.id, requestedOutcome.changes);
       }

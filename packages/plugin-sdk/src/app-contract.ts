@@ -494,6 +494,11 @@ export interface PluginSidebarProject {
   name: string;
   /** True for the implicit personal project. */
   isPersonal: boolean;
+  /**
+   * Canonical git remote configured for this project, or null when the project
+   * is not backed by a remote repository.
+   */
+  experimental_gitRemoteUrl?: string | null;
 }
 
 export interface PluginSidebarThreadsState {
@@ -531,6 +536,8 @@ export interface PluginSidebarThreadActions {
       environmentId: string;
       locked: boolean;
     };
+    /** Open bb's GitHub branch / pull-request workflow chooser. */
+    experimental_startGithubWorkflow?: boolean;
   }): void;
   setPinned(threadId: string, pinned: boolean): Promise<void>;
   setRead(threadId: string, read: boolean): Promise<void>;

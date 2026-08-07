@@ -330,6 +330,8 @@ type ExpectedSystemKey =
   | "cliSkillsStatus"
   | "config"
   | "executionOptions"
+  | "githubRepositories"
+  | "githubPullRequests"
   | "installCliSkills"
   | "reloadConfig"
   | "transcribeVoice"

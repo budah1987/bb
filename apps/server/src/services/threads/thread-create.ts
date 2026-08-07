@@ -811,6 +811,10 @@ export async function createThreadFromRequest(
           hostId,
           sourcePath: managedSource.path,
         }),
+        ...(workspace.branchName ? { branchName: workspace.branchName } : {}),
+        ...(workspace.pullRequestNumber === undefined
+          ? {}
+          : { pullRequestNumber: workspace.pullRequestNumber }),
         workspaceProvisionType: workspace.type,
       };
       break;

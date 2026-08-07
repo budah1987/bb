@@ -56,6 +56,12 @@ interface ProjectDiscoveryCommandOptions {
   query?: string;
 }
 
+interface GithubRepositoryCommandOptions {
+  host?: string;
+  machine?: string;
+  json?: boolean;
+}
+
 function addProjectWorkspaceRoutingOptions(command: Command): Command {
   return command
     .option("--machine <id-or-name>", "Project source machine")
@@ -345,6 +351,85 @@ export function registerProjectCommands(
         }
         printProjectTable(projects);
       }),
+    );
+
+  project
+    .command("github-repositories")
+    .description(
+      "List repositories visible to every authenticated GitHub account",
+    )
+    .option("--machine <id-or-name>", "Machine whose GitHub accounts to use")
+    .option("--host <id-or-name>", "Alias for --machine")
+    .option("--json", "Print machine-readable JSON output")
+    .action(
+      action(async (opts: GithubRepositoryCommandOptions) => {
+        const target = resolveMachineTargetOption(opts);
+        const hostId =
+          target === undefined
+            ? undefined
+            : await resolveMachineHostId({
+                serverUrl: getUrl(),
+                target,
+              });
+        const catalog = await createCliBbSdk(
+          getUrl(),
+        ).system.githubRepositories(hostId === undefined ? {} : { hostId });
+        if (outputJson(opts, catalog)) return;
+        const accounts = catalog.accounts
+          .map(
+            (account) =>
+              `@${account.login}${account.active ? " (active)" : ""}`,
+          )
+          .join(", ");
+        console.log(`Accounts: ${accounts}`);
+        if (catalog.repositories.length === 0) {
+          console.log("No repositories are accessible to every account.");
+          return;
+        }
+        for (const repository of catalog.repositories) {
+          const privacy = repository.isPrivate ? "private" : "public";
+          console.log(
+            `${repository.nameWithOwner}\t${privacy}\t${repository.accessibleBy.map((login) => `@${login}`).join(" + ")}`,
+          );
+        }
+      }),
+    );
+
+  project
+    .command("github-pull-requests <repository>")
+    .description("List open pull requests for one GitHub repository")
+    .option("--machine <id-or-name>", "Machine whose GitHub account to use")
+    .option("--host <id-or-name>", "Alias for --machine")
+    .option("--json", "Print machine-readable JSON output")
+    .action(
+      action(
+        async (repository: string, opts: GithubRepositoryCommandOptions) => {
+          const target = resolveMachineTargetOption(opts);
+          const hostId =
+            target === undefined
+              ? undefined
+              : await resolveMachineHostId({
+                  serverUrl: getUrl(),
+                  target,
+                });
+          const catalog = await createCliBbSdk(
+            getUrl(),
+          ).system.githubPullRequests({
+            repository,
+            ...(hostId === undefined ? {} : { hostId }),
+          });
+          if (outputJson(opts, catalog)) return;
+          if (catalog.pullRequests.length === 0) {
+            console.log(`No open pull requests found for ${repository}.`);
+            return;
+          }
+          for (const pullRequest of catalog.pullRequests) {
+            console.log(
+              `#${pullRequest.number}\t${pullRequest.isDraft ? "draft" : "open"}\t${pullRequest.headRepository}:${pullRequest.headBranch}\t${pullRequest.title}`,
+            );
+          }
+        },
+      ),
     );
 
   project

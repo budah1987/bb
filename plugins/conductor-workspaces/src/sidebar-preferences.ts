@@ -1,4 +1,5 @@
 const PROJECT_ORDER_KEY = "bb.conductor.project-order.v1";
+const WORKSPACE_ORDER_KEY = "bb.conductor.workspace-order.v1";
 const COLLAPSED_SECTIONS_KEY = "bb.conductor.collapsed-sections.v1";
 const CLOSED_TABS_KEY = "bb.conductor.closed-tabs.v1";
 
@@ -72,6 +73,16 @@ export function saveProjectOrder(projectIds: readonly string[]): void {
   writeStringArray(PROJECT_ORDER_KEY, projectIds);
 }
 
+export function loadWorkspaceOrders(): Record<string, string[]> {
+  return readStringArrayRecord(WORKSPACE_ORDER_KEY);
+}
+
+export function saveWorkspaceOrders(
+  workspaceOrders: Readonly<Record<string, readonly string[]>>,
+): void {
+  writeStringArrayRecord(WORKSPACE_ORDER_KEY, workspaceOrders);
+}
+
 export function loadCollapsedSections(): Set<string> {
   return new Set(readStringArray(COLLAPSED_SECTIONS_KEY));
 }
@@ -118,4 +129,19 @@ export function moveProjectId(
   if (moved === undefined) return [...projectIds];
   next.splice(to, 0, moved);
   return next;
+}
+
+export function orderWorkspaceKeys(
+  availableKeys: readonly string[],
+  preferredKeys: readonly string[],
+): string[] {
+  return orderProjectIds(availableKeys, preferredKeys);
+}
+
+export function moveWorkspaceKey(
+  workspaceKeys: readonly string[],
+  activeKey: string,
+  overKey: string,
+): string[] {
+  return moveProjectId(workspaceKeys, activeKey, overKey);
 }

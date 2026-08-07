@@ -1,9 +1,6 @@
 import { mkdir, rm } from "node:fs/promises";
 import path from "node:path";
-import type {
-  ProvisioningTranscriptEntry,
-  WorkspaceStatus,
-} from "@bb/domain";
+import type { ProvisioningTranscriptEntry, WorkspaceStatus } from "@bb/domain";
 import type {
   CommitOptions,
   CommitResult,
@@ -67,6 +64,12 @@ export type UnmanagedCheckoutOpts =
       kind: "new";
       name: string;
       baseBranch: string;
+    }
+  | {
+      /** Fetches a GitHub pull request head and checks it out locally. */
+      kind: "pull-request";
+      name: string;
+      number: number;
     };
 
 export interface UnmanagedWorkspaceOpts extends ProvisionBase {
@@ -89,6 +92,8 @@ export interface ManagedWorkspaceBaseOpts extends ProvisionBase {
    * `null` to use the source's default branch.
    */
   baseBranch: string | null;
+  /** GitHub pull request head to use as the worktree start point. */
+  pullRequestNumber?: number;
   /** Setup script timeout in ms. Controlled by the server. */
   timeoutMs: number;
   /** Resolved user-shell PATH for the setup script. */
@@ -421,7 +426,52 @@ function getCheckoutCompletedText(args: CheckoutCompletedTextArgs): string {
   if (checkout.kind === "new") {
     return `Created branch ${checkout.name}`;
   }
+  if (checkout.kind === "pull-request") {
+    return `Checked out pull request #${checkout.number} on ${checkout.name}`;
+  }
   return `Switched to branch ${checkout.name}`;
+}
+
+function getCheckoutActionText(
+  checkout: UnmanagedCheckoutOpts,
+  phase: "waiting" | "ready" | "active" | "failed-waiting" | "failed",
+): string {
+  const label =
+    checkout.kind === "new"
+      ? `create branch ${checkout.name}`
+      : checkout.kind === "pull-request"
+        ? `check out pull request #${checkout.number}`
+        : `switch to branch ${checkout.name}`;
+  switch (phase) {
+    case "waiting":
+      return `Waiting to ${label}`;
+    case "ready":
+      return `Ready to ${label}`;
+    case "active":
+      return `${label[0]?.toUpperCase()}${label.slice(1)}`;
+    case "failed-waiting":
+      return `Failed waiting to ${label}`;
+    case "failed":
+      return `Failed to ${label}`;
+  }
+}
+
+async function fetchPullRequestHead(args: {
+  cwd: string;
+  number: number;
+  signal: AbortSignal | undefined;
+}): Promise<string> {
+  const localRef = `refs/bb/pull/${args.number}/head`;
+  await runGit(
+    [
+      "fetch",
+      "--quiet",
+      "origin",
+      `+refs/pull/${args.number}/head:${localRef}`,
+    ],
+    { cwd: args.cwd, signal: args.signal },
+  );
+  return localRef;
 }
 
 function createProvisionCancelledError(cause?: unknown): WorkspaceError {
@@ -521,18 +571,11 @@ async function applyUnmanagedCheckout(
   const { cwd, checkout, onProgress, signal } = args;
   throwIfProvisionAborted(signal);
   // `switch -C` for new (create-or-reset from base) and `switch` for existing.
-  const switchArgs =
-    checkout.kind === "new"
-      ? ["switch", "-C", checkout.name, checkout.baseBranch]
-      : ["switch", checkout.name];
   const waitingStartedAt = Date.now();
   onProgress?.({
     type: "step",
     key: "git-checkout-waiting",
-    text:
-      checkout.kind === "new"
-        ? `Waiting to create branch ${checkout.name}`
-        : `Waiting to switch to branch ${checkout.name}`,
+    text: getCheckoutActionText(checkout, "waiting"),
     status: "started",
     startedAt: waitingStartedAt,
   });
@@ -565,10 +608,7 @@ async function applyUnmanagedCheckout(
             onProgress?.({
               type: "step",
               key: "git-checkout-waiting",
-              text:
-                checkout.kind === "new"
-                  ? `Ready to create branch ${checkout.name}`
-                  : `Ready to switch to branch ${checkout.name}`,
+              text: getCheckoutActionText(checkout, "ready"),
               status: "completed",
               startedAt: waitingStartedAt,
               metadata: { durationMs: lockAcquiredAt - waitingStartedAt },
@@ -587,13 +627,25 @@ async function applyUnmanagedCheckout(
             onProgress?.({
               type: "step",
               key: "git-checkout-started",
-              text:
-                checkout.kind === "new"
-                  ? `Creating branch ${checkout.name}`
-                  : `Switching to branch ${checkout.name}`,
+              text: getCheckoutActionText(checkout, "active"),
               status: "started",
               startedAt,
             });
+            const switchArgs =
+              checkout.kind === "new"
+                ? ["switch", "-C", checkout.name, checkout.baseBranch]
+                : checkout.kind === "pull-request"
+                  ? [
+                      "switch",
+                      "-C",
+                      checkout.name,
+                      await fetchPullRequestHead({
+                        cwd,
+                        number: checkout.number,
+                        signal,
+                      }),
+                    ]
+                  : ["switch", checkout.name];
             await runGit(switchArgs, { cwd, signal });
           },
           signal,
@@ -616,10 +668,7 @@ async function applyUnmanagedCheckout(
       onProgress?.({
         type: "step",
         key: "git-checkout-waiting",
-        text:
-          checkout.kind === "new"
-            ? `Failed waiting to create branch ${checkout.name}`
-            : `Failed waiting to switch to branch ${checkout.name}`,
+        text: getCheckoutActionText(checkout, "failed-waiting"),
         status: "failed",
         startedAt: waitingStartedAt,
         metadata: { durationMs: failedAt - waitingStartedAt },
@@ -628,10 +677,7 @@ async function applyUnmanagedCheckout(
     onProgress?.({
       type: "step",
       key: "git-checkout-failed",
-      text:
-        checkout.kind === "new"
-          ? `Failed to create branch ${checkout.name}`
-          : `Failed to switch to branch ${checkout.name}`,
+      text: getCheckoutActionText(checkout, "failed"),
       status: "failed",
       startedAt,
       metadata: { durationMs: failedAt - startedAt },
@@ -685,6 +731,7 @@ async function provisionWorktree(
     targetPath: opts.targetPath,
     branchName: opts.branchName,
     baseBranch: opts.baseBranch,
+    pullRequestNumber: opts.pullRequestNumber,
     timeoutMs: opts.timeoutMs,
     setupPath: opts.setupPath,
     onProgress: opts.onProgress,

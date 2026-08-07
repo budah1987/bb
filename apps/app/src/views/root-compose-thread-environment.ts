@@ -1,10 +1,13 @@
 import { PERSONAL_PROJECT_ID } from "@bb/domain";
+import type { GithubPullRequest } from "@bb/host-daemon-contract";
 import type { BaseBranchSpec, CreateThreadRequest } from "@bb/server-contract";
 import { parseEnvironmentValue } from "@/components/pickers/environment-picker-value";
 
 export interface RootComposeSelectedBranch {
   name: string;
   isNew: boolean;
+  requestedName?: string;
+  pullRequest?: GithubPullRequest;
 }
 
 export interface ResolveRootComposeThreadEnvironmentArgs {
@@ -72,6 +75,12 @@ export function resolveRootComposeThreadEnvironment(
             defaultWorktreeBaseBranch: args.defaultWorktreeBaseBranch,
             selectedBranch: args.selectedBranch,
           }),
+          ...(args.selectedBranch?.requestedName
+            ? { branchName: args.selectedBranch.requestedName }
+            : {}),
+          ...(args.selectedBranch?.pullRequest
+            ? { pullRequestNumber: args.selectedBranch.pullRequest.number }
+            : {}),
         },
       };
     }
@@ -86,6 +95,25 @@ export function resolveRootComposeThreadEnvironment(
           branch: {
             kind: "new",
             baseBranch: args.selectedBranch.name,
+            ...(args.selectedBranch.requestedName
+              ? { name: args.selectedBranch.requestedName }
+              : {}),
+          },
+        },
+      };
+    }
+
+    if (args.selectedBranch?.pullRequest) {
+      return {
+        type: "host",
+        hostId: parsed.hostId,
+        workspace: {
+          type: "unmanaged",
+          path: null,
+          branch: {
+            kind: "pull-request",
+            number: args.selectedBranch.pullRequest.number,
+            name: args.selectedBranch.requestedName ?? args.selectedBranch.name,
           },
         },
       };

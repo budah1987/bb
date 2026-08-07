@@ -43,8 +43,8 @@ export type { GitBranchName };
 /**
  * Pre-thread checkout intent for an unmanaged workspace. Omitting this from
  * the workspace request means "don't touch HEAD"; including it asks the
- * daemon to switch to the named branch or create a server-named branch from
- * `baseBranch` before the thread starts.
+ * daemon to switch to the named branch, create a branch from `baseBranch`, or
+ * fetch and check out a pull request head before the thread starts.
  */
 export const unmanagedBranchSpecSchema = z.discriminatedUnion("kind", [
   z
@@ -54,7 +54,19 @@ export const unmanagedBranchSpecSchema = z.discriminatedUnion("kind", [
     })
     .strict(),
   z
-    .object({ kind: z.literal("new"), baseBranch: gitBranchNameSchema })
+    .object({
+      kind: z.literal("new"),
+      baseBranch: gitBranchNameSchema,
+      /** Omission lets the server mint a thread-scoped branch name. */
+      name: gitBranchNameSchema.optional(),
+    })
+    .strict(),
+  z
+    .object({
+      kind: z.literal("pull-request"),
+      number: z.number().int().positive(),
+      name: gitBranchNameSchema,
+    })
     .strict(),
 ]);
 export type UnmanagedBranchSpec = z.infer<typeof unmanagedBranchSpecSchema>;
@@ -65,8 +77,8 @@ export const unmanagedWorkspaceSchema = z.object({
   /**
    * If set, the daemon checks out this branch in the unmanaged workspace
    * before the thread starts. `existing` switches to a named branch; `new`
-   * asks the server to mint a thread-scoped branch name and create it from
-   * the requested base branch.
+   * creates it from the requested base branch; `pull-request` fetches a PR
+   * head into the requested local branch.
    */
   branch: unmanagedBranchSpecSchema.optional(),
 });
@@ -87,6 +99,10 @@ export const managedWorktreeWorkspaceSchema = z.object({
   type: z.literal("managed-worktree"),
   /** Branch the new worktree should be based on. */
   baseBranch: baseBranchSpecSchema,
+  /** Omission lets the server mint a thread-scoped branch name. */
+  branchName: gitBranchNameSchema.optional(),
+  /** When present, the worktree starts at this pull request's head commit. */
+  pullRequestNumber: z.number().int().positive().optional(),
 });
 
 export const personalWorkspaceSchema = z.object({

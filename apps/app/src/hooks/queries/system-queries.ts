@@ -13,6 +13,8 @@ import type {
 } from "@bb/server-contract";
 import type {
   DiscoverReposResult,
+  GithubPullRequestCatalog,
+  GithubRepositoryCatalog,
   ProviderCliStatusResponse,
 } from "@bb/host-daemon-contract";
 import type { ProviderUsageResponse } from "@bb/host-daemon-contract";
@@ -30,6 +32,8 @@ import {
   onboardingReposQueryKey,
   systemConfigQueryKey,
   systemExecutionOptionsQueryKey,
+  systemGithubRepositoriesQueryKey,
+  systemGithubPullRequestsQueryKey,
   systemUsageLimitsQueryKey,
   systemVersionQueryKey,
 } from "./query-keys";
@@ -261,5 +265,47 @@ export function useSystemUsageLimits(args: UseSystemUsageLimitsArgs = {}) {
       }),
     enabled: args.enabled ?? true,
     ...FOCUS_OWNED_LIVE_QUERY_POLICY,
+  });
+}
+
+export interface UseGithubRepositoriesArgs extends QueryOptions {
+  hostId?: string;
+}
+
+/**
+ * Account-aware GitHub catalog. This is intentionally fetched only by a
+ * visible repository chooser because it queries every authenticated account.
+ */
+export function useGithubRepositories(args: UseGithubRepositoriesArgs = {}) {
+  const hostId = args.hostId ?? null;
+  return useQuery<GithubRepositoryCatalog>({
+    queryKey: systemGithubRepositoriesQueryKey(hostId),
+    queryFn: ({ signal }) =>
+      sdk.system.githubRepositories({
+        ...(args.hostId === undefined ? {} : { hostId: args.hostId }),
+        signal,
+      }),
+    enabled: args.enabled ?? true,
+    staleTime: 60_000,
+  });
+}
+
+export interface UseGithubPullRequestsArgs extends QueryOptions {
+  repository: string;
+  hostId?: string;
+}
+
+export function useGithubPullRequests(args: UseGithubPullRequestsArgs) {
+  const hostId = args.hostId ?? null;
+  return useQuery<GithubPullRequestCatalog>({
+    queryKey: systemGithubPullRequestsQueryKey(args.repository, hostId),
+    queryFn: ({ signal }) =>
+      sdk.system.githubPullRequests({
+        repository: args.repository,
+        ...(args.hostId === undefined ? {} : { hostId: args.hostId }),
+        signal,
+      }),
+    enabled: (args.enabled ?? true) && args.repository.length > 0,
+    staleTime: 30_000,
   });
 }

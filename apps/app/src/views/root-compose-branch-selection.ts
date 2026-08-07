@@ -11,6 +11,7 @@ export interface UseScopedBranchSelectionResult {
   onClearBranch: () => void;
   onCreateBranch: (currentBranch: string | null) => void;
   onCreateBranchFrom: (name: string) => void;
+  onSelectWorkflowBranch: (branch: RootComposeSelectedBranch) => void;
   selectedBranch: RootComposeSelectedBranch | null;
 }
 
@@ -99,11 +100,20 @@ export function useScopedBranchSelection(
     setSelectedBranchState(null);
   }, [scopeUsable]);
 
+  const onSelectWorkflowBranch = useCallback(
+    (branch: RootComposeSelectedBranch) => {
+      if (!scopeUsable) return;
+      setSelectedBranchState(branch);
+    },
+    [scopeUsable],
+  );
+
   return {
     onBranchChange,
     onClearBranch,
     onCreateBranch,
     onCreateBranchFrom,
+    onSelectWorkflowBranch,
     selectedBranch,
   };
 }

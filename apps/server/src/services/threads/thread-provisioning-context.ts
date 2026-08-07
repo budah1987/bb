@@ -34,6 +34,8 @@ const directManagedIntentSchema = z.object({
   hostId: z.string().min(1),
   sourcePath: z.string().min(1),
   baseBranch: baseBranchSpecSchema,
+  branchName: z.string().min(1).optional(),
+  pullRequestNumber: z.number().int().positive().optional(),
   workspaceProvisionType: z.literal("managed-worktree"),
 });
 

@@ -22,6 +22,27 @@ Before stabilization, audit:
 - validation, accessibility labels, reduced motion, and cleanup on plugin
   reload/disable/removal.
 
+## `PluginSidebarProject.experimental_gitRemoteUrl`
+
+Exposes the project's configured git remote to a plugin-owned sidebar so it
+can distinguish repositories with similar local display names and show a
+canonical `owner/repo` label. The value is null for projects without a remote;
+the field remains optional so a plugin stays compatible with older hosts.
+
+Before stabilization, audit whether sidebar projects should expose a parsed
+repository identity instead of a provider-specific URL, and whether remotes
+containing embedded credentials need additional normalization before crossing
+the app plugin boundary.
+
+## `PluginSidebarThreadActions.openNewThread({ experimental_startGithubWorkflow })`
+
+Opens the native GitHub workflow chooser while starting a plugin-initiated
+thread. This keeps branch, pull-request, and checkout policy in the app while
+allowing custom sidebars to offer the same repository `+` interaction.
+
+Before stabilization, audit whether workflow launch should become a general
+typed new-thread intent and whether non-GitHub providers need the same surface.
+
 ## `bb.agents.registerTool({ experimental_statusLabels })`
 
 **What it does.** Lets a native plugin tool supply one short label while it is

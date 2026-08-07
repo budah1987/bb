@@ -185,12 +185,15 @@ DialogOverlay.displayName = DialogPrimitive.Overlay.displayName;
 // Content
 // ---------------------------------------------------------------------------
 
-type DialogContentProps = React.ComponentPropsWithoutRef<
+interface DialogContentProps extends React.ComponentPropsWithoutRef<
   typeof DialogPrimitive.Content
->;
+> {
+  /** Class applied to the compact viewport drawer container. */
+  compactContentClassName?: string;
+}
 
 const DialogContent = React.forwardRef<HTMLDivElement, DialogContentProps>(
-  ({ className, children, ...props }, ref) => {
+  ({ className, compactContentClassName, children, ...props }, ref) => {
     const { isCompactViewport, open, onOpenChange } = useResponsiveDialog();
     useBrowserDimmingModal(open);
     // Unconditional (rules of hooks — the compact branch returns early); the
@@ -200,7 +203,11 @@ const DialogContent = React.forwardRef<HTMLDivElement, DialogContentProps>(
     if (isCompactViewport) {
       const domProps = stripRadixContentProps(props);
       return (
-        <ResponsiveDrawerShell open={open} onOpenChange={onOpenChange}>
+        <ResponsiveDrawerShell
+          open={open}
+          onOpenChange={onOpenChange}
+          contentClassName={compactContentClassName}
+        >
           <div
             ref={ref}
             className={cn(

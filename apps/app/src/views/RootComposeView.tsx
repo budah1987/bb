@@ -46,6 +46,10 @@ import {
 } from "@/components/pickers/environment-picker-value";
 import type { ProjectSelectorOption } from "@/components/pickers/ProjectSelector";
 import {
+  GithubWorkflowDialog,
+  type GithubWorkflowSelection,
+} from "@/components/github/GithubWorkflowDialog";
+import {
   ProjectMachineSetupDialog,
   type ProjectMachineSetupCompletion,
   type ProjectMachineSetupDialogTarget,
@@ -93,10 +97,13 @@ import {
 import { useEnvironment } from "@/hooks/queries/environment-queries";
 import { useProjectDefaultExecutionOptions } from "@/hooks/queries/project-default-execution-options-query";
 import {
+  useGithubRepositories,
+  useGithubPullRequests,
   useHostProviderCliStatus,
   useOnboardingAgents,
   useSystemConfig,
 } from "@/hooks/queries/system-queries";
+import { parseGithubRepositoryName } from "@/lib/github-repository";
 import { useSidebarNavigation } from "@/hooks/queries/sidebar-navigation-query";
 import { useThreads } from "@/hooks/queries/thread-queries";
 import { useCommandSuggestions } from "@/hooks/useCommandSuggestions";
@@ -184,6 +191,7 @@ import {
 } from "./RootComposeSecondaryContent";
 import {
   buildRootComposeBranchUiState,
+  resolveBranchMutationBlocker,
   type RootComposeBranchEnvironmentMode,
 } from "./root-compose-branch-ui";
 import {
@@ -360,7 +368,9 @@ export function hasPromptBranchSelectionChanged(
   }
   return (
     currentBranch.name !== nextBranch.name ||
-    currentBranch.isNew !== nextBranch.isNew
+    currentBranch.isNew !== nextBranch.isNew ||
+    currentBranch.requestedName !== nextBranch.requestedName ||
+    currentBranch.pullRequest?.number !== nextBranch.pullRequest?.number
   );
 }
 
@@ -407,6 +417,17 @@ export function shouldStartComposingFromLocationState(state: unknown): boolean {
     return false;
   }
   return "focusPrompt" in state && state.focusPrompt === true;
+}
+
+export function shouldOpenGithubWorkflowFromLocationState(
+  state: unknown,
+): boolean {
+  return Boolean(
+    state &&
+    typeof state === "object" &&
+    "startGithubWorkflow" in state &&
+    state.startGithubWorkflow === true,
+  );
 }
 
 export function requestRootComposePluginFocus(storageKey: string | null): void {
@@ -617,6 +638,7 @@ function readForkThreadCreateSeedFromLocationState(
 export function hasSingleUseRootComposeTargetState(state: unknown): boolean {
   return (
     readRootComposeSectionTargetFromLocationState(state) !== null ||
+    shouldOpenGithubWorkflowFromLocationState(state) ||
     readReuseEnvironmentIdFromLocationState(state) !== null ||
     readPluginNewThreadDraftKeyFromLocationState(state) !== null ||
     readForkThreadCreateSeedFromLocationState(state) !== null ||
@@ -652,10 +674,14 @@ export function buildMobileRecentThreads({
   if (!sidebarNavigation) return [];
 
   const threads: ThreadListEntry[] = [
-    ...sidebarNavigation.personalProject.threads,
+    ...sidebarNavigation.personalProject.threads.filter(
+      (thread) => thread.visibility !== "hidden",
+    ),
   ];
   for (const project of sidebarNavigation.projects) {
-    threads.push(...project.threads);
+    threads.push(
+      ...project.threads.filter((thread) => thread.visibility !== "hidden"),
+    );
   }
   return threads;
 }
@@ -882,6 +908,25 @@ export function RootComposeView() {
     [hostsQuery.data, serverPrimaryHostId],
   );
   const primaryHostId = primaryHost?.id ?? null;
+  const [githubRepositoryChooserOpen, setGithubRepositoryChooserOpen] =
+    useState(false);
+  const [githubWorkflowOpen, setGithubWorkflowOpen] = useState(false);
+  const githubRepositoriesQuery = useGithubRepositories({
+    ...(primaryHostId === null ? {} : { hostId: primaryHostId }),
+    enabled:
+      (githubRepositoryChooserOpen || githubWorkflowOpen) &&
+      primaryHostId !== null,
+  });
+  const githubRepositoryByName = useMemo(
+    () =>
+      new Map(
+        (githubRepositoriesQuery.data?.repositories ?? []).map((repository) => [
+          repository.nameWithOwner.toLocaleLowerCase(),
+          repository,
+        ]),
+      ),
+    [githubRepositoriesQuery.data?.repositories],
+  );
   const knownHostIds = useMemo(
     () => new Set((hostsQuery.data ?? []).map((host) => host.id)),
     [hostsQuery.data],
@@ -1213,6 +1258,9 @@ export function RootComposeView() {
     if (shouldStartComposingFromLocationState(location.state)) {
       setStartedComposing(true);
     }
+    if (shouldOpenGithubWorkflowFromLocationState(location.state)) {
+      setGithubWorkflowOpen(true);
+    }
     if (sectionTarget?.kind === "set") {
       setRootComposeSectionId(sectionTarget.sectionId);
     } else if (sectionTarget?.kind === "clear") {
@@ -1379,6 +1427,7 @@ export function RootComposeView() {
     onClearBranch: handleClearBranch,
     onCreateBranch: handleCreateBranch,
     onCreateBranchFrom: handleCreateBranchFrom,
+    onSelectWorkflowBranch: handleSelectWorkflowBranch,
   } = useScopedBranchSelection({
     environmentValue: effectiveEnvironmentValue,
     projectId,
@@ -1386,11 +1435,16 @@ export function RootComposeView() {
   const canChangeBranchSelection =
     projectId !== undefined && effectiveEnvironmentValue !== "";
   const selectedBranchName = selectedBranch?.name ?? "";
+  const workflowBranchHostId = isHostMode
+    ? parsedEnvironment.hostId
+    : githubWorkflowOpen
+      ? primaryHostId
+      : null;
   const hostBranchesQuery = useProjectSourceBranches(
     projectId,
-    isHostMode ? parsedEnvironment.hostId : null,
+    workflowBranchHostId,
     {
-      enabled: isHostMode && !isProjectless,
+      enabled: (isHostMode || githubWorkflowOpen) && !isProjectless,
       query: branchSearchQuery,
       selectedBranch: selectedBranchName,
     },
@@ -1608,10 +1662,35 @@ export function RootComposeView() {
 
   const projectOptions = useMemo(
     (): readonly ProjectSelectorOption[] =>
-      projects?.map((project) => ({ id: project.id, name: project.name })) ??
-      [],
-    [projects],
+      projects?.map((project) => {
+        const nameWithOwner = parseGithubRepositoryName(project.gitRemoteUrl);
+        const catalogRepository = nameWithOwner
+          ? githubRepositoryByName.get(nameWithOwner.toLocaleLowerCase())
+          : undefined;
+        return {
+          id: project.id,
+          name: project.name,
+          ...(nameWithOwner
+            ? {
+                githubRepository: {
+                  nameWithOwner,
+                  accessibleBy: catalogRepository?.accessibleBy ?? [],
+                  activeAccount: catalogRepository?.activeAccount ?? null,
+                },
+              }
+            : {}),
+        };
+      }) ?? [],
+    [githubRepositoryByName, projects],
   );
+  const selectedGithubRepository =
+    projectOptions.find((project) => project.id === projectId)?.githubRepository
+      ?.nameWithOwner ?? "";
+  const githubPullRequestsQuery = useGithubPullRequests({
+    repository: selectedGithubRepository,
+    ...(workflowBranchHostId === null ? {} : { hostId: workflowBranchHostId }),
+    enabled: githubWorkflowOpen && selectedGithubRepository.length > 0,
+  });
   const mobileRecentProjectNamesById = useMemo(() => {
     const namesById = new Map<string, string>();
     const navigation = sidebarNavigationQuery.data;
@@ -1676,6 +1755,56 @@ export function RootComposeView() {
       snapshotPromptDraftBeforeOptionChange,
     ],
   );
+  const workflowBranches = useMemo(
+    () => [...new Set([...branchOptions, ...remoteBranchOptions])],
+    [branchOptions, remoteBranchOptions],
+  );
+  const workflowLocalBlocker = resolveBranchMutationBlocker({
+    checkout: activeBranchesQuery.data,
+    isFetching: activeBranchesQuery.isFetching,
+    isLoading: activeBranchesQuery.isLoading,
+    mode: "local",
+    selectedBranch: null,
+  });
+  const handleApplyGithubWorkflow = useCallback(
+    (selection: GithubWorkflowSelection) => {
+      const hostId = workflowBranchHostId ?? primaryHostId;
+      if (hostId === null || selection.projectId !== projectId) return;
+      snapshotPromptDraftBeforeOptionChange();
+      handleEnvironmentSelectionValueChange(
+        encodeHostValue(hostId, selection.checkoutMode),
+      );
+      if (selection.start.kind === "existing-branch") {
+        handleSelectWorkflowBranch({
+          name: selection.start.branchName,
+          isNew: false,
+        });
+        return;
+      }
+      if (selection.start.kind === "new-branch") {
+        handleSelectWorkflowBranch({
+          name: selection.start.baseBranch,
+          isNew: true,
+          requestedName: selection.start.branchName,
+        });
+        return;
+      }
+      handleSelectWorkflowBranch({
+        name: selection.start.pullRequest.baseBranch,
+        isNew: false,
+        requestedName: selection.start.localBranchName,
+        pullRequest: selection.start.pullRequest,
+      });
+    },
+    [
+      handleEnvironmentSelectionValueChange,
+      handleSelectWorkflowBranch,
+      primaryHostId,
+      projectId,
+      snapshotPromptDraftBeforeOptionChange,
+      workflowBranchHostId,
+    ],
+  );
   const shouldFocusPrompt =
     typeof location.state === "object" &&
     location.state !== null &&
@@ -1730,10 +1859,27 @@ export function RootComposeView() {
               attachments: promptDraft.attachments,
             }
           : null;
-      const submittedInput =
+      const visibleSubmittedInput =
         submittedDraft !== null
           ? promptDraftToInput(submittedDraft)
           : (inputsOverride ?? []);
+      const submittedInput: PromptInput[] = selectedBranch?.pullRequest
+        ? [
+            ...visibleSubmittedInput,
+            {
+              type: "text",
+              visibility: "agent-only",
+              mentions: [],
+              text: [
+                `GitHub pull request: #${selectedBranch.pullRequest.number} ${selectedBranch.pullRequest.title}`,
+                `URL: ${selectedBranch.pullRequest.url}`,
+                `Head: ${selectedBranch.pullRequest.headRepository}:${selectedBranch.pullRequest.headBranch}`,
+                `Base: ${selectedBranch.pullRequest.baseBranch}`,
+                "Treat this pull request as durable context for the conversation.",
+              ].join("\n"),
+            },
+          ]
+        : visibleSubmittedInput;
       if (!projectId || !selectedProviderId || !selectedThreadModel) {
         return;
       }
@@ -1826,6 +1972,7 @@ export function RootComposeView() {
       rootComposeSectionId,
       selectedEnvironment,
       selectedProviderId,
+      selectedBranch?.pullRequest,
       selectedThreadModel,
       serviceTier,
       supportsServiceTier,
@@ -3452,6 +3599,48 @@ export function RootComposeView() {
       onComplete={handleMachineSetupComplete}
     />
   );
+  const githubWorkflowDialog = (
+    <GithubWorkflowDialog
+      open={githubWorkflowOpen}
+      onOpenChange={setGithubWorkflowOpen}
+      projects={projectOptions}
+      projectId={isProjectless ? null : projectId}
+      onProjectChange={(nextProjectId) => {
+        void handleProjectChange(nextProjectId);
+      }}
+      branches={workflowBranches}
+      defaultBranch={activeBranchesQuery.data?.defaultBranch ?? null}
+      currentBranch={
+        activeBranchesQuery.data?.checkout.kind === "branch"
+          ? activeBranchesQuery.data.checkout.branchName
+          : null
+      }
+      branchesLoading={activeBranchesQuery.isLoading}
+      branchesError={
+        activeBranchesQuery.error instanceof Error
+          ? activeBranchesQuery.error.message
+          : activeBranchesQuery.isError
+            ? "Branches could not be loaded."
+            : null
+      }
+      pullRequests={githubPullRequestsQuery.data?.pullRequests ?? []}
+      pullRequestsLoading={githubPullRequestsQuery.isLoading}
+      pullRequestsError={
+        githubPullRequestsQuery.error instanceof Error
+          ? githubPullRequestsQuery.error.message
+          : githubPullRequestsQuery.isError
+            ? "Pull requests could not be loaded."
+            : null
+      }
+      localDisabledReason={workflowLocalBlocker?.title}
+      worktreeDisabledReason={
+        projectSourceWorktreeUnavailable
+          ? PROJECT_SOURCE_WORKTREE_DISABLED_REASON
+          : null
+      }
+      onApply={handleApplyGithubWorkflow}
+    />
+  );
 
   const promptBox = (
     <NewThreadPromptBox
@@ -3475,6 +3664,21 @@ export function RootComposeView() {
         branch: branchConfig,
         worktree: worktreeConfig,
         permission: permissionConfig,
+        githubWorkflow:
+          !isProjectless && projectId !== PERSONAL_PROJECT_ID
+            ? {
+                label: selectedBranch?.pullRequest
+                  ? `PR #${selectedBranch.pullRequest.number}`
+                  : (selectedBranch?.requestedName ??
+                    selectedBranch?.name ??
+                    "Set up workspace"),
+                onOpen: () => setGithubWorkflowOpen(true),
+                disabled:
+                  isForkDraft ||
+                  isEnvironmentLocked ||
+                  isCopyingPromptAttachments,
+              }
+            : undefined,
         banner: promptBanner,
         header: promptHeader,
       }}
@@ -3482,6 +3686,7 @@ export function RootComposeView() {
         projects: projectOptions,
         value: isProjectless ? null : projectId,
         onChange: handleProjectChange,
+        onOpenChange: setGithubRepositoryChooserOpen,
         allowNoProject: true,
         createProject: {
           onCreate: quickCreateProject.openCreateDialog,
@@ -3504,6 +3709,7 @@ export function RootComposeView() {
         onToggle={handleToggleSecondaryPanel}
       />
       {machineSetupDialog}
+      {githubWorkflowDialog}
       {rootPanelToggle}
       <PluginComposerHostProvider value={pluginComposerHost}>
         <RootComposeSecondaryContent

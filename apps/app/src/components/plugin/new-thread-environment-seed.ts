@@ -46,9 +46,17 @@ export function newThreadEnvironmentArgsToSeed(
     return {
       selectionValue: encodeHostValue(hostId, "worktree"),
       branch:
-        workspace.baseBranch.kind === "named"
-          ? { name: workspace.baseBranch.name, isNew: false }
-          : null,
+        workspace.pullRequestNumber !== undefined
+          ? null
+          : workspace.baseBranch.kind === "named"
+            ? {
+                name: workspace.baseBranch.name,
+                isNew: workspace.branchName !== undefined,
+                ...(workspace.branchName
+                  ? { requestedName: workspace.branchName }
+                  : {}),
+              }
+            : null,
     };
   }
   // Unmanaged. `path` has no picker control — the composer always submits
@@ -60,6 +68,14 @@ export function newThreadEnvironmentArgsToSeed(
         ? null
         : workspace.branch.kind === "existing"
           ? { name: workspace.branch.name, isNew: false }
-          : { name: workspace.branch.baseBranch, isNew: true },
+          : workspace.branch.kind === "new"
+            ? {
+                name: workspace.branch.baseBranch,
+                isNew: true,
+                ...(workspace.branch.name
+                  ? { requestedName: workspace.branch.name }
+                  : {}),
+              }
+            : null,
   };
 }

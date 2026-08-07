@@ -56,6 +56,10 @@ import {
   transcribeCodexVoice,
 } from "./codex-chatgpt-client.js";
 import { discoverRepos } from "./command-handlers/discover-repos.js";
+import {
+  getGithubPullRequestCatalog,
+  getGithubRepositoryCatalog,
+} from "./github-repositories.js";
 import { getProviderUsage } from "./provider-usage.js";
 import {
   getKnownAcpAgentsStatus,
@@ -468,6 +472,15 @@ const onlineRpcHandlers: OnlineRpcHandlerMap = {
   "known_acp_agents.status": async (command) =>
     getKnownAcpAgentsStatus({ agents: command.agents }),
   "provider.usage": async () => getProviderUsage(),
+  "github.repository_catalog": async (_command, options) =>
+    getGithubRepositoryCatalog({
+      env: options.runtimeManager.getShellEnv(),
+    }),
+  "github.pull_request_catalog": async (command, options) =>
+    getGithubPullRequestCatalog({
+      env: options.runtimeManager.getShellEnv(),
+      repository: command.repository,
+    }),
   "provider_cli.status": async (_command, options) =>
     getProviderCliStatus({
       env: providerCliEnvFromShellEnv(options.runtimeManager.getShellEnv()),

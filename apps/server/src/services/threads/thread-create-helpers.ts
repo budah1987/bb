@@ -89,7 +89,8 @@ export function requireSourceForHost(
  */
 export type UnmanagedCheckoutCommand =
   | { kind: "existing"; name: string }
-  | { kind: "new"; name: string; baseBranch: string };
+  | { kind: "new"; name: string; baseBranch: string }
+  | { kind: "pull-request"; name: string; number: number };
 
 export type EnvironmentProvisionCommandArgs =
   | {
@@ -109,6 +110,7 @@ export type EnvironmentProvisionCommandArgs =
       targetPath: string;
       branchName: string;
       baseBranch: BaseBranchSpec;
+      pullRequestNumber?: number;
       setupTimeoutMs: number;
     }
   | {
@@ -142,6 +144,9 @@ export function buildEnvironmentProvisionCommand(
         targetPath: args.targetPath,
         branchName: args.branchName,
         baseBranch: baseBranchSpecToStoredName(args.baseBranch),
+        ...(args.pullRequestNumber === undefined
+          ? {}
+          : { pullRequestNumber: args.pullRequestNumber }),
         setupTimeoutMs: args.setupTimeoutMs,
       };
     case "personal":

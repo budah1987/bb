@@ -36,7 +36,7 @@ import {
   providerCliStatusResponseSchema,
 } from "./local.js";
 
-export const HOST_DAEMON_PROTOCOL_VERSION = 76 as const;
+export const HOST_DAEMON_PROTOCOL_VERSION = 78 as const;
 
 export {
   BRANCH_LIST_LIMIT_MAX,
@@ -922,6 +922,13 @@ const unmanagedCheckoutSchema = z.discriminatedUnion("kind", [
       baseBranch: gitBranchNameSchema,
     })
     .strict(),
+  z
+    .object({
+      kind: z.literal("pull-request"),
+      name: gitBranchNameSchema,
+      number: z.number().int().positive(),
+    })
+    .strict(),
 ]);
 
 const unmanagedEnvironmentProvisionCommandSchema =
@@ -947,6 +954,8 @@ const managedEnvironmentProvisionFieldsSchema = z.object({
    * `null` to use the source's default branch (resolved by the daemon).
    */
   baseBranch: gitBranchNameSchema.nullable(),
+  /** GitHub pull request head to fetch before creating the worktree. */
+  pullRequestNumber: z.number().int().positive().optional(),
   /** Maximum time in ms to wait for the setup script */
   setupTimeoutMs: z.number().int().positive(),
 });
@@ -1452,6 +1461,78 @@ export type ProviderUsageResponse = z.infer<typeof providerUsageResponseSchema>;
 
 const providerUsageCommandSchema = z
   .object({ type: z.literal("provider.usage") })
+  .strict();
+
+export const githubAccountSchema = z
+  .object({
+    host: z.string().min(1),
+    login: z.string().min(1),
+    active: z.boolean(),
+  })
+  .strict();
+export type GithubAccount = z.infer<typeof githubAccountSchema>;
+
+export const githubRepositorySchema = z
+  .object({
+    name: z.string().min(1),
+    nameWithOwner: z.string().min(3),
+    owner: z.string().min(1),
+    url: z.string().url(),
+    isPrivate: z.boolean(),
+    defaultBranch: z.string().min(1).nullable(),
+    updatedAt: z.string().min(1),
+    accessibleBy: z.array(z.string().min(1)).min(1),
+    activeAccount: z.string().min(1).nullable(),
+  })
+  .strict();
+export type GithubRepository = z.infer<typeof githubRepositorySchema>;
+
+export const githubRepositoryCatalogSchema = z
+  .object({
+    accounts: z.array(githubAccountSchema).min(1),
+    repositories: z.array(githubRepositorySchema),
+    scope: z.enum(["account", "intersection"]),
+  })
+  .strict();
+export type GithubRepositoryCatalog = z.infer<
+  typeof githubRepositoryCatalogSchema
+>;
+
+export const githubPullRequestSchema = z
+  .object({
+    number: z.number().int().positive(),
+    title: z.string().min(1),
+    url: z.string().url(),
+    isDraft: z.boolean(),
+    headBranch: gitBranchNameSchema,
+    headRepository: z.string().min(3),
+    baseBranch: gitBranchNameSchema,
+    author: z.string().min(1),
+    updatedAt: z.string().min(1),
+  })
+  .strict();
+export type GithubPullRequest = z.infer<typeof githubPullRequestSchema>;
+
+export const githubPullRequestCatalogSchema = z
+  .object({
+    repository: z.string().min(3),
+    account: z.string().min(1),
+    pullRequests: z.array(githubPullRequestSchema),
+  })
+  .strict();
+export type GithubPullRequestCatalog = z.infer<
+  typeof githubPullRequestCatalogSchema
+>;
+
+const githubRepositoryCatalogCommandSchema = z
+  .object({ type: z.literal("github.repository_catalog") })
+  .strict();
+
+const githubPullRequestCatalogCommandSchema = z
+  .object({
+    type: z.literal("github.pull_request_catalog"),
+    repository: z.string().regex(/^[\w.-]+\/[\w.-]+$/u),
+  })
   .strict();
 
 /**
@@ -1967,6 +2048,24 @@ export const hostDaemonCommandRegistry = {
     type: "provider.usage",
     schema: providerUsageCommandSchema,
     resultSchema: providerUsageResponseSchema,
+    transport: "onlineRpc",
+    retryable: true,
+    flushEventsBeforeResult: false,
+    envLane: null,
+  }),
+  "github.repository_catalog": defineHostDaemonCommandDescriptor({
+    type: "github.repository_catalog",
+    schema: githubRepositoryCatalogCommandSchema,
+    resultSchema: githubRepositoryCatalogSchema,
+    transport: "onlineRpc",
+    retryable: true,
+    flushEventsBeforeResult: false,
+    envLane: null,
+  }),
+  "github.pull_request_catalog": defineHostDaemonCommandDescriptor({
+    type: "github.pull_request_catalog",
+    schema: githubPullRequestCatalogCommandSchema,
+    resultSchema: githubPullRequestCatalogSchema,
     transport: "onlineRpc",
     retryable: true,
     flushEventsBeforeResult: false,

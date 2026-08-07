@@ -4,11 +4,15 @@ import {
   loadCollapsedSections,
   loadClosedTabIds,
   loadProjectOrder,
+  loadWorkspaceOrders,
+  moveWorkspaceKey,
   moveProjectId,
+  orderWorkspaceKeys,
   orderProjectIds,
   saveCollapsedSections,
   saveClosedTabIds,
   saveProjectOrder,
+  saveWorkspaceOrders,
 } from "./sidebar-preferences";
 
 beforeEach(() => window.localStorage.clear());
@@ -38,6 +42,17 @@ describe("sidebar preferences", () => {
     saveCollapsedSections(new Set(["project:a", "threads"]));
     expect(loadProjectOrder()).toEqual(["b", "a"]);
     expect([...loadCollapsedSections()]).toEqual(["project:a", "threads"]);
+  });
+
+  it("persists workspace order separately for each repository", () => {
+    saveWorkspaceOrders({
+      "project-1": ["workspace-2", "workspace-1"],
+      "project-2": ["workspace-3"],
+    });
+    expect(loadWorkspaceOrders()).toEqual({
+      "project-1": ["workspace-2", "workspace-1"],
+      "project-2": ["workspace-3"],
+    });
   });
 
   it("persists a last-closed-first tab stack per workspace", () => {
@@ -71,5 +86,18 @@ describe("sidebar preferences", () => {
   it("moves a dragged repository relative to its drop target", () => {
     expect(moveProjectId(["a", "b", "c"], "c", "a")).toEqual(["c", "a", "b"]);
     expect(moveProjectId(["a", "b"], "missing", "a")).toEqual(["a", "b"]);
+  });
+
+  it("normalizes and moves workspace keys", () => {
+    expect(orderWorkspaceKeys(["a", "b", "c"], ["c", "missing", "a"])).toEqual([
+      "c",
+      "a",
+      "b",
+    ]);
+    expect(moveWorkspaceKey(["a", "b", "c"], "c", "a")).toEqual([
+      "c",
+      "a",
+      "b",
+    ]);
   });
 });

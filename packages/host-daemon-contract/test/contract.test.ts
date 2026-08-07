@@ -361,6 +361,40 @@ const ONLINE_RPC_RESPONSE_RESULT_FIXTURES: OnlineRpcResponseResultFixtures = {
     claudeCode: { status: "unauthenticated" },
     cursor: { status: "not_installed" },
   },
+  "github.repository_catalog": {
+    accounts: [{ host: "github.com", login: "octocat", active: true }],
+    repositories: [
+      {
+        name: "hello-world",
+        nameWithOwner: "octocat/hello-world",
+        owner: "octocat",
+        url: "https://github.com/octocat/hello-world",
+        isPrivate: true,
+        defaultBranch: "main",
+        updatedAt: "2026-08-01T00:00:00.000Z",
+        accessibleBy: ["octocat"],
+        activeAccount: "octocat",
+      },
+    ],
+    scope: "account",
+  },
+  "github.pull_request_catalog": {
+    repository: "octocat/hello-world",
+    account: "octocat",
+    pullRequests: [
+      {
+        number: 42,
+        title: "Improve the greeting",
+        url: "https://github.com/octocat/hello-world/pull/42",
+        isDraft: false,
+        headBranch: "feature/greeting",
+        headRepository: "octocat/hello-world",
+        baseBranch: "main",
+        author: "octocat",
+        updatedAt: "2026-08-02T00:00:00.000Z",
+      },
+    ],
+  },
   "provider_cli.status": {
     codex: {
       displayName: "Codex",
@@ -708,6 +742,8 @@ const INTENTIONAL_OPTIONAL_HOST_DAEMON_FIELDS: Record<string, string> = {
     "ACP permission CLI config omits insertAfterArgs when permission args should be inserted before all configured agent args.",
   "hostDaemonCommandSchema.checkout":
     "environment.provision only includes checkout instructions for unmanaged workspaces that requested a branch mutation.",
+  "hostDaemonCommandSchema.pullRequestNumber":
+    "managed worktree provisioning includes a pull request number only when the worktree must start from a fetched GitHub PR head.",
   "hostDaemonCommandSchema.targetPath":
     "project.clone omits targetPath when the daemon should derive its default checkout location for the project.",
   "hostDaemonOnlineRpcCommandSchema.expectedSha256":
@@ -1040,12 +1076,10 @@ describe("host-daemon local schemas", () => {
 });
 
 describe("host-daemon command schemas", () => {
-  // Version 76 preserves version 75's grantable Claude sandbox network prompt
-  // and adds workspace rename commands. Older daemons either drop the prompt's
-  // localSettings grant or have no handler for rename, so the bump forces an
-  // update before the server relies on both behaviors.
-  it("uses protocol version 76 for workspace rename support", () => {
-    expect(HOST_DAEMON_PROTOCOL_VERSION).toBe(76);
+  // Version 78 adds pull-request catalog and checkout payloads. Older daemons
+  // cannot safely parse or execute these commands, so the bump forces an update.
+  it("uses protocol version 78 for GitHub workflow support", () => {
+    expect(HOST_DAEMON_PROTOCOL_VERSION).toBe(78);
   });
 
   it("binds Plan cancellation to a required turn id and typed result", () => {

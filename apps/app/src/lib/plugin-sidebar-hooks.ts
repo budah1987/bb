@@ -77,6 +77,7 @@ export function useSidebarThreads(): PluginSidebarThreadsState {
         id: project.id,
         name: project.name,
         isPersonal: project.id === PERSONAL_PROJECT_ID,
+        experimental_gitRemoteUrl: project.gitRemoteUrl,
       })),
     };
   }, [data, hostNamesById, query.isError]);
@@ -187,9 +188,14 @@ export function useSidebarThreadActions(): PluginSidebarThreadActions {
               }
             : null;
         const state =
-          options?.focusPrompt || sameEnvironmentState !== null
+          options?.focusPrompt ||
+          options?.experimental_startGithubWorkflow ||
+          sameEnvironmentState !== null
             ? {
                 ...(options?.focusPrompt ? { focusPrompt: true } : {}),
+                ...(options?.experimental_startGithubWorkflow
+                  ? { startGithubWorkflow: true }
+                  : {}),
                 ...(sameEnvironmentState ?? {}),
               }
             : undefined;

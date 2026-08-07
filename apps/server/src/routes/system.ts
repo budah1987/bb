@@ -44,6 +44,10 @@ import {
 } from "../services/system/onboarding.js";
 import { getProviderUsageLimits } from "../services/system/usage-limits.js";
 import {
+  getGithubPullRequests,
+  getGithubRepositories,
+} from "../services/system/github-repositories.js";
+import {
   listCustomThemeNames,
   readCustomThemeCss,
   resolveAppTheme,
@@ -287,6 +291,14 @@ export function registerSystemRoutes(
 
   get(routes.onboardingRepos, async (context, query) =>
     context.json(await getOnboardingRepos(deps, query)),
+  );
+
+  get(routes.githubRepositories, async (context, query) =>
+    context.json(await getGithubRepositories(deps, query)),
+  );
+
+  get(routes.githubPullRequests, async (context, query) =>
+    context.json(await getGithubPullRequests(deps, query)),
   );
 
   get(routes.usageLimits, async (context, query) =>

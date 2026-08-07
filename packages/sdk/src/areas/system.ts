@@ -5,6 +5,8 @@ import type {
 } from "@bb/domain";
 import type {
   DiscoverReposResult,
+  GithubPullRequestCatalog,
+  GithubRepositoryCatalog,
   ProviderUsageResponse,
 } from "@bb/host-daemon-contract";
 import type {
@@ -18,6 +20,8 @@ import type {
   SystemInstallCliSkillsResponse,
   OnboardingAgentOverview,
   OnboardingTelemetryEvent,
+  SystemGithubPullRequestsQuery,
+  SystemGithubRepositoriesQuery,
   SystemOnboardingReposQuery,
   SystemUsageLimitsQuery,
   SystemVersionQuery,
@@ -40,6 +44,14 @@ export interface SystemExecutionOptionsArgs extends SystemExecutionOptionsQuery 
 }
 
 export interface SystemUsageLimitsArgs extends SystemUsageLimitsQuery {
+  signal?: AbortSignal;
+}
+
+export interface SystemGithubRepositoriesArgs extends SystemGithubRepositoriesQuery {
+  signal?: AbortSignal;
+}
+
+export interface SystemGithubPullRequestsArgs extends SystemGithubPullRequestsQuery {
   signal?: AbortSignal;
 }
 
@@ -71,6 +83,8 @@ export type SystemUpdateExperimentsResult = Experiments;
 export type SystemUpdateGeneralSettingsResult = AppSettings;
 export type SystemUpdateKeyboardSettingsResult = AppKeybindingOverrides;
 export type SystemUsageLimitsResult = ProviderUsageResponse;
+export type SystemGithubRepositoriesResult = GithubRepositoryCatalog;
+export type SystemGithubPullRequestsResult = GithubPullRequestCatalog;
 export interface SystemOnboardingArgs extends SystemOnboardingReposQuery {
   signal?: AbortSignal;
 }
@@ -117,6 +131,14 @@ export interface SystemArea {
   onboardingRepos(
     args?: SystemOnboardingArgs,
   ): Promise<SystemOnboardingReposResult>;
+  /** Repositories visible to every authenticated GitHub account on a machine. */
+  githubRepositories(
+    args?: SystemGithubRepositoriesArgs,
+  ): Promise<SystemGithubRepositoriesResult>;
+  /** Open pull requests for one GitHub repository. */
+  githubPullRequests(
+    args: SystemGithubPullRequestsArgs,
+  ): Promise<SystemGithubPullRequestsResult>;
   usageLimits(args?: SystemUsageLimitsArgs): Promise<SystemUsageLimitsResult>;
   version(args?: SystemVersionArgs): Promise<SystemVersionResult>;
 }
@@ -232,6 +254,27 @@ export function createSystemArea(args: CreateSdkAreaArgs): SystemArea {
       return transport.readJson(
         transport.api.v1.system.onboarding.repos.$get(
           { query: { hostId: input.hostId } },
+          ...signalRequestArgs(input.signal),
+        ),
+      );
+    },
+    async githubRepositories(input = {}) {
+      return transport.readJson(
+        transport.api.v1.system.github.repositories.$get(
+          { query: { hostId: input.hostId } },
+          ...signalRequestArgs(input.signal),
+        ),
+      );
+    },
+    async githubPullRequests(input) {
+      return transport.readJson(
+        transport.api.v1.system.github["pull-requests"].$get(
+          {
+            query: {
+              repository: input.repository,
+              hostId: input.hostId,
+            },
+          },
           ...signalRequestArgs(input.signal),
         ),
       );

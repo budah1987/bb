@@ -70,6 +70,63 @@ describe("resolveRootComposeThreadEnvironment", () => {
     });
   });
 
+  it("preserves the requested branch name for host local", () => {
+    expect(
+      resolveRootComposeThreadEnvironment({
+        defaultBranch: "main",
+        defaultWorktreeBaseBranch: "main",
+        environmentValue: hostLocalEnvironmentValue,
+        projectId,
+        selectedBranch: {
+          name: "main",
+          isNew: true,
+          requestedName: "feature/github-workflow",
+        },
+      }),
+    ).toMatchObject({
+      workspace: {
+        type: "unmanaged",
+        branch: {
+          kind: "new",
+          baseBranch: "main",
+          name: "feature/github-workflow",
+        },
+      },
+    });
+  });
+
+  it("sends pull-request checkout intent for host local", () => {
+    expect(
+      resolveRootComposeThreadEnvironment({
+        defaultBranch: "main",
+        defaultWorktreeBaseBranch: "main",
+        environmentValue: hostLocalEnvironmentValue,
+        projectId,
+        selectedBranch: {
+          name: "main",
+          isNew: false,
+          requestedName: "pr-42-feature",
+          pullRequest: {
+            number: 42,
+            title: "Feature",
+            url: "https://github.com/acme/repo/pull/42",
+            isDraft: false,
+            headBranch: "feature",
+            headRepository: "contributor/repo",
+            baseBranch: "main",
+            author: "contributor",
+            updatedAt: "2026-08-05T00:00:00.000Z",
+          },
+        },
+      }),
+    ).toMatchObject({
+      workspace: {
+        type: "unmanaged",
+        branch: { kind: "pull-request", number: 42, name: "pr-42-feature" },
+      },
+    });
+  });
+
   it("sends default base branch for managed worktrees without an explicit pick", () => {
     expect(
       resolveRootComposeThreadEnvironment({
@@ -117,6 +174,39 @@ describe("resolveRootComposeThreadEnvironment", () => {
       workspace: {
         type: "managed-worktree",
         baseBranch: { kind: "named", name: "develop" },
+      },
+    });
+  });
+
+  it("preserves named branch and pull-request inputs for managed worktrees", () => {
+    expect(
+      resolveRootComposeThreadEnvironment({
+        defaultBranch: "main",
+        defaultWorktreeBaseBranch: "origin/main",
+        environmentValue: hostWorktreeEnvironmentValue,
+        projectId,
+        selectedBranch: {
+          name: "main",
+          isNew: false,
+          requestedName: "pr-42-feature",
+          pullRequest: {
+            number: 42,
+            title: "Feature",
+            url: "https://github.com/acme/repo/pull/42",
+            isDraft: false,
+            headBranch: "feature",
+            headRepository: "contributor/repo",
+            baseBranch: "main",
+            author: "contributor",
+            updatedAt: "2026-08-05T00:00:00.000Z",
+          },
+        },
+      }),
+    ).toMatchObject({
+      workspace: {
+        type: "managed-worktree",
+        branchName: "pr-42-feature",
+        pullRequestNumber: 42,
       },
     });
   });

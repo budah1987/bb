@@ -153,6 +153,39 @@ describe("workspace provisioning", () => {
     expect(worktreeHead.stdout.trim()).toBe(remoteHead);
   });
 
+  it("creates worktrees from fetched GitHub pull request heads", async () => {
+    const { repoPath } = await initRemoteBackedRepo();
+    await runGit(["switch", "-c", "pull-request-head"], { cwd: repoPath });
+    await fs.writeFile(path.join(repoPath, "pull-request.txt"), "head\n");
+    await runGit(["add", "pull-request.txt"], { cwd: repoPath });
+    await runGit(["commit", "-m", "Pull request head"], { cwd: repoPath });
+    const pullRequestHead = (
+      await runGit(["rev-parse", "HEAD"], { cwd: repoPath })
+    ).stdout.trim();
+    await runGit(["push", "origin", "HEAD:refs/pull/23/head"], {
+      cwd: repoPath,
+    });
+    await runGit(["switch", "main"], { cwd: repoPath });
+    const parentDir = await makeTempDir("bb-worktree-pr-parent-");
+    const targetPath = path.join(parentDir, "pr-23");
+
+    await createWorktree({
+      sourcePath: repoPath,
+      targetPath,
+      branchName: "pr-23-navigation",
+      baseBranch: "main",
+      pullRequestNumber: 23,
+      timeoutMs: 900000,
+    });
+
+    expect(await new Workspace(targetPath).currentBranch).toBe(
+      "pr-23-navigation",
+    );
+    expect(
+      (await runGit(["rev-parse", "HEAD"], { cwd: targetPath })).stdout.trim(),
+    ).toBe(pullRequestHead);
+  });
+
   it("rolls back failed worktree setup scripts", async () => {
     const sourceRepo = await initRepoWithOptionalSetup(
       "echo failing >&2\nexit 1\n",

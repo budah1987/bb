@@ -113,6 +113,17 @@
   padding: 0.375rem 0.5rem;
 }
 
+.conductor-workspace-sortable-row > .conductor-workspace-row {
+  min-width: 0;
+  flex: 1;
+  width: auto;
+}
+
+.group\/workspace:hover .conductor-drag-handle,
+.group\/workspace:focus-within .conductor-drag-handle {
+  opacity: 1;
+}
+
 .conductor-workspace-row:hover,
 .conductor-workspace-row:focus-visible,
 .conductor-workspace-row[data-active] {

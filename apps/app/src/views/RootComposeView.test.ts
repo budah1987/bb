@@ -89,6 +89,7 @@ describe("requestRootComposePluginFocus", () => {
 interface MakeThreadArgs {
   id: string;
   projectId: string;
+  visibility?: ThreadListEntry["visibility"];
 }
 
 interface MakeProjectArgs {
@@ -134,7 +135,7 @@ function makeThread(args: MakeThreadArgs): ThreadListEntry {
     sourceThreadId: null,
     originKind: null,
     originPluginId: null,
-    visibility: "visible",
+    visibility: args.visibility ?? "visible",
     childOrigin: null,
     archivedAt: null,
     pinnedAt: null,
@@ -220,7 +221,7 @@ function makeProjectBranchesResponse(
 }
 
 describe("buildMobileRecentThreads", () => {
-  it("includes projectless and every project thread", () => {
+  it("includes visible projectless and project threads, excluding hidden side chats", () => {
     const sidebarNavigation: SidebarBootstrapResponse = {
       sections: [],
       personalProject: makeProject({
@@ -231,6 +232,11 @@ describe("buildMobileRecentThreads", () => {
           makeThread({
             id: "thr_personal",
             projectId: PERSONAL_PROJECT_ID,
+          }),
+          makeThread({
+            id: "thr_hidden_personal",
+            projectId: PERSONAL_PROJECT_ID,
+            visibility: "hidden",
           }),
         ],
       }),
@@ -243,6 +249,11 @@ describe("buildMobileRecentThreads", () => {
             makeThread({
               id: "thr_app",
               projectId: "proj_app",
+            }),
+            makeThread({
+              id: "thr_hidden_app",
+              projectId: "proj_app",
+              visibility: "hidden",
             }),
           ],
         }),

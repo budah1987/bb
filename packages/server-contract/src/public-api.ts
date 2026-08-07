@@ -23,6 +23,8 @@ import {
 } from "@bb/domain";
 import type {
   DiscoverReposResult,
+  GithubPullRequestCatalog,
+  GithubRepositoryCatalog,
   ProviderUsageResponse,
 } from "@bb/host-daemon-contract";
 import {
@@ -152,6 +154,8 @@ import type {
   SystemProvidersQuery,
   OnboardingAgentOverview,
   OnboardingTelemetryEvent,
+  SystemGithubPullRequestsQuery,
+  SystemGithubRepositoriesQuery,
   SystemOnboardingReposQuery,
   SystemUsageLimitsQuery,
   SystemVersionQuery,
@@ -274,6 +278,8 @@ import {
   setQueuedMessageGroupBoundaryRequestSchema,
   sendQueuedMessageRequestSchema,
   systemExecutionOptionsQuerySchema,
+  systemGithubPullRequestsQuerySchema,
+  systemGithubRepositoriesQuerySchema,
   systemProvidersQuerySchema,
   onboardingTelemetryEventSchema,
   systemOnboardingReposQuerySchema,
@@ -1418,6 +1424,22 @@ export const publicApiRoutes = {
         systemOnboardingReposQuerySchema,
       ),
       response: jsonResponse<DiscoverReposResult>(),
+    }),
+    githubRepositories: defineRoute({
+      path: "/system/github/repositories",
+      method: "get",
+      request: optionalQueryRequest<EmptyInput, SystemGithubRepositoriesQuery>(
+        systemGithubRepositoriesQuerySchema,
+      ),
+      response: jsonResponse<GithubRepositoryCatalog>(),
+    }),
+    githubPullRequests: defineRoute({
+      path: "/system/github/pull-requests",
+      method: "get",
+      request: optionalQueryRequest<EmptyInput, SystemGithubPullRequestsQuery>(
+        systemGithubPullRequestsQuerySchema,
+      ),
+      response: jsonResponse<GithubPullRequestCatalog>(),
     }),
     usageLimits: defineRoute({
       path: "/system/usage-limits",

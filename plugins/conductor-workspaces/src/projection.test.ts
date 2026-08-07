@@ -65,7 +65,12 @@ describe("buildConductorProjection", () => {
         }),
       ],
       [
-        { id: "project-1", name: "BB", isPersonal: false },
+        {
+          id: "project-1",
+          name: "BB",
+          isPersonal: false,
+          experimental_gitRemoteUrl: "git@github.com:better-build/bb.git",
+        },
         { id: "personal", name: "Personal", isPersonal: true },
       ],
     );
@@ -77,6 +82,7 @@ describe("buildConductorProjection", () => {
     ]);
     expect(projection.projects).toHaveLength(1);
     expect(projection.projects[0]?.name).toBe("BB");
+    expect(projection.projects[0]?.repositoryName).toBe("better-build/bb");
     expect(projection.report).toMatchObject({
       version: 2,
       activeConversations: 3,

@@ -33,6 +33,13 @@ A project maps to a code repository. All threads belong to a project.
 
 Discovery:
 
+  bb project github-repositories            List the repository intersection
+    --machine <id-or-name>                   Machine whose GitHub accounts to use
+    --host <id-or-name>                      Alias for --machine
+  bb project github-pull-requests <owner/repo>
+                                              List open pull requests
+    --machine <id-or-name>                   Machine whose GitHub account to use
+    --host <id-or-name>                      Alias for --machine
   bb project branches <id> --host <id>   List branches for a machine source
   bb project paths <id>                   Search workspace paths
   bb project files <id>                   List workspace files
@@ -47,6 +54,13 @@ Discovery:
   environment selects its owning machine and workspace; otherwise an explicit
   machine selects that machine's project source. Omitting both intentionally
   falls back to the primary machine's project source.
+
+  GitHub repository discovery reads every authenticated github.com account on
+  the selected machine and returns only repositories accessible to all of
+  them. Human output identifies the repository owner, every account with
+  access, and the active account; --json returns the complete typed catalog.
+  Pull-request discovery uses the active account and returns the PR head
+  repository and branch so agents can reproduce the selected starting point.
 
 Attachments:
 

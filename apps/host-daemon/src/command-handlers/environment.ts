@@ -198,6 +198,7 @@ export function toProvisionWorkspaceOptions(
         targetPath: command.targetPath,
         branchName: command.branchName,
         baseBranch: command.baseBranch,
+        pullRequestNumber: command.pullRequestNumber,
         timeoutMs: command.setupTimeoutMs,
         onProgress,
       };

@@ -147,6 +147,39 @@ describe("provisionWorkspace", () => {
       );
     });
 
+    it("fetches and checks out GitHub pull request heads", async () => {
+      const repoPath = await initRepo();
+      const remotePath = await makeTempDir("bb-provision-pr-remote-");
+      await runGit(["init", "--bare"], { cwd: remotePath });
+      await runGit(["remote", "add", "origin", remotePath], { cwd: repoPath });
+      await runGit(["switch", "-c", "pull-request-head"], { cwd: repoPath });
+      await fs.writeFile(path.join(repoPath, "pull-request.txt"), "head\n");
+      await runGit(["add", "pull-request.txt"], { cwd: repoPath });
+      await runGit(["commit", "-m", "Pull request head"], { cwd: repoPath });
+      const pullRequestHead = (
+        await runGit(["rev-parse", "HEAD"], { cwd: repoPath })
+      ).stdout.trim();
+      await runGit(["push", "origin", "HEAD:refs/pull/17/head"], {
+        cwd: repoPath,
+      });
+      await runGit(["switch", "main"], { cwd: repoPath });
+
+      const ws = await provisionWorkspace({
+        workspaceProvisionType: "unmanaged",
+        path: repoPath,
+        checkout: {
+          kind: "pull-request",
+          number: 17,
+          name: "pr-17-navigation",
+        },
+      });
+
+      expect(await ws.getCurrentBranch()).toBe("pr-17-navigation");
+      expect(
+        (await runGit(["rev-parse", "HEAD"], { cwd: repoPath })).stdout.trim(),
+      ).toBe(pullRequestHead);
+    });
+
     it("no-ops unmanaged checkout when already on the target branch even if dirty", async () => {
       const repoPath = await initRepo();
       await fs.writeFile(path.join(repoPath, "dirty.txt"), "dirty\n", "utf8");

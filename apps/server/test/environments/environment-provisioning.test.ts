@@ -335,6 +335,49 @@ describe("environment reprovisioning", () => {
     });
   });
 
+  it("preserves GitHub workflow inputs in managed provisioning commands", async () => {
+    await withTestHarness(async (harness) => {
+      const { host } = seedHostSession(harness.deps, {
+        id: "host-github-workflow",
+      });
+      const { project } = seedProjectWithSource(harness.deps, {
+        hostId: host.id,
+        path: "/tmp/github-workflow-project",
+      });
+
+      const thread = await createThreadFromRequest(harness.deps, {
+        childOrigin: null,
+        startedOnBehalfOf: null,
+        environment: {
+          type: "host",
+          hostId: host.id,
+          workspace: {
+            type: "managed-worktree",
+            baseBranch: { kind: "named", name: "main" },
+            branchName: "pr-42-navigation",
+            pullRequestNumber: 42,
+          },
+        },
+        input: textInput("continue pull request"),
+        origin: "cli",
+        projectId: project.id,
+        providerId: "codex",
+      });
+      const queued = await waitForQueuedCommand(
+        harness,
+        ({ command }) =>
+          command.type === "environment.provision" &&
+          command.initiator?.threadId === thread.id,
+      );
+      const command =
+        requireManagedWorktreeEnvironmentProvisionLiveCommand(queued).command;
+
+      expect(command.branchName).toBe("pr-42-navigation");
+      expect(command.pullRequestNumber).toBe(42);
+      expect(command.baseBranch).toBe("main");
+    });
+  });
+
   it("finalizes a tombstoned thread instead of activating it when provisioning succeeds late", async () => {
     await withTestHarness(async (harness) => {
       const { host } = seedHostSession(harness.deps, {
@@ -404,7 +447,7 @@ describe("environment reprovisioning", () => {
     });
   });
 
-    it("preserves a stopped pre-start thread when stale provision failure settles", async () => {
+  it("preserves a stopped pre-start thread when stale provision failure settles", async () => {
     await withTestHarness(async (harness) => {
       const { host } = seedHostSession(harness.deps, {
         id: "host-pre-start-provision-cancel",

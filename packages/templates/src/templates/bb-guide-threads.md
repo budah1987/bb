@@ -23,7 +23,9 @@ Spawning:
     --reasoning-level <level>      Reasoning level: low, medium, high, xhigh, max (provider-dependent)
     --environment <id-or-path>     Attach to an existing environment (ID or workspace path)
     --new-environment <kind>       Create a new environment (worktree)
-    --base-branch <branch>         Base branch for a new managed worktree
+    --base-branch <branch>         Base for a new worktree or named branch
+    --branch-name <branch>         Explicit name for a new branch or PR checkout
+    --pull-request <number>        Fetch a GitHub pull request head
     --machine <id-or-name>         Run on a machine (--host is an alias)
     --service-tier <tier>          Service tier: fast, default
     --permission-mode <mode>       Permission mode: accept-edits, auto, or full
@@ -58,6 +60,10 @@ Spawning:
   workspace. It cannot be combined with an existing environment ID because that
   environment already selects its machine. Without the flag, local/primary
   machine resolution is unchanged.
+  For repository work, combine --branch-name with --base-branch to create a
+  named branch in the current checkout, or add --new-environment worktree to
+  isolate it. --pull-request fetches refs/pull/<number>/head and uses
+  --branch-name when supplied (otherwise pr-<number>).
 
 Forking:
 

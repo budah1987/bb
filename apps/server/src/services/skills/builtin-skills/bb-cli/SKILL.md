@@ -132,6 +132,10 @@ message agents, or inspect projects, providers, and environments.
   context variables. Omitted execution flags use remembered project defaults;
   without a remembered model, bb uses the explicitly requested provider or
   Codex and resolves its provider-reported default model on the target machine.
+- Use `--branch-name <name> --base-branch <base>` to create a named branch in
+  the current checkout, or add `--new-environment worktree` for an isolated
+  worktree. Use `--pull-request <number>` to fetch a GitHub PR head; combine it
+  with `--branch-name` to control the local branch name.
 - Add repeatable `--file <path>` / `--image <path>` flags for structured prompt
   attachments, and `--section <id>` to add the new thread to a section. These
   flags pass host-readable absolute paths (or relative server-upload tokens)
@@ -212,6 +216,13 @@ status|install` to inspect or install provider CLIs on a selected machine.
   CLI machine fallback (normally the primary machine).
 - `bb project list` preserves the ordinary-project-only default. Pass
   `--include-personal` when the singleton personal project must be discoverable.
+- Use `bb project github-repositories [--machine <id-or-name>]` to list only
+  repositories accessible to every authenticated github.com account on that
+  machine. The result names the repository owner, every account with access,
+  and which account is active; use `--json` for the typed catalog.
+- Use `bb project github-pull-requests <owner/repo> [--machine <id-or-name>]`
+  to list open pull requests with their head repository, head branch, draft
+  state, and title; use `--json` for the typed catalog.
 - Use `bb project source add <project-id> --machine <id-or-name> --path <path>`
   to register a path on another connected machine. It uses the same selector
   resolution and fallback as project create. Use `--clone` instead of `--path`

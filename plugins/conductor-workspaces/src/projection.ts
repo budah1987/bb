@@ -29,6 +29,7 @@ export interface ConductorWorkspace {
 export interface ConductorProject {
   id: string;
   name: string;
+  repositoryName: string | null;
   workspaces: readonly ConductorWorkspace[];
 }
 
@@ -59,6 +60,14 @@ function titleFor(thread: PluginSidebarThread): string {
     thread.titleFallback?.trim() ||
     "Untitled conversation"
   );
+}
+
+function githubRepositoryName(remoteUrl: string | null | undefined) {
+  if (!remoteUrl) return null;
+  const match = remoteUrl
+    .trim()
+    .match(/github\.com[:/]([^/\s]+)\/([^/\s]+?)(?:\.git)?\/?$/u);
+  return match ? `${match[1]}/${match[2]}` : null;
 }
 
 function workspaceTitle(
@@ -138,10 +147,17 @@ export function buildConductorProjection(
       return {
         id: projectId,
         name: project?.name ?? "Unknown repository",
+        repositoryName: githubRepositoryName(
+          project?.experimental_gitRemoteUrl,
+        ),
         workspaces,
       };
     })
-    .sort((left, right) => left.name.localeCompare(right.name));
+    .sort((left, right) =>
+      (left.repositoryName ?? left.name).localeCompare(
+        right.repositoryName ?? right.name,
+      ),
+    );
 
   personalThreads.sort((left, right) => {
     const createdAtDelta = right.createdAt - left.createdAt;
