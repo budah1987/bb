@@ -1602,8 +1602,21 @@ function createFakePluginHostInternal(
 
   // --- ui ---
   const mentionProviders: FakeMentionProviderRecord[] = [];
+  let backgroundActivityProvider: PluginBackgroundActivityProvider | null = null;
   const ui: PluginUi = {
     requestInput,
+    contributeBackgroundActivity(provider) {
+      assertLive();
+      if (backgroundActivityProvider) {
+        throw new Error("a background activity provider is already registered");
+      }
+      if (typeof provider?.list !== "function") {
+        throw new Error(
+          "background activity provider must supply a list({ threadId }) function",
+        );
+      }
+      backgroundActivityProvider = provider;
+    },
     registerMentionProvider(provider) {
       assertLive();
       const id = provider?.id;

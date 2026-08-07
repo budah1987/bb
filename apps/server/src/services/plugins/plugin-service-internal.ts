@@ -155,6 +155,19 @@ export interface PluginResolvedAgentConfiguration {
   dynamicInstructions: Array<{ pluginId: string; text: string }>;
 }
 
+/**
+ * One live background task contributed by a running plugin, validated at the
+ * boundary so the timeline projection can trust it.
+ */
+export interface PluginBackgroundActivityContribution {
+  pluginId: string;
+  id: string;
+  kind: "agent" | "command";
+  title: string;
+  detail: string | null;
+  startedAtMs: number;
+}
+
 /** One mention provider contributed by a running plugin (design §4.9). */
 export interface PluginMentionProviderContribution {
   pluginId: string;

@@ -14,18 +14,33 @@ export const LOCAL_AGENT_TASK_TYPE = "local_agent";
 export const LOCAL_SUBAGENT_TASK_TYPE = "local_subagent";
 
 /**
+ * Background work a plugin owns rather than the provider — a model delegated
+ * to another runtime, a remote job. It has no provider task events, so the
+ * contributing plugin reports it directly, but it is the same kind of thing as
+ * a backgrounded subagent and shares its row, glyph and priority.
+ */
+export const PLUGIN_AGENT_TASK_TYPE = "plugin_agent";
+export const PLUGIN_COMMAND_TASK_TYPE = "plugin_command";
+
+/**
  * Whether a background task renders as a "background command" row rather than
  * a workflow or background agent row.
  */
 export function isBackgroundCommandTaskType(taskType: string): boolean {
-  return taskType === LOCAL_BASH_TASK_TYPE;
+  return taskType === LOCAL_BASH_TASK_TYPE || taskType === PLUGIN_COMMAND_TASK_TYPE;
 }
 
 export function isBackgroundAgentTaskType(taskType: string): boolean {
   return (
     taskType === LOCAL_AGENT_TASK_TYPE ||
-    taskType === LOCAL_SUBAGENT_TASK_TYPE
+    taskType === LOCAL_SUBAGENT_TASK_TYPE ||
+    taskType === PLUGIN_AGENT_TASK_TYPE
   );
+}
+
+/** Whether a background row came from a plugin rather than the provider. */
+export function isPluginTaskType(taskType: string): boolean {
+  return taskType === PLUGIN_AGENT_TASK_TYPE || taskType === PLUGIN_COMMAND_TASK_TYPE;
 }
 
 /**

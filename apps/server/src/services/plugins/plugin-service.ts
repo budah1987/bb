@@ -94,6 +94,7 @@ import type {
   PluginApplyUpdateOutcome,
   PluginInstructionContribution,
   PluginListEntry,
+  PluginBackgroundActivityContribution,
   PluginMentionProviderContribution,
   PluginMentionResolveResult,
   PluginMentionSearchGroup,
@@ -113,6 +114,7 @@ export type {
   PluginInstructionContribution,
   PluginResolvedAgentConfiguration,
   PluginListEntry,
+  PluginBackgroundActivityContribution,
   PluginMentionProviderContribution,
   PluginMentionResolveResult,
   PluginMentionSearchGroup,
@@ -318,6 +320,15 @@ export interface PluginService {
    * GET /plugins/contributions. No plugin code runs.
    */
   listMentionProviderContributions(): PluginMentionProviderContribution[];
+  /**
+   * Live background work contributed by loaded plugins for one thread, merged
+   * into the timeline's activeBackgroundCommands. Called on the timeline
+   * projection path, so every provider is synchronous by contract and each is
+   * failure-isolated: a throwing plugin loses its own rows and nothing else.
+   */
+  listBackgroundActivity(
+    threadId: string,
+  ): PluginBackgroundActivityContribution[];
   /**
    * Run every loaded plugin's mention providers against one composer query
    * (design §4.9). Providers run concurrently, each wrapped in the
@@ -1955,6 +1966,47 @@ export function createPluginService(deps: PluginServiceDeps): PluginService {
         }
       }
       return contributions;
+    },
+
+    listBackgroundActivity(threadId) {
+      const rows: PluginBackgroundActivityContribution[] = [];
+      for (const [id, plugin] of [...loaded.entries()].sort(([a], [b]) =>
+        a.localeCompare(b),
+      )) {
+        const provider = plugin.handle.backgroundActivityProvider;
+        if (!provider) continue;
+        // This runs inside the timeline projection, so a throwing or malformed
+        // provider must cost the thread nothing beyond its own rows.
+        try {
+          const items = provider.list({ threadId });
+          if (!Array.isArray(items)) continue;
+          for (const item of items) {
+            if (
+              typeof item?.id !== "string" ||
+              typeof item.title !== "string" ||
+              typeof item.startedAtMs !== "number" ||
+              !Number.isFinite(item.startedAtMs)
+            ) {
+              continue;
+            }
+            rows.push({
+              pluginId: id,
+              id: item.id,
+              kind: item.kind === "command" ? "command" : "agent",
+              title: item.title,
+              detail: typeof item.detail === "string" ? item.detail : null,
+              startedAtMs: item.startedAtMs,
+            });
+          }
+        } catch (error) {
+          logger.warn(
+            `[plugin:${id}] background activity provider failed: ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+          );
+        }
+      }
+      return rows;
     },
 
     async searchMentions(args) {

@@ -567,12 +567,50 @@ export interface PluginMentionProviderRegistration {
   resolve(itemId: string): { context: string } | Promise<{ context: string }>;
 }
 
+/** One live background task a plugin owns, for the thread's activity card. */
+export interface PluginBackgroundActivityItem {
+  /** Unique within this plugin and stable for the life of the task. */
+  id: string;
+  /**
+   * `agent` for work a model is doing (a delegated worker, a remote job);
+   * `command` for a process. This picks the row's glyph and wording, and
+   * agent work outranks command work for the sidebar's single status glyph.
+   */
+  kind: "agent" | "command";
+  /** One line naming the work, e.g. "opus implementation". */
+  title: string;
+  /** Optional second line: what the task is doing right now. */
+  detail?: string;
+  /** Epoch ms the task started; drives the row's live elapsed time. */
+  startedAtMs: number;
+}
+
+export interface PluginBackgroundActivityProvider {
+  /**
+   * Live background tasks for one thread.
+   *
+   * SYNCHRONOUS AND CHEAP BY CONTRACT: this runs inside the thread timeline
+   * projection, which is rebuilt on every timeline fetch. Do the I/O in a
+   * `bb.background.service` and answer from that cache — never read the
+   * filesystem or network here. A throwing provider contributes nothing.
+   */
+  list(context: { threadId: string }): PluginBackgroundActivityItem[];
+}
+
 export interface PluginUi {
   /** Block until the app submits or cancels a plugin-owned composer form. */
   requestInput(
     request: PluginInteractionRequest,
     options?: { signal?: AbortSignal },
   ): Promise<PluginInteractionResult>;
+  /**
+   * Contribute live background tasks into the thread's existing background
+   * activity card and sidebar status glyph, rather than drawing a competing
+   * strip above the composer. Rows merge with bb's own background commands and
+   * agents and share their grouping, ordering and priority. At most one
+   * provider per plugin.
+   */
+  contributeBackgroundActivity(provider: PluginBackgroundActivityProvider): void;
   /**
    * Register a mention provider for the shipped app's composer (design §4.9).
    * Providers default to the `@` trigger and may opt into `#`, `$`, `!`, or

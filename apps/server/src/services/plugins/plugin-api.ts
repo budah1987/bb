@@ -23,6 +23,7 @@ import type {
   PluginAgentToolResult,
   PluginAgents,
   PluginBackground,
+  PluginBackgroundActivityProvider,
   PluginCli,
   PluginCliCommandInfo,
   PluginCliContext,
@@ -75,6 +76,8 @@ export type {
   PluginAgentToolResult,
   PluginAgents,
   PluginBackground,
+  PluginBackgroundActivityItem,
+  PluginBackgroundActivityProvider,
   PluginCli,
   PluginCliCommandInfo,
   PluginCliContext,
@@ -426,6 +429,12 @@ export interface PluginApiHandle {
   instructionProvider: PluginInstructionProvider | null;
   /** Mention providers recorded by `bb.ui.registerMentionProvider`. */
   mentionProviders: PluginMentionProviderRecord[];
+  /**
+   * Live background work from `bb.ui.contributeBackgroundActivity` (at most
+   * one; null when none). Read on the thread timeline path, so its `list` is
+   * synchronous by contract.
+   */
+  backgroundActivityProvider: PluginBackgroundActivityProvider | null;
   /** Publish factory-time host declarations and status only after commit. */
   activate(): void;
   /** Poison every method on the handle. */
@@ -1123,8 +1132,21 @@ export function createPluginApi(options: {
   };
 
   const mentionProviders: PluginMentionProviderRecord[] = [];
+  let backgroundActivityProvider: PluginBackgroundActivityProvider | null = null;
   const ui: PluginUi = {
     requestInput,
+    contributeBackgroundActivity(provider) {
+      assertLive();
+      if (backgroundActivityProvider) {
+        throw new Error("a background activity provider is already registered");
+      }
+      if (typeof provider?.list !== "function") {
+        throw new Error(
+          "background activity provider must supply a list({ threadId }) function",
+        );
+      }
+      backgroundActivityProvider = provider;
+    },
     registerMentionProvider(provider) {
       assertLive();
       const id = provider?.id;
@@ -1333,6 +1355,9 @@ export function createPluginApi(options: {
       return instructionProvider;
     },
     mentionProviders,
+    get backgroundActivityProvider() {
+      return backgroundActivityProvider;
+    },
     activate() {
       if (activated) return;
       assertLive();
