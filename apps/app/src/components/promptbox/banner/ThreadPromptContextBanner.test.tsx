@@ -30,6 +30,7 @@ const pullRequestFixture: ThreadPullRequest = {
     passedCount: 1,
     failedCount: 0,
     pendingCount: 0,
+    items: [],
   },
   review: {
     state: "none",
@@ -213,6 +214,7 @@ describe("ThreadPromptContextBanner", () => {
               passedCount: 0,
               failedCount: 0,
               pendingCount: 1,
+              items: [],
             },
             attention: "checks_pending",
           },
@@ -299,6 +301,7 @@ describe("ThreadPromptContextBanner", () => {
               passedCount: 0,
               failedCount: 1,
               pendingCount: 0,
+              items: [],
             },
             attention: "checks_failed",
           },

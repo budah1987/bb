@@ -358,6 +358,7 @@ export function PullRequest() {
       passedCount: 0,
       failedCount: 0,
       pendingCount: 0,
+      items: [],
     },
     review: {
       state: "none",
@@ -372,6 +373,7 @@ export function PullRequest() {
       passedCount: 0,
       failedCount: 0,
       pendingCount: 0,
+      items: [],
     },
     review: {
       state: "none",
@@ -391,6 +393,7 @@ export function PullRequest() {
       passedCount: 2,
       failedCount: 1,
       pendingCount: 0,
+      items: [],
     },
     attention: "checks_failed",
   });
@@ -401,6 +404,7 @@ export function PullRequest() {
       passedCount: 2,
       failedCount: 0,
       pendingCount: 1,
+      items: [],
     },
     attention: "checks_pending",
   });
@@ -452,6 +456,7 @@ export function PullRequest() {
       passedCount: 2,
       failedCount: 1,
       pendingCount: 0,
+      items: [],
     },
     mergeability: draftMergeability,
     attention: "checks_failed",
@@ -464,6 +469,7 @@ export function PullRequest() {
       passedCount: 0,
       failedCount: 0,
       pendingCount: 0,
+      items: [],
     },
     mergeability: draftMergeability,
     attention: "draft",
@@ -476,6 +482,7 @@ export function PullRequest() {
       passedCount: 0,
       failedCount: 0,
       pendingCount: 0,
+      items: [],
     },
     mergeability: draftMergeability,
     attention: "draft",
@@ -488,6 +495,7 @@ export function PullRequest() {
       passedCount: 2,
       failedCount: 0,
       pendingCount: 1,
+      items: [],
     },
     mergeability: draftMergeability,
     attention: "draft",

@@ -23,6 +23,7 @@ export const FIXED_PANEL_TABS_IDLE_EXPIRY_MS = 14 * 24 * 60 * 60 * 1000;
 const SECONDARY_PANEL_TAB_ID_ENVIRONMENT_NONE = "none";
 const THREAD_INFO_TAB_ID = "thread-info:thread-info:none";
 const GIT_DIFF_TAB_ID = "git-diff:git-diff:none";
+const PULL_REQUEST_TAB_ID = "pull-request:pull-request:none";
 const NEW_TAB_TAB_ID = "new-tab:new-tab:none";
 
 const environmentFilePreviewSourceSchema: z.ZodType<EnvironmentFilePreviewSource> =
@@ -63,6 +64,12 @@ const gitDiffFixedPanelTabSchema = z
   .object({
     id: z.string().min(1),
     kind: z.literal("git-diff"),
+  })
+  .strict();
+const pullRequestFixedPanelTabSchema = z
+  .object({
+    id: z.string().min(1),
+    kind: z.literal("pull-request"),
   })
   .strict();
 const workspaceFilePreviewFixedPanelTabSchema = z
@@ -137,6 +144,7 @@ const pluginPanelFixedPanelTabSchema = z
 const secondaryFixedPanelTabSchema = z.union([
   threadInfoFixedPanelTabSchema,
   gitDiffFixedPanelTabSchema,
+  pullRequestFixedPanelTabSchema,
   pluginPanelFixedPanelTabSchema,
   workspaceFilePreviewFixedPanelTabSchema,
   hostFilePreviewFixedPanelTabSchema,
@@ -187,6 +195,11 @@ export interface ThreadInfoFixedPanelTab {
 export interface GitDiffFixedPanelTab {
   id: string;
   kind: "git-diff";
+}
+
+export interface PullRequestFixedPanelTab {
+  id: string;
+  kind: "pull-request";
 }
 
 /**
@@ -267,6 +280,7 @@ export interface TerminalFixedPanelTab {
 export type SecondaryFixedPanelTab =
   | ThreadInfoFixedPanelTab
   | GitDiffFixedPanelTab
+  | PullRequestFixedPanelTab
   | PluginPanelFixedPanelTab
   | WorkspaceFilePreviewFixedPanelTab
   | HostFilePreviewFixedPanelTab
@@ -503,6 +517,13 @@ export function createGitDiffFixedPanelTab(): GitDiffFixedPanelTab {
   };
 }
 
+export function createPullRequestFixedPanelTab(): PullRequestFixedPanelTab {
+  return {
+    id: PULL_REQUEST_TAB_ID,
+    kind: "pull-request",
+  };
+}
+
 export function createPluginPanelFixedPanelTab({
   actionId,
   paramsJson,
@@ -646,6 +667,13 @@ function normalizeFixedPanelTabId(tab: FixedPanelTab): FixedPanelTab {
             ...tab,
             id: GIT_DIFF_TAB_ID,
           };
+    case "pull-request":
+      return tab.id === PULL_REQUEST_TAB_ID
+        ? tab
+        : {
+            ...tab,
+            id: PULL_REQUEST_TAB_ID,
+          };
     case "workspace-file-preview": {
       const id = buildWorkspaceFilePreviewTabId({
         environmentId: tab.environmentId,
@@ -767,6 +795,7 @@ function stripTransientFixedPanelTabForStorage(
       };
     case "thread-info":
     case "git-diff":
+    case "pull-request":
     case "plugin-panel":
     case "browser":
     case "new-tab":
@@ -946,6 +975,7 @@ export function areFixedPanelTabsEquivalent(
   switch (a.kind) {
     case "thread-info":
     case "git-diff":
+    case "pull-request":
     case "new-tab":
       return true;
     case "plugin-panel":

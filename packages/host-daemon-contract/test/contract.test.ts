@@ -571,6 +571,23 @@ const SETTLED_RESPONSE_RESULT_FIXTURES: SettledResponseResultFixtures = {
     branchName: "feature/renamed",
   },
   "workspace.pull_request_action": {},
+  "workspace.pull_request_create": {
+    pullRequest: {
+      number: 42,
+      title: "Add host RPC guard",
+      state: "OPEN",
+      url: "https://github.com/acme/bb/pull/42",
+      isDraft: false,
+      baseRefName: "main",
+      headRefName: "feature/host-rpc",
+      updatedAt: "2026-06-16T12:30:00Z",
+      checks: [],
+      reviewDecision: null,
+      reviewRequestCount: 0,
+      mergeStateStatus: "CLEAN",
+      mergeable: "MERGEABLE",
+    },
+  },
 };
 
 const WORKSPACE_DIFF_FILES_AVAILABLE_RESULT: JsonObject = {
@@ -1079,7 +1096,7 @@ describe("host-daemon command schemas", () => {
   // Version 78 adds pull-request catalog and checkout payloads. Older daemons
   // cannot safely parse or execute these commands, so the bump forces an update.
   it("uses protocol version 78 for GitHub workflow support", () => {
-    expect(HOST_DAEMON_PROTOCOL_VERSION).toBe(78);
+    expect(HOST_DAEMON_PROTOCOL_VERSION).toBe(79);
   });
 
   it("binds Plan cancellation to a required turn id and typed result", () => {

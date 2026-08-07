@@ -270,6 +270,45 @@ describe("workspace command dispatch", () => {
     });
   });
 
+  it("covers workspace.pull_request_create", async () => {
+    const harness = createHarness({ isWorktree: true });
+    await harness.manager.ensureEnvironment({
+      environmentId: "env-1",
+      workspacePath: "/tmp/env-1",
+    });
+
+    await expect(
+      dispatchCommand(
+        {
+          type: "workspace.pull_request_create",
+          environmentId: "env-1",
+          workspaceContext: {
+            workspacePath: "/tmp/env-1",
+            workspaceProvisionType: "managed-worktree",
+          },
+          baseBranch: "main",
+          body: "Ships the workflow",
+          draft: true,
+          title: "Add PR workflow",
+        },
+        harness.dispatchOptions(),
+      ),
+    ).resolves.toMatchObject({
+      pullRequest: {
+        number: 42,
+        title: "Add PR workflow",
+        isDraft: true,
+      },
+    });
+    expect(harness.workspaceState.lastPullRequestAction).toEqual({
+      operation: "create",
+      baseBranch: "main",
+      body: "Ships the workflow",
+      draft: true,
+      title: "Add PR workflow",
+    });
+  });
+
   it("rehydrates a missing workspace runtime from workspaceContext", async () => {
     const harness = createHarness({ workspacePath: "/tmp/env-rehydrate" });
 

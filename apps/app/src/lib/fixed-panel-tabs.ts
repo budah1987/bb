@@ -9,6 +9,7 @@ import { useThreadTabs } from "@/hooks/queries/thread-tabs-query";
 import {
   EMPTY_FIXED_PANEL_TABS_STATE,
   createGitDiffFixedPanelTab,
+  createPullRequestFixedPanelTab,
   createTerminalFixedPanelTab,
   createThreadInfoFixedPanelTab,
   getFixedPanelTabsStateStorageKey,
@@ -92,6 +93,7 @@ function getFixedPanelTabsStateAtom(threadId: string | null | undefined) {
 
 function buildSecondaryPanelTab(panel: ThreadSecondaryPanel): FixedPanelTab {
   if (panel === "git-diff") return createGitDiffFixedPanelTab();
+  if (panel === "pull-request") return createPullRequestFixedPanelTab();
   return createThreadInfoFixedPanelTab();
 }
 

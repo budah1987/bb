@@ -17,6 +17,7 @@ import { serializePluginPanelParams } from "@/lib/plugin-json-value";
 import {
   defaultAppSettings,
   resolveEnvironmentMergeBaseBranch,
+  type GitHostPullRequestCheck,
   type ThreadListEntry,
   type ThreadWithRuntime,
 } from "@bb/domain";
@@ -30,7 +31,10 @@ import { copyToClipboardWithToast } from "@/lib/clipboard";
 import type { ThreadSecondaryPanel as ThreadSecondaryPanelTab } from "@/lib/thread-secondary-panel";
 import { useForkThreadFromMessage } from "@/hooks/useForkThreadFromMessage";
 import { isThreadForkable } from "@/lib/fork-thread-request";
-import { useRequestEnvironmentAction } from "../../hooks/mutations/environment-mutations";
+import {
+  useArchiveEnvironmentThreads,
+  useRequestEnvironmentAction,
+} from "../../hooks/mutations/environment-mutations";
 import {
   useMarkThreadRead,
   useUpdateThread,
@@ -146,6 +150,10 @@ import {
   usePluginPanelActions,
 } from "@/components/plugin/PluginPanelActions";
 import { PluginThreadPanelNavigationProvider } from "@/components/plugin/plugin-thread-panel-navigation";
+import {
+  PullRequestPanel,
+  type PullRequestCreateInput,
+} from "@/components/pull-request/PullRequestPanel";
 import { usePluginSlots } from "@/lib/plugin-slots";
 import { getFileExtension } from "@/lib/file-opener-preference";
 import { Icon } from "@bb/shared-ui/icon";
@@ -771,6 +779,7 @@ function ThreadDetailViewInternal(props: ThreadDetailViewInternalProps) {
   const sendMessage = useSendThreadMessage();
   const createQueuedMessage = useCreateThreadQueuedMessage();
   const requestEnvironmentAction = useRequestEnvironmentAction();
+  const archiveEnvironmentThreads = useArchiveEnvironmentThreads();
   const [pullRequestMergeMethod, setPullRequestMergeMethod] = useAtom(
     pullRequestMergeMethodAtom,
   );
@@ -1505,6 +1514,33 @@ function ThreadDetailViewInternal(props: ThreadDetailViewInternalProps) {
   const pullRequest = getEnvironmentPullRequestFromResponse(
     pullRequestQuery.data,
   );
+  const handlePullRequestCreate = useCallback(
+    async (input: PullRequestCreateInput) => {
+      const environmentId = thread?.environmentId;
+      if (!environmentId) return;
+      const toastId = appToast.loading("Creating pull request");
+      try {
+        const response = await requestEnvironmentAction.mutateAsync({
+          id: environmentId,
+          action: "pull_request_create",
+          options: input,
+        });
+        if (response.action !== "pull_request_create") {
+          throw new Error("Expected pull request create action response.");
+        }
+        appToast.success(response.message, { id: toastId });
+      } catch (error) {
+        appToast.error("Failed to create pull request", {
+          id: toastId,
+          description: getMutationErrorMessage({
+            error,
+            fallbackMessage: "Pull request was not created",
+          }),
+        });
+      }
+    },
+    [requestEnvironmentAction, thread?.environmentId],
+  );
   const handlePullRequestReady = useCallback(async () => {
     const environmentId = thread?.environmentId;
     if (!environmentId) {
@@ -1588,6 +1624,63 @@ function ThreadDetailViewInternal(props: ThreadDetailViewInternalProps) {
       setPullRequestMergeMethod,
       thread?.environmentId,
     ],
+  );
+  const handlePullRequestArchive = useCallback(async () => {
+    const environmentId = thread?.environmentId;
+    if (!environmentId) return;
+    const toastId = appToast.loading("Archiving workspace");
+    try {
+      const response = await archiveEnvironmentThreads.mutateAsync({
+        id: environmentId,
+      });
+      appToast.success(
+        `Archived ${response.archivedThreadIds.length} thread${response.archivedThreadIds.length === 1 ? "" : "s"}`,
+        { id: toastId },
+      );
+    } catch (error) {
+      appToast.error("Failed to archive workspace", {
+        id: toastId,
+        description: getMutationErrorMessage({
+          error,
+          fallbackMessage: "Workspace was not archived",
+        }),
+      });
+    }
+  }, [archiveEnvironmentThreads, thread?.environmentId]);
+  const handleAskAgentToFixPullRequestCheck = useCallback(
+    async (check: GitHostPullRequestCheck) => {
+      if (!thread || sendMessage.isPending) return;
+      const toastId = appToast.loading("Sending check to agent");
+      try {
+        await sendMessage.mutateAsync({
+          id: thread.id,
+          mode: "queue-if-active",
+          input: [
+            {
+              type: "text",
+              mentions: [],
+              text: [
+                `Investigate and fix the failing CI check \"${check.name}\" for pull request #${pullRequest?.number ?? "unknown"}.`,
+                check.url ? `Check details: ${check.url}` : null,
+                "Use the GitHub CLI to inspect the failing run and logs, make the smallest safe fix, run the relevant local checks, and report what changed.",
+              ]
+                .filter((line): line is string => line !== null)
+                .join("\n"),
+            },
+          ],
+        });
+        appToast.success("Check sent to agent", { id: toastId });
+      } catch (error) {
+        appToast.error("Failed to message agent", {
+          id: toastId,
+          description: getMutationErrorMessage({
+            error,
+            fallbackMessage: "Check was not sent to the agent",
+          }),
+        });
+      }
+    },
+    [pullRequest?.number, sendMessage, thread],
   );
   const workspaceBranch = workspaceStatus?.branch;
   const workspaceChangedFilesSection = useMemo(
@@ -2359,6 +2452,7 @@ function ThreadDetailViewInternal(props: ThreadDetailViewInternalProps) {
       onPullRequestMerge={handlePullRequestMerge}
       onPullRequestDraft={handlePullRequestDraft}
       onPullRequestReady={handlePullRequestReady}
+      onOpenPullRequestPanel={() => openSecondaryPanel("pull-request")}
       pullRequestMergeMethod={pullRequestMergeMethod}
       onChangedFileClick={handleChangedFileClick}
       openThreadDiffPanel={openSecondaryPanelDiffPanel}
@@ -2463,6 +2557,39 @@ function ThreadDetailViewInternal(props: ThreadDetailViewInternalProps) {
   ) : activePluginPanelTab ? (
     <PluginPanelTabContent tab={activePluginPanelTab} threadId={thread.id} />
   ) : undefined;
+  const pullRequestPanelContent = (
+    <PullRequestPanel
+      baseBranchOptions={[
+        ...new Set([
+          workspaceStatus?.branch.defaultBranch ?? "main",
+          ...(mergeBaseBranchOptions ?? []),
+        ]),
+      ]}
+      creationUnavailableReason={
+        environment?.workspaceProvisionType === "managed-worktree"
+          ? null
+          : "Create a managed worktree from a branch first, then BB can push it and open a pull request."
+      }
+      defaultBaseBranch={workspaceStatus?.branch.defaultBranch ?? "main"}
+      isActionPending={
+        requestEnvironmentAction.isPending ||
+        archiveEnvironmentThreads.isPending
+      }
+      isLoading={pullRequestQuery.isLoading}
+      onArchive={() => void handlePullRequestArchive()}
+      onAskAgentToFix={(check) =>
+        void handleAskAgentToFixPullRequestCheck(check)
+      }
+      onConvertToDraft={() => void handlePullRequestDraft()}
+      onCreate={(input) => void handlePullRequestCreate(input)}
+      onMarkReady={() => void handlePullRequestReady()}
+      onMerge={(method) => void handlePullRequestMerge(method)}
+      onRefresh={() => void pullRequestQuery.refetch()}
+      pullRequestResponse={pullRequestQuery.data}
+      threadTitle={threadTitle}
+      workspaceStatus={workspaceStatus}
+    />
+  );
   const isBrowserTabActive = activeBrowserTab !== null;
   const threadDetailContent = (
     <MarkdownLocalFileContextMenuContext.Provider
@@ -2537,6 +2664,7 @@ function ThreadDetailViewInternal(props: ThreadDetailViewInternalProps) {
             workspaceRootPath: environment?.path,
             fileTabs,
             fileTabContent,
+            pullRequestContent: pullRequestPanelContent,
             fileTabContentFillsRegion:
               activePluginPanelTab !== null &&
               pluginThreadPanelActions.find(

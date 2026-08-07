@@ -36,7 +36,7 @@ import {
   providerCliStatusResponseSchema,
 } from "./local.js";
 
-export const HOST_DAEMON_PROTOCOL_VERSION = 78 as const;
+export const HOST_DAEMON_PROTOCOL_VERSION = 79 as const;
 
 export {
   BRANCH_LIST_LIMIT_MAX,
@@ -1052,6 +1052,16 @@ const workspacePullRequestCommandSchema =
     type: z.literal("workspace.pull_request"),
   });
 
+const workspacePullRequestCreateCommandSchema = hostDaemonWorkspaceTargetSchema
+  .extend({
+    type: z.literal("workspace.pull_request_create"),
+    baseBranch: gitBranchNameSchema,
+    body: z.string(),
+    draft: z.boolean(),
+    title: z.string().trim().min(1),
+  })
+  .strict();
+
 const pullRequestMergeMethodSchema = z.enum(["merge", "squash", "rebase"]);
 
 const workspacePullRequestReadyCommandSchema = hostDaemonWorkspaceTargetSchema
@@ -1390,6 +1400,11 @@ const workspaceRenameResultSchema = z.discriminatedUnion("target", [
   z.object({ target: z.literal("folder"), path: z.string().min(1) }),
 ]);
 const workspacePullRequestActionResultSchema = z.object({}).strict();
+const workspacePullRequestCreateResultSchema = z
+  .object({
+    pullRequest: gitHostPullRequestSchema,
+  })
+  .strict();
 // ---------------------------------------------------------------------------
 // Provider usage limits (live read from the host's provider credentials)
 // ---------------------------------------------------------------------------
@@ -1805,6 +1820,15 @@ export const hostDaemonCommandRegistry = {
     type: "workspace.pull_request_action",
     schema: workspacePullRequestActionCommandSchema,
     resultSchema: workspacePullRequestActionResultSchema,
+    transport: "settled",
+    retryable: false,
+    flushEventsBeforeResult: false,
+    envLane: "write",
+  }),
+  "workspace.pull_request_create": defineHostDaemonCommandDescriptor({
+    type: "workspace.pull_request_create",
+    schema: workspacePullRequestCreateCommandSchema,
+    resultSchema: workspacePullRequestCreateResultSchema,
     transport: "settled",
     retryable: false,
     flushEventsBeforeResult: false,

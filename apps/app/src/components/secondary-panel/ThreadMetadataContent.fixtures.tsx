@@ -63,6 +63,7 @@ export function makePullRequest(
       passedCount: 3,
       failedCount: 0,
       pendingCount: 0,
+      items: [],
     },
     review: {
       state: "approved",

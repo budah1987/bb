@@ -427,6 +427,27 @@ const commandHandlers: CommandHandlerMap = {
     }
     return {};
   },
+  "workspace.pull_request_create": async (command, options) => {
+    const entry = await requireResolvedWorkspaceForCommand({
+      dataDir: options.dataDir,
+      environmentId: command.environmentId,
+      requireGit: true,
+      requireManagedWorktree: true,
+      runtimeManager: options.runtimeManager,
+      workspaceContext: command.workspaceContext,
+    });
+    const pullRequest = await entry.workspace.runPullRequestAction({
+      operation: "create",
+      baseBranch: command.baseBranch,
+      body: command.body,
+      draft: command.draft,
+      title: command.title,
+    });
+    if (!pullRequest) {
+      throw new Error("Pull request creation returned no pull request");
+    }
+    return { pullRequest };
+  },
 };
 
 const onlineRpcHandlers: OnlineRpcHandlerMap = {

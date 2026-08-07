@@ -40,9 +40,7 @@ function PromptStage({
   return (
     <div
       data-promptbox-shell=""
-      className={
-        size === "desktop" ? "min-w-0 flex-1" : "w-[20rem] shrink-0"
-      }
+      className={size === "desktop" ? "min-w-0 flex-1" : "w-[20rem] shrink-0"}
     >
       {children}
     </div>
@@ -387,6 +385,7 @@ function buildPullRequestFixture(
       passedCount: 1,
       failedCount: 1,
       pendingCount: 1,
+      items: [],
     },
     review: {
       state: "review_requested",
@@ -433,6 +432,7 @@ const pullRequestStateRows: readonly {
         passedCount: 3,
         failedCount: 0,
         pendingCount: 0,
+        items: [],
       },
       attention: "ready_to_merge",
     }),
@@ -448,6 +448,7 @@ const pullRequestStateRows: readonly {
         passedCount: 1,
         failedCount: 0,
         pendingCount: 2,
+        items: [],
       },
       attention: "checks_pending",
     }),
@@ -463,6 +464,7 @@ const pullRequestStateRows: readonly {
         passedCount: 1,
         failedCount: 1,
         pendingCount: 1,
+        items: [],
       },
       attention: "checks_failed",
     }),
@@ -479,6 +481,7 @@ const pullRequestStateRows: readonly {
         passedCount: 0,
         failedCount: 0,
         pendingCount: 2,
+        items: [],
       },
       mergeability: {
         state: "draft",
@@ -499,6 +502,7 @@ const pullRequestStateRows: readonly {
         passedCount: 3,
         failedCount: 0,
         pendingCount: 0,
+        items: [],
       },
       review: {
         state: "review_requested",
@@ -518,6 +522,7 @@ const pullRequestStateRows: readonly {
         passedCount: 0,
         failedCount: 0,
         pendingCount: 0,
+        items: [],
       },
       mergeability: {
         state: "blocked",
@@ -539,6 +544,7 @@ const pullRequestStateRows: readonly {
         passedCount: 3,
         failedCount: 0,
         pendingCount: 0,
+        items: [],
       },
       attention: "merged",
     }),
@@ -555,6 +561,7 @@ const pullRequestStateRows: readonly {
         passedCount: 0,
         failedCount: 0,
         pendingCount: 0,
+        items: [],
       },
       attention: "closed",
     }),

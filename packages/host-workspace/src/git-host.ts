@@ -11,7 +11,7 @@ import {
   gitHostPullRequestSchema,
 } from "@bb/domain";
 import { sanitizeInheritedChildProcessEnv } from "@bb/process-utils";
-import { WorkspaceError } from "./git.js";
+import { runGit, WorkspaceError } from "./git.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -27,6 +27,7 @@ const GH_PR_VIEW_TIMEOUT_MS = 10_000;
 const GH_PR_VIEW_MAX_BUFFER_BYTES = 16 * 1024 * 1024;
 const GH_PR_ACTION_TIMEOUT_MS = 60_000;
 const GH_PR_ACTION_MAX_BUFFER_BYTES = 16 * 1024 * 1024;
+const GIT_PUSH_TIMEOUT_MS = 120_000;
 
 const GH_PR_VIEW_JSON_FIELDS = [
   "number",
@@ -54,12 +55,25 @@ export type GitHostPullRequestMergeMethod = "merge" | "squash" | "rebase";
 export type GitHostPullRequestAction =
   | { operation: "ready" }
   | { operation: "draft" }
-  | { operation: "merge"; method: GitHostPullRequestMergeMethod };
+  | { operation: "merge"; method: GitHostPullRequestMergeMethod }
+  | ({ operation: "create" } & GitHostPullRequestCreateOptions);
+
+export interface GitHostPullRequestCreateOptions {
+  baseBranch: string;
+  body: string;
+  draft: boolean;
+  title: string;
+}
 
 interface RunPullRequestActionForBranchArgs {
   cwd: string;
   branch: string;
   action: GitHostPullRequestAction;
+}
+
+interface CreatePullRequestForBranchArgs extends GitHostPullRequestCreateOptions {
+  branch: string;
+  cwd: string;
 }
 
 type JsonObject = Record<string, unknown>;
@@ -298,6 +312,8 @@ function buildPullRequestActionArgs(
       return ["pr", "ready", "--undo", "--", branch];
     case "merge":
       return ["pr", "merge", getMergeMethodFlag(action.method), "--", branch];
+    case "create":
+      throw new Error("Pull request creation uses createPullRequestForBranch");
   }
 }
 
@@ -447,7 +463,14 @@ export async function getPullRequestForBranch(
  */
 export async function runPullRequestActionForBranch(
   args: RunPullRequestActionForBranchArgs,
-): Promise<void> {
+): Promise<void | GitHostPullRequest> {
+  if (args.action.operation === "create") {
+    return createPullRequestForBranch({
+      cwd: args.cwd,
+      branch: args.branch,
+      ...args.action,
+    });
+  }
   const ghArgs = buildPullRequestActionArgs(args.action, args.branch);
   try {
     await execFileAsync("gh", ghArgs, {
@@ -460,4 +483,58 @@ export async function runPullRequestActionForBranch(
   } catch (error) {
     throw createGitHostCommandFailedError(ghArgs, error);
   }
+}
+
+/**
+ * Push the current workspace branch to origin and create its GitHub pull
+ * request without invoking any interactive gh prompts. The newly-created PR
+ * is fetched immediately so every caller receives the same validated shape as
+ * the normal pull-request lookup path.
+ */
+export async function createPullRequestForBranch(
+  args: CreatePullRequestForBranchArgs,
+): Promise<GitHostPullRequest> {
+  await runGit(["push", "--set-upstream", "origin", "HEAD"], {
+    cwd: args.cwd,
+    timeoutMs: GIT_PUSH_TIMEOUT_MS,
+  });
+
+  const ghArgs = [
+    "pr",
+    "create",
+    "--title",
+    args.title,
+    "--body",
+    args.body,
+    "--base",
+    args.baseBranch,
+    "--head",
+    args.branch,
+    ...(args.draft ? ["--draft"] : []),
+  ];
+  try {
+    await execFileAsync("gh", ghArgs, {
+      cwd: args.cwd,
+      encoding: "utf8",
+      env: sanitizeInheritedChildProcessEnv({ env: process.env }),
+      timeout: GH_PR_ACTION_TIMEOUT_MS,
+      maxBuffer: GH_PR_ACTION_MAX_BUFFER_BYTES,
+    });
+  } catch (error) {
+    throw createGitHostCommandFailedError(ghArgs, error);
+  }
+
+  const result = await getPullRequestForBranch({
+    cwd: args.cwd,
+    branch: args.branch,
+  });
+  if (result.outcome === "found") {
+    return result.pullRequest;
+  }
+  throw new WorkspaceError(
+    "git_host_command_failed",
+    result.outcome === "unavailable"
+      ? result.message
+      : "Pull request was created but could not be loaded",
+  );
 }

@@ -93,6 +93,7 @@ export interface ThreadPromptPullRequestSection {
   pullRequest: ThreadPullRequest;
   actions?: {
     isPending?: boolean;
+    onOpenChecks?: () => void;
     onMarkReady?: () => void;
     onMerge?: (method: PullRequestMergeMethod) => void;
     onConvertToDraft?: () => void;
@@ -285,8 +286,7 @@ function SectionToggleButton({
         // icon — the icons' own internal padding provides enough separation,
         // and a gap here makes the pair look untethered.
         label !== null && label !== undefined ? "gap-1.5" : "gap-0",
-        !active &&
-          (isExpanded ? "text-foreground" : "text-muted-foreground"),
+        !active && (isExpanded ? "text-foreground" : "text-muted-foreground"),
       )}
     >
       {icon}
@@ -317,9 +317,7 @@ function SectionToggleButton({
       <Icon
         name="ChevronDown"
         className={cn(
-          active
-            ? activityIconClass("active")
-            : "text-subtle-foreground",
+          active ? activityIconClass("active") : "text-subtle-foreground",
           "size-3.5 shrink-0 transition-transform duration-200",
           isExpanded && "rotate-180",
         )}
@@ -815,10 +813,7 @@ function ReadOnlyContextBanner({
             className="size-3.5 shrink-0"
             aria-hidden="true"
           />
-          <span
-            className="min-w-0 truncate"
-            aria-hidden="true"
-          >
+          <span className="min-w-0 truncate" aria-hidden="true">
             {statusLabel}
           </span>
         </div>
@@ -974,8 +969,7 @@ export function ThreadPromptContextBanner({
   // inline as "Parent <name>" with the name as a link. There's no other
   // context to compete for the row, so the icon-only toggle would be a strict
   // downgrade in legibility.
-  const isParentThreadOnly =
-    showParentThread && !showGit && !showPullRequest;
+  const isParentThreadOnly = showParentThread && !showGit && !showPullRequest;
 
   const pullRequest = pullRequestSection?.pullRequest ?? null;
   const showPullRequestLabel =
@@ -983,25 +977,28 @@ export function ThreadPromptContextBanner({
   const pullRequestActions = pullRequestSection?.actions;
   const pullRequestAction =
     pullRequest && pullRequestActions ? (
-      pullRequest.state === "draft" && pullRequestActions.onMarkReady ? (
-        <BannerActionSlot>
+      <BannerActionSlot>
+        {pullRequestActions.onOpenChecks ? (
+          <PromptBannerActionButton onClick={pullRequestActions.onOpenChecks}>
+            Checks
+          </PromptBannerActionButton>
+        ) : null}
+        {pullRequest.state === "draft" && pullRequestActions.onMarkReady ? (
           <PullRequestReadyTextAction
             disabled={pullRequestActions.isPending}
             onMarkReady={pullRequestActions.onMarkReady}
           />
-        </BannerActionSlot>
-      ) : pullRequest.state === "open" &&
-        pullRequest.mergeability.state === "mergeable" &&
-        pullRequestActions.onMerge ? (
-        <BannerActionSlot>
+        ) : pullRequest.state === "open" &&
+          pullRequest.mergeability.state === "mergeable" &&
+          pullRequestActions.onMerge ? (
           <PullRequestMergeSplitButton
             disabled={pullRequestActions.isPending}
             onConvertToDraft={pullRequestActions.onConvertToDraft}
             onMerge={pullRequestActions.onMerge}
             selectedMethod={pullRequestActions.selectedMergeMethod ?? "merge"}
           />
-        </BannerActionSlot>
-      ) : null
+        ) : null}
+      </BannerActionSlot>
     ) : null;
 
   const compactContextBanner =

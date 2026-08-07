@@ -222,6 +222,25 @@ export function createFakeWorkspace(pathname: string) {
     },
     async runPullRequestAction(action) {
       state.lastPullRequestAction = action;
+      if (action.operation === "create") {
+        return {
+          number: 42,
+          title: action.title,
+          state: "OPEN" as const,
+          url: "https://github.com/acme/repo/pull/42",
+          isDraft: action.draft,
+          baseRefName: action.baseBranch,
+          headRefName: "feature/work",
+          updatedAt: "2026-08-06T00:00:00.000Z",
+          checks: [],
+          reviewDecision: null,
+          reviewRequestCount: 0,
+          mergeStateStatus: action.draft
+            ? ("DRAFT" as const)
+            : ("CLEAN" as const),
+          mergeable: "MERGEABLE" as const,
+        };
+      }
     },
     async listBranches() {
       return ["main"];

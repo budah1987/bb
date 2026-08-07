@@ -1,4 +1,5 @@
 import type {
+  GitHostPullRequest,
   RawDiffFileStat,
   ThreadGitDiffResponse,
   WorkspaceCommitSummary,
@@ -653,7 +654,7 @@ export class Workspace {
 
   async runPullRequestAction(
     action: PullRequestActionOptions,
-  ): Promise<void> {
+  ): Promise<void | GitHostPullRequest> {
     const branch = await getCurrentBranch(this.path);
     if (!branch) {
       throw new WorkspaceError(
@@ -670,39 +671,34 @@ export class Workspace {
     });
 
     const mergeBaseBranch = options.mergeBaseBranch;
-    const [
-      statusOutput,
-      diffOutput,
-      checkout,
-      defaultBranch,
-      mergeBaseData,
-    ] = await Promise.all([
-      // --no-optional-locks: this runs on the watcher polling cadence and
-      // must not take index.lock under a concurrent commit.
-      runGit(
-        [
-          "--no-optional-locks",
-          "status",
-          "--porcelain=v1",
-          "--branch",
-          "--untracked-files=all",
-        ],
-        { cwd: this.path, timeoutMs: WORKSPACE_STATUS_GIT_TIMEOUT_MS },
-      ),
-      readHeadNumstat(this.path, WORKSPACE_STATUS_GIT_TIMEOUT_MS),
-      getCheckoutRef(this.path, {
-        timeoutMs: WORKSPACE_STATUS_GIT_TIMEOUT_MS,
-      }),
-      readDefaultBranch(this.path, {
-        timeoutMs: WORKSPACE_STATUS_GIT_TIMEOUT_MS,
-      }),
-      mergeBaseBranch
-        ? this.readMergeBaseStatus(
-            mergeBaseBranch,
-            WORKSPACE_STATUS_GIT_TIMEOUT_MS,
-          )
-        : null,
-    ]);
+    const [statusOutput, diffOutput, checkout, defaultBranch, mergeBaseData] =
+      await Promise.all([
+        // --no-optional-locks: this runs on the watcher polling cadence and
+        // must not take index.lock under a concurrent commit.
+        runGit(
+          [
+            "--no-optional-locks",
+            "status",
+            "--porcelain=v1",
+            "--branch",
+            "--untracked-files=all",
+          ],
+          { cwd: this.path, timeoutMs: WORKSPACE_STATUS_GIT_TIMEOUT_MS },
+        ),
+        readHeadNumstat(this.path, WORKSPACE_STATUS_GIT_TIMEOUT_MS),
+        getCheckoutRef(this.path, {
+          timeoutMs: WORKSPACE_STATUS_GIT_TIMEOUT_MS,
+        }),
+        readDefaultBranch(this.path, {
+          timeoutMs: WORKSPACE_STATUS_GIT_TIMEOUT_MS,
+        }),
+        mergeBaseBranch
+          ? this.readMergeBaseStatus(
+              mergeBaseBranch,
+              WORKSPACE_STATUS_GIT_TIMEOUT_MS,
+            )
+          : null,
+      ]);
 
     const entries = parsePorcelainEntries(statusOutput.stdout);
     const untrackedPaths = entries
@@ -1544,16 +1540,35 @@ export class Workspace {
       case "commit": {
         const [nameStatus, numstat, shortstat] = await Promise.all([
           runGit(
-            ["show", "--format=", "--no-ext-diff", "--name-status", "-M", "-z", target.sha],
+            [
+              "show",
+              "--format=",
+              "--no-ext-diff",
+              "--name-status",
+              "-M",
+              "-z",
+              target.sha,
+            ],
             { cwd: this.path },
           ),
           runGit(
-            ["show", "--format=", "--no-ext-diff", "--numstat", "-M", "-z", target.sha],
+            [
+              "show",
+              "--format=",
+              "--no-ext-diff",
+              "--numstat",
+              "-M",
+              "-z",
+              target.sha,
+            ],
             { cwd: this.path },
           ),
-          runGit(["show", "--format=", "--no-ext-diff", "--shortstat", target.sha], {
-            cwd: this.path,
-          }),
+          runGit(
+            ["show", "--format=", "--no-ext-diff", "--shortstat", target.sha],
+            {
+              cwd: this.path,
+            },
+          ),
         ]);
         return {
           nameStatus: nameStatus.stdout,
@@ -1607,7 +1622,10 @@ export class Workspace {
       index < untrackedPaths.length;
       index += UNTRACKED_DIFF_BATCH_SIZE
     ) {
-      const batch = untrackedPaths.slice(index, index + UNTRACKED_DIFF_BATCH_SIZE);
+      const batch = untrackedPaths.slice(
+        index,
+        index + UNTRACKED_DIFF_BATCH_SIZE,
+      );
       stats.push(
         ...(await Promise.all(
           batch.map((relativePath) =>
@@ -1623,7 +1641,15 @@ export class Workspace {
     relativePath: string,
   ): Promise<RawDiffFileStat> {
     const numstat = await runGit(
-      ["diff", "--no-index", "--numstat", "-z", "--", "/dev/null", relativePath],
+      [
+        "diff",
+        "--no-index",
+        "--numstat",
+        "-z",
+        "--",
+        "/dev/null",
+        relativePath,
+      ],
       { cwd: this.path, allowFailure: true },
     );
     const entry = parseNumstatEntriesZ(numstat.stdout)[0];
@@ -1998,12 +2024,11 @@ export class Workspace {
       ];
     }
 
-    const untrackedArtifacts =
-      await this.readUntrackedDiffArtifacts({
-        relativePaths: requestedUntrackedPaths,
-        maxDiffBytes: args.maxDiffBytes,
-        maxFileListBytes: args.maxFileListBytes,
-      });
+    const untrackedArtifacts = await this.readUntrackedDiffArtifacts({
+      relativePaths: requestedUntrackedPaths,
+      maxDiffBytes: args.maxDiffBytes,
+      maxFileListBytes: args.maxFileListBytes,
+    });
     const combinedNumstat = joinDiffArtifactLines([
       args.numstat,
       ...untrackedArtifacts.map((artifact) => artifact.numstat),

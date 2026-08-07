@@ -39,6 +39,7 @@ describe("assembleThreadPullRequest", () => {
         passedCount: 0,
         failedCount: 0,
         pendingCount: 0,
+        items: [],
       },
       review: {
         state: "none",
@@ -49,7 +50,7 @@ describe("assembleThreadPullRequest", () => {
         mergeStateStatus: "CLEAN",
         mergeable: "MERGEABLE",
       },
-      attention: "none",
+      attention: "ready_to_merge",
     });
   });
 
@@ -108,6 +109,20 @@ describe("assembleThreadPullRequest", () => {
         passedCount: 1,
         failedCount: 1,
         pendingCount: 0,
+        items: [
+          {
+            name: "test",
+            status: "completed",
+            conclusion: "success",
+            url: null,
+          },
+          {
+            name: "typecheck",
+            status: "completed",
+            conclusion: "failure",
+            url: "https://github.com/acme/bb/actions/runs/1",
+          },
+        ],
       },
       attention: "checks_failed",
     });

@@ -26,6 +26,7 @@ import {
   WORKSPACE_DIFF_MAX_DIFF_BYTES,
   WORKSPACE_DIFF_MAX_FILE_LIST_BYTES,
 } from "../constants.js";
+
 import { ApiError } from "../errors.js";
 import {
   requireEnvironment,
@@ -41,6 +42,8 @@ import {
 } from "./branch-list-query.js";
 import { parseFileListLimit } from "./file-list-query.js";
 import { parsePathKindInclusion } from "./path-list-inclusion.js";
+
+const PULL_REQUEST_CREATE_TIMEOUT_MS = 3 * 60_000;
 import { requireWorkspaceCommandTarget } from "../services/environments/workspace-command-target.js";
 import { callEnvironmentWorkspaceStatus } from "../services/environments/workspace-status.js";
 import { assembleThreadPullRequest } from "../services/environments/pull-request.js";
@@ -860,6 +863,50 @@ export function registerEnvironmentRoutes(app: Hono, deps: AppDeps): void {
           ok: true,
           action: "pull_request_ready",
           message: "Pull request marked ready",
+        });
+      }
+      case "pull_request_create": {
+        if (!environment.isGitRepo) {
+          throw new ApiError(
+            409,
+            "invalid_request",
+            "Pull request creation requires a git environment",
+          );
+        }
+        const target = requireWorkspaceCommandTarget(environment);
+        const existingPullRequest = await getPullRequestForWorkspaceTarget(
+          deps,
+          target,
+        );
+        if (existingPullRequest) {
+          throw new ApiError(
+            409,
+            "invalid_request",
+            `Pull request #${existingPullRequest.number} already exists for this branch`,
+          );
+        }
+
+        const result = await mapPullRequestActionFailureTo409(() =>
+          runLiveCommandAndWait(deps, {
+            hostId: target.hostId,
+            timeoutMs: PULL_REQUEST_CREATE_TIMEOUT_MS,
+            command: {
+              type: "workspace.pull_request_create",
+              environmentId: target.environmentId,
+              workspaceContext: target.workspaceContext,
+              baseBranch: payload.options.baseBranch,
+              body: payload.options.body,
+              draft: payload.options.draft,
+              title: payload.options.title,
+            },
+          }),
+        );
+        const pullRequest = assembleThreadPullRequest(result.pullRequest);
+        return context.json({
+          ok: true,
+          action: "pull_request_create",
+          message: `Pull request #${pullRequest.number} created`,
+          pullRequest,
         });
       }
       case "pull_request_draft": {

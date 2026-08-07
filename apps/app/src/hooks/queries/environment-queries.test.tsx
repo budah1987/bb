@@ -40,6 +40,7 @@ const pullRequestFixture: ThreadPullRequest = {
     passedCount: 1,
     failedCount: 0,
     pendingCount: 0,
+    items: [],
   },
   review: {
     state: "none",
@@ -117,6 +118,7 @@ describe("useEnvironmentPullRequest", () => {
           ...pullRequestFixture.checks,
           state: "pending",
           pendingCount: 1,
+          items: [],
         },
         attention: "checks_pending",
       }),

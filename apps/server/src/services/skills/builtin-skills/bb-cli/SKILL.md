@@ -249,6 +249,10 @@ status|install` to inspect or install provider CLIs on a selected machine.
 status|branches|paths|diff|diff-files|diff-file|diff-patch <id>` and `bb
 environment pull-request show <id>`. Diff commands require an explicit target
   and the matching merge-base or commit flags; all support `--json`.
+- `bb environment pull-request create <id> --base <branch> --title <title>`
+  pushes the current branch to `origin` and creates its GitHub PR. Add
+  `--draft`, `--body`, or `--json` as needed. `pull-request show` includes
+  individual CI check results and links.
 - `bb environment pull-request ready|draft|merge` manages pull-request state;
   `bb environment archive-threads` bulk-archives an environment's threads.
 - `bb environment rename <id> --branch <name>` renames a worktree's checked-out

@@ -1,6 +1,10 @@
 import { mkdir, rm } from "node:fs/promises";
 import path from "node:path";
-import type { ProvisioningTranscriptEntry, WorkspaceStatus } from "@bb/domain";
+import type {
+  GitHostPullRequest,
+  ProvisioningTranscriptEntry,
+  WorkspaceStatus,
+} from "@bb/domain";
 import type {
   CommitOptions,
   CommitResult,
@@ -160,7 +164,9 @@ export interface HostWorkspace {
   diffFiles(args: DiffFilesArgs): Promise<DiffFilesResult>;
   diffPatch(args: DiffPatchArgs): Promise<DiffPatchEntry[]>;
   getPullRequest(): Promise<GitHostPullRequestLookup>;
-  runPullRequestAction(action: PullRequestActionOptions): Promise<void>;
+  runPullRequestAction(
+    action: PullRequestActionOptions,
+  ): Promise<void | GitHostPullRequest>;
   listBranches(): Promise<string[]>;
   listFiles(): Promise<string[]>;
 
@@ -273,7 +279,9 @@ class ProvisionedHostWorkspace implements HostWorkspace {
     return this.ws.getPullRequest();
   }
 
-  runPullRequestAction(action: PullRequestActionOptions): Promise<void> {
+  runPullRequestAction(
+    action: PullRequestActionOptions,
+  ): Promise<void | GitHostPullRequest> {
     return this.ws.runPullRequestAction(action);
   }
 

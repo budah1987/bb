@@ -112,6 +112,11 @@ Making your repo work with bb:
   bb environment archive-threads <id>     Archive all threads in an environment
 
   bb environment pull-request show <id>   Inspect a pull request
+  bb environment pull-request create <id> Push the branch and create a pull request
+    --base <branch>                       Base branch (required)
+    --title <title>                       Pull request title (required)
+    --body <body>                         Pull request body
+    --draft                               Create as a draft
   bb environment pull-request ready <id>  Mark a pull request ready
   bb environment pull-request draft <id>  Convert a pull request to draft
   bb environment pull-request merge <id>  Merge a pull request
@@ -121,6 +126,8 @@ Every inspection command accepts an arbitrary environment ID and supports
 `--json`. Non-git status/diff responses are reported explicitly. `diff-file`
 prints UTF-8 content directly and labels base64 binary content; diff and patch
 truncation markers are preserved.
+Pull-request inspection includes each check run, its result, and its details
+URL when GitHub provides one.
 
 Remote access (bb connect):
 

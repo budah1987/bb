@@ -64,6 +64,7 @@ function assembleThreadPullRequestChecks(
     passedCount,
     failedCount,
     pendingCount,
+    items: [...rawChecks],
   };
 }
 
@@ -146,7 +147,10 @@ function assemblePullRequestAttention(
     return "review_requested";
   }
   if (checks.state === "pending") return "checks_pending";
-  if (mergeability.state === "mergeable" && checks.state === "passing") {
+  if (
+    mergeability.state === "mergeable" &&
+    (checks.state === "passing" || checks.state === "no_checks")
+  ) {
     return "ready_to_merge";
   }
   return "none";

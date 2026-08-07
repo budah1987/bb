@@ -212,6 +212,7 @@ export interface ThreadSecondaryPanelProps {
   defaultMergeBaseBranch?: string;
   environmentId?: string;
   metadataContent: ReactNode;
+  pullRequestContent?: ReactNode;
   fileTabs?: SecondaryPanelFileTab[];
   fileTabContent?: ReactNode;
   /**
@@ -237,6 +238,7 @@ export interface ThreadSecondaryPanelProps {
   showConversationCollapseControl?: boolean;
   showGitDiffTab?: boolean;
   showInfoTab?: boolean;
+  showPullRequestTab?: boolean;
   showNewTabButton?: boolean;
   /**
    * How the panel's own inline hide control (top chrome, trailing edge) renders
@@ -305,6 +307,8 @@ function resolveActiveFixedPanel({
       return "thread-info";
     case "git-diff":
       return canUseGitUi ? "git-diff" : "thread-info";
+    case "pull-request":
+      return canUseGitUi ? "pull-request" : "thread-info";
     case "plugin-panel":
     case "workspace-file-preview":
     case "host-file-preview":
@@ -322,6 +326,7 @@ export function ThreadSecondaryPanel({
   defaultMergeBaseBranch,
   environmentId,
   metadataContent,
+  pullRequestContent,
   fileTabs,
   fileTabContent,
   fileTabContentFillsRegion,
@@ -332,6 +337,7 @@ export function ThreadSecondaryPanel({
   showConversationCollapseControl = true,
   showGitDiffTab = true,
   showInfoTab = true,
+  showPullRequestTab = true,
   showNewTabButton = true,
   inlinePanelToggle = "button",
   resizablePanelId = "thread-detail-secondary-panel",
@@ -681,6 +687,20 @@ export function ThreadSecondaryPanel({
                 activeTreatment="fill"
               />
             ) : null}
+            {showPullRequestTab && canUseGitUi ? (
+              <PinnedIconTab
+                ariaLabel="Show pull request checks"
+                isActive={
+                  activeFixedPanel === "pull-request" && !hasActiveFileTab
+                }
+                label="Checks"
+                leadingVisual={<Icon name="GitPullRequest" />}
+                onClick={() => onPanelChange("pull-request")}
+                title="Pull request checks"
+                usesDesktopChrome={usesDesktopChrome}
+                activeTreatment="fill"
+              />
+            ) : null}
             {visibleFileTabs && visibleFileTabs.length > 0 ? (
               <SecondaryPanelTabStrip
                 fileTabs={visibleFileTabs}
@@ -819,6 +839,8 @@ export function ThreadSecondaryPanel({
             onSelectionAddToChat={onSelectionAddToChat}
             workspaceRootPath={workspaceRootPath}
           />
+        ) : activeFixedPanel === "pull-request" ? (
+          pullRequestContent
         ) : (
           <ThreadInfoTabContent metadataContent={metadataContent} />
         )}

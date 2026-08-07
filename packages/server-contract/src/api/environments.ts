@@ -185,6 +185,7 @@ export type PullRequestMergeMethod = z.infer<
 export const environmentActionTypeSchema = z.enum([
   "commit",
   "squash_merge",
+  "pull_request_create",
   "pull_request_ready",
   "pull_request_merge",
   "pull_request_draft",
@@ -206,6 +207,18 @@ export type PullRequestMergeOptions = z.infer<
   typeof pullRequestMergeOptionsSchema
 >;
 
+export const pullRequestCreateOptionsSchema = z
+  .object({
+    baseBranch: gitBranchNameSchema,
+    body: z.string(),
+    draft: z.boolean(),
+    title: z.string().trim().min(1),
+  })
+  .strict();
+export type PullRequestCreateOptions = z.infer<
+  typeof pullRequestCreateOptionsSchema
+>;
+
 export const environmentActionRequestSchema = z.discriminatedUnion("action", [
   z
     .object({
@@ -216,6 +229,12 @@ export const environmentActionRequestSchema = z.discriminatedUnion("action", [
     .object({
       action: z.literal("squash_merge"),
       options: squashMergeOptionsSchema,
+    })
+    .strict(),
+  z
+    .object({
+      action: z.literal("pull_request_create"),
+      options: pullRequestCreateOptionsSchema,
     })
     .strict(),
   z
@@ -260,6 +279,16 @@ export type SquashMergeActionResponse = z.infer<
   typeof squashMergeActionResponseSchema
 >;
 
+export const pullRequestCreateActionResponseSchema = z.object({
+  ok: z.literal(true),
+  action: z.literal("pull_request_create"),
+  message: z.string().min(1),
+  pullRequest: threadPullRequestSchema,
+});
+export type PullRequestCreateActionResponse = z.infer<
+  typeof pullRequestCreateActionResponseSchema
+>;
+
 export const pullRequestReadyActionResponseSchema = z.object({
   ok: z.literal(true),
   action: z.literal("pull_request_ready"),
@@ -291,6 +320,7 @@ export type PullRequestDraftActionResponse = z.infer<
 export const environmentActionResponseSchema = z.discriminatedUnion("action", [
   commitActionResponseSchema,
   squashMergeActionResponseSchema,
+  pullRequestCreateActionResponseSchema,
   pullRequestReadyActionResponseSchema,
   pullRequestMergeActionResponseSchema,
   pullRequestDraftActionResponseSchema,

@@ -57,7 +57,9 @@ export type {
 } from "./git.js";
 
 export {
+  createPullRequestForBranch,
   getPullRequestForBranch,
   parseGitHostPullRequest,
   type GitHostPullRequestLookup,
+  type GitHostPullRequestCreateOptions,
 } from "./git-host.js";

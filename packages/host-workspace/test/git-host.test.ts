@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  createPullRequestForBranch,
   getPullRequestForBranch,
   parseGitHostPullRequest,
   runPullRequestActionForBranch,
@@ -194,11 +195,7 @@ describe("runPullRequestActionForBranch", () => {
   }
 
   it.each([
-    [
-      "ready",
-      { operation: "ready" },
-      ["pr", "ready", "--", "bb/pr-actions"],
-    ],
+    ["ready", { operation: "ready" }, ["pr", "ready", "--", "bb/pr-actions"]],
     [
       "draft",
       { operation: "draft" },
@@ -219,31 +216,30 @@ describe("runPullRequestActionForBranch", () => {
       { operation: "merge", method: "rebase" },
       ["pr", "merge", "--rebase", "--", "bb/pr-actions"],
     ],
-  ] satisfies readonly [
-    string,
-    GitHostPullRequestAction,
-    readonly string[],
-  ][])("runs gh pr %s for the branch", async (_label, action, expectedArgs) => {
-    mockGhSuccess();
+  ] satisfies readonly [string, GitHostPullRequestAction, readonly string[]][])(
+    "runs gh pr %s for the branch",
+    async (_label, action, expectedArgs) => {
+      mockGhSuccess();
 
-    await runPullRequestActionForBranch({
-      cwd: "/tmp/workspace",
-      branch: "bb/pr-actions",
-      action,
-    });
-
-    expect(execFileMock).toHaveBeenCalledWith(
-      "gh",
-      expectedArgs,
-      expect.objectContaining({
+      await runPullRequestActionForBranch({
         cwd: "/tmp/workspace",
-        encoding: "utf8",
-        maxBuffer: 16 * 1024 * 1024,
-        timeout: 60_000,
-      }),
-      expect.any(Function),
-    );
-  });
+        branch: "bb/pr-actions",
+        action,
+      });
+
+      expect(execFileMock).toHaveBeenCalledWith(
+        "gh",
+        expectedArgs,
+        expect.objectContaining({
+          cwd: "/tmp/workspace",
+          encoding: "utf8",
+          maxBuffer: 16 * 1024 * 1024,
+          timeout: 60_000,
+        }),
+        expect.any(Function),
+      );
+    },
+  );
 
   it("maps a missing gh executable to a workspace error", async () => {
     const error = Object.assign(new Error("spawn gh ENOENT"), {
@@ -270,6 +266,60 @@ describe("runPullRequestActionForBranch", () => {
       code: "git_host_cli_unavailable",
       name: "WorkspaceError",
     });
+  });
+});
+
+describe("createPullRequestForBranch", () => {
+  it("pushes the branch and creates a non-interactive draft PR", async () => {
+    execFileMock.mockImplementation(
+      (
+        file: string,
+        args: readonly string[],
+        _options: object,
+        callback: (error: Error | null, stdout: string, stderr: string) => void,
+      ) => {
+        const isView = file === "gh" && args[1] === "view";
+        callback(null, isView ? ghJson({ isDraft: true }) : "", "");
+      },
+    );
+
+    await expect(
+      createPullRequestForBranch({
+        cwd: "/tmp/workspace",
+        branch: "bb/pr-create",
+        baseBranch: "main",
+        body: "Ships the new workflow",
+        draft: true,
+        title: "Add pull request workflow",
+      }),
+    ).resolves.toMatchObject({ number: 42, isDraft: true });
+
+    expect(execFileMock).toHaveBeenNthCalledWith(
+      1,
+      "git",
+      ["push", "--set-upstream", "origin", "HEAD"],
+      expect.objectContaining({ cwd: "/tmp/workspace", timeout: 120_000 }),
+      expect.any(Function),
+    );
+    expect(execFileMock).toHaveBeenNthCalledWith(
+      2,
+      "gh",
+      [
+        "pr",
+        "create",
+        "--title",
+        "Add pull request workflow",
+        "--body",
+        "Ships the new workflow",
+        "--base",
+        "main",
+        "--head",
+        "bb/pr-create",
+        "--draft",
+      ],
+      expect.objectContaining({ cwd: "/tmp/workspace", timeout: 60_000 }),
+      expect.any(Function),
+    );
   });
 });
 
@@ -336,8 +386,7 @@ describe("getPullRequestForBranch", () => {
     mockGhFailure(
       Object.assign(new Error("gh exited 4"), {
         code: 4,
-        stderr:
-          "gh: To get started with GitHub CLI, please run: gh auth login",
+        stderr: "gh: To get started with GitHub CLI, please run: gh auth login",
       }),
     );
     const result = await getPullRequestForBranch(lookupArgs);

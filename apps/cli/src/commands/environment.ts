@@ -84,8 +84,12 @@ interface EnvironmentSquashMergeCommandOptions {
 }
 
 interface EnvironmentPullRequestCommandOptions {
+  base?: string;
+  body?: string;
+  draft?: boolean;
   json?: boolean;
   method?: "merge" | "squash" | "rebase";
+  title?: string;
 }
 
 interface BuildEnvironmentUpdateArgsInput {
@@ -763,10 +767,46 @@ export function registerEnvironmentCommands(
             `${pr.checks.failedCount} failed, ${pr.checks.pendingCount} pending, ` +
             `${pr.checks.totalCount} total)`,
         );
+        for (const check of pr.checks.items) {
+          const result =
+            check.status === "completed"
+              ? (check.conclusion ?? "unknown")
+              : check.status;
+          console.log(
+            `  - ${check.name}: ${result}${check.url ? ` (${check.url})` : ""}`,
+          );
+        }
         console.log(
           `Review: ${pr.review.state} (${pr.review.reviewRequestCount} requested)`,
         );
         console.log(`Merge: ${pr.mergeability.state}`);
+      }),
+    );
+
+  pullRequest
+    .command("create <id>")
+    .description("Push the environment branch and create a pull request")
+    .requiredOption("--base <branch>", "Base branch")
+    .requiredOption("--title <title>", "Pull request title")
+    .option("--body <body>", "Pull request body", "")
+    .option("--draft", "Create as a draft pull request", false)
+    .option("--json", "Print machine-readable JSON output")
+    .action(
+      action(async (id: string, opts: EnvironmentPullRequestCommandOptions) => {
+        if (!opts.base || !opts.title) {
+          throw new Error("--base and --title are required.");
+        }
+        const result = await createCliBbSdk(
+          getUrl(),
+        ).environments.createPullRequest({
+          environmentId: id,
+          baseBranch: opts.base,
+          body: opts.body ?? "",
+          draft: opts.draft ?? false,
+          title: opts.title,
+        });
+        if (outputJson(opts, result)) return;
+        console.log(`${result.message}: ${result.pullRequest.url}`);
       }),
     );
 

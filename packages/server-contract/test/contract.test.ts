@@ -930,6 +930,21 @@ describe("server-contract canonical schemas", () => {
 
     expect(
       environmentActionRequestSchema.parse({
+        action: "pull_request_create",
+        options: {
+          baseBranch: "main",
+          body: "Ships the workflow",
+          draft: true,
+          title: "Add PR workflow",
+        },
+      }),
+    ).toMatchObject({
+      action: "pull_request_create",
+      options: { baseBranch: "main", draft: true },
+    });
+
+    expect(
+      environmentActionRequestSchema.parse({
         action: "pull_request_ready",
       }),
     ).toMatchObject({

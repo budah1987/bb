@@ -277,6 +277,7 @@ export const threadPullRequestChecksSchema = z
     passedCount: z.number().int().nonnegative(),
     failedCount: z.number().int().nonnegative(),
     pendingCount: z.number().int().nonnegative(),
+    items: z.array(gitHostPullRequestCheckSchema),
   })
   .strict();
 export type ThreadPullRequestChecks = z.infer<
