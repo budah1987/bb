@@ -14,6 +14,7 @@ import {
   useThreadTimelineController,
 } from "@/components/thread/timeline";
 import { serializePluginPanelParams } from "@/lib/plugin-json-value";
+import { sdk } from "@/lib/sdk";
 import {
   defaultAppSettings,
   resolveEnvironmentMergeBaseBranch,
@@ -153,6 +154,7 @@ import { PluginThreadPanelNavigationProvider } from "@/components/plugin/plugin-
 import {
   PullRequestPanel,
   type PullRequestCreateInput,
+  type PullRequestMetadataSuggestion,
 } from "@/components/pull-request/PullRequestPanel";
 import { usePluginSlots } from "@/lib/plugin-slots";
 import { getFileExtension } from "@/lib/file-opener-preference";
@@ -2331,6 +2333,20 @@ function ThreadDetailViewInternal(props: ThreadDetailViewInternalProps) {
     workspaceDeleted: isWorkspaceDeleted,
   });
   const threadTitle = getThreadDisplayTitle(thread);
+  const handleGeneratePullRequestMetadata = useCallback(
+    async (baseBranch: string): Promise<PullRequestMetadataSuggestion> => {
+      if (!thread.environmentId) {
+        return { body: "", title: threadTitle };
+      }
+      const result = await sdk.environments.generatePullRequestMetadata({
+        environmentId: thread.environmentId,
+        baseBranch,
+        fallbackTitle: threadTitle,
+      });
+      return { body: result.body, title: result.title };
+    },
+    [thread.environmentId, threadTitle],
+  );
   const responsiveWorkspaceActions: ThreadActionsMenuResponsiveAction[] =
     workspaceOpenPath && preferredDirectoryTarget
       ? [
@@ -2366,9 +2382,20 @@ function ThreadDetailViewInternal(props: ThreadDetailViewInternalProps) {
         gitActions.threadGitActionDialog.onOpen(action.target);
       },
     }));
+  const responsivePullRequestActions: ThreadActionsMenuResponsiveAction[] =
+    canUseGitUi
+      ? [
+          {
+            icon: "GitPullRequest" as const,
+            label: pullRequest ? "Pull request checks" : "Create pull request",
+            onSelect: () => openSecondaryPanel("pull-request"),
+          },
+        ]
+      : [];
   const responsiveHeaderActions = [
     ...responsiveWorkspaceActions,
     ...responsiveGitActions,
+    ...responsivePullRequestActions,
   ];
   const workspaceOpenButton =
     workspaceOpenPath && preferredDirectoryTarget ? (
@@ -2565,11 +2592,6 @@ function ThreadDetailViewInternal(props: ThreadDetailViewInternalProps) {
           ...(mergeBaseBranchOptions ?? []),
         ]),
       ]}
-      creationUnavailableReason={
-        environment?.workspaceProvisionType === "managed-worktree"
-          ? null
-          : "Create a managed worktree from a branch first, then BB can push it and open a pull request."
-      }
       defaultBaseBranch={workspaceStatus?.branch.defaultBranch ?? "main"}
       isActionPending={
         requestEnvironmentAction.isPending ||
@@ -2581,10 +2603,13 @@ function ThreadDetailViewInternal(props: ThreadDetailViewInternalProps) {
         void handleAskAgentToFixPullRequestCheck(check)
       }
       onConvertToDraft={() => void handlePullRequestDraft()}
+      onCommitChanges={() => void gitActions.handleCommitThread()}
       onCreate={(input) => void handlePullRequestCreate(input)}
+      onGenerateMetadata={handleGeneratePullRequestMetadata}
       onMarkReady={() => void handlePullRequestReady()}
       onMerge={(method) => void handlePullRequestMerge(method)}
       onRefresh={() => void pullRequestQuery.refetch()}
+      onReviewChanges={openSecondaryPanelDiffPanel}
       pullRequestResponse={pullRequestQuery.data}
       threadTitle={threadTitle}
       workspaceStatus={workspaceStatus}

@@ -1,6 +1,12 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
-import type { ThreadPullRequest } from "@bb/domain";
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
+import type { ThreadPullRequest, WorkspaceStatus } from "@bb/domain";
 import type { ComponentProps } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { PullRequestPanel } from "./PullRequestPanel";
@@ -31,6 +37,33 @@ afterEach(cleanup);
 
 const noop = vi.fn();
 
+const dirtyWorkspaceStatus: WorkspaceStatus = {
+  workingTree: {
+    state: "dirty_uncommitted",
+    hasUncommittedChanges: true,
+    files: [
+      {
+        path: "apps/app/src/components/pull-request/PullRequestPanel.tsx",
+        status: "M",
+        insertions: 12,
+        deletions: 2,
+      },
+    ],
+    insertions: 12,
+    deletions: 2,
+  },
+  branch: {
+    currentBranch: "feature/pr-workflow",
+    defaultBranch: "main",
+  },
+  checkout: {
+    kind: "branch",
+    branchName: "feature/pr-workflow",
+    headSha: null,
+  },
+  mergeBase: null,
+};
+
 function renderPanel(
   pullRequestResponse:
     | { outcome: "absent" }
@@ -43,17 +76,22 @@ function renderPanel(
   render(
     <PullRequestPanel
       baseBranchOptions={["main", "release"]}
-      creationUnavailableReason={null}
       defaultBaseBranch="main"
       isActionPending={false}
       isLoading={false}
       onArchive={onArchive}
       onAskAgentToFix={onAskAgentToFix}
+      onCommitChanges={noop}
       onConvertToDraft={noop}
       onCreate={onCreate}
+      onGenerateMetadata={async () => ({
+        body: "",
+        title: "Ship the PR workflow",
+      })}
       onMarkReady={noop}
       onMerge={noop}
       onRefresh={noop}
+      onReviewChanges={noop}
       pullRequestResponse={pullRequestResponse}
       threadTitle="Ship the PR workflow"
       workspaceStatus={undefined}
@@ -118,6 +156,55 @@ describe("PullRequestPanel", () => {
       draft: true,
       title: "Ship the PR workflow",
     });
+  });
+
+  it("applies generated metadata while keeping the form editable", async () => {
+    renderPanel(
+      { outcome: "absent" },
+      {
+        onGenerateMetadata: async () => ({
+          body: "Explains the generated pull request.",
+          title: "Generate pull request metadata",
+        }),
+      },
+    );
+
+    await waitFor(() => {
+      expect(screen.getByLabelText("Title")).toHaveProperty(
+        "value",
+        "Generate pull request metadata",
+      );
+    });
+    expect(screen.getByLabelText(/Description/)).toHaveProperty(
+      "value",
+      "Explains the generated pull request.",
+    );
+
+    fireEvent.change(screen.getByLabelText("Title"), {
+      target: { value: "Edited title" },
+    });
+    expect(screen.getByLabelText("Title")).toHaveProperty(
+      "value",
+      "Edited title",
+    );
+  });
+
+  it("offers review and commit actions for uncommitted changes", () => {
+    const onCommitChanges = vi.fn();
+    const onReviewChanges = vi.fn();
+    renderPanel(
+      { outcome: "absent" },
+      {
+        onCommitChanges,
+        onReviewChanges,
+        workspaceStatus: dirtyWorkspaceStatus,
+      },
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Review changes" }));
+    fireEvent.click(screen.getByRole("button", { name: "Commit changes" }));
+    expect(onReviewChanges).toHaveBeenCalledOnce();
+    expect(onCommitChanges).toHaveBeenCalledOnce();
   });
 
   it("surfaces a failing check and sends it to the agent", () => {

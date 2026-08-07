@@ -3,6 +3,7 @@ import {
   commitActionResponseSchema,
   pullRequestCreateActionResponseSchema,
   pullRequestDraftActionResponseSchema,
+  pullRequestMetadataActionResponseSchema,
   pullRequestMergeActionResponseSchema,
   pullRequestReadyActionResponseSchema,
   squashMergeActionResponseSchema,
@@ -26,6 +27,7 @@ import type {
   EnvironmentStatusResponse,
   PullRequestMergeMethod,
   PullRequestCreateActionResponse,
+  PullRequestMetadataActionResponse,
   PullRequestDraftActionResponse,
   PullRequestMergeActionResponse,
   PullRequestReadyActionResponse,
@@ -118,6 +120,11 @@ export interface EnvironmentPullRequestCreateArgs extends EnvironmentActionArgs 
   title: string;
 }
 
+export interface EnvironmentPullRequestMetadataArgs extends EnvironmentActionArgs {
+  baseBranch: string;
+  fallbackTitle: string;
+}
+
 export type EnvironmentDiffPatchArgs = EnvironmentDiffPatchRequest & {
   environmentId: string;
   signal?: AbortSignal;
@@ -140,6 +147,8 @@ export type EnvironmentMarkPullRequestDraftResult =
   PullRequestDraftActionResponse;
 export type EnvironmentCreatePullRequestResult =
   PullRequestCreateActionResponse;
+export type EnvironmentPullRequestMetadataResult =
+  PullRequestMetadataActionResponse;
 export type EnvironmentMarkPullRequestReadyResult =
   PullRequestReadyActionResponse;
 export type EnvironmentMergePullRequestResult = PullRequestMergeActionResponse;
@@ -169,6 +178,9 @@ export interface EnvironmentsArea {
   createPullRequest(
     args: EnvironmentPullRequestCreateArgs,
   ): Promise<EnvironmentCreatePullRequestResult>;
+  generatePullRequestMetadata(
+    args: EnvironmentPullRequestMetadataArgs,
+  ): Promise<EnvironmentPullRequestMetadataResult>;
   rename(args: EnvironmentRenameArgs): Promise<EnvironmentRenameResult>;
   markPullRequestDraft(
     args: EnvironmentActionArgs,
@@ -389,6 +401,21 @@ export function createEnvironmentsArea(
         }),
       );
       return pullRequestCreateActionResponseSchema.parse(body);
+    },
+    async generatePullRequestMetadata(input) {
+      const body = await transport.readJson(
+        transport.api.v1.environments[":id"].actions.$post({
+          param: { id: input.environmentId },
+          json: {
+            action: "pull_request_metadata",
+            options: {
+              baseBranch: input.baseBranch,
+              fallbackTitle: input.fallbackTitle,
+            },
+          },
+        }),
+      );
+      return pullRequestMetadataActionResponseSchema.parse(body);
     },
     async rename(input) {
       const request = renameEnvironmentRequestSchema.parse({

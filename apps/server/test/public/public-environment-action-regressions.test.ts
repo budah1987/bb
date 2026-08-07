@@ -35,6 +35,70 @@ function rawPullRequest(
 }
 
 describe("public environment action regressions", () => {
+  it("prepares pull request metadata for an unmanaged git checkout", async () => {
+    await withTestHarness(async (harness) => {
+      const { host } = seedHostSession(harness.deps, {
+        id: "host-pr-metadata",
+      });
+      const { project } = seedProjectWithSource(harness.deps, {
+        hostId: host.id,
+      });
+      const environment = seedEnvironment(harness.deps, {
+        hostId: host.id,
+        projectId: project.id,
+        branchName: "feature/pr-metadata",
+        defaultBranch: "main",
+        path: "/tmp/pr-metadata-env",
+        workspaceProvisionType: "unmanaged",
+      });
+
+      const responsePromise = harness.app.request(
+        `/api/v1/environments/${environment.id}/actions`,
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            action: "pull_request_metadata",
+            options: {
+              baseBranch: "main",
+              fallbackTitle: "Improve pull request creation",
+            },
+          }),
+        },
+      );
+
+      const diffCommand = await waitForQueuedCommand(
+        harness,
+        ({ command }) =>
+          command.type === "workspace.diff" &&
+          command.environmentId === environment.id,
+      );
+      expect(diffCommand.command).toMatchObject({
+        target: { type: "branch_committed", mergeBaseBranch: "main" },
+      });
+      await reportQueuedCommandSuccess(harness, diffCommand, {
+        outcome: "available",
+        diff: {
+          diff: "",
+          files: "",
+          mergeBaseRef: null,
+          shortstat: "",
+          truncated: false,
+        },
+      });
+
+      const response = await responsePromise;
+      expect(response.status).toBe(200);
+      await expect(readJson(response)).resolves.toEqual({
+        ok: true,
+        action: "pull_request_metadata",
+        title: "Improve pull request creation",
+        body: "",
+        generated: false,
+      });
+    });
+  });
+
   it("rejects malformed squash-merge payload with a 400", async () => {
     await withTestHarness(async (harness) => {
       const squashMergeResponse = await harness.app.request(
@@ -467,5 +531,4 @@ describe("public environment action regressions", () => {
       });
     });
   });
-
 });

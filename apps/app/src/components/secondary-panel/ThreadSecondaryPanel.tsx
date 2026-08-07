@@ -689,14 +689,14 @@ export function ThreadSecondaryPanel({
             ) : null}
             {showPullRequestTab && canUseGitUi ? (
               <PinnedIconTab
-                ariaLabel="Show pull request checks"
+                ariaLabel="Show pull request workflow"
                 isActive={
                   activeFixedPanel === "pull-request" && !hasActiveFileTab
                 }
-                label="Checks"
+                label="Pull request"
                 leadingVisual={<Icon name="GitPullRequest" />}
                 onClick={() => onPanelChange("pull-request")}
-                title="Pull request checks"
+                title="Pull request"
                 usesDesktopChrome={usesDesktopChrome}
                 activeTreatment="fill"
               />

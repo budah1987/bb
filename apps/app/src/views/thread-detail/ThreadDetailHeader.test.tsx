@@ -27,8 +27,9 @@ vi.mock("@/components/layout/AppPageHeader", () => ({
   ),
 }));
 
+let isCompactViewport = false;
 vi.mock("@bb/shared-ui/hooks/use-compact-viewport", () => ({
-  useIsCompactViewport: () => false,
+  useIsCompactViewport: () => isCompactViewport,
 }));
 
 const PANE_CONTEXT: PaneContextValue = {
@@ -49,6 +50,7 @@ const PANE_CONTEXT: PaneContextValue = {
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
+  isCompactViewport = false;
 });
 
 describe("ThreadDetailHeader", () => {
@@ -209,6 +211,38 @@ describe("ThreadDetailHeader", () => {
     expect(screen.getByText("Commit")).not.toBeNull();
     expect(screen.getByText("Thread menu")).not.toBeNull();
     expect(screen.queryByText("Responsive menu actions")).toBeNull();
+  });
+
+  it("moves workflow actions into the thread menu on compact viewports", () => {
+    isCompactViewport = true;
+
+    render(
+      <PaneContext.Provider value={PANE_CONTEXT}>
+        <ThreadDetailHeader
+          actionsMenu={(includeResponsiveActions) => (
+            <>
+              <span>Thread menu</span>
+              {includeResponsiveActions ? (
+                <span>Responsive menu actions</span>
+              ) : null}
+            </>
+          )}
+          childPillLabel={null}
+          isSecondaryPanelOpen={false}
+          onOpenThreadGitAction={vi.fn()}
+          onToggleSecondaryPanel={vi.fn()}
+          threadHeaderGitActions={[
+            { label: "Commit", target: { kind: "commit" } },
+          ]}
+          threadTitle="Compact thread"
+          workspaceOpenButton={<button>Open workspace</button>}
+        />
+      </PaneContext.Provider>,
+    );
+
+    expect(screen.getByText("Responsive menu actions")).not.toBeNull();
+    expect(screen.queryByText("Open workspace")).toBeNull();
+    expect(screen.queryByText("Commit")).toBeNull();
   });
 
   it("renders serialized mentions in the thread title as pills", () => {

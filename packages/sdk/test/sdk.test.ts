@@ -885,6 +885,46 @@ describe("@bb/sdk", () => {
     ]);
   });
 
+  it("generates pull request metadata through the environment action transport", async () => {
+    const response = {
+      ok: true,
+      action: "pull_request_metadata",
+      title: "Generate pull request metadata",
+      body: "Explains the committed branch changes.",
+      generated: true,
+    } as const;
+    const queue = createFetchQueue([{ body: response }]);
+    const sdk = createBbSdk({
+      transport: createHttpTransport({
+        baseUrl: "http://bb.test",
+        fetch: queue.fetch,
+        runtime: "node",
+      }),
+    });
+
+    await expect(
+      sdk.environments.generatePullRequestMetadata({
+        environmentId: "env_pr",
+        baseBranch: "main",
+        fallbackTitle: "Improve pull request creation",
+      }),
+    ).resolves.toEqual(response);
+
+    expect(queue.requests).toEqual([
+      {
+        bodyText: JSON.stringify({
+          action: "pull_request_metadata",
+          options: {
+            baseBranch: "main",
+            fallbackTitle: "Improve pull request creation",
+          },
+        }),
+        method: "POST",
+        url: "http://bb.test/api/v1/environments/env_pr/actions",
+      },
+    ]);
+  });
+
   it("updates environment metadata through the HTTP transport", async () => {
     const environment = makeEnvironment({
       id: "env_update",

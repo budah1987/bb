@@ -246,6 +246,7 @@ type ExpectedEnvironmentsKey =
   | "diffFile"
   | "diffFiles"
   | "diffPatch"
+  | "generatePullRequestMetadata"
   | "get"
   | "markPullRequestDraft"
   | "markPullRequestReady"

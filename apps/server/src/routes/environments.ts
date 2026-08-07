@@ -35,6 +35,7 @@ import {
 import { runLiveCommandAndWait } from "../services/hosts/live-command-wait.js";
 import { callHostRetryableOnlineRpc } from "../services/hosts/online-rpc.js";
 import { generateCommitMessage } from "../services/ai/commit-message.js";
+import { generatePullRequestMetadata } from "../services/ai/pull-request-metadata.js";
 import { archiveEnvironmentThreads } from "../services/threads/thread-archive.js";
 import {
   normalizeBranchQuery,
@@ -863,6 +864,46 @@ export function registerEnvironmentRoutes(app: Hono, deps: AppDeps): void {
           ok: true,
           action: "pull_request_ready",
           message: "Pull request marked ready",
+        });
+      }
+      case "pull_request_metadata": {
+        if (!environment.isGitRepo) {
+          throw new ApiError(
+            409,
+            "invalid_request",
+            "Pull request metadata requires a git environment",
+          );
+        }
+        const target = requireWorkspaceCommandTarget(environment);
+        const diffResult = await callHostRetryableOnlineRpc(deps, {
+          hostId: target.hostId,
+          timeoutMs: COMMAND_TIMEOUT_MS,
+          command: {
+            type: "workspace.diff",
+            environmentId: target.environmentId,
+            workspaceContext: target.workspaceContext,
+            target: {
+              type: "branch_committed",
+              mergeBaseBranch: payload.options.baseBranch,
+            },
+            maxDiffBytes: AI_MAX_DIFF_BYTES,
+            maxFileListBytes: AI_MAX_FILE_LIST_BYTES,
+          },
+        });
+        const workspaceDiff = requireAvailableWorkspaceDiff(diffResult);
+        const metadata = await generatePullRequestMetadata(deps, {
+          baseBranch: payload.options.baseBranch,
+          fallbackTitle: payload.options.fallbackTitle,
+          shortstat: workspaceDiff.shortstat,
+          files: workspaceDiff.files,
+          patch: workspaceDiff.diff,
+        });
+        return context.json({
+          ok: true,
+          action: "pull_request_metadata",
+          title: metadata?.title ?? payload.options.fallbackTitle,
+          body: metadata?.body ?? "",
+          generated: metadata !== null,
         });
       }
       case "pull_request_create": {

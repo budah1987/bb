@@ -43,6 +43,12 @@ export function useRequestEnvironmentAction() {
             environmentId: id,
             mergeBaseBranch: request.options.mergeBaseBranch,
           });
+        case "pull_request_metadata":
+          return sdk.environments.generatePullRequestMetadata({
+            environmentId: id,
+            baseBranch: request.options.baseBranch,
+            fallbackTitle: request.options.fallbackTitle,
+          });
         case "pull_request_create":
           return sdk.environments.createPullRequest({
             environmentId: id,

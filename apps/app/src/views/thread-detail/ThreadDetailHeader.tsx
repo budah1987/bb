@@ -103,6 +103,8 @@ export function ThreadDetailHeader({
     isSplitPaneHeader &&
     measuredPaneWidth > 0 &&
     measuredPaneWidth < NARROW_SPLIT_HEADER_MAX_WIDTH;
+  const usesResponsiveActionMenu =
+    renderAsDrawer || usesResponsiveActionOverflow;
   useLayoutEffect(() => {
     if (!isSplitPaneHeader) {
       return;
@@ -190,7 +192,7 @@ export function ThreadDetailHeader({
             usesDesktopChrome && MACOS_WINDOW_NO_DRAG_CLASS,
           )}
         >
-          {actionsMenu(usesResponsiveActionOverflow)}
+          {actionsMenu(usesResponsiveActionMenu)}
         </span>
       )}
     </>
@@ -203,12 +205,12 @@ export function ThreadDetailHeader({
         data-thread-header-workflow-actions=""
       >
         {pluginActions}
-        {!usesResponsiveActionOverflow && workspaceOpenButton ? (
+        {!usesResponsiveActionMenu && workspaceOpenButton ? (
           <span className="inline-flex" data-thread-header-responsive-action="">
             {workspaceOpenButton}
           </span>
         ) : null}
-        {!usesResponsiveActionOverflow && primaryAction ? (
+        {!usesResponsiveActionMenu && primaryAction ? (
           <span className="inline-flex" data-thread-header-responsive-action="">
             {secondaryActions.length > 0 ? (
               <SplitButton

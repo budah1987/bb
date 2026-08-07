@@ -112,6 +112,9 @@ Making your repo work with bb:
   bb environment archive-threads <id>     Archive all threads in an environment
 
   bb environment pull-request show <id>   Inspect a pull request
+  bb environment pull-request suggest <id> Generate an editable title and description
+    --base <branch>                       Base branch (required)
+    --fallback-title <title>              Fallback when inference is unavailable (required)
   bb environment pull-request create <id> Push the branch and create a pull request
     --base <branch>                       Base branch (required)
     --title <title>                       Pull request title (required)

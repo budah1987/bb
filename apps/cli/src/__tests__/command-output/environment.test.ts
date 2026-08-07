@@ -234,6 +234,47 @@ describe("bb environment command output", () => {
     ]);
   });
 
+  it("bb environment pull-request suggest prints generated metadata", async () => {
+    const post = vi.fn(async () => ({
+      ok: true,
+      action: "pull_request_metadata",
+      title: "Generate pull request metadata",
+      body: "Explains the committed branch changes.",
+      generated: true,
+    }));
+    stubServerApi({ "v1.environments.:id.actions.$post": post });
+
+    await runCommand(
+      [
+        "environment",
+        "pull-request",
+        "suggest",
+        "env-pr-suggest",
+        "--base",
+        "main",
+        "--fallback-title",
+        "Improve pull request creation",
+      ],
+      register,
+    );
+
+    expect(post).toHaveBeenCalledWith({
+      param: { id: "env-pr-suggest" },
+      json: {
+        action: "pull_request_metadata",
+        options: {
+          baseBranch: "main",
+          fallbackTitle: "Improve pull request creation",
+        },
+      },
+    });
+    expect(collectLogLines(vi.mocked(console.log))).toEqual([
+      "Title: Generate pull request metadata",
+      "Description:",
+      "Explains the committed branch changes.",
+    ]);
+  });
+
   it("bb environment branches returns local and remote results", async () => {
     const get = vi.fn(async () => ({
       branches: ["main", "release"],

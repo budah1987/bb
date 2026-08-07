@@ -930,6 +930,19 @@ describe("server-contract canonical schemas", () => {
 
     expect(
       environmentActionRequestSchema.parse({
+        action: "pull_request_metadata",
+        options: {
+          baseBranch: "main",
+          fallbackTitle: "Add PR workflow",
+        },
+      }),
+    ).toMatchObject({
+      action: "pull_request_metadata",
+      options: { baseBranch: "main" },
+    });
+
+    expect(
+      environmentActionRequestSchema.parse({
         action: "pull_request_create",
         options: {
           baseBranch: "main",

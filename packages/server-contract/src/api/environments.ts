@@ -185,6 +185,7 @@ export type PullRequestMergeMethod = z.infer<
 export const environmentActionTypeSchema = z.enum([
   "commit",
   "squash_merge",
+  "pull_request_metadata",
   "pull_request_create",
   "pull_request_ready",
   "pull_request_merge",
@@ -219,6 +220,16 @@ export type PullRequestCreateOptions = z.infer<
   typeof pullRequestCreateOptionsSchema
 >;
 
+export const pullRequestMetadataOptionsSchema = z
+  .object({
+    baseBranch: gitBranchNameSchema,
+    fallbackTitle: z.string().trim().min(1),
+  })
+  .strict();
+export type PullRequestMetadataOptions = z.infer<
+  typeof pullRequestMetadataOptionsSchema
+>;
+
 export const environmentActionRequestSchema = z.discriminatedUnion("action", [
   z
     .object({
@@ -229,6 +240,12 @@ export const environmentActionRequestSchema = z.discriminatedUnion("action", [
     .object({
       action: z.literal("squash_merge"),
       options: squashMergeOptionsSchema,
+    })
+    .strict(),
+  z
+    .object({
+      action: z.literal("pull_request_metadata"),
+      options: pullRequestMetadataOptionsSchema,
     })
     .strict(),
   z
@@ -279,6 +296,17 @@ export type SquashMergeActionResponse = z.infer<
   typeof squashMergeActionResponseSchema
 >;
 
+export const pullRequestMetadataActionResponseSchema = z.object({
+  ok: z.literal(true),
+  action: z.literal("pull_request_metadata"),
+  title: z.string().min(1),
+  body: z.string(),
+  generated: z.boolean(),
+});
+export type PullRequestMetadataActionResponse = z.infer<
+  typeof pullRequestMetadataActionResponseSchema
+>;
+
 export const pullRequestCreateActionResponseSchema = z.object({
   ok: z.literal(true),
   action: z.literal("pull_request_create"),
@@ -320,6 +348,7 @@ export type PullRequestDraftActionResponse = z.infer<
 export const environmentActionResponseSchema = z.discriminatedUnion("action", [
   commitActionResponseSchema,
   squashMergeActionResponseSchema,
+  pullRequestMetadataActionResponseSchema,
   pullRequestCreateActionResponseSchema,
   pullRequestReadyActionResponseSchema,
   pullRequestMergeActionResponseSchema,

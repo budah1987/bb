@@ -1,4 +1,11 @@
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type FormEvent,
+} from "react";
 import type {
   GitHostPullRequestCheck,
   ThreadPullRequest,
@@ -47,19 +54,28 @@ export interface PullRequestCreateInput {
   title: string;
 }
 
+export interface PullRequestMetadataSuggestion {
+  body: string;
+  title: string;
+}
+
 export interface PullRequestPanelProps {
   baseBranchOptions: readonly string[];
-  creationUnavailableReason: string | null;
   defaultBaseBranch: string;
   isActionPending: boolean;
   isLoading: boolean;
   onArchive: () => void;
   onAskAgentToFix: (check: GitHostPullRequestCheck) => void;
   onConvertToDraft: () => void;
+  onCommitChanges: () => void;
   onCreate: (input: PullRequestCreateInput) => void;
+  onGenerateMetadata: (
+    baseBranch: string,
+  ) => Promise<PullRequestMetadataSuggestion>;
   onMarkReady: () => void;
   onMerge: (method: PullRequestMergeMethod) => void;
   onRefresh: () => void;
+  onReviewChanges: () => void;
   pullRequestResponse: EnvironmentPullRequestResponse | undefined;
   threadTitle: string;
   workspaceStatus: WorkspaceStatus | undefined;
@@ -208,19 +224,23 @@ function CheckRow({
 
 function CreatePullRequestForm({
   baseBranchOptions,
-  creationUnavailableReason,
   defaultBaseBranch,
   isActionPending,
+  onCommitChanges,
   onCreate,
+  onGenerateMetadata,
+  onReviewChanges,
   threadTitle,
   workspaceStatus,
 }: Pick<
   PullRequestPanelProps,
   | "baseBranchOptions"
-  | "creationUnavailableReason"
   | "defaultBaseBranch"
   | "isActionPending"
+  | "onCommitChanges"
   | "onCreate"
+  | "onGenerateMetadata"
+  | "onReviewChanges"
   | "threadTitle"
   | "workspaceStatus"
 >) {
@@ -228,6 +248,9 @@ function CreatePullRequestForm({
   const [body, setBody] = useState("");
   const [baseBranch, setBaseBranch] = useState(defaultBaseBranch);
   const [draft, setDraft] = useState(false);
+  const [isGeneratingMetadata, setIsGeneratingMetadata] = useState(false);
+  const editedFieldsRef = useRef({ body: false, title: false });
+  const generationRequestRef = useRef(0);
 
   useEffect(() => {
     setTitle(threadTitle);
@@ -236,14 +259,52 @@ function CreatePullRequestForm({
     setBaseBranch(defaultBaseBranch);
   }, [defaultBaseBranch]);
 
+  const generateMetadata = useCallback(
+    async (nextBaseBranch: string) => {
+      const requestId = generationRequestRef.current + 1;
+      generationRequestRef.current = requestId;
+      setIsGeneratingMetadata(true);
+      try {
+        const metadata = await onGenerateMetadata(nextBaseBranch);
+        if (generationRequestRef.current !== requestId) return;
+        if (!editedFieldsRef.current.title) {
+          setTitle(metadata.title);
+        }
+        if (!editedFieldsRef.current.body) {
+          setBody(metadata.body);
+        }
+      } catch {
+        // Metadata generation is an enhancement; the editable fallbacks stay
+        // available when inference or the connection is unavailable.
+      } finally {
+        if (generationRequestRef.current === requestId) {
+          setIsGeneratingMetadata(false);
+        }
+      }
+    },
+    [onGenerateMetadata],
+  );
+
+  useEffect(() => {
+    void generateMetadata(defaultBaseBranch);
+    return () => {
+      generationRequestRef.current += 1;
+    };
+  }, [defaultBaseBranch, generateMetadata]);
+
   const currentBranch = workspaceStatus?.branch.currentBranch ?? null;
   const hasUncommittedChanges =
     workspaceStatus?.workingTree.hasUncommittedChanges === true;
+  const previousHasUncommittedChangesRef = useRef(hasUncommittedChanges);
+  useEffect(() => {
+    const previousValue = previousHasUncommittedChangesRef.current;
+    previousHasUncommittedChangesRef.current = hasUncommittedChanges;
+    if (previousValue && !hasUncommittedChanges) {
+      void generateMetadata(baseBranch);
+    }
+  }, [baseBranch, generateMetadata, hasUncommittedChanges]);
   const canSubmit =
-    title.trim().length > 0 &&
-    baseBranch.trim().length > 0 &&
-    creationUnavailableReason === null &&
-    !isActionPending;
+    title.trim().length > 0 && baseBranch.trim().length > 0 && !isActionPending;
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -280,22 +341,48 @@ function CreatePullRequestForm({
             )}{" "}
             to origin, then create the pull request.
           </p>
+          {isGeneratingMetadata ? (
+            <p
+              className="flex items-center gap-1.5 pt-1 text-xs text-muted-foreground"
+              role="status"
+            >
+              <Icon
+                name="Spinner"
+                className="size-3 animate-spin"
+                aria-hidden="true"
+              />
+              Drafting title and description…
+            </p>
+          ) : null}
         </header>
 
         {hasUncommittedChanges ? (
-          <div className="flex gap-2 rounded-lg bg-warning/10 px-3 py-2 text-xs leading-5 text-warning-text">
-            <Icon name="AlertTriangle" className="mt-0.5 size-4 shrink-0" />
-            <p>
-              Uncommitted files stay in the worktree. Commit them before
-              creating the PR if they should be included.
-            </p>
-          </div>
-        ) : null}
-
-        {creationUnavailableReason ? (
-          <div className="flex gap-2 rounded-lg bg-muted px-3 py-2 text-xs leading-5 text-muted-foreground">
-            <Icon name="AlertCircle" className="mt-0.5 size-4 shrink-0" />
-            <p>{creationUnavailableReason}</p>
+          <div className="rounded-lg bg-warning/10 px-3 py-3 text-warning-text">
+            <div className="flex gap-2 text-xs leading-5">
+              <Icon name="AlertTriangle" className="mt-0.5 size-4 shrink-0" />
+              <p>Uncommitted files won’t be included in this pull request.</p>
+            </div>
+            <div className="mt-2 grid grid-cols-2 gap-2 pl-6">
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="min-h-11"
+                onClick={onReviewChanges}
+              >
+                Review changes
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="min-h-11 bg-transparent"
+                disabled={isActionPending}
+                onClick={onCommitChanges}
+              >
+                Commit changes
+              </Button>
+            </div>
           </div>
         ) : null}
 
@@ -303,10 +390,13 @@ function CreatePullRequestForm({
           Title
           <Input
             value={title}
-            onChange={(event) => setTitle(event.target.value)}
+            onChange={(event) => {
+              editedFieldsRef.current.title = true;
+              setTitle(event.target.value);
+            }}
             placeholder="Summarize the change"
             autoComplete="off"
-            disabled={isActionPending || creationUnavailableReason !== null}
+            disabled={isActionPending}
           />
         </label>
 
@@ -319,8 +409,11 @@ function CreatePullRequestForm({
             options={baseBranchOptions}
             currentBranch={currentBranch}
             priorityOptions={[defaultBaseBranch]}
-            onChange={setBaseBranch}
-            disabled={isActionPending || creationUnavailableReason !== null}
+            onChange={(nextBaseBranch) => {
+              setBaseBranch(nextBaseBranch);
+              void generateMetadata(nextBaseBranch);
+            }}
+            disabled={isActionPending}
             placeholder="Choose a base branch"
             triggerLabel="Base branch"
             menuKind="base"
@@ -333,9 +426,12 @@ function CreatePullRequestForm({
           <span className="font-normal text-muted-foreground">Optional</span>
           <textarea
             value={body}
-            onChange={(event) => setBody(event.target.value)}
+            onChange={(event) => {
+              editedFieldsRef.current.body = true;
+              setBody(event.target.value);
+            }}
             placeholder="What changed, and why?"
-            disabled={isActionPending || creationUnavailableReason !== null}
+            disabled={isActionPending}
             rows={6}
             className="min-h-28 w-full resize-y rounded-md border border-input bg-transparent px-3 py-2 text-sm text-foreground outline-none transition-[border-color,box-shadow] duration-150 placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/30 disabled:cursor-not-allowed disabled:opacity-50 motion-reduce:transition-none"
           />
@@ -345,7 +441,7 @@ function CreatePullRequestForm({
           <Checkbox
             checked={draft}
             onCheckedChange={(checked) => setDraft(checked === true)}
-            disabled={isActionPending || creationUnavailableReason !== null}
+            disabled={isActionPending}
           />
           <span>
             Create as draft

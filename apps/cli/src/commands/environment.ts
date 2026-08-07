@@ -87,6 +87,7 @@ interface EnvironmentPullRequestCommandOptions {
   base?: string;
   body?: string;
   draft?: boolean;
+  fallbackTitle?: string;
   json?: boolean;
   method?: "merge" | "squash" | "rebase";
   title?: string;
@@ -780,6 +781,34 @@ export function registerEnvironmentCommands(
           `Review: ${pr.review.state} (${pr.review.reviewRequestCount} requested)`,
         );
         console.log(`Merge: ${pr.mergeability.state}`);
+      }),
+    );
+
+  pullRequest
+    .command("suggest <id>")
+    .description("Generate a pull request title and description")
+    .requiredOption("--base <branch>", "Base branch")
+    .requiredOption(
+      "--fallback-title <title>",
+      "Fallback title when generation is unavailable",
+    )
+    .option("--json", "Print machine-readable JSON output")
+    .action(
+      action(async (id: string, opts: EnvironmentPullRequestCommandOptions) => {
+        if (!opts.base || !opts.fallbackTitle) {
+          throw new Error("--base and --fallback-title are required.");
+        }
+        const result = await createCliBbSdk(
+          getUrl(),
+        ).environments.generatePullRequestMetadata({
+          environmentId: id,
+          baseBranch: opts.base,
+          fallbackTitle: opts.fallbackTitle,
+        });
+        if (outputJson(opts, result)) return;
+        console.log(`Title: ${result.title}`);
+        console.log("Description:");
+        console.log(result.body || "(empty)");
       }),
     );
 
