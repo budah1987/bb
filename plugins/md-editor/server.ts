@@ -8,6 +8,42 @@ import { z } from "zod";
 
 const execFileAsync = promisify(execFile);
 const MARKDOWN_EXTENSIONS = [".md", ".markdown", ".mdx"] as const;
+const TEXT_EXTENSIONS = [
+  ".txt",
+  ".text",
+  ".log",
+  ".csv",
+  ".json",
+  ".yaml",
+  ".yml",
+  ".toml",
+  ".xml",
+  ".html",
+  ".css",
+  ".js",
+  ".jsx",
+  ".ts",
+  ".tsx",
+  ".sh",
+  ".bash",
+  ".zsh",
+  ".py",
+  ".rb",
+  ".go",
+  ".rs",
+  ".java",
+  ".sql",
+  ".ini",
+  ".conf",
+  ".env",
+  ".properties",
+  ".diff",
+  ".patch",
+] as const;
+const FILE_OPENER_EXTENSIONS = [
+  ...MARKDOWN_EXTENSIONS,
+  ...TEXT_EXTENSIONS,
+] as const;
 const GITHUB_CLI_CANDIDATES = ["gh", "/opt/homebrew/bin/gh", "/usr/local/bin/gh"];
 
 const openerSourceSchema = z
@@ -28,6 +64,7 @@ const fileReadSchema = z
     sizeBytes: z.number().int().nonnegative(),
     modifiedAtMs: z.number().nonnegative().optional(),
     sha256: z.string(),
+    isMarkdown: z.boolean(),
     readOnly: z.boolean(),
   })
   .strict();
@@ -104,6 +141,13 @@ const githubContentsSchema = z
 function isMarkdownPath(filePath: string): boolean {
   const lowerPath = filePath.toLowerCase();
   return MARKDOWN_EXTENSIONS.some((extension) => lowerPath.endsWith(extension));
+}
+
+function isSupportedTextPath(filePath: string): boolean {
+  const lowerPath = filePath.toLowerCase();
+  return FILE_OPENER_EXTENSIONS.some((extension) =>
+    lowerPath.endsWith(extension),
+  );
 }
 
 function isWithinRoot(rootPath: string, candidatePath: string): boolean {
@@ -209,9 +253,10 @@ async function readGithubFile(target: GithubFileTarget) {
     path: file.path || target.path,
     content: file.content,
     contentEncoding: "utf8" as const,
-    mimeType: "text/markdown",
+    mimeType: isMarkdownPath(target.path) ? "text/markdown" : "text/plain",
     sizeBytes: bytes.byteLength,
     sha256: createHash("sha256").update(bytes).digest("hex"),
+    isMarkdown: isMarkdownPath(target.path),
     readOnly: true,
   };
 }
@@ -234,8 +279,10 @@ async function resolveFile(
   source: OpenerSource,
   filePath: string,
 ): Promise<ResolvedFile> {
-  if (!isMarkdownPath(filePath)) {
-    throw new Error("Markdown Editor only opens .md, .markdown, and .mdx files.");
+  if (!isSupportedTextPath(filePath)) {
+    throw new Error(
+      "Markdown Editor only opens supported Markdown and text files.",
+    );
   }
 
   if (source.kind === "host") {
@@ -350,7 +397,11 @@ export default function plugin(bb: BbPluginApi) {
         if (file.contentEncoding !== "utf8") {
           throw new Error("Markdown Editor can only open UTF-8 text files.");
         }
-        return { ...file, readOnly: false };
+        return {
+          ...file,
+          isMarkdown: isMarkdownPath(filePath),
+          readOnly: false,
+        };
       } catch (error: unknown) {
         if (target.github) return readGithubFile(target.github);
         throw error;

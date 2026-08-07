@@ -12,16 +12,36 @@ function MarkdownEditorHome() {
     <div className="space-y-2 p-6 text-sm">
       <h1 className="text-base font-medium text-foreground">Markdown Editor</h1>
       <p className="text-muted-foreground">
-        Open a Markdown file from the file picker or a file link to edit it here.
-        Switch between a rendered preview and the raw Markdown source, then save
-        with compare-and-swap protection.
+        Open a Markdown or text file from the file picker or a file link. Markdown
+        files have rendered preview and raw source modes; other text files open
+        as readable source.
       </p>
     </div>
   );
 }
 
+function useIsMobile(): boolean {
+  const [isMobile, setIsMobile] = useState(() =>
+    typeof window !== "undefined" &&
+    typeof window.matchMedia === "function" &&
+    window.matchMedia("(max-width: 767px)").matches,
+  );
+
+  useEffect(() => {
+    if (typeof window.matchMedia !== "function") return;
+    const mediaQuery = window.matchMedia("(max-width: 767px)");
+    const update = () => setIsMobile(mediaQuery.matches);
+    update();
+    mediaQuery.addEventListener("change", update);
+    return () => mediaQuery.removeEventListener("change", update);
+  }, []);
+
+  return isMobile;
+}
+
 function MarkdownFileOpener({ path, source }: PluginFileOpenerProps) {
   const rpc = useRpc<typeof rpcContract>();
+  const isMobile = useIsMobile();
   const sourceKey = useMemo(
     () =>
       [
@@ -52,10 +72,11 @@ function MarkdownFileOpener({ path, source }: PluginFileOpenerProps) {
     content: string;
     sha256: string;
     filename: string;
+    isMarkdown: boolean;
     readOnly: boolean;
   } | null>(null);
   const [draft, setDraft] = useState("");
-  const [mode, setMode] = useState<"preview" | "edit">("preview");
+  const [mode, setMode] = useState<"preview" | "raw">("preview");
   const editorRef = useRef<HTMLTextAreaElement>(null);
   const [error, setError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
@@ -74,9 +95,11 @@ function MarkdownFileOpener({ path, source }: PluginFileOpenerProps) {
           content: opened.content,
           sha256: opened.sha256,
           filename: opened.path.split(/[\\/]/u).at(-1) ?? path,
+          isMarkdown: opened.isMarkdown,
           readOnly: opened.readOnly,
         });
         setDraft(opened.content);
+        setMode(opened.isMarkdown ? "preview" : "raw");
       })
       .catch((reason: unknown) => {
         if (active) {
@@ -89,12 +112,12 @@ function MarkdownFileOpener({ path, source }: PluginFileOpenerProps) {
   }, [openerSource, path, rpc, sourceKey]);
 
   useEffect(() => {
-    if (mode === "edit") editorRef.current?.focus();
-  }, [mode]);
+    if (mode === "raw" && !isMobile) editorRef.current?.focus();
+  }, [isMobile, mode]);
 
   const isDirty = file !== null && draft !== file.content;
   const save = async () => {
-    if (!file || file.readOnly || !isDirty || isSaving) return;
+    if (!file || isMobile || file.readOnly || !isDirty || isSaving) return;
     setIsSaving(true);
     setError(null);
     try {
@@ -136,58 +159,63 @@ function MarkdownFileOpener({ path, source }: PluginFileOpenerProps) {
           <p className="text-xs text-muted-foreground">
             {file.readOnly
               ? "GitHub snapshot · read-only"
-              : `${draft.length.toLocaleString()} characters`}
+              : isMobile
+                ? "Read-only on mobile"
+                : `${draft.length.toLocaleString()} characters`}
           </p>
         </div>
         <div className="flex shrink-0 items-center gap-2">
-          <div
-            className="flex rounded-md border border-border p-0.5"
-            role="tablist"
-            aria-label="Markdown view"
-          >
-            {(["preview", "edit"] as const).map((nextMode) => (
-              <button
-                key={nextMode}
-                type="button"
-                role="tab"
-                aria-selected={mode === nextMode}
-                onClick={() => setMode(nextMode)}
-                className="rounded px-2 py-1 text-xs font-medium capitalize text-foreground hover:bg-muted aria-selected:bg-muted"
-              >
-                {nextMode}
-              </button>
-            ))}
-          </div>
-          <button
-            type="button"
-            onClick={() => void save()}
-            disabled={file.readOnly || !isDirty || isSaving}
-            title={
-              file.readOnly
-                ? "Open this file in a workspace checkout to save edits"
-                : undefined
-            }
-            className="rounded-md border border-border px-2 py-1 text-xs font-medium text-foreground hover:bg-muted disabled:pointer-events-none disabled:opacity-50"
-          >
-            {isSaving ? "Saving…" : "Save"}
-          </button>
+          {file.isMarkdown ? (
+            <div
+              className="flex rounded-md border border-border p-0.5"
+              role="tablist"
+              aria-label="Markdown view"
+            >
+              {(["preview", "raw"] as const).map((nextMode) => (
+                <button
+                  key={nextMode}
+                  type="button"
+                  role="tab"
+                  aria-selected={mode === nextMode}
+                  onClick={() => setMode(nextMode)}
+                  className="rounded px-2 py-1 text-xs font-medium text-foreground hover:bg-muted aria-selected:bg-muted"
+                >
+                  {nextMode === "preview" ? "Preview" : "Raw"}
+                </button>
+              ))}
+            </div>
+          ) : null}
+          {!isMobile && !file.readOnly ? (
+            <button
+              type="button"
+              onClick={() => void save()}
+              disabled={!isDirty || isSaving}
+              className="rounded-md border border-border px-2 py-1 text-xs font-medium text-foreground hover:bg-muted disabled:pointer-events-none disabled:opacity-50"
+            >
+              {isSaving ? "Saving…" : "Save"}
+            </button>
+          ) : null}
         </div>
       </header>
       {file.readOnly ? (
         <div className="border-b border-border px-4 py-2 text-xs text-muted-foreground">
           This file was loaded from GitHub because it is not in the current
-          workspace. You can edit the draft here, but save it from a workspace
+          workspace. It is available for viewing, but save it from a workspace
           checkout.
         </div>
       ) : null}
-      {mode === "preview" ? (
+      {mode === "preview" && file.isMarkdown ? (
         <div
-          className="min-h-0 min-w-0 flex-1 cursor-text overflow-auto px-4 py-5 break-words"
-          onDoubleClick={() => setMode("edit")}
-          title="Double-click to edit the Markdown source"
+          className={`min-h-0 min-w-0 flex-1 overflow-auto px-4 py-5 break-words${isMobile ? "" : " cursor-text"}`}
+          onDoubleClick={isMobile ? undefined : () => setMode("raw")}
+          title={isMobile ? undefined : "Double-click to view the raw Markdown source"}
         >
           <Markdown content={draft} className="text-sm" />
         </div>
+      ) : isMobile ? (
+        <pre className="min-h-0 min-w-0 flex-1 overflow-auto whitespace-pre-wrap break-words p-4 font-mono text-xs leading-5 text-foreground">
+          {draft}
+        </pre>
       ) : (
         <textarea
           ref={editorRef}
@@ -231,7 +259,41 @@ export default definePluginApp((app) => {
   app.slots.fileOpener({
     id: "markdown",
     title: "Markdown Editor",
-    extensions: ["md", "markdown", "mdx"],
+    extensions: [
+      "md",
+      "markdown",
+      "mdx",
+      "txt",
+      "text",
+      "log",
+      "csv",
+      "json",
+      "yaml",
+      "yml",
+      "toml",
+      "xml",
+      "html",
+      "css",
+      "js",
+      "jsx",
+      "ts",
+      "tsx",
+      "sh",
+      "bash",
+      "zsh",
+      "py",
+      "rb",
+      "go",
+      "rs",
+      "java",
+      "sql",
+      "ini",
+      "conf",
+      "env",
+      "properties",
+      "diff",
+      "patch",
+    ],
     component: MarkdownFileOpener,
   });
 });
