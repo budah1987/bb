@@ -154,7 +154,7 @@ describe("bb thread action command output", () => {
     const deleteFn = vi.fn(async () => ({ ok: true }));
     stubServerApi({
       "v1.threads.:id.$get": get,
-      "v1.threads.:id.$delete": deleteFn,
+      "v1.threads.:id.delete.$post": deleteFn,
     });
     readlineMocks.question.mockResolvedValue("yes");
 
@@ -186,7 +186,7 @@ describe("bb thread action command output", () => {
     const deleteFn = vi.fn(async () => ({ ok: true }));
     stubServerApi({
       "v1.threads.:id.$get": get,
-      "v1.threads.:id.$delete": deleteFn,
+      "v1.threads.:id.delete.$post": deleteFn,
     });
     readlineMocks.question.mockResolvedValue("no");
 
@@ -211,7 +211,7 @@ describe("bb thread action command output", () => {
     const deleteFn = vi.fn(async () => ({ ok: true }));
     stubServerApi({
       "v1.threads.:id.$get": get,
-      "v1.threads.:id.$delete": deleteFn,
+      "v1.threads.:id.delete.$post": deleteFn,
     });
 
     await runCommand(
@@ -239,7 +239,7 @@ describe("bb thread action command output", () => {
     const deleteFn = vi.fn(async () => ({ ok: true }));
     stubServerApi({
       "v1.threads.:id.$get": get,
-      "v1.threads.:id.$delete": deleteFn,
+      "v1.threads.:id.delete.$post": deleteFn,
     });
 
     await runCommand(
