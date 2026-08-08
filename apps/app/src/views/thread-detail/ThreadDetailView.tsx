@@ -64,6 +64,10 @@ import { isTransientReadError } from "@/hooks/queries/query-helpers";
 import { usePromptDraftStorage } from "@/hooks/usePromptDraftStorage";
 import { subscribeComposerFocusRequests } from "@/lib/composer-focus-requests";
 import { ThreadGitActionDialog } from "@/components/dialogs/ThreadGitActionDialog";
+import {
+  EnvironmentRenameDialog,
+  type EnvironmentRenameDialogTarget,
+} from "@/components/dialogs/EnvironmentRenameDialog";
 import { PageShell } from "@/components/ui/page-shell.js";
 import { HEADER_ICON_BUTTON_CLASS } from "@/components/layout/AppPageHeader";
 import {
@@ -242,6 +246,7 @@ import {
   useToggleThreadSecondaryPanelSelection,
 } from "./threadSecondaryPanelSelection";
 import { useRouteState } from "@/hooks/useRouteState";
+import { useDialogState } from "@/hooks/useDialogState";
 import { useAppCommandHandler } from "@/components/commands/AppCommandProvider";
 import { DefaultPaneContextProvider, usePaneContext } from "./PaneContext";
 
@@ -802,6 +807,11 @@ function ThreadDetailViewInternal(props: ThreadDetailViewInternalProps) {
   );
   const markThreadRead = useMarkThreadRead();
   const updateEnvironment = useUpdateEnvironment();
+  const workspaceRenameDialog = useDialogState<EnvironmentRenameDialogTarget>();
+  const {
+    onClose: closeWorkspaceRenameDialog,
+    onOpen: openWorkspaceRenameDialog,
+  } = workspaceRenameDialog;
   const updateThread = useUpdateThread({
     errorMessage: "Failed to assign parent thread.",
   });
@@ -846,6 +856,41 @@ function ThreadDetailViewInternal(props: ThreadDetailViewInternalProps) {
     staleTime: 5_000,
   });
   const environment = environmentQuery.data;
+  const handleOpenWorkspaceRename = useCallback(() => {
+    if (environment === undefined) {
+      return;
+    }
+
+    updateEnvironment.reset();
+    openWorkspaceRenameDialog({
+      ...(environment.branchName !== null
+        ? { branchName: environment.branchName }
+        : {}),
+      canClearName: environment.name !== null,
+      id: environment.id,
+      currentName: environment.name ?? "",
+    });
+  }, [environment, openWorkspaceRenameDialog, updateEnvironment]);
+  const handleSubmitWorkspaceRename = useCallback(
+    (environmentId: string, name: string | null) => {
+      updateEnvironment.mutate(
+        { id: environmentId, name },
+        { onSuccess: closeWorkspaceRenameDialog },
+      );
+    },
+    [closeWorkspaceRenameDialog, updateEnvironment],
+  );
+  const workspaceRenamePending =
+    updateEnvironment.isPending &&
+    updateEnvironment.variables?.id === environment?.id;
+  const workspaceRenameErrorMessage =
+    updateEnvironment.error &&
+    updateEnvironment.variables?.id === environment?.id
+      ? getMutationErrorMessage({
+          error: updateEnvironment.error,
+          fallbackMessage: "Failed to rename workspace.",
+        })
+      : null;
   const hostsQuery = useHosts({
     enabled:
       hasThreadDetailBootstrapSettled &&
@@ -2484,6 +2529,9 @@ function ThreadDetailViewInternal(props: ThreadDetailViewInternalProps) {
         actionsMenu={(includeResponsiveActions) => (
           <ThreadActionsMenu
             thread={thread}
+            onRenameWorkspace={
+              environment === undefined ? undefined : handleOpenWorkspaceRename
+            }
             triggerClassName={HEADER_ICON_BUTTON_CLASS}
             align="end"
             responsiveActions={
@@ -2855,6 +2903,14 @@ function ThreadDetailViewInternal(props: ThreadDetailViewInternalProps) {
             onSquashMerge={gitActions.handleSquashMergeThread}
           />
         ) : null}
+        <EnvironmentRenameDialog
+          entityLabel="workspace"
+          errorMessage={workspaceRenameErrorMessage}
+          target={workspaceRenameDialog.target}
+          pending={workspaceRenamePending}
+          onOpenChange={workspaceRenameDialog.onOpenChange}
+          onRename={handleSubmitWorkspaceRename}
+        />
       </UrlOpenRoutingProvider>
     </MarkdownLocalFileContextMenuContext.Provider>
   );

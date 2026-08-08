@@ -152,6 +152,8 @@ describe("ConductorContextBar compact layout", () => {
         screen.getByRole("button", { name: "Conversation 1" }),
       ).toBeDefined();
     });
+    expect(screen.queryByText("Mobile workspace")).toBeNull();
+    expect(screen.queryByText("qa/mobile")).toBeNull();
     expect(
       screen.getByRole("button", { name: "Conversation 6" }),
     ).toBeDefined();

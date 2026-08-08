@@ -24,6 +24,8 @@ import { useThreadActions } from "./ThreadActionsProvider";
 
 interface ThreadActionsMenuBaseProps {
   thread: Thread;
+  /** Adds an environment-scoped rename action when the thread has a workspace. */
+  onRenameWorkspace?: () => void;
   /**
    * Pass `false` to hide the Delete entry (e.g. sidebar rows that intentionally
    * route users to the thread detail page for destructive actions). Defaults
@@ -132,6 +134,7 @@ function ThreadActionMenuSeparator({
 function ThreadActionsMenuItems({
   thread,
   canDelete = true,
+  onRenameWorkspace,
   onOpenInSplit,
   responsiveActions = [],
   surface,
@@ -216,8 +219,19 @@ function ThreadActionsMenuItems({
           }, 0);
         }}
       >
-        Rename
+        Rename conversation
       </ThreadActionMenuItem>
+      {onRenameWorkspace ? (
+        <ThreadActionMenuItem
+          surface={surface}
+          icon="Folder"
+          onSelect={() => {
+            window.setTimeout(onRenameWorkspace, 0);
+          }}
+        >
+          Rename workspace
+        </ThreadActionMenuItem>
+      ) : null}
       {showSeparators ? <ThreadActionMenuSeparator surface={surface} /> : null}
       <ThreadActionMenuItem
         surface={surface}
@@ -253,6 +267,7 @@ function ThreadActionsMenuItems({
 export function ThreadActionsMenu({
   thread,
   canDelete = true,
+  onRenameWorkspace,
   onOpenInSplit,
   responsiveActions,
   onOpenChange,
@@ -286,6 +301,7 @@ export function ThreadActionsMenu({
         <ThreadActionsMenuItems
           thread={thread}
           canDelete={canDelete}
+          onRenameWorkspace={onRenameWorkspace}
           onOpenInSplit={onOpenInSplit}
           responsiveActions={responsiveActions}
           surface="dropdown"
@@ -299,6 +315,7 @@ export function ThreadActionsContextMenu({
   children,
   thread,
   canDelete = true,
+  onRenameWorkspace,
   onOpenInSplit,
   onOpenChange,
 }: ThreadActionsContextMenuProps) {
@@ -309,6 +326,7 @@ export function ThreadActionsContextMenu({
         <ThreadActionsMenuItems
           thread={thread}
           canDelete={canDelete}
+          onRenameWorkspace={onRenameWorkspace}
           onOpenInSplit={onOpenInSplit}
           surface="context"
         />
