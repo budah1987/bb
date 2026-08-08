@@ -1160,11 +1160,6 @@ function FocusSection({
               />
             ))}
           </div>
-          {project.workspaces.length === 0 ? (
-            <p className="px-3 py-2 text-2xs text-muted-foreground">
-              No workspaces yet. Use + to start one.
-            </p>
-          ) : null}
         </SortableContext>
       </SectionContent>
     </section>
