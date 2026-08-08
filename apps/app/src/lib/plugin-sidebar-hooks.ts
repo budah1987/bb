@@ -78,6 +78,7 @@ export function useSidebarThreads(): PluginSidebarThreadsState {
         name: project.name,
         isPersonal: project.id === PERSONAL_PROJECT_ID,
         experimental_gitRemoteUrl: project.gitRemoteUrl,
+        experimental_githubAccountLogin: project.githubAccountLogin,
       })),
     };
   }, [data, hostNamesById, query.isError]);

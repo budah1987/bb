@@ -91,6 +91,32 @@ describe("buildConductorProjection", () => {
     });
   });
 
+  it("keeps repositories visible before their first workspace is created", () => {
+    const projection = buildConductorProjection(
+      [thread("repo-thread")],
+      [
+        {
+          id: "project-1",
+          name: "BB",
+          isPersonal: false,
+          experimental_githubAccountLogin: "amirghst",
+        },
+        {
+          id: "project-2",
+          name: "New repository",
+          isPersonal: false,
+        },
+      ],
+    );
+
+    expect(projection.projects.map((project) => project.name)).toEqual([
+      "BB",
+      "New repository",
+    ]);
+    expect(projection.projects[0]?.githubAccountLogin).toBe("amirghst");
+    expect(projection.projects[1]?.workspaces).toEqual([]);
+  });
+
   it("projects native environments exactly once and preserves legacy organizers", () => {
     const threads = [
       thread("organizer", { originPluginId: "conductor-workspaces" }),

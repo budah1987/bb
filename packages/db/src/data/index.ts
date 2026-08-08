@@ -64,12 +64,12 @@ export type {
 
 export {
   createProjectSource,
+  getDefaultProjectSource,
   countProjectSources,
   getProjectSourceForProject,
   listProjectSources,
   listProjectSourcesByProjectIds,
   getProjectSourceByHost,
-  getDefaultProjectSource,
   toProjectSource,
   updateProjectSource,
   deleteProjectSource,

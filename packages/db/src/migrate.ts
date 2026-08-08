@@ -1252,6 +1252,8 @@ function repairBranchLocalQueuedGroupingBeforeInitialThreadSections(
 
 const STAGED_CONNECT_MACHINE_ID_COLUMN = "_bb_connect_machine_id_pending";
 const STAGED_GITHUB_ACCOUNT_LOGIN_COLUMN = "_bb_github_account_login_pending";
+const STAGED_PROJECT_GITHUB_ACCOUNT_LOGIN_COLUMN =
+  "_bb_project_github_account_login_pending";
 
 function stageExistingConnectMachineIdColumn(
   db: DbConnection,
@@ -1334,6 +1336,50 @@ function restoreStagedGithubAccountLoginColumn(db: DbConnection): void {
   db.$client.exec(
     `UPDATE environments SET github_account_login = ${STAGED_GITHUB_ACCOUNT_LOGIN_COLUMN};
      ALTER TABLE environments DROP COLUMN ${STAGED_GITHUB_ACCOUNT_LOGIN_COLUMN};`,
+  );
+}
+
+function stageExistingProjectGithubAccountLoginColumn(
+  db: DbConnection,
+  migrationsFolder: string,
+): boolean {
+  if (
+    !tableExists(db, "__drizzle_migrations") ||
+    !tableExists(db, "projects") ||
+    !columnExists(db, "projects", "github_account_login")
+  ) {
+    return false;
+  }
+
+  const migration = requireExpectedAppliedMigration(
+    readExpectedAppliedMigrations(migrationsFolder),
+    "0088_true_true_believers",
+  );
+  if (readAppliedMigrationCreatedAts(db).has(migration.createdAt)) {
+    return false;
+  }
+
+  db.$client.exec(
+    `ALTER TABLE projects RENAME COLUMN github_account_login TO ${STAGED_PROJECT_GITHUB_ACCOUNT_LOGIN_COLUMN}`,
+  );
+  return true;
+}
+
+function restoreStagedProjectGithubAccountLoginColumn(db: DbConnection): void {
+  if (
+    !columnExists(db, "projects", STAGED_PROJECT_GITHUB_ACCOUNT_LOGIN_COLUMN)
+  ) {
+    return;
+  }
+  if (!columnExists(db, "projects", "github_account_login")) {
+    db.$client.exec(
+      `ALTER TABLE projects RENAME COLUMN ${STAGED_PROJECT_GITHUB_ACCOUNT_LOGIN_COLUMN} TO github_account_login`,
+    );
+    return;
+  }
+  db.$client.exec(
+    `UPDATE projects SET github_account_login = ${STAGED_PROJECT_GITHUB_ACCOUNT_LOGIN_COLUMN};
+     ALTER TABLE projects DROP COLUMN ${STAGED_PROJECT_GITHUB_ACCOUNT_LOGIN_COLUMN};`,
   );
 }
 
@@ -1544,12 +1590,17 @@ export function migrate(db: DbConnection, options: MigrateOptions = {}): void {
       db,
       migrationsFolder,
     );
+    const stagedProjectGithubAccountLogin =
+      stageExistingProjectGithubAccountLoginColumn(db, migrationsFolder);
     try {
       drizzleMigrate(db, { migrationsFolder });
     } finally {
       if (stagedConnectMachineId) restoreStagedConnectMachineIdColumn(db);
       if (stagedGithubAccountLogin) {
         restoreStagedGithubAccountLoginColumn(db);
+      }
+      if (stagedProjectGithubAccountLogin) {
+        restoreStagedProjectGithubAccountLoginColumn(db);
       }
     }
     applyReorderedCleanupMigrations(db, migrationsFolder);

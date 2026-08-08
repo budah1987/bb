@@ -17,6 +17,8 @@ A project maps to a code repository. All threads belong to a project.
     --before <id>                         Next project, or omit for end
   bb project create --name "..." [options]
     --root <path>                         Project source path
+    --remote-url <url>                    Clone a Git repository as the source
+    --github-account <login>              Default GitHub account for new workspaces
     --machine <id-or-name>                Bind the path to a connected machine
     --host <id-or-name>                   Alias for --machine
 
@@ -27,6 +29,8 @@ A project maps to a code repository. All threads belong to a project.
   bb project show <id>                    Show project details
   bb project update <id>                  Update a project
     --name <name>                         New name
+    --github-account <login>              Set the default GitHub account
+    --clear-github-account                Clear the default account
 
   bb project delete <id>                  Delete project and all threads
     --yes                                 Skip confirmation
@@ -64,6 +68,8 @@ Discovery:
   access, and the active account; --json returns the complete typed catalog.
   Pull-request discovery uses the active account and returns the PR head
   repository and branch so agents can reproduce the selected starting point.
+  The project GitHub account is a repository default inherited by new
+  workspaces; an explicit workspace account still takes precedence.
 
 Attachments:
 
