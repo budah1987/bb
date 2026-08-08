@@ -491,18 +491,18 @@
 
 .conductor-signal-slot {
   display: inline-block;
-  width: 0.75rem;
-  height: 0.75rem;
+  width: 1.125rem;
+  height: 1.125rem;
   flex: none;
 }
 
 .conductor-pixel-matrix {
-  --conductor-pixel-size: 1px;
+  --conductor-pixel-size: 2.25px;
   display: grid;
   grid-template-columns: repeat(5, var(--conductor-pixel-size));
   grid-template-rows: repeat(5, var(--conductor-pixel-size));
   place-content: center;
-  gap: 1px;
+  gap: 1.125px;
   color: var(--primary);
 }
 
