@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 
 import { cleanup, fireEvent, render } from "@testing-library/react";
+import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { PanelGroup } from "react-resizable-panels";
 import { TooltipProvider } from "@bb/shared-ui/tooltip";
@@ -15,6 +16,7 @@ const noop = () => {};
 function renderPanel(args: {
   isConversationCollapsed: boolean;
   onToggleConversationCollapse: () => void;
+  filesContent?: ReactNode;
 }) {
   const { wrapper: Wrapper } = createQueryClientTestHarness();
   return render(
@@ -63,6 +65,20 @@ describe("ThreadSecondaryPanel resize handle", () => {
         "-translate-x-1/2",
         "cursor-col-resize",
       ]),
+    );
+  });
+});
+
+describe("ThreadSecondaryPanel Files view", () => {
+  it("renders the Files content slot for the thread panel", () => {
+    const view = renderPanel({
+      isConversationCollapsed: false,
+      onToggleConversationCollapse: noop,
+      filesContent: <div data-testid="files-content">Workspace files</div>,
+    });
+
+    expect(view.getByTestId("files-content").textContent).toBe(
+      "Workspace files",
     );
   });
 });

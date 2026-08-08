@@ -49,6 +49,7 @@ import {
   useEnvironment,
   getEnvironmentPullRequestFromResponse,
   useEnvironmentPullRequest,
+  useEnvironmentWorkspaceFiles,
   useEnvironmentWorkStatus,
 } from "../../hooks/queries/environment-queries";
 import {
@@ -147,6 +148,7 @@ import {
   SIDE_CHAT_PLUGIN_PANEL_ACTION_ID,
 } from "@/lib/side-chat-plugin";
 import { NewTabPage } from "@/components/secondary-panel/NewTabPage";
+import { WorkspaceFilesRow } from "@/components/secondary-panel/ThreadMetadataContent";
 import { resolveRightPanelFileVisual } from "@/components/secondary-panel/rightPanelFileVisuals";
 import { COARSE_POINTER_COMPACT_ICON_SIZE_CLASS } from "@bb/shared-ui/coarse-pointer-sizing";
 import { PluginIcon } from "@/components/plugin/PluginIcon";
@@ -1113,6 +1115,55 @@ function ThreadDetailViewInternal(props: ThreadDetailViewInternalProps) {
     onSelectPath: handleSelectStorageBrowserPath,
     selectedPath: activeStorageFilePath,
   });
+  const workspaceFilesQuery = useEnvironmentWorkspaceFiles(
+    thread?.environmentId,
+    {
+      enabled:
+        isSecondaryPanelOpen && activeFixedSecondaryTab?.kind === "thread-info",
+      hostId: environment?.hostId,
+      rootPath: environment?.path,
+    },
+  );
+  const workspaceFiles = useMemo(
+    () =>
+      workspaceFilesQuery.data?.paths
+        .filter((entry) => entry.kind === "file")
+        .map(({ name, path }) => ({ name, path })) ?? [],
+    [workspaceFilesQuery.data?.paths],
+  );
+  const handleSelectWorkspaceBrowserPath =
+    useCallback<ThreadStoragePathSelectHandler>(
+      (path) => {
+        openWorkspaceFile({
+          lineRange: null,
+          path,
+          source: { kind: "working-tree" },
+          statusLabel: null,
+        });
+      },
+      [openWorkspaceFile],
+    );
+  const workspaceBrowserController = useThreadStorageBrowser({
+    files: workspaceFiles,
+    onSelectPath: handleSelectWorkspaceBrowserPath,
+    selectedPath:
+      activeWorkspaceFileSource?.kind === "working-tree"
+        ? activeWorkspaceFilePath
+        : null,
+  });
+  const workspaceFilesContent = (
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden px-4 py-3">
+      <WorkspaceFilesRow
+        controller={workspaceBrowserController}
+        filesError={workspaceFilesQuery.error}
+        isFilesLoading={
+          environmentQuery.isLoading || workspaceFilesQuery.isLoading
+        }
+        isFilesTruncated={workspaceFilesQuery.data?.truncated}
+        onRefresh={() => void workspaceFilesQuery.refetch()}
+      />
+    </div>
+  );
   const [storedConversationCollapsed, setStoredConversationCollapsed] = useAtom(
     getThreadConversationCollapsedAtom(threadId),
   );
@@ -2614,6 +2665,7 @@ function ThreadDetailViewInternal(props: ThreadDetailViewInternalProps) {
       activePath={activeWorkspaceFilePath}
       copyPath={workspaceFileCopyPath}
       environmentId={thread.environmentId}
+      hostId={environment?.hostId ?? null}
       lineRange={activeWorkspaceFileLineRange}
       markdownLinkRouting={workspaceMarkdownLinkRouting}
       onOpenInEditor={handleOpenFileInEditor}
@@ -2621,6 +2673,7 @@ function ThreadDetailViewInternal(props: ThreadDetailViewInternalProps) {
       source={activeWorkspaceFileSource}
       statusLabel={activeWorkspaceFileStatusLabel}
       threadId={thread.id}
+      rootPath={workspacePreviewRootPath}
     />
   ) : activeHostFilePath ? (
     <HostFilePreviewTabContent
@@ -2744,6 +2797,16 @@ function ThreadDetailViewInternal(props: ThreadDetailViewInternalProps) {
             isLoadingMergeBaseBranchOptions,
             updateThreadPending:
               updateThread.isPending || updateEnvironment.isPending,
+            workspaceFiles:
+              environment?.hostId && environment.path
+                ? {
+                    controller: workspaceBrowserController,
+                    filesError: workspaceFilesQuery.error,
+                    isFilesLoading: workspaceFilesQuery.isLoading,
+                    isFilesTruncated: workspaceFilesQuery.data?.truncated,
+                    onRefresh: () => void workspaceFilesQuery.refetch(),
+                  }
+                : undefined,
             storage: metadataStorage,
             onAssignParent: handleAssignParent,
             onParentSelectorOpenChange: handleParentSelectorOpenChange,
@@ -2761,6 +2824,7 @@ function ThreadDetailViewInternal(props: ThreadDetailViewInternalProps) {
             canUseGitUi,
             defaultMergeBaseBranch: resolvedDefaultMergeBaseBranch,
             environmentId: thread.environmentId ?? undefined,
+            filesContent: workspaceFilesContent,
             workspaceRootPath: environment?.path,
             fileTabs,
             fileTabContent,

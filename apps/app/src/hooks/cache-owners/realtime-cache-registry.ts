@@ -72,6 +72,7 @@ import {
   environmentDiffFilesQueryKeyPrefix,
   environmentFilePreviewQueryKeyPrefix,
   environmentPullRequestQueryKey,
+  environmentWorkspaceFilesQueryKeyPrefix,
   environmentWorkStatusQueryKeyPrefix,
   hostsQueryKey,
   sidebarNavigationQueryKey,
@@ -837,6 +838,9 @@ function dirtyEnvironmentLiveWorkspaceStateQueries({
   });
   queryClient.invalidateQueries({
     queryKey: environmentFilePreviewQueryKeyPrefix(environmentId),
+  });
+  queryClient.invalidateQueries({
+    queryKey: environmentWorkspaceFilesQueryKeyPrefix(environmentId),
   });
   queryClient.invalidateQueries({
     queryKey: environmentDiffFilesQueryKeyPrefix(environmentId),

@@ -215,6 +215,7 @@ export interface ThreadSecondaryPanelProps {
   defaultMergeBaseBranch?: string;
   environmentId?: string;
   metadataContent: ReactNode;
+  filesContent?: ReactNode;
   pullRequestContent?: ReactNode;
   fileTabs?: SecondaryPanelFileTab[];
   fileTabContent?: ReactNode;
@@ -329,6 +330,7 @@ export function ThreadSecondaryPanel({
   defaultMergeBaseBranch,
   environmentId,
   metadataContent,
+  filesContent,
   pullRequestContent,
   fileTabs,
   fileTabContent,
@@ -651,7 +653,7 @@ export function ThreadSecondaryPanel({
               `transition-[padding] ${PANEL_COLLAPSE_TRANSITION_CLASS}`,
               collapsedPanelTrafficLightReserveClassName,
             )}
-            // A toolbar, not a tablist: the pinned Info view, Diff control, and
+            // A toolbar, not a tablist: the pinned Files view, Diff control, and
             // open-view pills are toggle buttons (`aria-pressed`) rather than
             // `role="tab"` widgets backed by tabpanels, so `role="tablist"`
             // would be malformed. Toolbar semantics describe this compact row
@@ -661,14 +663,14 @@ export function ThreadSecondaryPanel({
           >
             {showInfoTab ? (
               <PinnedIconTab
-                ariaLabel="Show thread info panel"
+                ariaLabel="Show files panel"
                 isActive={
                   activeFixedPanel === "thread-info" && !hasActiveFileTab
                 }
-                label="Info"
-                leadingVisual={<Icon name="Info" />}
+                label="Files"
+                leadingVisual={<Icon name="FolderOpen" />}
                 onClick={() => onPanelChange("thread-info")}
-                title="Thread info"
+                title="Files"
                 usesDesktopChrome={usesDesktopChrome}
                 activeTreatment="fill"
               />
@@ -845,7 +847,9 @@ export function ThreadSecondaryPanel({
         ) : activeFixedPanel === "pull-request" ? (
           pullRequestContent
         ) : (
-          <ThreadInfoTabContent metadataContent={metadataContent} />
+          <ThreadInfoTabContent
+            metadataContent={filesContent ?? metadataContent}
+          />
         )}
       </div>
     </aside>
@@ -942,7 +946,7 @@ function PinnedIconTab({
     <Tooltip>
       <TooltipTrigger asChild>
         <div
-          data-testid={label === "Info" ? "thread-info-tab" : undefined}
+          data-testid={label === "Files" ? "thread-info-tab" : undefined}
           className={cn(
             "shrink-0",
             usesDesktopChrome && MACOS_WINDOW_NO_DRAG_CLASS,
