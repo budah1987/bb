@@ -222,6 +222,15 @@ import type {
   UpdateThreadTabsRequest,
 } from "./api/thread-tabs.js";
 import { updateThreadTabsRequestSchema } from "./api/thread-tabs.js";
+import type {
+  GenerateThreadRecapRequest,
+  ThreadNotesResponse,
+  UpdateThreadScratchpadRequest,
+} from "./api/thread-notes.js";
+import {
+  generateThreadRecapRequestSchema,
+  updateThreadScratchpadRequestSchema,
+} from "./api/thread-notes.js";
 import {
   closeTerminalRequestSchema,
   copyProjectAttachmentsRequestSchema,
@@ -1121,6 +1130,35 @@ export const publicApiRoutes = {
       response: [
         jsonResponse<ThreadTabsResponse>(),
         jsonResponse<ApiError>({ status: 409 }),
+      ],
+    }),
+    notes: defineRoute({
+      path: "/threads/:id/notes",
+      method: "get",
+      request: noRequest<PathId>(),
+      response: jsonResponse<ThreadNotesResponse>(),
+    }),
+    updateScratchpad: defineRoute({
+      path: "/threads/:id/notes/scratchpad",
+      method: "put",
+      request: jsonRequest<PathId, UpdateThreadScratchpadRequest>(
+        updateThreadScratchpadRequestSchema,
+      ),
+      response: jsonResponse<ThreadNotesResponse>(),
+    }),
+    generateRecap: defineRoute({
+      path: "/threads/:id/notes/recap",
+      method: "post",
+      request: jsonRequest<PathId, GenerateThreadRecapRequest>(
+        generateThreadRecapRequestSchema,
+      ),
+      response: [
+        jsonResponse<ThreadNotesResponse>(),
+        // Nothing to summarize yet: the thread has no conversation.
+        jsonResponse<ApiError>({ status: 409 }),
+        // Inference is unconfigured, timed out, or returned nothing usable.
+        // The stored recap, if any, is left untouched.
+        jsonResponse<ApiError>({ status: 503 }),
       ],
     }),
     pin: defineRoute({

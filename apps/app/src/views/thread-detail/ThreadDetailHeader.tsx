@@ -24,6 +24,7 @@ import {
   shouldUseMacosDesktopChrome,
 } from "@/lib/bb-desktop";
 import { cn } from "@bb/shared-ui/lib/utils";
+import { useIsRailVisible, useToggleRail } from "@/lib/rail-visibility";
 import { useAppCommandShortcut } from "@/components/commands/AppCommandProvider";
 import { AppCommandShortcutHint } from "@/components/commands/AppCommandShortcutHint";
 import { ThreadTitleMentions } from "@/components/thread/ThreadTitleMentions";
@@ -83,6 +84,9 @@ export function ThreadDetailHeader({
   const renderAsDrawer = useIsCompactViewport();
   const [desktopInfo] = useState(getBbDesktopInfo);
   const panelShortcut = useAppCommandShortcut("panel.toggle");
+  const railShortcut = useAppCommandShortcut("rail.toggle");
+  const isRailVisible = useIsRailVisible();
+  const toggleRail = useToggleRail();
   const usesDesktopChrome = shouldUseMacosDesktopChrome(desktopInfo);
   const headerRef = useRef<HTMLElement>(null!);
   // The title doubles as the pane-reorder drag handle when the layout is split;
@@ -141,6 +145,11 @@ export function ThreadDetailHeader({
   // stable positions in the thread header.
   const showRightPanelToggle =
     secondaryPanelHost === null && !isSecondaryPanelOpen;
+  const railLabel = isRailVisible ? "Hide rail" : "Show rail";
+  // Unlike the panel toggle, this one stays put whether the rail is showing or
+  // not: the rail carries no chrome of its own to hide itself from, so the
+  // header owns both directions.
+  const showRailToggle = secondaryPanelHost === null && !renderAsDrawer;
 
   const center = (
     <>
@@ -242,6 +251,38 @@ export function ThreadDetailHeader({
         className="ml-1 flex items-center gap-0.5"
         data-thread-header-pane-actions=""
       >
+        {showRailToggle ? (
+          <span
+            className={cn(
+              "inline-flex items-center gap-1.5",
+              // The row's own gap-0.5 is 2px; 6px more makes the 8px the rail
+              // and panel toggles are meant to read as a pair across. Only
+              // while the panel toggle is actually there to pair with.
+              showRightPanelToggle && "mr-1.5",
+            )}
+          >
+            <AppCommandShortcutHint shortcut={railShortcut} />
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className={cn(
+                HEADER_ICON_BUTTON_CLASS,
+                CHROME_SUBTLE_ICON_BUTTON_FOREGROUND_CLASS,
+              )}
+              aria-label={
+                railShortcut
+                  ? `${railLabel} (${railShortcut.label})`
+                  : railLabel
+              }
+              aria-keyshortcuts={railShortcut?.ariaKeyshortcuts}
+              aria-pressed={isRailVisible}
+              onClick={toggleRail}
+            >
+              <Icon name="ListView" />
+            </Button>
+          </span>
+        ) : null}
         {showRightPanelToggle ? (
           <span className="inline-flex items-center gap-1.5">
             <AppCommandShortcutHint shortcut={panelShortcut} />

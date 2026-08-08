@@ -4,6 +4,7 @@ import {
   NewTabFileSearch,
   type NewTabFileSearchProps,
   type OpenBrowserHandler,
+  type OpenNotesHandler,
   type StartTerminalHandler,
 } from "./NewTabFileSearch";
 
@@ -11,6 +12,7 @@ type NewTabPageFileSearchProps = Omit<NewTabFileSearchProps, "idleActions">;
 
 export interface NewTabPageProps extends NewTabPageFileSearchProps {
   onOpenBrowser?: OpenBrowserHandler;
+  onOpenNotes?: OpenNotesHandler;
   onStartTerminal?: StartTerminalHandler;
   pluginActions?: readonly PluginPanelActionEntry[];
 }
@@ -27,6 +29,7 @@ export function NewTabPage({
   focusRequest,
   initialQuery,
   onOpenBrowser,
+  onOpenNotes,
   onSelect,
   onStartTerminal,
   pluginActions,
@@ -45,6 +48,7 @@ export function NewTabPage({
         idleActions={
           <NewTabActions
             onOpenBrowser={onOpenBrowser}
+            onOpenNotes={onOpenNotes}
             onStartTerminal={onStartTerminal}
             pluginActions={pluginActions}
           />

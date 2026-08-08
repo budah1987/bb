@@ -9,7 +9,14 @@ import {
   type ThreadQueuedMessage,
   type ThreadStatus,
 } from "@bb/domain";
-import { threadTabsResponseSchema } from "@bb/server-contract";
+import {
+  threadNotesResponseSchema,
+  threadTabsResponseSchema,
+} from "@bb/server-contract";
+import type {
+  ThreadNotesResponse,
+  UpdateThreadScratchpadRequest,
+} from "@bb/server-contract";
 import type {
   CreateQueuedMessageRequest,
   CreateThreadRequest,
@@ -125,6 +132,9 @@ export type ThreadQueuedMessageGroupBoundaryResult =
   ThreadQueuedMessageListResponse;
 export type ThreadTabsResult = ThreadTabsResponse;
 export type ThreadTabsUpdateResult = ThreadTabsResponse;
+export type ThreadNotesResult = ThreadNotesResponse;
+export type ThreadScratchpadUpdateResult = ThreadNotesResponse;
+export type ThreadRecapResult = ThreadNotesResponse;
 export type ThreadStorageFilesResult = ThreadStorageFileListResponse;
 export type ThreadStoragePathsResult = ThreadStoragePathListResponse;
 export type ThreadChildSummaryResult = ThreadChildSummaryResponse;
@@ -238,6 +248,20 @@ export interface ThreadTimelineTurnSummaryDetailsArgs extends TimelineTurnSummar
 
 export interface ThreadTabsUpdateArgs extends UpdateThreadTabsRequest {
   threadId: string;
+}
+
+export interface ThreadScratchpadUpdateArgs extends UpdateThreadScratchpadRequest {
+  threadId: string;
+}
+
+export interface ThreadRecapGenerateArgs {
+  threadId: string;
+  /**
+   * Regenerate even when the stored recap already reflects the thread's
+   * current event sequence. Defaults to false, which returns a current recap
+   * without paying for inference.
+   */
+  force?: boolean;
 }
 
 export interface ThreadOpenArgs {
@@ -404,6 +428,14 @@ export interface ThreadTabsArea {
   update(args: ThreadTabsUpdateArgs): Promise<ThreadTabsUpdateResult>;
 }
 
+export interface ThreadNotesArea {
+  generateRecap(args: ThreadRecapGenerateArgs): Promise<ThreadRecapResult>;
+  get(args: ThreadStatusArgs): Promise<ThreadNotesResult>;
+  setScratchpad(
+    args: ThreadScratchpadUpdateArgs,
+  ): Promise<ThreadScratchpadUpdateResult>;
+}
+
 export interface ThreadsArea {
   archive(args: ThreadActionArgs): Promise<ThreadArchiveResult>;
   archiveAll(args: ThreadActionArgs): Promise<ThreadArchiveAllResult>;
@@ -439,6 +471,7 @@ export interface ThreadsArea {
   spawn(args: ThreadSpawnArgs): Promise<ThreadSpawnResult>;
   stop(args: ThreadActionArgs): Promise<ThreadStopResult>;
   tabs: ThreadTabsArea;
+  notes: ThreadNotesArea;
   timeline(args: ThreadTimelineArgs): Promise<ThreadTimelineResult>;
   timelineTurnSummaryDetails(
     args: ThreadTimelineTurnSummaryDetailsArgs,
@@ -854,6 +887,35 @@ export function createThreadsArea(args: CreateSdkAreaArgs): ThreadsArea {
       return threadTabsResponseSchema.parse(body);
     },
   };
+  const notes: ThreadNotesArea = {
+    async generateRecap(input) {
+      const body = await transport.readJson(
+        transport.api.v1.threads[":id"].notes.recap.$post({
+          param: { id: input.threadId },
+          json: { force: input.force ?? false },
+        }),
+      );
+      return threadNotesResponseSchema.parse(body);
+    },
+    async get(input) {
+      const body = await transport.readJson(
+        transport.api.v1.threads[":id"].notes.$get(
+          { param: { id: input.threadId } },
+          ...signalRequestArgs(input.signal),
+        ),
+      );
+      return threadNotesResponseSchema.parse(body);
+    },
+    async setScratchpad(input) {
+      const body = await transport.readJson(
+        transport.api.v1.threads[":id"].notes.scratchpad.$put({
+          param: { id: input.threadId },
+          json: { scratchpad: input.scratchpad },
+        }),
+      );
+      return threadNotesResponseSchema.parse(body);
+    },
+  };
   return {
     async archive(input) {
       // Match the UI: archiving a parent also archives assigned children and
@@ -1051,6 +1113,7 @@ export function createThreadsArea(args: CreateSdkAreaArgs): ThreadsArea {
       return { ok: true };
     },
     tabs,
+    notes,
     async timeline(input) {
       return transport.readJson(
         transport.api.v1.threads[":id"].timeline.$get(

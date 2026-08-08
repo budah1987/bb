@@ -329,6 +329,16 @@ or artifacts, validation performed, and blockers.
 - Use `bb thread log <thread-id>` to inspect the conversation.
 - Use `bb thread output <thread-id>` to read the latest final output, or
   `bb thread output --self` for the current thread.
+- Use `bb thread notes show <thread-id>` to read the thread's scratchpad and
+  recap, and `bb thread notes set <text> <thread-id>` to replace the scratchpad.
+  The scratchpad is one free-form field capped at 350 characters and is the same
+  field the user edits in the app's Notes panel, so treat it as shared space:
+  read it before overwriting, and pass an empty string only to deliberately
+  clear it.
+- Use `bb thread notes recap <thread-id>` to generate the recap: a short
+  paragraph describing where the thread stands, ending in the next step. It
+  costs an inference call, so a recap that already covers every event in the
+  thread is returned unchanged unless you pass `--force`.
 
 For review or fix pipelines, get the environment ID from
 `bb thread show <thread-id> --json`, then spawn the follow-up with

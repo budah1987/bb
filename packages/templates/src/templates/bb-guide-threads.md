@@ -125,6 +125,22 @@ Inspecting:
   bb thread output [id]                    Get the final output of a thread
     --self                                 Target current thread
 
+  bb thread notes show [id]                Show a thread's scratchpad and recap
+    --json                                 Print machine-readable JSON output
+
+  bb thread notes set <text> [id]          Replace a thread's scratchpad
+    --json                                 Print machine-readable JSON output
+
+  bb thread notes recap [id]               Generate a thread's recap
+    --force                                Regenerate an already-current recap
+    --json                                 Print machine-readable JSON output
+
+  The scratchpad is a single free-form field capped at 350 characters, shared
+  with the app's Notes panel. Pass an empty string to clear it. The recap is a
+  short generated paragraph describing where the thread stands and what to do
+  next; it is written by `recap`, never by `set`. A recap that already reflects
+  every event in the thread is returned unchanged unless you pass `--force`.
+
   bb thread wait <id>                      Wait for a thread status or event (defaults to --status idle)
     --status <status>                      Wait for this status
     --event <type>                         Wait for this event type

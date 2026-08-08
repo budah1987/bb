@@ -87,6 +87,7 @@ export const APP_COMMAND_GROUPS: readonly AppCommandGroup[] = [
         "Toggle panel",
         "Show or hide the secondary panel.",
       ),
+      command("rail.toggle", "Toggle rail", "Show or hide the right rail."),
       command(
         "pane.focus.previous",
         "Focus previous chat pane",
