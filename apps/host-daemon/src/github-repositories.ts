@@ -467,7 +467,6 @@ export async function getGithubRepositoryCatalog(args: {
 
   const activeLogin = accounts.find((account) => account.active)?.login ?? null;
   const repositories = [...byRepository.values()]
-    .filter((entry) => entry.accountLogins.size === accounts.length)
     .map(({ repository, accountLogins }): GithubRepository => {
       const accessibleBy = accounts
         .map((account) => account.login)
@@ -492,6 +491,6 @@ export async function getGithubRepositoryCatalog(args: {
   return {
     accounts,
     repositories,
-    scope: accounts.length > 1 ? "intersection" : "account",
+    scope: accounts.length > 1 ? "union" : "account",
   };
 }
