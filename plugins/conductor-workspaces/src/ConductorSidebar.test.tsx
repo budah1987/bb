@@ -366,6 +366,62 @@ describe("ConductorSidebar", () => {
     });
   });
 
+  it("keeps conversation actions on workspace rows without worktree actions", async () => {
+    const rendered = renderSlot(
+      sidebar,
+      {
+        activeThreadId: null,
+        activeProjectId: "project-1",
+        isCompactViewport: false,
+        onNavigate: () => undefined,
+        searchQuery: "",
+      },
+      {
+        sidebarThreads: {
+          status: "ready",
+          projects: [{ id: "project-1", name: "Ghost", isPersonal: false }],
+          threads: [
+            thread("Branch workspace", {
+              lastReadAt: 2,
+              latestAttentionAt: 1,
+              environment: {
+                id: "environment-branch",
+                name: "amir/user-activation-fix",
+                branchName: "amir/user-activation-fix",
+                workspaceDisplayKind: "other",
+              },
+            }),
+          ],
+        },
+        rpc: {
+          readReconciliation: () => ({
+            legacyWorkspaces: [],
+            recordedSignature: null,
+          }),
+          recordReconciliation: () => ({ recorded: false }),
+        },
+      },
+    );
+
+    fireEvent.contextMenu(
+      await screen.findByRole("button", {
+        name: /amir\/user-activation-fix/u,
+      }),
+    );
+    expect(
+      screen.queryByRole("menuitem", { name: /Rename branch/u }),
+    ).toBeNull();
+    fireEvent.click(
+      await screen.findByRole("menuitem", { name: "Mark as read" }),
+    );
+
+    expect(rendered.sidebarActionCalls).toContainEqual({
+      method: "setRead",
+      threadId: "Branch workspace",
+      read: true,
+    });
+  });
+
   it("collapses repositories and Threads while keeping aggregate activity visible", async () => {
     renderSlot(
       sidebar,

@@ -529,7 +529,6 @@ function WorkspaceRow({
     </div>
   );
 
-  if (!isWorktree || !workspace.environmentId) return sortableRow;
   return (
     <ContextMenu>
       <ContextMenuTrigger asChild>{sortableRow}</ContextMenuTrigger>
@@ -545,28 +544,38 @@ function WorkspaceRow({
           <Icon name={focused ? "PinOff" : "Pin"} aria-hidden />
           {focused ? "Remove from Focus" : "Add to Focus"}
         </ContextMenuItem>
-        <ContextMenuSeparator />
-        <ContextMenuItem onSelect={() => onRequestRename(workspace, "display")}>
-          <Icon name="Edit" aria-hidden />
-          Rename sidebar label…
-        </ContextMenuItem>
-        <ContextMenuItem onSelect={() => onRequestRename(workspace, "branch")}>
-          <Icon name="GitBranch" aria-hidden />
-          Rename branch…
-        </ContextMenuItem>
-        <ContextMenuItem onSelect={() => onRequestRename(workspace, "folder")}>
-          <Icon name="Folder" aria-hidden />
-          Rename folder…
-        </ContextMenuItem>
-        <ContextMenuSeparator />
-        <ContextMenuItem
-          disabled={archivePending}
-          className="text-destructive focus:bg-destructive/15 focus:text-destructive data-[last-hovered]:bg-destructive/15 data-[last-hovered]:text-destructive"
-          onSelect={() => onRequestArchive(workspace)}
-        >
-          <Icon name="Archive" aria-hidden />
-          Archive workspace
-        </ContextMenuItem>
+        {isWorktree && workspace.environmentId ? (
+          <>
+            <ContextMenuSeparator />
+            <ContextMenuItem
+              onSelect={() => onRequestRename(workspace, "display")}
+            >
+              <Icon name="Edit" aria-hidden />
+              Rename sidebar label…
+            </ContextMenuItem>
+            <ContextMenuItem
+              onSelect={() => onRequestRename(workspace, "branch")}
+            >
+              <Icon name="GitBranch" aria-hidden />
+              Rename branch…
+            </ContextMenuItem>
+            <ContextMenuItem
+              onSelect={() => onRequestRename(workspace, "folder")}
+            >
+              <Icon name="Folder" aria-hidden />
+              Rename folder…
+            </ContextMenuItem>
+            <ContextMenuSeparator />
+            <ContextMenuItem
+              disabled={archivePending}
+              className="text-destructive focus:bg-destructive/15 focus:text-destructive data-[last-hovered]:bg-destructive/15 data-[last-hovered]:text-destructive"
+              onSelect={() => onRequestArchive(workspace)}
+            >
+              <Icon name="Archive" aria-hidden />
+              Archive workspace
+            </ContextMenuItem>
+          </>
+        ) : null}
       </ContextMenuContent>
     </ContextMenu>
   );
