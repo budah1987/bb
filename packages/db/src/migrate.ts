@@ -1353,7 +1353,7 @@ function stageExistingProjectGithubAccountLoginColumn(
 
   const migration = requireExpectedAppliedMigration(
     readExpectedAppliedMigrations(migrationsFolder),
-    "0088_true_true_believers",
+    "0089_demonic_vin_gonzales",
   );
   if (readAppliedMigrationCreatedAts(db).has(migration.createdAt)) {
     return false;
