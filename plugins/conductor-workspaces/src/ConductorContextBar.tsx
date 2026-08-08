@@ -319,6 +319,9 @@ function ConductorWorkspaceContextBar({
           <ConversationActionMenu
             key={thread.id}
             thread={thread}
+            onSetRead={(read) => {
+              void actions.setRead(thread.id, read);
+            }}
             onRename={() => setRenameThread(thread)}
             onArchive={() => actions.archive(thread.id)}
             onDelete={() => {

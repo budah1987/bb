@@ -132,6 +132,8 @@ message agents, or inspect projects, providers, and environments.
   context variables. Omitted execution flags use remembered project defaults;
   without a remembered model, bb uses the explicitly requested provider or
   Codex and resolves its provider-reported default model on the target machine.
+- Use `bb thread read <id>` to acknowledge a viewed response and clear its
+  Awaiting Reply state. Use `bb thread unread <id>` to restore unread state.
 - Use `--branch-name <name> --base-branch <base>` to create a named branch in
   the current checkout, or add `--new-environment worktree` for an isolated
   worktree. Use `--pull-request <number>` to fetch a GitHub PR head; combine it

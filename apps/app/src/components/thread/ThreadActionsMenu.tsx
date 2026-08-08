@@ -19,7 +19,7 @@ import { Button } from "@bb/shared-ui/button";
 import { COARSE_POINTER_ICON_SIZE_CLASS } from "@bb/shared-ui/coarse-pointer-sizing";
 import { useIsCompactViewport } from "@bb/shared-ui/hooks/use-compact-viewport";
 import { cn } from "@bb/shared-ui/lib/utils";
-import { isThreadRead } from "@/lib/thread-read-state";
+import { getThreadReadToggleAction } from "@/components/sidebar/threadReadState";
 import { useThreadActions } from "./ThreadActionsProvider";
 
 interface ThreadActionsMenuBaseProps {
@@ -150,7 +150,7 @@ function ThreadActionsMenuItems({
   const isCompactViewport = useIsCompactViewport();
   const isDrawer = surface === "dropdown" && isCompactViewport;
   const showSeparators = !isDrawer;
-  const isRead = isThreadRead(thread);
+  const readAction = getThreadReadToggleAction(thread);
   const isArchived = thread.archivedAt != null;
   const isPinned = thread.pinnedAt !== null;
 
@@ -194,12 +194,12 @@ function ThreadActionsMenuItems({
       {/* Quick status toggles. */}
       <ThreadActionMenuItem
         surface={surface}
-        icon={isRead ? "Mail" : "MailOpen"}
+        icon={readAction === "mark_unread" ? "Mail" : "MailOpen"}
         onSelect={() => {
           toggleRead(thread);
         }}
       >
-        {isRead ? "Mark unread" : "Mark read"}
+        {readAction === "mark_unread" ? "Mark as unread" : "Mark as read"}
       </ThreadActionMenuItem>
       <ThreadActionMenuItem
         surface={surface}

@@ -213,8 +213,8 @@ export function useSidebarThreadActions(): PluginSidebarThreadActions {
       },
       async setRead(threadId, read) {
         const entry = requireEntry(threadId);
-        const isRead = (entry.lastReadAt ?? 0) >= entry.latestAttentionAt;
-        if (isRead === read) return;
+        const isExplicitlyRead = entry.lastReadAt === entry.latestAttentionAt;
+        if (isExplicitlyRead === read) return;
         hostActions.toggleRead(entry);
       },
       async rename(threadId, title) {

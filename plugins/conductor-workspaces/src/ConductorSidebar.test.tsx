@@ -171,11 +171,12 @@ describe("ConductorSidebar", () => {
       within(threadsSection).queryByText("Dormant", { exact: true }),
     ).toBeNull();
     expect(
-      threadsSection.querySelector(".conductor-pixel-matrix--activity"),
+      threadsSection.querySelector(".conductor-pixel-matrix--working"),
     ).not.toBeNull();
-    const attentionBadge = screen.getByText("Needs attention");
-    expect(attentionBadge.className).toContain("conductor-status-badge");
-    expect(attentionBadge.getAttribute("data-signal")).toBe("unread");
+    const readyLabel = screen.getByText("Ready");
+    expect(readyLabel.className).toContain("conductor-status-label");
+    expect(readyLabel.getAttribute("data-signal")).toBe("ready");
+    expect(screen.queryByText("Needs attention")).toBeNull();
 
     fireEvent.click(workingLink, { metaKey: true });
     expect(rendered.sidebarActionCalls).toContainEqual({
@@ -261,6 +262,61 @@ describe("ConductorSidebar", () => {
     });
   });
 
+  it("lifts a pinned workspace into Focus without duplicating it", async () => {
+    const rendered = renderSlot(
+      sidebar,
+      {
+        activeThreadId: null,
+        activeProjectId: null,
+        isCompactViewport: false,
+        onNavigate: () => undefined,
+        searchQuery: "",
+      },
+      {
+        sidebarThreads: {
+          status: "ready",
+          projects: [{ id: "project-1", name: "BB", isPersonal: false }],
+          threads: [thread("Focused conversation", { isPinned: true })],
+        },
+        rpc: {
+          readReconciliation: () => ({
+            legacyWorkspaces: [],
+            recordedSignature: null,
+          }),
+          recordReconciliation: () => ({ recorded: false }),
+        },
+      },
+    );
+
+    const focus = await screen.findByRole("region", { name: "Focus" });
+    expect(within(focus).getByText("Repository workspace")).toBeDefined();
+    expect(screen.queryByRole("region", { name: "BB" })).toBeNull();
+
+    const focusToggle = within(focus).getByRole("button", { name: "Focus" });
+    fireEvent.click(focusToggle);
+    expect(focusToggle.getAttribute("aria-expanded")).toBe("false");
+    expect(
+      document
+        .getElementById(
+          focusToggle.getAttribute("aria-controls") ?? "missing-focus",
+        )
+        ?.getAttribute("aria-hidden"),
+    ).toBe("true");
+    fireEvent.click(focusToggle);
+
+    fireEvent.contextMenu(
+      within(focus).getByRole("button", { name: /Repository workspace/u }),
+    );
+    fireEvent.click(
+      await screen.findByRole("menuitem", { name: "Remove from Focus" }),
+    );
+    expect(rendered.sidebarActionCalls).toContainEqual({
+      method: "setPinned",
+      threadId: "Focused conversation",
+      pinned: false,
+    });
+  });
+
   it("opens Thread actions on a mobile long press", async () => {
     const rendered = renderSlot(
       sidebar,
@@ -279,6 +335,8 @@ describe("ConductorSidebar", () => {
             thread("Mobile personal", {
               projectId: "personal",
               environment: null,
+              lastReadAt: 2,
+              latestAttentionAt: 1,
             }),
           ],
         },
@@ -300,10 +358,11 @@ describe("ConductorSidebar", () => {
       clientY: 24,
     });
     act(() => vi.advanceTimersByTime(700));
-    fireEvent.click(screen.getByRole("menuitem", { name: "Archive" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Mark as read" }));
     expect(rendered.sidebarActionCalls).toContainEqual({
-      method: "archive",
+      method: "setRead",
       threadId: "Mobile personal",
+      read: true,
     });
   });
 
@@ -448,8 +507,15 @@ describe("ConductorSidebar", () => {
     expect(
       alpha.compareDocumentPosition(threads) & Node.DOCUMENT_POSITION_FOLLOWING,
     ).not.toBe(0);
-    expect(screen.getByRole("button", { name: "Reorder Beta" })).toBeDefined();
-    expect(screen.getByRole("button", { name: "Reorder Alpha" })).toBeDefined();
+    const betaToggle = beta.querySelector<HTMLButtonElement>(
+      "button[aria-controls]",
+    );
+    const alphaToggle = alpha.querySelector<HTMLButtonElement>(
+      "button[aria-controls]",
+    );
+    expect(betaToggle?.getAttribute("aria-roledescription")).toBe("sortable");
+    expect(alphaToggle?.getAttribute("aria-roledescription")).toBe("sortable");
+    expect(screen.queryByRole("button", { name: /Reorder/u })).toBeNull();
     expect(
       within(threads).queryByRole("button", { name: /Reorder/u }),
     ).toBeNull();
@@ -514,8 +580,10 @@ describe("ConductorSidebar", () => {
     expect(
       beta.compareDocumentPosition(alpha) & Node.DOCUMENT_POSITION_FOLLOWING,
     ).not.toBe(0);
-    const betaHandle = within(repository).getByTitle("Reorder Beta workspace");
-    expect(betaHandle.getAttribute("aria-roledescription")).toBe("sortable");
+    expect(beta.getAttribute("aria-roledescription")).toBe("sortable");
+    expect(
+      within(repository).queryByTitle("Reorder Beta workspace"),
+    ).toBeNull();
   });
 
   it("jumps to visible workspaces with Command+1-9, skipping collapsed sections", async () => {

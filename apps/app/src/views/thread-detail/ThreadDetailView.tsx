@@ -37,7 +37,7 @@ import {
   useRequestEnvironmentAction,
 } from "../../hooks/mutations/environment-mutations";
 import {
-  useMarkThreadRead,
+  useMarkThreadViewed,
   useUpdateThread,
 } from "../../hooks/mutations/thread-state-mutations";
 import {
@@ -805,7 +805,7 @@ function ThreadDetailViewInternal(props: ThreadDetailViewInternalProps) {
   const [pullRequestMergeMethod, setPullRequestMergeMethod] = useAtom(
     pullRequestMergeMethodAtom,
   );
-  const markThreadRead = useMarkThreadRead();
+  const markThreadRead = useMarkThreadViewed();
   const updateEnvironment = useUpdateEnvironment();
   const workspaceRenameDialog = useDialogState<EnvironmentRenameDialogTarget>();
   const {

@@ -424,6 +424,7 @@ export interface ThreadsArea {
   list(args?: ThreadListArgs): Promise<ThreadListResult>;
   markRead(args: ThreadActionArgs): Promise<ThreadReadStateResult>;
   markUnread(args: ThreadActionArgs): Promise<ThreadReadStateResult>;
+  markViewed(args: ThreadActionArgs): Promise<ThreadReadStateResult>;
   open(args: ThreadOpenArgs): Promise<ThreadOpenResult>;
   paneAction(args: ThreadPaneActionArgs): Promise<ThreadPaneActionResult>;
   output(args: ThreadOutputArgs): Promise<ThreadOutputResponse>;
@@ -933,6 +934,13 @@ export function createThreadsArea(args: CreateSdkAreaArgs): ThreadsArea {
     async markUnread(input) {
       return transport.readJson(
         transport.api.v1.threads[":id"].unread.$post({
+          param: { id: input.threadId },
+        }),
+      );
+    },
+    async markViewed(input) {
+      return transport.readJson(
+        transport.api.v1.threads[":id"].viewed.$post({
           param: { id: input.threadId },
         }),
       );
