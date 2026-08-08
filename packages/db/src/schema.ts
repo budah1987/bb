@@ -580,6 +580,35 @@ export const threadTabs = sqliteTable("thread_tabs", {
   updatedAt: integer("updated_at").notNull(),
 });
 
+// One row per thread backing the right rail's Notes tab. Holds two values with
+// deliberately different lifecycles: `scratchpad` is user-authored and never
+// derived, while the `recap*` columns are a regenerable cache of model output.
+// They share a row because both are single-valued per thread and are read
+// together every time the tab renders.
+export const threadNotes = sqliteTable("thread_notes", {
+  threadId: text("thread_id")
+    .primaryKey()
+    .references(() => threads.id, { onDelete: "cascade" }),
+  // Free-form user scratchpad. Length-capped at the server boundary, not here:
+  // SQLite has no CHECK on text length worth maintaining, and every writer
+  // (route, CLI, SDK) already parses through the same contract schema.
+  scratchpad: text("scratchpad").notNull().default(""),
+  // Generated prose recap; NULL until the first generation succeeds.
+  recapBody: text("recap_body"),
+  // The `events.sequence` high-water mark the recap was generated from. Compared
+  // against the thread's current sequence to decide whether the recap is stale;
+  // NULL whenever recapBody is NULL.
+  recapSourceSeq: integer("recap_source_seq"),
+  recapGeneratedAt: integer("recap_generated_at"),
+  // Set the first time the user opens the rail's Recap section on this thread.
+  // Automatic regeneration is gated on it so threads nobody looks at never pay
+  // for inference.
+  recapEnabled: integer("recap_enabled", { mode: "boolean" })
+    .notNull()
+    .default(false),
+  updatedAt: integer("updated_at").notNull(),
+});
+
 export const threadSections = sqliteTable(
   "thread_sections",
   {

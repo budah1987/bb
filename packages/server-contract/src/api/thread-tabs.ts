@@ -88,6 +88,7 @@ export const threadTabSchema = z.discriminatedUnion("kind", [
     })
     .strict(),
   z.object({ id: threadTabIdSchema, kind: z.literal("new-tab") }).strict(),
+  z.object({ id: threadTabIdSchema, kind: z.literal("notes") }).strict(),
   z
     .object({
       id: threadTabIdSchema,

@@ -858,7 +858,10 @@ export function BottomAnchoredScrollBody({
         {scrollOverlay ? (
           <div
             data-scroll-overlay=""
-            className="pointer-events-none z-30 col-start-1 row-start-1 flex min-h-0 min-w-0 items-center justify-end px-3 py-3"
+            // Anchored to the leading edge: the trailing edge of a thread pane
+            // belongs to the secondary panel and the right rail, and an overlay
+            // there would sit under whichever of them is open.
+            className="pointer-events-none z-30 col-start-1 row-start-1 flex min-h-0 min-w-0 items-center justify-start px-3 py-3"
           >
             <div className="pointer-events-auto">{scrollOverlay}</div>
           </div>

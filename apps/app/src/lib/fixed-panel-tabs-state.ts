@@ -25,6 +25,7 @@ const THREAD_INFO_TAB_ID = "thread-info:thread-info:none";
 const GIT_DIFF_TAB_ID = "git-diff:git-diff:none";
 const PULL_REQUEST_TAB_ID = "pull-request:pull-request:none";
 const NEW_TAB_TAB_ID = "new-tab:new-tab:none";
+export const NOTES_TAB_ID = "notes:notes:none";
 
 const environmentFilePreviewSourceSchema: z.ZodType<EnvironmentFilePreviewSource> =
   z.discriminatedUnion("kind", [
@@ -124,6 +125,12 @@ const newTabFixedPanelTabSchema = z
     kind: z.literal("new-tab"),
   })
   .strict();
+const notesFixedPanelTabSchema = z
+  .object({
+    id: z.string().min(1),
+    kind: z.literal("notes"),
+  })
+  .strict();
 const terminalFixedPanelTabSchema = z
   .object({
     id: z.string().min(1),
@@ -151,6 +158,7 @@ const secondaryFixedPanelTabSchema = z.union([
   threadStorageFilePreviewFixedPanelTabSchema,
   browserFixedPanelTabSchema,
   newTabFixedPanelTabSchema,
+  notesFixedPanelTabSchema,
   terminalFixedPanelTabSchema,
 ]);
 /**
@@ -271,6 +279,16 @@ export interface NewTabFixedPanelTab {
   kind: "new-tab";
 }
 
+/**
+ * The thread's Notes tab: a per-thread recap + scratchpad. Singleton per
+ * thread (one id), closable like a file tab rather than pinned, because it is
+ * a place you visit rather than a view you keep.
+ */
+export interface NotesFixedPanelTab {
+  id: string;
+  kind: "notes";
+}
+
 export interface TerminalFixedPanelTab {
   id: string;
   kind: "terminal";
@@ -287,6 +305,7 @@ export type SecondaryFixedPanelTab =
   | ThreadStorageFilePreviewFixedPanelTab
   | BrowserFixedPanelTab
   | NewTabFixedPanelTab
+  | NotesFixedPanelTab
   | TerminalFixedPanelTab;
 
 /**
@@ -300,6 +319,7 @@ export type SecondaryFileFixedPanelTab =
   | ThreadStorageFilePreviewFixedPanelTab
   | BrowserFixedPanelTab
   | NewTabFixedPanelTab
+  | NotesFixedPanelTab
   | TerminalFixedPanelTab
   | PluginPanelFixedPanelTab;
 
@@ -637,6 +657,13 @@ export function createNewTabFixedPanelTab(): NewTabFixedPanelTab {
   };
 }
 
+export function createNotesFixedPanelTab(): NotesFixedPanelTab {
+  return {
+    id: NOTES_TAB_ID,
+    kind: "notes",
+  };
+}
+
 export function createTerminalFixedPanelTab({
   terminalId,
 }: CreateTerminalFixedPanelTabArgs): TerminalFixedPanelTab {
@@ -716,6 +743,13 @@ function normalizeFixedPanelTabId(tab: FixedPanelTab): FixedPanelTab {
         : {
             ...tab,
             id: NEW_TAB_TAB_ID,
+          };
+    case "notes":
+      return tab.id === NOTES_TAB_ID
+        ? tab
+        : {
+            ...tab,
+            id: NOTES_TAB_ID,
           };
     case "plugin-panel": {
       const id = createPluginPanelFixedPanelTab({
@@ -799,6 +833,7 @@ function stripTransientFixedPanelTabForStorage(
     case "plugin-panel":
     case "browser":
     case "new-tab":
+    case "notes":
     case "terminal":
       return tab;
   }
@@ -977,6 +1012,7 @@ export function areFixedPanelTabsEquivalent(
     case "git-diff":
     case "pull-request":
     case "new-tab":
+    case "notes":
       return true;
     case "plugin-panel":
       return (
