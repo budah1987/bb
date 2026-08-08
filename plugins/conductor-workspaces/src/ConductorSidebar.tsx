@@ -134,6 +134,27 @@ interface GithubCatalog {
   repositories: GithubRepositoryOption[];
 }
 
+function accountsForRepository(
+  catalog: GithubCatalog | null,
+  repositoryName: string | null,
+): GithubAccountOption[] {
+  if (!catalog || !repositoryName) return [];
+  const repository = repositoryName
+    ? catalog.repositories.find(
+        (candidate) =>
+          candidate.nameWithOwner.toLocaleLowerCase() ===
+          repositoryName.toLocaleLowerCase(),
+      )
+    : undefined;
+  if (!repository) return [];
+  return catalog.accounts.filter((account) =>
+    repository.accessibleBy.some(
+      (login) =>
+        login.toLocaleLowerCase() === account.login.toLocaleLowerCase(),
+    ),
+  );
+}
+
 function AddRepositoryDialog({
   catalog,
   open,
@@ -170,15 +191,6 @@ function AddRepositoryDialog({
     });
   }, [onLoad, open]);
 
-  useEffect(() => {
-    if (!open || !catalog || accountLogin !== null) return;
-    setAccountLogin(
-      catalog.accounts.find((account) => account.active)?.login ??
-        catalog.accounts[0]?.login ??
-        null,
-    );
-  }, [accountLogin, catalog, open]);
-
   const filteredRepositories = useMemo(() => {
     const normalizedQuery = query.trim().toLocaleLowerCase();
     return (catalog?.repositories ?? []).filter((repository) =>
@@ -192,6 +204,25 @@ function AddRepositoryDialog({
   const selectedRepository = filteredRepositories.find(
     (repository) => repository.nameWithOwner === selectedName,
   );
+  const availableAccounts = accountsForRepository(
+    catalog,
+    selectedRepository?.nameWithOwner ?? null,
+  );
+  const selectableAccounts = selectedRepository
+    ? availableAccounts
+    : (catalog?.accounts ?? []);
+
+  useEffect(() => {
+    if (!open) return;
+    if (selectableAccounts.some((account) => account.login === accountLogin)) {
+      return;
+    }
+    setAccountLogin(
+      selectableAccounts.find((account) => account.active)?.login ??
+        selectableAccounts[0]?.login ??
+        null,
+    );
+  }, [accountLogin, open, selectableAccounts]);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -234,8 +265,8 @@ function AddRepositoryDialog({
               </p>
             ) : filteredRepositories.length === 0 ? (
               <p className="px-3 py-5 text-xs text-muted-foreground">
-                No repositories are visible to all authenticated GitHub
-                accounts.
+                No repositories are visible to any authenticated GitHub
+                account.
               </p>
             ) : (
               filteredRepositories.map((repository) => (
@@ -251,6 +282,11 @@ function AddRepositoryDialog({
                   <span className="min-w-0 flex-1 truncate font-medium">
                     {repository.nameWithOwner}
                   </span>
+                  <span className="max-w-40 shrink-0 truncate text-2xs text-muted-foreground">
+                    {repository.accessibleBy
+                      .map((login) => `@${login}`)
+                      .join(" · ")}
+                  </span>
                   <span className="shrink-0 text-2xs text-muted-foreground">
                     {repository.isPrivate ? "Private" : "Public"}
                   </span>
@@ -258,13 +294,13 @@ function AddRepositoryDialog({
               ))
             )}
           </div>
-          {catalog && catalog.accounts.length > 0 ? (
+          {selectableAccounts.length > 0 ? (
             <fieldset className="space-y-2">
               <legend className="text-xs font-medium text-foreground">
-                Default GitHub account
+                GitHub account for this repository
               </legend>
               <div className="grid grid-cols-2 gap-2">
-                {catalog.accounts.map((account) => (
+                {selectableAccounts.map((account) => (
                   <label
                     key={account.login}
                     className="flex cursor-pointer items-center gap-2 rounded-md border px-3 py-2 text-xs hover:bg-state-hover"
@@ -1738,7 +1774,10 @@ export function ConductorSidebar({
                       ? project.githubAccountLogin
                       : projectAccountOverrides[project.id]
                   }
-                  githubAccounts={githubCatalog?.accounts ?? []}
+                  githubAccounts={accountsForRepository(
+                    githubCatalog,
+                    project.repositoryName,
+                  )}
                   activeThreadId={activeThreadId}
                   collapsed={collapsed}
                   archivePending={archivePending}

@@ -1099,8 +1099,8 @@ describe("host-daemon command schemas", () => {
   // Version 80 includes live workspace metadata refresh and scopes GitHub PR
   // commands to an authenticated account. Older daemons do not support the
   // added messages and fields, so the bump forces an update.
-  it("uses protocol version 80 for account-scoped GitHub workflows", () => {
-    expect(HOST_DAEMON_PROTOCOL_VERSION).toBe(80);
+  it("uses protocol version 81 for account-scoped GitHub workflows", () => {
+    expect(HOST_DAEMON_PROTOCOL_VERSION).toBe(81);
   });
 
   it("binds Plan cancellation to a required turn id and typed result", () => {

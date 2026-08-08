@@ -40,7 +40,7 @@ Discovery:
   bb project github-accounts                List authenticated GitHub accounts
     --machine <id-or-name>                   Machine whose accounts to use
     --host <id-or-name>                      Alias for --machine
-  bb project github-repositories            List the repository intersection
+  bb project github-repositories            List repositories from all accounts
     --machine <id-or-name>                   Machine whose GitHub accounts to use
     --host <id-or-name>                      Alias for --machine
   bb project github-pull-requests <owner/repo>
@@ -63,9 +63,10 @@ Discovery:
   falls back to the primary machine's project source.
 
   GitHub repository discovery reads every authenticated github.com account on
-  the selected machine and returns only repositories accessible to all of
-  them. Human output identifies the repository owner, every account with
-  access, and the active account; --json returns the complete typed catalog.
+  the selected machine, combines repositories by owner/name, and reports which
+  accounts can access each one. Human output identifies the repository owner,
+  every account with access, and the active account; --json returns the complete
+  typed catalog.
   Pull-request discovery uses the active account and returns the PR head
   repository and branch so agents can reproduce the selected starting point.
   The project GitHub account is a repository default inherited by new

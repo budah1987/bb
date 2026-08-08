@@ -31,7 +31,7 @@ export async function getGithubAccounts(
 }
 
 /**
- * Reads GitHub accounts and their repository intersection from one machine.
+ * Reads GitHub accounts and the union of their repositories from one machine.
  * Credentials never cross the daemon boundary; this result contains logins
  * and repository metadata only.
  */
