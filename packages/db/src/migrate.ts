@@ -167,6 +167,7 @@ const branchLocalThreadSearchMigrationCreatedAts = [
   1781403656070, 1781403656071,
 ] as const;
 const branchLocalThreadTabsMigrationCreatedAts = [1783633750817] as const;
+const legacyProjectGithubAccountMigrationCreatedAt = 1786167579846;
 const pendingInteractionColumns: ExpectedColumn[] = [
   { name: "id", type: "text", notNull: true, primaryKey: true },
   { name: "thread_id", type: "text", notNull: true, primaryKey: false },
@@ -1383,6 +1384,29 @@ function restoreStagedProjectGithubAccountLoginColumn(db: DbConnection): void {
   );
 }
 
+function repairNotesMigrationAfterLegacyProjectMigration(
+  db: DbConnection,
+  migrationsFolder: string,
+): void {
+  if (
+    !tableExists(db, "__drizzle_migrations") ||
+    tableExists(db, "thread_notes")
+  ) {
+    return;
+  }
+
+  const appliedCreatedAts = readAppliedMigrationCreatedAts(db);
+  if (!appliedCreatedAts.has(legacyProjectGithubAccountMigrationCreatedAt)) {
+    return;
+  }
+
+  const notesMigration = requireExpectedAppliedMigration(
+    readExpectedAppliedMigrations(migrationsFolder),
+    "0088_unusual_iron_patriot",
+  );
+  applyMigrationStatements(db, notesMigration);
+}
+
 function repairBranchLocalThreadSearchMigrations(db: DbConnection): void {
   if (!tableExists(db, "__drizzle_migrations")) {
     return;
@@ -1592,6 +1616,7 @@ export function migrate(db: DbConnection, options: MigrateOptions = {}): void {
     );
     const stagedProjectGithubAccountLogin =
       stageExistingProjectGithubAccountLoginColumn(db, migrationsFolder);
+    repairNotesMigrationAfterLegacyProjectMigration(db, migrationsFolder);
     try {
       drizzleMigrate(db, { migrationsFolder });
     } finally {
