@@ -66,12 +66,18 @@ export interface NewTabFileSearchProps {
 }
 
 export type OpenBrowserHandler = () => void;
+export type OpenNotesHandler = () => void;
 export type StartTerminalHandler = () => void;
 
 export interface NewTabActionsProps {
   /** Open a session-based side chat of the current thread in its own tab. */
   /** Desktop-only: open a new in-panel browser tab. Absent ⇒ no Browser entry. */
   onOpenBrowser?: OpenBrowserHandler;
+  /**
+   * Open the thread's Notes tab. Absent ⇒ no Notes entry — the standalone
+   * compact PWA omits it, and root compose has no thread to take notes on.
+   */
+  onOpenNotes?: OpenNotesHandler;
   onStartTerminal?: StartTerminalHandler;
   /** Plugin `threadPanelAction` rows, rendered after the built-in entries. */
   pluginActions?: readonly PluginPanelActionEntry[];
@@ -177,6 +183,7 @@ const FILE_SEARCH_SOURCE_LABELS = {
 } satisfies Record<FileSearchSource, string>;
 
 const OPEN_BROWSER_ENTRY_ID = "file-search-result-open-browser";
+const OPEN_NOTES_ENTRY_ID = "file-search-result-open-notes";
 const START_TERMINAL_ENTRY_ID = "file-search-result-start-terminal";
 
 const RECENT_ENTRY_ID_PREFIX = "file-search-result-recent";
@@ -764,17 +771,23 @@ export function NewTabFileSearch({
 
 export function NewTabActions({
   onOpenBrowser,
+  onOpenNotes,
   onStartTerminal,
   pluginActions,
 }: NewTabActionsProps) {
   const terminalShortcut = useAppCommandShortcut("terminal.open");
   const showOpenBrowserEntry =
     onOpenBrowser !== undefined && isDesktopBrowserAvailable();
+  const showOpenNotesEntry = onOpenNotes !== undefined;
   const showStartTerminalEntry = onStartTerminal !== undefined;
 
   const handleOpenBrowser = useCallback(() => {
     onOpenBrowser?.();
   }, [onOpenBrowser]);
+
+  const handleOpenNotes = useCallback(() => {
+    onOpenNotes?.();
+  }, [onOpenNotes]);
 
   const handleStartTerminal = useCallback(() => {
     onStartTerminal?.();
@@ -782,6 +795,7 @@ export function NewTabActions({
 
   const hasOpenActions =
     showOpenBrowserEntry ||
+    showOpenNotesEntry ||
     showStartTerminalEntry ||
     (pluginActions !== undefined && pluginActions.length > 0);
 
@@ -805,6 +819,16 @@ export function NewTabActions({
               isActive={false}
               onActivate={() => undefined}
               onSelect={handleOpenBrowser}
+            />
+          ) : null}
+          {showOpenNotesEntry ? (
+            <NewTabActionTile
+              id={OPEN_NOTES_ENTRY_ID}
+              iconName="EditFile"
+              label="Open notes"
+              isActive={false}
+              onActivate={() => undefined}
+              onSelect={handleOpenNotes}
             />
           ) : null}
           {showStartTerminalEntry ? (

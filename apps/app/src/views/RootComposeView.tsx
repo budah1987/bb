@@ -2869,6 +2869,26 @@ export function RootComposeView() {
               onSelect: () => handleActivateFileTab(tab.id),
               onClose: () => closeTab(tab.id),
             };
+          case "notes":
+            // Notes are per-thread; root compose has no thread, so this tab
+            // can only arrive from persisted state. Render it hidden rather
+            // than pruning it — a prune would delete the user's thread tab.
+            return {
+              id: tab.id,
+              filename: "Notes",
+              isHidden: true,
+              isActive: tab.id === activeFixedSecondaryTabId,
+              leadingVisual: (
+                <Icon
+                  name="EditFile"
+                  className={COARSE_POINTER_COMPACT_ICON_SIZE_CLASS}
+                  aria-hidden
+                />
+              ),
+              statusLabel: null,
+              onSelect: () => handleActivateFileTab(tab.id),
+              onClose: () => closeTab(tab.id),
+            };
           case "plugin-panel":
             // Plugin action tabs are opened from a thread's launcher; the
             // root panel offers no plugin actions, but file-opener tabs open

@@ -73,6 +73,7 @@ declare const appKeybindingOverridesSchema: z$1.ZodArray<z$1.ZodObject<{
         "panel.newTab": "panel.newTab";
         "panel.close": "panel.close";
         "panel.toggle": "panel.toggle";
+        "rail.toggle": "rail.toggle";
         "file.quickOpen": "file.quickOpen";
         "diff.toggle": "diff.toggle";
         "terminal.open": "terminal.open";
@@ -159,6 +160,7 @@ declare const changedMessageSchema: z$1.ZodDiscriminatedUnion<[z$1.ZodObject<{
         "order-changed": "order-changed";
         "tabs-changed": "tabs-changed";
         "terminals-changed": "terminals-changed";
+        "notes-changed": "notes-changed";
     }>>>;
 }, z$1.core.$strict>, z$1.ZodObject<{
     type: z$1.ZodLiteral<"changed">;
@@ -6978,6 +6980,7 @@ declare const systemConfigResponseSchema: z$1.ZodObject<{
             "panel.newTab": "panel.newTab";
             "panel.close": "panel.close";
             "panel.toggle": "panel.toggle";
+            "rail.toggle": "rail.toggle";
             "file.quickOpen": "file.quickOpen";
             "diff.toggle": "diff.toggle";
             "terminal.open": "terminal.open";
@@ -7070,6 +7073,7 @@ declare const systemConfigResponseSchema: z$1.ZodObject<{
             "panel.newTab": "panel.newTab";
             "panel.close": "panel.close";
             "panel.toggle": "panel.toggle";
+            "rail.toggle": "rail.toggle";
             "file.quickOpen": "file.quickOpen";
             "diff.toggle": "diff.toggle";
             "terminal.open": "terminal.open";
@@ -7162,6 +7166,7 @@ declare const systemConfigResponseSchema: z$1.ZodObject<{
             "panel.newTab": "panel.newTab";
             "panel.close": "panel.close";
             "panel.toggle": "panel.toggle";
+            "rail.toggle": "rail.toggle";
             "file.quickOpen": "file.quickOpen";
             "diff.toggle": "diff.toggle";
             "terminal.open": "terminal.open";
@@ -10045,6 +10050,19 @@ declare const threadStoragePathListResponseSchema: z$1.ZodObject<{
 }, z$1.core.$strip>;
 type ThreadStoragePathListResponse = z$1.infer<typeof threadStoragePathListResponseSchema>;
 
+declare const threadNotesResponseSchema: z$1.ZodObject<{
+    recapBody: z$1.ZodNullable<z$1.ZodString>;
+    recapEnabled: z$1.ZodBoolean;
+    recapGeneratedAt: z$1.ZodNullable<z$1.ZodNumber>;
+    recapSourceSeq: z$1.ZodNullable<z$1.ZodNumber>;
+    scratchpad: z$1.ZodString;
+}, z$1.core.$strict>;
+type ThreadNotesResponse = z$1.infer<typeof threadNotesResponseSchema>;
+declare const updateThreadScratchpadRequestSchema: z$1.ZodObject<{
+    scratchpad: z$1.ZodString;
+}, z$1.core.$strict>;
+type UpdateThreadScratchpadRequest = z$1.infer<typeof updateThreadScratchpadRequestSchema>;
+
 declare const threadTabsResponseSchema: z$1.ZodObject<{
     revision: z$1.ZodNumber;
     tabs: z$1.ZodArray<z$1.ZodDiscriminatedUnion<[z$1.ZodObject<{
@@ -10112,6 +10130,9 @@ declare const threadTabsResponseSchema: z$1.ZodObject<{
     }, z$1.core.$strict>, z$1.ZodObject<{
         id: z$1.ZodString;
         kind: z$1.ZodLiteral<"new-tab">;
+    }, z$1.core.$strict>, z$1.ZodObject<{
+        id: z$1.ZodString;
+        kind: z$1.ZodLiteral<"notes">;
     }, z$1.core.$strict>, z$1.ZodObject<{
         id: z$1.ZodString;
         kind: z$1.ZodLiteral<"side-chat">;
@@ -10193,6 +10214,9 @@ declare const updateThreadTabsRequestSchema: z$1.ZodObject<{
     }, z$1.core.$strict>, z$1.ZodObject<{
         id: z$1.ZodString;
         kind: z$1.ZodLiteral<"new-tab">;
+    }, z$1.core.$strict>, z$1.ZodObject<{
+        id: z$1.ZodString;
+        kind: z$1.ZodLiteral<"notes">;
     }, z$1.core.$strict>, z$1.ZodObject<{
         id: z$1.ZodString;
         kind: z$1.ZodLiteral<"side-chat">;
@@ -12547,6 +12571,9 @@ type ThreadQueuedMessageSendResult = SendQueuedMessageResponse;
 type ThreadQueuedMessageGroupBoundaryResult = ThreadQueuedMessageListResponse;
 type ThreadTabsResult = ThreadTabsResponse;
 type ThreadTabsUpdateResult = ThreadTabsResponse;
+type ThreadNotesResult = ThreadNotesResponse;
+type ThreadScratchpadUpdateResult = ThreadNotesResponse;
+type ThreadRecapResult = ThreadNotesResponse;
 type ThreadStorageFilesResult = ThreadStorageFileListResponse;
 type ThreadStoragePathsResult = ThreadStoragePathListResponse;
 type ThreadChildSummaryResult = ThreadChildSummaryResponse;
@@ -12627,6 +12654,18 @@ interface ThreadTimelineTurnSummaryDetailsArgs extends TimelineTurnSummaryDetail
 }
 interface ThreadTabsUpdateArgs extends UpdateThreadTabsRequest {
     threadId: string;
+}
+interface ThreadScratchpadUpdateArgs extends UpdateThreadScratchpadRequest {
+    threadId: string;
+}
+interface ThreadRecapGenerateArgs {
+    threadId: string;
+    /**
+     * Regenerate even when the stored recap already reflects the thread's
+     * current event sequence. Defaults to false, which returns a current recap
+     * without paying for inference.
+     */
+    force?: boolean;
 }
 interface ThreadOpenArgs {
     threadId: string;
@@ -12729,6 +12768,11 @@ interface ThreadTabsArea {
     get(args: ThreadStatusArgs): Promise<ThreadTabsResult>;
     update(args: ThreadTabsUpdateArgs): Promise<ThreadTabsUpdateResult>;
 }
+interface ThreadNotesArea {
+    generateRecap(args: ThreadRecapGenerateArgs): Promise<ThreadRecapResult>;
+    get(args: ThreadStatusArgs): Promise<ThreadNotesResult>;
+    setScratchpad(args: ThreadScratchpadUpdateArgs): Promise<ThreadScratchpadUpdateResult>;
+}
 interface ThreadsArea {
     archive(args: ThreadActionArgs): Promise<ThreadArchiveResult>;
     archiveAll(args: ThreadActionArgs): Promise<ThreadArchiveAllResult>;
@@ -12745,6 +12789,7 @@ interface ThreadsArea {
     list(args?: ThreadListArgs): Promise<ThreadListResult>;
     markRead(args: ThreadActionArgs): Promise<ThreadReadStateResult>;
     markUnread(args: ThreadActionArgs): Promise<ThreadReadStateResult>;
+    markViewed(args: ThreadActionArgs): Promise<ThreadReadStateResult>;
     open(args: ThreadOpenArgs): Promise<ThreadOpenResult>;
     paneAction(args: ThreadPaneActionArgs): Promise<ThreadPaneActionResult>;
     output(args: ThreadOutputArgs): Promise<ThreadOutputResponse>;
@@ -12757,6 +12802,7 @@ interface ThreadsArea {
     spawn(args: ThreadSpawnArgs): Promise<ThreadSpawnResult>;
     stop(args: ThreadActionArgs): Promise<ThreadStopResult>;
     tabs: ThreadTabsArea;
+    notes: ThreadNotesArea;
     timeline(args: ThreadTimelineArgs): Promise<ThreadTimelineResult>;
     timelineTurnSummaryDetails(args: ThreadTimelineTurnSummaryDetailsArgs): Promise<ThreadTimelineTurnSummaryDetailsResult>;
     storageFiles(args: ThreadStorageFilesArgs): Promise<ThreadStorageFilesResult>;

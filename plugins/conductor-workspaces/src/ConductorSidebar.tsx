@@ -340,6 +340,11 @@ type DragState = {
   overId: string | null;
 };
 
+type SortableActivatorBindings = Pick<
+  ReturnType<typeof useSortable>,
+  "attributes" | "listeners" | "setActivatorNodeRef"
+>;
+
 function workspaceDndId(workspaceKey: string): string {
   return `${WORKSPACE_DND_PREFIX}${workspaceKey}`;
 }
@@ -552,14 +557,7 @@ function SignalStatus({
   if (!label) return null;
 
   return (
-    <span
-      className={
-        signal === "unread"
-          ? "conductor-status-badge"
-          : "conductor-status-label"
-      }
-      data-signal={signal}
-    >
+    <span className="conductor-status-label" data-signal={signal}>
       {label}
     </span>
   );
@@ -575,7 +573,7 @@ function SectionHeader({
   onToggle,
   onCreate,
   createLabel,
-  dragHandle,
+  dragBindings,
 }: {
   title: string;
   meta?: ReactNode;
@@ -586,18 +584,21 @@ function SectionHeader({
   onToggle: () => void;
   onCreate: () => void;
   createLabel: string;
-  dragHandle?: ReactNode;
+  dragBindings?: SortableActivatorBindings;
 }) {
   const statusLabel = signalLabel(signal);
 
   return (
     <div className="conductor-section-header group/section flex items-center gap-0.5 px-1 text-xs font-medium text-sidebar-foreground">
       <button
+        ref={dragBindings?.setActivatorNodeRef}
         type="button"
         className="conductor-section-toggle"
         aria-expanded={!collapsed}
         aria-controls={contentId}
         onClick={onToggle}
+        {...dragBindings?.attributes}
+        {...(dragBindings?.listeners ?? {})}
       >
         <Icon
           name="ChevronDown"
@@ -607,12 +608,13 @@ function SectionHeader({
         {icon}
         <span className="min-w-0 flex-1 truncate text-left">{title}</span>
         {meta}
-        <PixelMatrix
-          signal={signal}
-          label={statusLabel ? `${statusLabel} in ${title}` : undefined}
-        />
+        {collapsed ? (
+          <PixelMatrix
+            signal={signal}
+            label={statusLabel ? `${statusLabel} in ${title}` : undefined}
+          />
+        ) : null}
       </button>
-      {dragHandle}
       <button
         type="button"
         className="conductor-icon-button"
@@ -631,6 +633,7 @@ function WorkspaceRow({
   activeThreadId,
   archivePending,
   dragDisabled,
+  focused,
   isDropTarget,
   shortcutEnabled,
   jumpShortcut,
@@ -638,11 +641,14 @@ function WorkspaceRow({
   onOpen,
   onRequestArchive,
   onRequestRename,
+  onSetRead,
+  onSetFocused,
 }: {
   workspace: ConductorWorkspace;
   activeThreadId: string | null;
   archivePending: boolean;
   dragDisabled: boolean;
+  focused: boolean;
   isDropTarget: boolean;
   shortcutEnabled: boolean;
   jumpShortcut: { ariaKeyshortcuts: string; label: string } | null;
@@ -650,15 +656,15 @@ function WorkspaceRow({
   onOpen: (threadId: string) => void;
   onRequestArchive: (workspace: ConductorWorkspace) => void;
   onRequestRename: (workspace: ConductorWorkspace, scope: RenameScope) => void;
+  onSetRead: (workspace: ConductorWorkspace, read: boolean) => void;
+  onSetFocused: (workspace: ConductorWorkspace, focused: boolean) => void;
 }) {
   const target = pickWorkspaceThread(workspace, activeThreadId);
   const isActive = workspace.threads.some(
     (thread) => thread.id === activeThreadId,
   );
-  const unreadCount = workspace.threads.filter(
-    (thread) => thread.isUnread,
-  ).length;
   const signal = workspaceSignal(workspace.threads);
+  const isExplicitlyRead = target?.lastReadAt === target?.latestAttentionAt;
   const statusLabel = signalLabel(signal);
   const displayKind = workspace.threads[0]?.environment?.workspaceDisplayKind;
   const isWorktree =
@@ -687,31 +693,47 @@ function WorkspaceRow({
 
   const row = (
     <button
+      ref={setActivatorNodeRef}
       type="button"
       className="conductor-workspace-row"
+      data-focused={focused || undefined}
       data-sidebar-thread-shortcut-target={isShortcutTarget ? "" : undefined}
       data-sidebar-thread-id={isShortcutTarget ? target?.id : undefined}
       data-active={isActive || undefined}
       aria-current={isActive ? "page" : undefined}
       aria-keyshortcuts={jumpShortcut?.ariaKeyshortcuts}
       onClick={() => target && onOpen(target.id)}
+      {...attributes}
+      {...(listeners ?? {})}
     >
       <PixelMatrix
         signal={signal}
         label={statusLabel ? `${statusLabel} workspace` : undefined}
       />
       <span className="min-w-0 flex-1 text-left">
-        <span className="block truncate text-xs font-medium text-sidebar-foreground">
+        <span
+          className={
+            focused
+              ? "block truncate text-sm font-medium text-sidebar-foreground"
+              : "block truncate text-xs font-medium text-sidebar-foreground"
+          }
+        >
           {workspace.title}
         </span>
-        <span className="flex min-w-0 items-center gap-1 text-2xs text-muted-foreground">
+        <span
+          className={
+            focused
+              ? "flex min-w-0 items-center gap-1 text-xs text-muted-foreground"
+              : "flex min-w-0 items-center gap-1 text-2xs text-muted-foreground"
+          }
+        >
           <span className="min-w-0 flex-1 truncate">
             {workspace.branchName ??
               `${workspace.threads.length} conversation${workspace.threads.length === 1 ? "" : "s"}`}
           </span>
-          <SignalStatus signal={signal} />
         </span>
       </span>
+      <SignalStatus signal={signal} />
       {showJumpShortcut && jumpShortcut ? (
         <kbd
           aria-hidden
@@ -719,10 +741,6 @@ function WorkspaceRow({
         >
           {jumpShortcut.label}
         </kbd>
-      ) : unreadCount > 0 ? (
-        <span className="text-2xs tabular-nums text-muted-foreground">
-          {unreadCount}
-        </span>
       ) : null}
     </button>
   );
@@ -736,47 +754,56 @@ function WorkspaceRow({
       data-drop-target={isDropTarget || undefined}
     >
       {row}
-      <button
-        ref={setActivatorNodeRef}
-        type="button"
-        className="conductor-drag-handle"
-        aria-label="Reorder workspace"
-        title={`Reorder ${workspace.title}`}
-        disabled={dragDisabled}
-        {...attributes}
-        {...listeners}
-      >
-        <Icon name="DragDropVertical" className="size-3.5" aria-hidden />
-      </button>
     </div>
   );
 
-  if (!isWorktree || !workspace.environmentId) return sortableRow;
   return (
     <ContextMenu>
       <ContextMenuTrigger asChild>{sortableRow}</ContextMenuTrigger>
       <ContextMenuContent aria-label={`${workspace.title} actions`}>
-        <ContextMenuItem onSelect={() => onRequestRename(workspace, "display")}>
-          <Icon name="Edit" aria-hidden />
-          Rename sidebar label…
-        </ContextMenuItem>
-        <ContextMenuItem onSelect={() => onRequestRename(workspace, "branch")}>
-          <Icon name="GitBranch" aria-hidden />
-          Rename branch…
-        </ContextMenuItem>
-        <ContextMenuItem onSelect={() => onRequestRename(workspace, "folder")}>
-          <Icon name="Folder" aria-hidden />
-          Rename folder…
+        <ContextMenuItem
+          onSelect={() => onSetRead(workspace, !isExplicitlyRead)}
+        >
+          <Icon name={isExplicitlyRead ? "Mail" : "MailOpen"} aria-hidden />
+          {isExplicitlyRead ? "Mark as unread" : "Mark as read"}
         </ContextMenuItem>
         <ContextMenuSeparator />
-        <ContextMenuItem
-          disabled={archivePending}
-          className="text-destructive focus:bg-destructive/15 focus:text-destructive data-[last-hovered]:bg-destructive/15 data-[last-hovered]:text-destructive"
-          onSelect={() => onRequestArchive(workspace)}
-        >
-          <Icon name="Archive" aria-hidden />
-          Archive workspace
+        <ContextMenuItem onSelect={() => onSetFocused(workspace, !focused)}>
+          <Icon name={focused ? "PinOff" : "Pin"} aria-hidden />
+          {focused ? "Remove from Focus" : "Add to Focus"}
         </ContextMenuItem>
+        {isWorktree && workspace.environmentId ? (
+          <>
+            <ContextMenuSeparator />
+            <ContextMenuItem
+              onSelect={() => onRequestRename(workspace, "display")}
+            >
+              <Icon name="Edit" aria-hidden />
+              Rename sidebar label…
+            </ContextMenuItem>
+            <ContextMenuItem
+              onSelect={() => onRequestRename(workspace, "branch")}
+            >
+              <Icon name="GitBranch" aria-hidden />
+              Rename branch…
+            </ContextMenuItem>
+            <ContextMenuItem
+              onSelect={() => onRequestRename(workspace, "folder")}
+            >
+              <Icon name="Folder" aria-hidden />
+              Rename folder…
+            </ContextMenuItem>
+            <ContextMenuSeparator />
+            <ContextMenuItem
+              disabled={archivePending}
+              className="text-destructive focus:bg-destructive/15 focus:text-destructive data-[last-hovered]:bg-destructive/15 data-[last-hovered]:text-destructive"
+              onSelect={() => onRequestArchive(workspace)}
+            >
+              <Icon name="Archive" aria-hidden />
+              Archive workspace
+            </ContextMenuItem>
+          </>
+        ) : null}
       </ContextMenuContent>
     </ContextMenu>
   );
@@ -806,11 +833,6 @@ function WorkspaceDragPreview({
               `${workspace.threads.length} conversation${workspace.threads.length === 1 ? "" : "s"}`}
           </span>
         </span>
-        <Icon
-          name="DragDropVertical"
-          className="size-3.5 shrink-0 text-primary"
-          aria-hidden
-        />
       </div>
     </div>
   );
@@ -855,11 +877,6 @@ function ProjectDragPreview({
         {projectLabel}
       </span>
       <PixelMatrix signal={signal} />
-      <Icon
-        name="DragDropVertical"
-        className="size-3.5 shrink-0 text-muted-foreground"
-        aria-hidden
-      />
     </div>
   );
 }
@@ -883,6 +900,8 @@ function ProjectSection({
   onOpen,
   onRequestArchive,
   onRequestRename,
+  onSetRead,
+  onSetFocused,
   onRequestRenameProject,
   onRequestChangeIcon,
   onRequestGithubCatalog,
@@ -909,6 +928,8 @@ function ProjectSection({
   onOpen: (threadId: string) => void;
   onRequestArchive: (workspace: ConductorWorkspace) => void;
   onRequestRename: (workspace: ConductorWorkspace, scope: RenameScope) => void;
+  onSetRead: (workspace: ConductorWorkspace, read: boolean) => void;
+  onSetFocused: (workspace: ConductorWorkspace, focused: boolean) => void;
   onRequestRenameProject: () => void;
   onRequestChangeIcon: () => void;
   onRequestGithubCatalog: () => void;
@@ -982,24 +1003,7 @@ function ProjectSection({
               onToggle={onToggle}
               onCreate={onCreate}
               createLabel={`New workspace in ${projectLabel}`}
-              dragHandle={
-                <button
-                  ref={setActivatorNodeRef}
-                  type="button"
-                  className="conductor-drag-handle"
-                  aria-label={`Reorder ${projectLabel}`}
-                  title={`Reorder ${projectLabel}`}
-                  disabled={dragDisabled}
-                  {...attributes}
-                  {...listeners}
-                >
-                  <Icon
-                    name="DragDropVertical"
-                    className="size-3.5"
-                    aria-hidden
-                  />
-                </button>
-              }
+              dragBindings={{ attributes, listeners, setActivatorNodeRef }}
             />
           </div>
         </ContextMenuTrigger>
@@ -1063,6 +1067,7 @@ function ProjectSection({
                 dragDisabled={
                   workspaceDragDisabled || project.workspaces.length < 2
                 }
+                focused={false}
                 isDropTarget={dropTargetWorkspaceKey === workspace.key}
                 shortcutEnabled={!collapsed}
                 jumpShortcut={jumpShortcuts.get(workspace.key) ?? null}
@@ -1070,14 +1075,91 @@ function ProjectSection({
                 onOpen={onOpen}
                 onRequestArchive={onRequestArchive}
                 onRequestRename={onRequestRename}
+                onSetRead={onSetRead}
+                onSetFocused={onSetFocused}
               />
             ))}
           </div>
-          {project.workspaces.length === 0 ? (
-            <p className="px-3 py-2 text-2xs text-muted-foreground">
-              No workspaces yet. Use + to start one.
-            </p>
-          ) : null}
+        </SortableContext>
+      </SectionContent>
+    </section>
+  );
+}
+
+function FocusSection({
+  workspaces,
+  activeThreadId,
+  archivePending,
+  collapsed,
+  jumpShortcuts,
+  showJumpShortcuts,
+  onToggle,
+  onOpen,
+  onRequestArchive,
+  onRequestRename,
+  onSetRead,
+  onSetFocused,
+}: {
+  workspaces: readonly ConductorWorkspace[];
+  activeThreadId: string | null;
+  archivePending: boolean;
+  collapsed: boolean;
+  jumpShortcuts: ReadonlyMap<
+    string,
+    { ariaKeyshortcuts: string; label: string }
+  >;
+  showJumpShortcuts: boolean;
+  onToggle: () => void;
+  onOpen: (threadId: string) => void;
+  onRequestArchive: (workspace: ConductorWorkspace) => void;
+  onRequestRename: (workspace: ConductorWorkspace, scope: RenameScope) => void;
+  onSetRead: (workspace: ConductorWorkspace, read: boolean) => void;
+  onSetFocused: (workspace: ConductorWorkspace, focused: boolean) => void;
+}) {
+  if (workspaces.length === 0) return null;
+
+  return (
+    <section className="conductor-focus-section min-w-0" aria-label="Focus">
+      <button
+        type="button"
+        className="conductor-focus-heading"
+        aria-expanded={!collapsed}
+        aria-controls="conductor-focus-workspaces"
+        onClick={onToggle}
+      >
+        <span>Focus</span>
+        <Icon
+          name="ChevronDown"
+          className="conductor-section-caret size-3 text-muted-foreground"
+          aria-hidden
+        />
+      </button>
+      <SectionContent id="conductor-focus-workspaces" collapsed={collapsed}>
+        <SortableContext
+          items={workspaces.map((workspace) => workspaceDndId(workspace.key))}
+          strategy={verticalListSortingStrategy}
+        >
+          <div className="space-y-0.5">
+            {workspaces.map((workspace) => (
+              <WorkspaceRow
+                key={workspace.key}
+                workspace={workspace}
+                activeThreadId={activeThreadId}
+                archivePending={archivePending}
+                dragDisabled
+                focused
+                isDropTarget={false}
+                shortcutEnabled={!collapsed}
+                jumpShortcut={jumpShortcuts.get(workspace.key) ?? null}
+                showJumpShortcut={showJumpShortcuts}
+                onOpen={onOpen}
+                onRequestArchive={onRequestArchive}
+                onRequestRename={onRequestRename}
+                onSetRead={onSetRead}
+                onSetFocused={onSetFocused}
+              />
+            ))}
+          </div>
         </SortableContext>
       </SectionContent>
     </section>
@@ -1206,7 +1288,7 @@ export function ConductorSidebar({
   const projectById = new Map(
     projection.projects.map((project) => [project.id, project]),
   );
-  const projects = orderProjectIds(
+  const orderedProjects = orderProjectIds(
     projection.projects.map((project) => project.id),
     projectOrder,
   )
@@ -1252,11 +1334,29 @@ export function ConductorSidebar({
       );
     });
 
-  const visibleWorkspaces = projects.flatMap((project) =>
-    query || !collapsedSections.has(`project:${project.id}`)
-      ? project.workspaces
-      : [],
+  const focusedWorkspaces = orderedProjects.flatMap((project) =>
+    project.workspaces.filter((workspace) =>
+      workspace.threads.some((thread) => thread.isPinned),
+    ),
   );
+  const projects = orderedProjects
+    .map((project) => ({
+      ...project,
+      workspaces: project.workspaces.filter(
+        (workspace) => !workspace.threads.some((thread) => thread.isPinned),
+      ),
+    }))
+    .filter((project) => project.workspaces.length > 0);
+  const focusCollapsed = query ? false : collapsedSections.has("focus");
+
+  const visibleWorkspaces = [
+    ...(focusCollapsed ? [] : focusedWorkspaces),
+    ...projects.flatMap((project) =>
+      query || !collapsedSections.has(`project:${project.id}`)
+        ? project.workspaces
+        : [],
+    ),
+  ];
   // Digit assignments mirror the jump handler below: 1–8 in visible order and
   // 9 for the last row. Held long enough, the chord modifier reveals them as
   // pills — the same affordance bb's own chrome uses for its shortcuts.
@@ -1426,6 +1526,36 @@ export function ConductorSidebar({
         customization?.name ?? project.repositoryName ?? project.name,
       currentIcon: customization?.icon ?? null,
     });
+  }
+
+  function setWorkspaceFocused(
+    workspace: ConductorWorkspace,
+    focused: boolean,
+  ) {
+    const pinnedThreads = workspace.threads.filter((thread) => thread.isPinned);
+    if (!focused) {
+      for (const thread of pinnedThreads) {
+        void actions.setPinned(thread.id, false);
+      }
+      return;
+    }
+    const target = pickWorkspaceThread(workspace, activeThreadId);
+    if (target) void actions.setPinned(target.id, true);
+  }
+
+  function setWorkspaceRead(workspace: ConductorWorkspace, read: boolean) {
+    const target = pickWorkspaceThread(workspace, activeThreadId);
+    const threads = read
+      ? workspace.threads.filter(
+          (thread) => conversationSignal(thread) === "awaiting-reply",
+        )
+      : target
+        ? [target]
+        : [];
+    const targets = threads.length > 0 ? threads : target ? [target] : [];
+    for (const thread of targets) {
+      void actions.setRead(thread.id, read);
+    }
   }
 
   async function requestRename(
@@ -1602,6 +1732,24 @@ export function ConductorSidebar({
           onDragCancel={() => setDragState(null)}
           onDragEnd={onDragEndWithFeedback}
         >
+          <FocusSection
+            workspaces={focusedWorkspaces}
+            activeThreadId={activeThreadId}
+            archivePending={archivePending}
+            collapsed={focusCollapsed}
+            jumpShortcuts={jumpShortcutByWorkspaceKey}
+            showJumpShortcuts={showJumpShortcuts}
+            onToggle={() => toggleSection("focus")}
+            onOpen={openThread}
+            onRequestArchive={(workspace) => {
+              void requestArchive(workspace);
+            }}
+            onRequestRename={(workspace, scope) => {
+              void requestRename(workspace, scope).catch(() => undefined);
+            }}
+            onSetRead={setWorkspaceRead}
+            onSetFocused={setWorkspaceFocused}
+          />
           <SortableContext
             items={projects.map((project) => project.id)}
             strategy={verticalListSortingStrategy}
@@ -1650,6 +1798,8 @@ export function ConductorSidebar({
                   onRequestRename={(workspace, scope) => {
                     void requestRename(workspace, scope).catch(() => undefined);
                   }}
+                  onSetRead={setWorkspaceRead}
+                  onSetFocused={setWorkspaceFocused}
                   onRequestRenameProject={() => requestRenameProject(project)}
                   onRequestChangeIcon={() => requestChangeProjectIcon(project)}
                   onRequestGithubCatalog={() => {
@@ -1712,6 +1862,9 @@ export function ConductorSidebar({
                     <li key={thread.id} className="list-none">
                       <ConversationActionMenu
                         thread={thread}
+                        onSetRead={(read) => {
+                          void actions.setRead(thread.id, read);
+                        }}
                         onRename={() => setRenameThread(thread)}
                         onArchive={() => actions.archive(thread.id)}
                         onDelete={() => {
@@ -1758,8 +1911,8 @@ export function ConductorSidebar({
                             <span className="block truncate text-xs font-medium text-sidebar-foreground">
                               {threadDisplayTitle(thread)}
                             </span>
-                            <SignalStatus signal={signal} />
                           </span>
+                          <SignalStatus signal={signal} />
                         </div>
                       </ConversationActionMenu>
                     </li>

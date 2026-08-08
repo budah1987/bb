@@ -320,6 +320,7 @@ function resolveActiveFixedPanel({
     case "browser":
     case "terminal":
     case "new-tab":
+    case "notes":
       return null;
   }
 }

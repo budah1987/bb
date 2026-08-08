@@ -39,7 +39,7 @@ function signalThread(
 }
 
 describe("conversationSignal", () => {
-  it("keeps user-blocked work in needs-attention even if activity remains", () => {
+  it("keeps user-blocked work waiting even if activity remains", () => {
     expect(
       conversationSignal(
         signalThread({
@@ -53,10 +53,10 @@ describe("conversationSignal", () => {
           },
         }),
       ),
-    ).toBe("unread");
+    ).toBe("waiting");
   });
 
-  it("uses activity before unread and renders idle as no signal", () => {
+  it("uses working before ready and renders quiet work as passive", () => {
     expect(
       conversationSignal(
         signalThread({
@@ -70,8 +70,26 @@ describe("conversationSignal", () => {
           },
         }),
       ),
-    ).toBe("activity");
-    expect(conversationSignal(signalThread({ isUnread: true }))).toBe("unread");
-    expect(conversationSignal(signalThread({}))).toBe("idle");
+    ).toBe("working");
+    expect(conversationSignal(signalThread({ isUnread: true }))).toBe("ready");
+    expect(conversationSignal(signalThread({}))).toBe("passive");
+  });
+
+  it("distinguishes failed unread work from ready unread work", () => {
+    expect(
+      conversationSignal(signalThread({ indicator: "unread-error" })),
+    ).toBe("failed");
+    expect(
+      conversationSignal(signalThread({ indicator: "unread-success" })),
+    ).toBe("ready");
+  });
+
+  it("marks viewed output without a newer reply as awaiting reply", () => {
+    expect(
+      conversationSignal(signalThread({ lastReadAt: 2, latestAttentionAt: 1 })),
+    ).toBe("awaiting-reply");
+    expect(
+      conversationSignal(signalThread({ lastReadAt: 1, latestAttentionAt: 1 })),
+    ).toBe("passive");
   });
 });

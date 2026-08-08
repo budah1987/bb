@@ -19,8 +19,9 @@ function Stage({ children }: { children: ReactNode }) {
 }
 
 // Click the "…" trigger to open the menu. It carries icons and grouping
-// dividers: status toggles (read/pin), open + edit, then lifecycle
-// (archive/delete). The read toggle uses an envelope icon and reflects state.
+// dividers: status toggles (read/pin), conversation/workspace rename, then
+// lifecycle (archive/delete). The read toggle uses an envelope icon and
+// reflects state.
 export function Overview() {
   const readThread = makeThreadListEntry({
     id: "thr_read",
@@ -42,7 +43,7 @@ export function Overview() {
     <StoryCard>
       <StoryRow
         label="read · unpinned"
-        hint="Mark unread · Pin — Rename — Archive · Delete"
+        hint="Mark unread · Pin — Rename conversation — Archive · Delete"
       >
         <Stage>
           <ThreadActionsMenu thread={readThread} />

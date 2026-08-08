@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "c23566c7-1ac2-4ff8-9f0e-a41d8a355365",
+  "id": "a08bb507-49fa-46ea-86f5-b8b757c85183",
   "prevId": "4a47299d-648e-4f40-9cac-1cb5134c646c",
   "tables": {
     "app_settings": {
@@ -2229,13 +2229,6 @@
           "notNull": false,
           "autoincrement": false
         },
-        "github_account_login": {
-          "name": "github_account_login",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
         "sort_key": {
           "name": "sort_key",
           "type": "text",
@@ -2869,6 +2862,81 @@
         "thread_dynamic_context_file_states_thread_id_threads_id_fk": {
           "name": "thread_dynamic_context_file_states_thread_id_threads_id_fk",
           "tableFrom": "thread_dynamic_context_file_states",
+          "tableTo": "threads",
+          "columnsFrom": [
+            "thread_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "thread_notes": {
+      "name": "thread_notes",
+      "columns": {
+        "thread_id": {
+          "name": "thread_id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "scratchpad": {
+          "name": "scratchpad",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "''"
+        },
+        "recap_body": {
+          "name": "recap_body",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "recap_source_seq": {
+          "name": "recap_source_seq",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "recap_generated_at": {
+          "name": "recap_generated_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "recap_enabled": {
+          "name": "recap_enabled",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": false
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "thread_notes_thread_id_threads_id_fk": {
+          "name": "thread_notes_thread_id_threads_id_fk",
+          "tableFrom": "thread_notes",
           "tableTo": "threads",
           "columnsFrom": [
             "thread_id"
