@@ -354,6 +354,7 @@ export function makeProject(
     kind: "standard",
     name: PROJECT_NAMES.bb,
     gitRemoteUrl: null,
+    githubAccountLogin: null,
     sources: [],
     createdAt: 1,
     updatedAt: 2,

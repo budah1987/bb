@@ -2235,11 +2235,17 @@ declare const createProjectSourceRequestSchema: z$1.ZodDiscriminatedUnion<[z$1.Z
 type CreateProjectSourceRequest = z$1.infer<typeof createProjectSourceRequestSchema>;
 declare const createProjectRequestSchema: z$1.ZodObject<{
     name: z$1.ZodString;
-    source: z$1.ZodObject<{
+    source: z$1.ZodDiscriminatedUnion<[z$1.ZodObject<{
         hostId: z$1.ZodString;
         type: z$1.ZodLiteral<"local_path">;
         path: z$1.ZodPipe<z$1.ZodString, z$1.ZodTransform<string, string>>;
-    }, z$1.core.$strict>;
+    }, z$1.core.$strict>, z$1.ZodObject<{
+        hostId: z$1.ZodString;
+        type: z$1.ZodLiteral<"clone">;
+        targetPath: z$1.ZodOptional<z$1.ZodPipe<z$1.ZodString, z$1.ZodTransform<string, string>>>;
+        remoteUrl: z$1.ZodOptional<z$1.ZodString>;
+    }, z$1.core.$strict>], "type">;
+    githubAccountLogin: z$1.ZodOptional<z$1.ZodNullable<z$1.ZodString>>;
 }, z$1.core.$strip>;
 type CreateProjectRequest = z$1.infer<typeof createProjectRequestSchema>;
 declare const threadSectionSchema: z$1.ZodObject<{
@@ -2467,6 +2473,7 @@ declare const promptHistoryResponseSchema: z$1.ZodArray<z$1.ZodObject<{
 type PromptHistoryResponse = z$1.infer<typeof promptHistoryResponseSchema>;
 declare const updateProjectRequestSchema: z$1.ZodObject<{
     name: z$1.ZodOptional<z$1.ZodString>;
+    githubAccountLogin: z$1.ZodOptional<z$1.ZodNullable<z$1.ZodString>>;
 }, z$1.core.$strip>;
 type UpdateProjectRequest = z$1.infer<typeof updateProjectRequestSchema>;
 declare const updateProjectSourceRequestSchema: z$1.ZodObject<{
@@ -2544,6 +2551,7 @@ declare const projectResponseSchema: z$1.ZodObject<{
     }>;
     name: z$1.ZodString;
     gitRemoteUrl: z$1.ZodNullable<z$1.ZodString>;
+    githubAccountLogin: z$1.ZodNullable<z$1.ZodString>;
     createdAt: z$1.ZodNumber;
     updatedAt: z$1.ZodNumber;
     sources: z$1.ZodArray<z$1.ZodObject<{
@@ -2566,6 +2574,7 @@ declare const projectWithThreadsResponseSchema: z$1.ZodObject<{
     }>;
     name: z$1.ZodString;
     gitRemoteUrl: z$1.ZodNullable<z$1.ZodString>;
+    githubAccountLogin: z$1.ZodNullable<z$1.ZodString>;
     createdAt: z$1.ZodNumber;
     updatedAt: z$1.ZodNumber;
     sources: z$1.ZodArray<z$1.ZodObject<{
@@ -10709,6 +10718,8 @@ interface PluginSidebarProject {
      * is not backed by a remote repository.
      */
     experimental_gitRemoteUrl?: string | null;
+    /** Default GitHub identity for new workspaces in this repository. */
+    experimental_githubAccountLogin?: string | null;
 }
 interface PluginSidebarThreadsState {
     status: "loading" | "ready" | "error";

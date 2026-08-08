@@ -7,6 +7,7 @@ import {
   deleteProjectSource,
   getProjectSourceByHost,
   getProjectSourceForProject,
+  getDefaultProjectSource,
   listProjectExecutionDefaultsByProjectIds,
   listPublicProjects,
   listProjectSourcesByProjectIds,
@@ -81,7 +82,11 @@ import { parseFileListLimit } from "./file-list-query.js";
 import { parseSafeRelativeRoutePath } from "./relative-route-path.js";
 import { resolveSkillCatalog } from "../services/skills/skill-catalog.js";
 import { resolveWorkspaceProjectSkills } from "../services/skills/workspace-skills.js";
-import { assertUsableHostId } from "../services/hosts/primary-host.js";
+import { getGithubAccounts } from "../services/system/github-repositories.js";
+import {
+  assertUsableHostId,
+  requirePrimaryHostId,
+} from "../services/hosts/primary-host.js";
 import {
   resolveProjectCommandWorkspace,
   resolveProjectWorkspaceTarget,
@@ -99,6 +104,7 @@ function toProjectResponseProjectFields(
     kind: project.kind,
     name: project.name,
     gitRemoteUrl: project.gitRemoteUrl,
+    githubAccountLogin: project.githubAccountLogin,
     createdAt: project.createdAt,
     updatedAt: project.updatedAt,
   };
@@ -351,14 +357,66 @@ export function registerProjectRoutes(app: Hono, deps: AppDeps): void {
 
   post(routes.create, async (context, payload) => {
     const { source } = payload;
-    if (source.type === "local_path") {
-      requireNonDestroyedHostWithStatus(deps, source.hostId);
-      assertUsableHostId(deps, { hostId: source.hostId });
+    requireNonDestroyedHostWithStatus(deps, source.hostId);
+    assertUsableHostId(deps, { hostId: source.hostId });
+
+    let resolvedSource: { type: "local_path"; hostId: string; path: string };
+    let gitRemoteUrl: string | null;
+    if (source.type === "clone") {
+      if (!source.remoteUrl) {
+        throw new ApiError(
+          400,
+          "missing_git_remote",
+          "A remoteUrl is required when creating a project from a clone",
+        );
+      }
+      const resolved = await runLiveHostCommand(deps, {
+        hostId: source.hostId,
+        timeoutMs: PROJECT_CLONE_TIMEOUT_MS,
+        command: {
+          type: "project.clone",
+          remoteUrl: source.remoteUrl,
+          projectSlug: payload.name,
+          ...(source.targetPath !== undefined
+            ? { targetPath: source.targetPath }
+            : {}),
+        },
+      });
+      resolvedSource = {
+        type: "local_path",
+        hostId: source.hostId,
+        path: resolved.path,
+      };
+      gitRemoteUrl = resolved.gitRemoteUrl ?? source.remoteUrl;
+    } else {
+      resolvedSource = source;
+      gitRemoteUrl = await inspectProjectGitRemoteBestEffort(deps, source);
     }
-    const gitRemoteUrl = await inspectProjectGitRemoteBestEffort(deps, source);
+
+    let githubAccountLogin = payload.githubAccountLogin ?? null;
+    if (githubAccountLogin !== null) {
+      const catalog = await getGithubAccounts(deps, {
+        hostId: source.hostId,
+      });
+      const account = catalog.accounts.find(
+        (candidate) =>
+          candidate.login.toLocaleLowerCase() ===
+          githubAccountLogin?.toLocaleLowerCase(),
+      );
+      if (!account) {
+        throw new ApiError(
+          400,
+          "invalid_request",
+          `GitHub account @${githubAccountLogin} is not authenticated on this machine`,
+        );
+      }
+      githubAccountLogin = account.login;
+    }
+
     const { project } = createProject(deps.db, deps.hub, {
       name: payload.name,
-      source,
+      source: resolvedSource,
+      githubAccountLogin,
     });
     if (gitRemoteUrl !== null) {
       setProjectGitRemoteUrlIfMissing(
@@ -403,13 +461,42 @@ export function registerProjectRoutes(app: Hono, deps: AppDeps): void {
   });
 
   patch(routes.update, async (context, payload) => {
-    requirePublicStandardProject(deps.db, context.req.param("id"));
-    const project = updateProject(
-      deps.db,
-      deps.hub,
-      context.req.param("id"),
-      payload,
-    );
+    const projectId = context.req.param("id");
+    requirePublicStandardProject(deps.db, projectId);
+    let update = payload;
+    if (
+      payload.githubAccountLogin !== undefined &&
+      payload.githubAccountLogin !== null
+    ) {
+      const source = getDefaultProjectSource(deps.db, projectId);
+      const hostId = source?.hostId ?? requirePrimaryHostId(deps);
+      assertUsableHostId(deps, { hostId });
+      const catalog = await getGithubAccounts(deps, {
+        hostId,
+      });
+      const requestedLogin = payload.githubAccountLogin;
+      if (requestedLogin === null || requestedLogin === undefined) {
+        throw new ApiError(
+          400,
+          "invalid_request",
+          "GitHub account is required",
+        );
+      }
+      const account = catalog.accounts.find(
+        (candidate) =>
+          candidate.login.toLocaleLowerCase() ===
+          requestedLogin.toLocaleLowerCase(),
+      );
+      if (!account) {
+        throw new ApiError(
+          400,
+          "invalid_request",
+          `GitHub account @${requestedLogin} is not authenticated on this machine`,
+        );
+      }
+      update = { ...payload, githubAccountLogin: account.login };
+    }
+    const project = updateProject(deps.db, deps.hub, projectId, update);
     if (!project) {
       throw new ApiError(404, "project_not_found", "Project not found");
     }

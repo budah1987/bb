@@ -221,6 +221,7 @@ declare const environmentSchema: z$1.ZodObject<{
     baseBranch: z$1.ZodNullable<z$1.ZodString>;
     defaultBranch: z$1.ZodNullable<z$1.ZodString>;
     mergeBaseBranch: z$1.ZodNullable<z$1.ZodString>;
+    githubAccountLogin: z$1.ZodNullable<z$1.ZodString>;
     status: z$1.ZodEnum<{
         error: "error";
         provisioning: "provisioning";
@@ -313,8 +314,8 @@ declare const providerPendingInteractionSchema: z$1.ZodObject<{
     id: z$1.ZodString;
     threadId: z$1.ZodString;
     status: z$1.ZodEnum<{
-        pending: "pending";
         interrupted: "interrupted";
+        pending: "pending";
         resolving: "resolving";
         resolved: "resolved";
     }>;
@@ -451,8 +452,8 @@ declare const pluginPendingInteractionSchema: z$1.ZodObject<{
     id: z$1.ZodString;
     threadId: z$1.ZodString;
     status: z$1.ZodEnum<{
-        pending: "pending";
         interrupted: "interrupted";
+        pending: "pending";
         resolving: "resolving";
         resolved: "resolved";
     }>;
@@ -699,8 +700,8 @@ declare const threadEventSchema: z$1.ZodPipe<z$1.ZodUnknown, z$1.ZodUnion<readon
     providerThreadId: z$1.ZodString;
     objective: z$1.ZodString;
     status: z$1.ZodEnum<{
-        paused: "paused";
         active: "active";
+        paused: "paused";
         budgetLimited: "budgetLimited";
         complete: "complete";
     }>;
@@ -744,10 +745,10 @@ declare const threadEventSchema: z$1.ZodPipe<z$1.ZodUnknown, z$1.ZodUnion<readon
         command: z$1.ZodString;
         cwd: z$1.ZodString;
         status: z$1.ZodEnum<{
-            pending: "pending";
             completed: "completed";
             failed: "failed";
             interrupted: "interrupted";
+            pending: "pending";
         }>;
         approvalStatus: z$1.ZodNullable<z$1.ZodEnum<{
             waiting_for_approval: "waiting_for_approval";
@@ -791,10 +792,10 @@ declare const threadEventSchema: z$1.ZodPipe<z$1.ZodUnknown, z$1.ZodUnion<readon
             diff: z$1.ZodOptional<z$1.ZodString>;
         }, z$1.core.$strip>>;
         status: z$1.ZodEnum<{
-            pending: "pending";
             completed: "completed";
             failed: "failed";
             interrupted: "interrupted";
+            pending: "pending";
         }>;
         approvalStatus: z$1.ZodNullable<z$1.ZodEnum<{
             waiting_for_approval: "waiting_for_approval";
@@ -831,10 +832,10 @@ declare const threadEventSchema: z$1.ZodPipe<z$1.ZodUnknown, z$1.ZodUnion<readon
             completed: z$1.ZodString;
         }, z$1.core.$strip>>;
         status: z$1.ZodEnum<{
-            pending: "pending";
             completed: "completed";
             failed: "failed";
             interrupted: "interrupted";
+            pending: "pending";
         }>;
         result: z$1.ZodOptional<z$1.ZodUnknown>;
         error: z$1.ZodOptional<z$1.ZodString>;
@@ -881,17 +882,17 @@ declare const threadEventSchema: z$1.ZodPipe<z$1.ZodUnknown, z$1.ZodUnion<readon
         taskType: z$1.ZodString;
         description: z$1.ZodString;
         status: z$1.ZodEnum<{
-            pending: "pending";
             completed: "completed";
             failed: "failed";
             interrupted: "interrupted";
+            pending: "pending";
         }>;
         taskStatus: z$1.ZodEnum<{
-            pending: "pending";
             completed: "completed";
-            running: "running";
-            paused: "paused";
             failed: "failed";
+            paused: "paused";
+            pending: "pending";
+            running: "running";
             killed: "killed";
             stopped: "stopped";
         }>;
@@ -907,8 +908,8 @@ declare const threadEventSchema: z$1.ZodPipe<z$1.ZodUnknown, z$1.ZodUnion<readon
                 index: z$1.ZodNumber;
                 label: z$1.ZodString;
                 state: z$1.ZodEnum<{
-                    running: "running";
                     failed: "failed";
+                    running: "running";
                     queued: "queued";
                     done: "done";
                     skipped: "skipped";
@@ -976,10 +977,10 @@ declare const threadEventSchema: z$1.ZodPipe<z$1.ZodUnknown, z$1.ZodUnion<readon
         command: z$1.ZodString;
         cwd: z$1.ZodString;
         status: z$1.ZodEnum<{
-            pending: "pending";
             completed: "completed";
             failed: "failed";
             interrupted: "interrupted";
+            pending: "pending";
         }>;
         approvalStatus: z$1.ZodNullable<z$1.ZodEnum<{
             waiting_for_approval: "waiting_for_approval";
@@ -1023,10 +1024,10 @@ declare const threadEventSchema: z$1.ZodPipe<z$1.ZodUnknown, z$1.ZodUnion<readon
             diff: z$1.ZodOptional<z$1.ZodString>;
         }, z$1.core.$strip>>;
         status: z$1.ZodEnum<{
-            pending: "pending";
             completed: "completed";
             failed: "failed";
             interrupted: "interrupted";
+            pending: "pending";
         }>;
         approvalStatus: z$1.ZodNullable<z$1.ZodEnum<{
             waiting_for_approval: "waiting_for_approval";
@@ -1063,10 +1064,10 @@ declare const threadEventSchema: z$1.ZodPipe<z$1.ZodUnknown, z$1.ZodUnion<readon
             completed: z$1.ZodString;
         }, z$1.core.$strip>>;
         status: z$1.ZodEnum<{
-            pending: "pending";
             completed: "completed";
             failed: "failed";
             interrupted: "interrupted";
+            pending: "pending";
         }>;
         result: z$1.ZodOptional<z$1.ZodUnknown>;
         error: z$1.ZodOptional<z$1.ZodString>;
@@ -1113,17 +1114,17 @@ declare const threadEventSchema: z$1.ZodPipe<z$1.ZodUnknown, z$1.ZodUnion<readon
         taskType: z$1.ZodString;
         description: z$1.ZodString;
         status: z$1.ZodEnum<{
-            pending: "pending";
             completed: "completed";
             failed: "failed";
             interrupted: "interrupted";
+            pending: "pending";
         }>;
         taskStatus: z$1.ZodEnum<{
-            pending: "pending";
             completed: "completed";
-            running: "running";
-            paused: "paused";
             failed: "failed";
+            paused: "paused";
+            pending: "pending";
+            running: "running";
             killed: "killed";
             stopped: "stopped";
         }>;
@@ -1139,8 +1140,8 @@ declare const threadEventSchema: z$1.ZodPipe<z$1.ZodUnknown, z$1.ZodUnion<readon
                 index: z$1.ZodNumber;
                 label: z$1.ZodString;
                 state: z$1.ZodEnum<{
-                    running: "running";
                     failed: "failed";
+                    running: "running";
                     queued: "queued";
                     done: "done";
                     skipped: "skipped";
@@ -1242,17 +1243,17 @@ declare const threadEventSchema: z$1.ZodPipe<z$1.ZodUnknown, z$1.ZodUnion<readon
         taskType: z$1.ZodString;
         description: z$1.ZodString;
         status: z$1.ZodEnum<{
-            pending: "pending";
             completed: "completed";
             failed: "failed";
             interrupted: "interrupted";
+            pending: "pending";
         }>;
         taskStatus: z$1.ZodEnum<{
-            pending: "pending";
             completed: "completed";
-            running: "running";
-            paused: "paused";
             failed: "failed";
+            paused: "paused";
+            pending: "pending";
+            running: "running";
             killed: "killed";
             stopped: "stopped";
         }>;
@@ -1268,8 +1269,8 @@ declare const threadEventSchema: z$1.ZodPipe<z$1.ZodUnknown, z$1.ZodUnion<readon
                 index: z$1.ZodNumber;
                 label: z$1.ZodString;
                 state: z$1.ZodEnum<{
-                    running: "running";
                     failed: "failed";
+                    running: "running";
                     queued: "queued";
                     done: "done";
                     skipped: "skipped";
@@ -1314,17 +1315,17 @@ declare const threadEventSchema: z$1.ZodPipe<z$1.ZodUnknown, z$1.ZodUnion<readon
         taskType: z$1.ZodString;
         description: z$1.ZodString;
         status: z$1.ZodEnum<{
-            pending: "pending";
             completed: "completed";
             failed: "failed";
             interrupted: "interrupted";
+            pending: "pending";
         }>;
         taskStatus: z$1.ZodEnum<{
-            pending: "pending";
             completed: "completed";
-            running: "running";
-            paused: "paused";
             failed: "failed";
+            paused: "paused";
+            pending: "pending";
+            running: "running";
             killed: "killed";
             stopped: "stopped";
         }>;
@@ -1340,8 +1341,8 @@ declare const threadEventSchema: z$1.ZodPipe<z$1.ZodUnknown, z$1.ZodUnion<readon
                 index: z$1.ZodNumber;
                 label: z$1.ZodString;
                 state: z$1.ZodEnum<{
-                    running: "running";
                     failed: "failed";
+                    running: "running";
                     queued: "queued";
                     done: "done";
                     skipped: "skipped";
@@ -1413,10 +1414,10 @@ declare const threadEventSchema: z$1.ZodPipe<z$1.ZodUnknown, z$1.ZodUnion<readon
     plan: z$1.ZodArray<z$1.ZodObject<{
         step: z$1.ZodString;
         status: z$1.ZodOptional<z$1.ZodEnum<{
-            pending: "pending";
             completed: "completed";
             failed: "failed";
             active: "active";
+            pending: "pending";
         }>>;
     }, z$1.core.$strip>>;
     explanation: z$1.ZodOptional<z$1.ZodString>;
@@ -1819,8 +1820,8 @@ declare const threadEventSchema: z$1.ZodPipe<z$1.ZodUnknown, z$1.ZodUnion<readon
     providerId: z$1.ZodString;
     providerRequestId: z$1.ZodString;
     status: z$1.ZodEnum<{
-        pending: "pending";
         interrupted: "interrupted";
+        pending: "pending";
         resolving: "resolving";
         resolved: "resolved";
     }>;
@@ -1871,8 +1872,8 @@ declare const threadEventSchema: z$1.ZodPipe<z$1.ZodUnknown, z$1.ZodUnion<readon
     providerId: z$1.ZodString;
     providerRequestId: z$1.ZodString;
     status: z$1.ZodEnum<{
-        pending: "pending";
         interrupted: "interrupted";
+        pending: "pending";
         resolving: "resolving";
         resolved: "resolved";
     }>;
@@ -2041,9 +2042,9 @@ declare const threadTimelinePendingTodosSchema: z$1.ZodObject<{
         id: z$1.ZodString;
         text: z$1.ZodString;
         status: z$1.ZodEnum<{
+            completed: "completed";
             pending: "pending";
             in_progress: "in_progress";
-            completed: "completed";
         }>;
     }, z$1.core.$strip>>;
 }, z$1.core.$strip>;
@@ -2173,6 +2174,11 @@ declare const createThreadEnvironmentArgsSchema: z$1.ZodDiscriminatedUnion<[z$1.
         }, z$1.core.$strict>, z$1.ZodObject<{
             kind: z$1.ZodLiteral<"new">;
             baseBranch: z$1.ZodString;
+            name: z$1.ZodOptional<z$1.ZodString>;
+        }, z$1.core.$strict>, z$1.ZodObject<{
+            kind: z$1.ZodLiteral<"pull-request">;
+            number: z$1.ZodNumber;
+            name: z$1.ZodString;
         }, z$1.core.$strict>], "kind">>;
     }, z$1.core.$strip>, z$1.ZodObject<{
         type: z$1.ZodLiteral<"managed-worktree">;
@@ -2182,6 +2188,8 @@ declare const createThreadEnvironmentArgsSchema: z$1.ZodDiscriminatedUnion<[z$1.
         }, z$1.core.$strip>, z$1.ZodObject<{
             kind: z$1.ZodLiteral<"default">;
         }, z$1.core.$strip>], "kind">;
+        branchName: z$1.ZodOptional<z$1.ZodString>;
+        pullRequestNumber: z$1.ZodOptional<z$1.ZodNumber>;
     }, z$1.core.$strip>, z$1.ZodObject<{
         type: z$1.ZodLiteral<"personal">;
     }, z$1.core.$strip>], "type">;
@@ -2225,11 +2233,17 @@ declare const createProjectSourceRequestSchema: z$1.ZodDiscriminatedUnion<[z$1.Z
 type CreateProjectSourceRequest = z$1.infer<typeof createProjectSourceRequestSchema>;
 declare const createProjectRequestSchema: z$1.ZodObject<{
     name: z$1.ZodString;
-    source: z$1.ZodObject<{
+    source: z$1.ZodDiscriminatedUnion<[z$1.ZodObject<{
         hostId: z$1.ZodString;
         type: z$1.ZodLiteral<"local_path">;
         path: z$1.ZodPipe<z$1.ZodString, z$1.ZodTransform<string, string>>;
-    }, z$1.core.$strict>;
+    }, z$1.core.$strict>, z$1.ZodObject<{
+        hostId: z$1.ZodString;
+        type: z$1.ZodLiteral<"clone">;
+        targetPath: z$1.ZodOptional<z$1.ZodPipe<z$1.ZodString, z$1.ZodTransform<string, string>>>;
+        remoteUrl: z$1.ZodOptional<z$1.ZodString>;
+    }, z$1.core.$strict>], "type">;
+    githubAccountLogin: z$1.ZodOptional<z$1.ZodNullable<z$1.ZodString>>;
 }, z$1.core.$strip>;
 type CreateProjectRequest = z$1.infer<typeof createProjectRequestSchema>;
 declare const threadSectionSchema: z$1.ZodObject<{
@@ -2457,6 +2471,7 @@ declare const promptHistoryResponseSchema: z$1.ZodArray<z$1.ZodObject<{
 type PromptHistoryResponse = z$1.infer<typeof promptHistoryResponseSchema>;
 declare const updateProjectRequestSchema: z$1.ZodObject<{
     name: z$1.ZodOptional<z$1.ZodString>;
+    githubAccountLogin: z$1.ZodOptional<z$1.ZodNullable<z$1.ZodString>>;
 }, z$1.core.$strip>;
 type UpdateProjectRequest = z$1.infer<typeof updateProjectRequestSchema>;
 declare const updateProjectSourceRequestSchema: z$1.ZodObject<{
@@ -2534,6 +2549,7 @@ declare const projectResponseSchema: z$1.ZodObject<{
     }>;
     name: z$1.ZodString;
     gitRemoteUrl: z$1.ZodNullable<z$1.ZodString>;
+    githubAccountLogin: z$1.ZodNullable<z$1.ZodString>;
     createdAt: z$1.ZodNumber;
     updatedAt: z$1.ZodNumber;
     sources: z$1.ZodArray<z$1.ZodObject<{
@@ -2556,6 +2572,7 @@ declare const projectWithThreadsResponseSchema: z$1.ZodObject<{
     }>;
     name: z$1.ZodString;
     gitRemoteUrl: z$1.ZodNullable<z$1.ZodString>;
+    githubAccountLogin: z$1.ZodNullable<z$1.ZodString>;
     createdAt: z$1.ZodNumber;
     updatedAt: z$1.ZodNumber;
     sources: z$1.ZodArray<z$1.ZodObject<{
@@ -2732,6 +2749,7 @@ declare const registrySkillInstallResponseSchema: z$1.ZodObject<{
 type RegistrySkillInstallResponse = z$1.infer<typeof registrySkillInstallResponseSchema>;
 
 declare const updateEnvironmentRequestSchema: z$1.ZodObject<{
+    githubAccountLogin: z$1.ZodOptional<z$1.ZodNullable<z$1.ZodString>>;
     mergeBaseBranch: z$1.ZodOptional<z$1.ZodNullable<z$1.ZodString>>;
     name: z$1.ZodOptional<z$1.ZodNullable<z$1.ZodString>>;
 }, z$1.core.$strip>;
@@ -2864,8 +2882,8 @@ declare const environmentArchiveThreadsResponseSchema: z$1.ZodObject<{
 type EnvironmentArchiveThreadsResponse = z$1.infer<typeof environmentArchiveThreadsResponseSchema>;
 declare const pullRequestMergeMethodSchema: z$1.ZodEnum<{
     merge: "merge";
-    squash: "squash";
     rebase: "rebase";
+    squash: "squash";
 }>;
 type PullRequestMergeMethod = z$1.infer<typeof pullRequestMergeMethodSchema>;
 declare const commitActionResponseSchema: z$1.ZodObject<{
@@ -2885,6 +2903,116 @@ declare const squashMergeActionResponseSchema: z$1.ZodObject<{
     commitSubject: z$1.ZodString;
 }, z$1.core.$strip>;
 type SquashMergeActionResponse = z$1.infer<typeof squashMergeActionResponseSchema>;
+declare const pullRequestMetadataActionResponseSchema: z$1.ZodObject<{
+    ok: z$1.ZodLiteral<true>;
+    action: z$1.ZodLiteral<"pull_request_metadata">;
+    title: z$1.ZodString;
+    body: z$1.ZodString;
+    generated: z$1.ZodBoolean;
+}, z$1.core.$strip>;
+type PullRequestMetadataActionResponse = z$1.infer<typeof pullRequestMetadataActionResponseSchema>;
+declare const pullRequestCreateActionResponseSchema: z$1.ZodObject<{
+    ok: z$1.ZodLiteral<true>;
+    action: z$1.ZodLiteral<"pull_request_create">;
+    message: z$1.ZodString;
+    pullRequest: z$1.ZodObject<{
+        number: z$1.ZodNumber;
+        title: z$1.ZodString;
+        state: z$1.ZodEnum<{
+            draft: "draft";
+            merged: "merged";
+            open: "open";
+            closed: "closed";
+        }>;
+        url: z$1.ZodString;
+        baseRefName: z$1.ZodString;
+        headRefName: z$1.ZodString;
+        updatedAt: z$1.ZodString;
+        checks: z$1.ZodObject<{
+            state: z$1.ZodEnum<{
+                unknown: "unknown";
+                pending: "pending";
+                passing: "passing";
+                failing: "failing";
+                no_checks: "no_checks";
+            }>;
+            totalCount: z$1.ZodNumber;
+            passedCount: z$1.ZodNumber;
+            failedCount: z$1.ZodNumber;
+            pendingCount: z$1.ZodNumber;
+            items: z$1.ZodArray<z$1.ZodObject<{
+                name: z$1.ZodString;
+                status: z$1.ZodEnum<{
+                    unknown: "unknown";
+                    completed: "completed";
+                    queued: "queued";
+                    in_progress: "in_progress";
+                }>;
+                conclusion: z$1.ZodNullable<z$1.ZodEnum<{
+                    unknown: "unknown";
+                    success: "success";
+                    skipped: "skipped";
+                    cancelled: "cancelled";
+                    failure: "failure";
+                    neutral: "neutral";
+                    timed_out: "timed_out";
+                    action_required: "action_required";
+                    startup_failure: "startup_failure";
+                    stale: "stale";
+                }>>;
+                url: z$1.ZodNullable<z$1.ZodString>;
+            }, z$1.core.$strict>>;
+        }, z$1.core.$strict>;
+        review: z$1.ZodObject<{
+            state: z$1.ZodEnum<{
+                none: "none";
+                approved: "approved";
+                changes_requested: "changes_requested";
+                review_required: "review_required";
+                review_requested: "review_requested";
+            }>;
+            reviewRequestCount: z$1.ZodNumber;
+        }, z$1.core.$strict>;
+        mergeability: z$1.ZodObject<{
+            state: z$1.ZodEnum<{
+                unknown: "unknown";
+                draft: "draft";
+                mergeable: "mergeable";
+                conflicts: "conflicts";
+                blocked: "blocked";
+            }>;
+            mergeStateStatus: z$1.ZodNullable<z$1.ZodEnum<{
+                BEHIND: "BEHIND";
+                BLOCKED: "BLOCKED";
+                CLEAN: "CLEAN";
+                DIRTY: "DIRTY";
+                DRAFT: "DRAFT";
+                HAS_HOOKS: "HAS_HOOKS";
+                UNKNOWN: "UNKNOWN";
+                UNSTABLE: "UNSTABLE";
+            }>>;
+            mergeable: z$1.ZodNullable<z$1.ZodEnum<{
+                UNKNOWN: "UNKNOWN";
+                CONFLICTING: "CONFLICTING";
+                MERGEABLE: "MERGEABLE";
+            }>>;
+        }, z$1.core.$strict>;
+        attention: z$1.ZodEnum<{
+            none: "none";
+            draft: "draft";
+            merged: "merged";
+            closed: "closed";
+            changes_requested: "changes_requested";
+            review_requested: "review_requested";
+            conflicts: "conflicts";
+            blocked: "blocked";
+            checks_failed: "checks_failed";
+            checks_pending: "checks_pending";
+            ready_to_merge: "ready_to_merge";
+        }>;
+    }, z$1.core.$strict>;
+}, z$1.core.$strip>;
+type PullRequestCreateActionResponse = z$1.infer<typeof pullRequestCreateActionResponseSchema>;
 declare const pullRequestReadyActionResponseSchema: z$1.ZodObject<{
     ok: z$1.ZodLiteral<true>;
     action: z$1.ZodLiteral<"pull_request_ready">;
@@ -2896,8 +3024,8 @@ declare const pullRequestMergeActionResponseSchema: z$1.ZodObject<{
     action: z$1.ZodLiteral<"pull_request_merge">;
     method: z$1.ZodEnum<{
         merge: "merge";
-        squash: "squash";
         rebase: "rebase";
+        squash: "squash";
     }>;
     message: z$1.ZodString;
 }, z$1.core.$strip>;
@@ -3023,8 +3151,8 @@ declare const environmentPullRequestResponseSchema: z$1.ZodDiscriminatedUnion<[z
         number: z$1.ZodNumber;
         title: z$1.ZodString;
         state: z$1.ZodEnum<{
-            merged: "merged";
             draft: "draft";
+            merged: "merged";
             open: "open";
             closed: "closed";
         }>;
@@ -3044,6 +3172,28 @@ declare const environmentPullRequestResponseSchema: z$1.ZodDiscriminatedUnion<[z
             passedCount: z$1.ZodNumber;
             failedCount: z$1.ZodNumber;
             pendingCount: z$1.ZodNumber;
+            items: z$1.ZodArray<z$1.ZodObject<{
+                name: z$1.ZodString;
+                status: z$1.ZodEnum<{
+                    unknown: "unknown";
+                    completed: "completed";
+                    queued: "queued";
+                    in_progress: "in_progress";
+                }>;
+                conclusion: z$1.ZodNullable<z$1.ZodEnum<{
+                    unknown: "unknown";
+                    success: "success";
+                    skipped: "skipped";
+                    cancelled: "cancelled";
+                    failure: "failure";
+                    neutral: "neutral";
+                    timed_out: "timed_out";
+                    action_required: "action_required";
+                    startup_failure: "startup_failure";
+                    stale: "stale";
+                }>>;
+                url: z$1.ZodNullable<z$1.ZodString>;
+            }, z$1.core.$strict>>;
         }, z$1.core.$strict>;
         review: z$1.ZodObject<{
             state: z$1.ZodEnum<{
@@ -3081,8 +3231,8 @@ declare const environmentPullRequestResponseSchema: z$1.ZodDiscriminatedUnion<[z
         }, z$1.core.$strict>;
         attention: z$1.ZodEnum<{
             none: "none";
-            merged: "merged";
             draft: "draft";
+            merged: "merged";
             closed: "closed";
             changes_requested: "changes_requested";
             review_requested: "review_requested";
@@ -3322,6 +3472,53 @@ declare const providerUsageResponseSchema: z$1.ZodObject<{
     }, z$1.core.$strip>], "status">;
 }, z$1.core.$strip>;
 type ProviderUsageResponse = z$1.infer<typeof providerUsageResponseSchema>;
+declare const githubAccountCatalogSchema: z$1.ZodObject<{
+    accounts: z$1.ZodArray<z$1.ZodObject<{
+        host: z$1.ZodString;
+        login: z$1.ZodString;
+        active: z$1.ZodBoolean;
+    }, z$1.core.$strict>>;
+}, z$1.core.$strict>;
+type GithubAccountCatalog = z$1.infer<typeof githubAccountCatalogSchema>;
+declare const githubRepositoryCatalogSchema: z$1.ZodObject<{
+    accounts: z$1.ZodArray<z$1.ZodObject<{
+        host: z$1.ZodString;
+        login: z$1.ZodString;
+        active: z$1.ZodBoolean;
+    }, z$1.core.$strict>>;
+    repositories: z$1.ZodArray<z$1.ZodObject<{
+        name: z$1.ZodString;
+        nameWithOwner: z$1.ZodString;
+        owner: z$1.ZodString;
+        url: z$1.ZodString;
+        isPrivate: z$1.ZodBoolean;
+        defaultBranch: z$1.ZodNullable<z$1.ZodString>;
+        updatedAt: z$1.ZodString;
+        accessibleBy: z$1.ZodArray<z$1.ZodString>;
+        activeAccount: z$1.ZodNullable<z$1.ZodString>;
+    }, z$1.core.$strict>>;
+    scope: z$1.ZodEnum<{
+        intersection: "intersection";
+        account: "account";
+    }>;
+}, z$1.core.$strict>;
+type GithubRepositoryCatalog = z$1.infer<typeof githubRepositoryCatalogSchema>;
+declare const githubPullRequestCatalogSchema: z$1.ZodObject<{
+    repository: z$1.ZodString;
+    account: z$1.ZodString;
+    pullRequests: z$1.ZodArray<z$1.ZodObject<{
+        number: z$1.ZodNumber;
+        title: z$1.ZodString;
+        url: z$1.ZodString;
+        isDraft: z$1.ZodBoolean;
+        headBranch: z$1.ZodString;
+        headRepository: z$1.ZodString;
+        baseBranch: z$1.ZodString;
+        author: z$1.ZodString;
+        updatedAt: z$1.ZodString;
+    }, z$1.core.$strict>>;
+}, z$1.core.$strict>;
+type GithubPullRequestCatalog = z$1.infer<typeof githubPullRequestCatalogSchema>;
 declare const discoverReposResultSchema: z$1.ZodObject<{
     repos: z$1.ZodArray<z$1.ZodObject<{
         path: z$1.ZodString;
@@ -4553,6 +4750,10 @@ declare const hostDaemonCommandRegistry: {
             kind: z$1.ZodLiteral<"new">;
             name: z$1.ZodString;
             baseBranch: z$1.ZodString;
+        }, z$1.core.$strict>, z$1.ZodObject<{
+            kind: z$1.ZodLiteral<"pull-request">;
+            name: z$1.ZodString;
+            number: z$1.ZodNumber;
         }, z$1.core.$strict>], "kind">>;
     }, z$1.core.$strict>, z$1.ZodObject<{
         environmentId: z$1.ZodString;
@@ -4565,6 +4766,7 @@ declare const hostDaemonCommandRegistry: {
         targetPath: z$1.ZodString;
         branchName: z$1.ZodString;
         baseBranch: z$1.ZodNullable<z$1.ZodString>;
+        pullRequestNumber: z$1.ZodOptional<z$1.ZodNumber>;
         setupTimeoutMs: z$1.ZodNumber;
         workspaceProvisionType: z$1.ZodLiteral<"managed-worktree">;
     }, z$1.core.$strict>, z$1.ZodObject<{
@@ -4703,6 +4905,7 @@ declare const hostDaemonCommandRegistry: {
             }>;
         }, z$1.core.$strip>;
         type: z$1.ZodLiteral<"workspace.pull_request_action">;
+        githubAccountLogin: z$1.ZodDefault<z$1.ZodNullable<z$1.ZodString>>;
         operation: z$1.ZodLiteral<"ready">;
     }, z$1.core.$strict>, z$1.ZodObject<{
         environmentId: z$1.ZodString;
@@ -4715,6 +4918,7 @@ declare const hostDaemonCommandRegistry: {
             }>;
         }, z$1.core.$strip>;
         type: z$1.ZodLiteral<"workspace.pull_request_action">;
+        githubAccountLogin: z$1.ZodDefault<z$1.ZodNullable<z$1.ZodString>>;
         operation: z$1.ZodLiteral<"draft">;
     }, z$1.core.$strict>, z$1.ZodObject<{
         environmentId: z$1.ZodString;
@@ -4727,6 +4931,7 @@ declare const hostDaemonCommandRegistry: {
             }>;
         }, z$1.core.$strip>;
         type: z$1.ZodLiteral<"workspace.pull_request_action">;
+        githubAccountLogin: z$1.ZodDefault<z$1.ZodNullable<z$1.ZodString>>;
         operation: z$1.ZodLiteral<"merge">;
         method: z$1.ZodEnum<{
             merge: "merge";
@@ -4734,6 +4939,81 @@ declare const hostDaemonCommandRegistry: {
             rebase: "rebase";
         }>;
     }, z$1.core.$strict>], "operation">, z$1.ZodObject<{}, z$1.core.$strict>, "settled", false>;
+    "workspace.pull_request_create": HostDaemonCommandDescriptor<"workspace.pull_request_create", z$1.ZodObject<{
+        environmentId: z$1.ZodString;
+        workspaceContext: z$1.ZodObject<{
+            workspacePath: z$1.ZodString;
+            workspaceProvisionType: z$1.ZodEnum<{
+                unmanaged: "unmanaged";
+                "managed-worktree": "managed-worktree";
+                personal: "personal";
+            }>;
+        }, z$1.core.$strip>;
+        type: z$1.ZodLiteral<"workspace.pull_request_create">;
+        baseBranch: z$1.ZodString;
+        body: z$1.ZodString;
+        draft: z$1.ZodBoolean;
+        githubAccountLogin: z$1.ZodDefault<z$1.ZodNullable<z$1.ZodString>>;
+        title: z$1.ZodString;
+    }, z$1.core.$strict>, z$1.ZodObject<{
+        pullRequest: z$1.ZodObject<{
+            number: z$1.ZodNumber;
+            title: z$1.ZodString;
+            state: z$1.ZodEnum<{
+                OPEN: "OPEN";
+                CLOSED: "CLOSED";
+                MERGED: "MERGED";
+            }>;
+            url: z$1.ZodString;
+            isDraft: z$1.ZodBoolean;
+            baseRefName: z$1.ZodString;
+            headRefName: z$1.ZodString;
+            updatedAt: z$1.ZodString;
+            checks: z$1.ZodArray<z$1.ZodObject<{
+                name: z$1.ZodString;
+                status: z$1.ZodEnum<{
+                    unknown: "unknown";
+                    completed: "completed";
+                    queued: "queued";
+                    in_progress: "in_progress";
+                }>;
+                conclusion: z$1.ZodNullable<z$1.ZodEnum<{
+                    unknown: "unknown";
+                    success: "success";
+                    cancelled: "cancelled";
+                    failure: "failure";
+                    skipped: "skipped";
+                    neutral: "neutral";
+                    timed_out: "timed_out";
+                    action_required: "action_required";
+                    startup_failure: "startup_failure";
+                    stale: "stale";
+                }>>;
+                url: z$1.ZodNullable<z$1.ZodString>;
+            }, z$1.core.$strict>>;
+            reviewDecision: z$1.ZodNullable<z$1.ZodEnum<{
+                APPROVED: "APPROVED";
+                CHANGES_REQUESTED: "CHANGES_REQUESTED";
+                REVIEW_REQUIRED: "REVIEW_REQUIRED";
+            }>>;
+            reviewRequestCount: z$1.ZodNumber;
+            mergeStateStatus: z$1.ZodNullable<z$1.ZodEnum<{
+                BEHIND: "BEHIND";
+                BLOCKED: "BLOCKED";
+                CLEAN: "CLEAN";
+                DIRTY: "DIRTY";
+                DRAFT: "DRAFT";
+                HAS_HOOKS: "HAS_HOOKS";
+                UNKNOWN: "UNKNOWN";
+                UNSTABLE: "UNSTABLE";
+            }>>;
+            mergeable: z$1.ZodNullable<z$1.ZodEnum<{
+                UNKNOWN: "UNKNOWN";
+                CONFLICTING: "CONFLICTING";
+                MERGEABLE: "MERGEABLE";
+            }>>;
+        }, z$1.core.$strict>;
+    }, z$1.core.$strict>, "settled", false>;
     "host.list_files": HostDaemonCommandDescriptor<"host.list_files", z$1.ZodObject<{
         type: z$1.ZodLiteral<"host.list_files">;
         path: z$1.ZodString;
@@ -5318,6 +5598,57 @@ declare const hostDaemonCommandRegistry: {
             accountEmail: z$1.ZodDefault<z$1.ZodNullable<z$1.ZodString>>;
         }, z$1.core.$strip>], "status">;
     }, z$1.core.$strip>, "onlineRpc", true>;
+    "github.repository_catalog": HostDaemonCommandDescriptor<"github.repository_catalog", z$1.ZodObject<{
+        type: z$1.ZodLiteral<"github.repository_catalog">;
+    }, z$1.core.$strict>, z$1.ZodObject<{
+        accounts: z$1.ZodArray<z$1.ZodObject<{
+            host: z$1.ZodString;
+            login: z$1.ZodString;
+            active: z$1.ZodBoolean;
+        }, z$1.core.$strict>>;
+        repositories: z$1.ZodArray<z$1.ZodObject<{
+            name: z$1.ZodString;
+            nameWithOwner: z$1.ZodString;
+            owner: z$1.ZodString;
+            url: z$1.ZodString;
+            isPrivate: z$1.ZodBoolean;
+            defaultBranch: z$1.ZodNullable<z$1.ZodString>;
+            updatedAt: z$1.ZodString;
+            accessibleBy: z$1.ZodArray<z$1.ZodString>;
+            activeAccount: z$1.ZodNullable<z$1.ZodString>;
+        }, z$1.core.$strict>>;
+        scope: z$1.ZodEnum<{
+            intersection: "intersection";
+            account: "account";
+        }>;
+    }, z$1.core.$strict>, "onlineRpc", true>;
+    "github.account_catalog": HostDaemonCommandDescriptor<"github.account_catalog", z$1.ZodObject<{
+        type: z$1.ZodLiteral<"github.account_catalog">;
+    }, z$1.core.$strict>, z$1.ZodObject<{
+        accounts: z$1.ZodArray<z$1.ZodObject<{
+            host: z$1.ZodString;
+            login: z$1.ZodString;
+            active: z$1.ZodBoolean;
+        }, z$1.core.$strict>>;
+    }, z$1.core.$strict>, "onlineRpc", true>;
+    "github.pull_request_catalog": HostDaemonCommandDescriptor<"github.pull_request_catalog", z$1.ZodObject<{
+        type: z$1.ZodLiteral<"github.pull_request_catalog">;
+        repository: z$1.ZodString;
+    }, z$1.core.$strict>, z$1.ZodObject<{
+        repository: z$1.ZodString;
+        account: z$1.ZodString;
+        pullRequests: z$1.ZodArray<z$1.ZodObject<{
+            number: z$1.ZodNumber;
+            title: z$1.ZodString;
+            url: z$1.ZodString;
+            isDraft: z$1.ZodBoolean;
+            headBranch: z$1.ZodString;
+            headRepository: z$1.ZodString;
+            baseBranch: z$1.ZodString;
+            author: z$1.ZodString;
+            updatedAt: z$1.ZodString;
+        }, z$1.core.$strict>>;
+    }, z$1.core.$strict>, "onlineRpc", true>;
     "workspace.discover_repos": HostDaemonCommandDescriptor<"workspace.discover_repos", z$1.ZodObject<{
         type: z$1.ZodLiteral<"workspace.discover_repos">;
         maxDepth: z$1.ZodNumber;
@@ -5704,6 +6035,7 @@ declare const hostDaemonCommandRegistry: {
             }>;
         }, z$1.core.$strip>;
         type: z$1.ZodLiteral<"workspace.pull_request">;
+        githubAccountLogin: z$1.ZodDefault<z$1.ZodNullable<z$1.ZodString>>;
     }, z$1.core.$strict>, z$1.ZodDiscriminatedUnion<[z$1.ZodObject<{
         outcome: z$1.ZodLiteral<"available">;
         pullRequest: z$1.ZodObject<{
@@ -6515,6 +6847,21 @@ declare const systemUsageLimitsQuerySchema: z$1.ZodObject<{
     hostId: z$1.ZodOptional<z$1.ZodString>;
 }, z$1.core.$strip>;
 type SystemUsageLimitsQuery = z$1.infer<typeof systemUsageLimitsQuerySchema>;
+/** Omission reads GitHub credentials from the primary machine. */
+declare const systemGithubAccountsQuerySchema: z$1.ZodObject<{
+    hostId: z$1.ZodOptional<z$1.ZodString>;
+}, z$1.core.$strip>;
+type SystemGithubAccountsQuery = z$1.infer<typeof systemGithubAccountsQuerySchema>;
+/** Omission reads GitHub credentials from the primary machine. */
+declare const systemGithubRepositoriesQuerySchema: z$1.ZodObject<{
+    hostId: z$1.ZodOptional<z$1.ZodString>;
+}, z$1.core.$strip>;
+type SystemGithubRepositoriesQuery = z$1.infer<typeof systemGithubRepositoriesQuerySchema>;
+declare const systemGithubPullRequestsQuerySchema: z$1.ZodObject<{
+    repository: z$1.ZodString;
+    hostId: z$1.ZodOptional<z$1.ZodString>;
+}, z$1.core.$strip>;
+type SystemGithubPullRequestsQuery = z$1.infer<typeof systemGithubPullRequestsQuerySchema>;
 declare const systemVoiceTranscriptionResponseSchema: z$1.ZodObject<{
     text: z$1.ZodString;
 }, z$1.core.$strip>;
@@ -6983,9 +7330,9 @@ declare const terminalSessionSchema: z$1.ZodObject<{
     cols: z$1.ZodNumber;
     rows: z$1.ZodNumber;
     status: z$1.ZodEnum<{
-        running: "running";
         starting: "starting";
         disconnected: "disconnected";
+        running: "running";
         exited: "exited";
     }>;
     exitCode: z$1.ZodNullable<z$1.ZodNumber>;
@@ -7014,9 +7361,9 @@ declare const terminalListResponseSchema: z$1.ZodObject<{
         cols: z$1.ZodNumber;
         rows: z$1.ZodNumber;
         status: z$1.ZodEnum<{
-            running: "running";
             starting: "starting";
             disconnected: "disconnected";
+            running: "running";
             exited: "exited";
         }>;
         exitCode: z$1.ZodNullable<z$1.ZodNumber>;
@@ -7901,6 +8248,11 @@ declare const createThreadRequestSchema: z$1.ZodObject<{
             }, z$1.core.$strict>, z$1.ZodObject<{
                 kind: z$1.ZodLiteral<"new">;
                 baseBranch: z$1.ZodString;
+                name: z$1.ZodOptional<z$1.ZodString>;
+            }, z$1.core.$strict>, z$1.ZodObject<{
+                kind: z$1.ZodLiteral<"pull-request">;
+                number: z$1.ZodNumber;
+                name: z$1.ZodString;
             }, z$1.core.$strict>], "kind">>;
         }, z$1.core.$strip>, z$1.ZodObject<{
             type: z$1.ZodLiteral<"managed-worktree">;
@@ -7910,6 +8262,8 @@ declare const createThreadRequestSchema: z$1.ZodObject<{
             }, z$1.core.$strip>, z$1.ZodObject<{
                 kind: z$1.ZodLiteral<"default">;
             }, z$1.core.$strip>], "kind">;
+            branchName: z$1.ZodOptional<z$1.ZodString>;
+            pullRequestNumber: z$1.ZodOptional<z$1.ZodNumber>;
         }, z$1.core.$strip>, z$1.ZodObject<{
             type: z$1.ZodLiteral<"personal">;
         }, z$1.core.$strip>], "type">;
@@ -8956,6 +9310,7 @@ declare const threadWithIncludesResponseSchema: z$1.ZodObject<{
         baseBranch: z$1.ZodNullable<z$1.ZodString>;
         defaultBranch: z$1.ZodNullable<z$1.ZodString>;
         mergeBaseBranch: z$1.ZodNullable<z$1.ZodString>;
+        githubAccountLogin: z$1.ZodNullable<z$1.ZodString>;
         status: z$1.ZodEnum<{
             error: "error";
             provisioning: "provisioning";
@@ -9603,8 +9958,8 @@ declare const threadTimelineResponseSchema: z$1.ZodObject<{
         updatedAt: z$1.ZodNumber;
         objective: z$1.ZodString;
         status: z$1.ZodEnum<{
-            paused: "paused";
             active: "active";
+            paused: "paused";
             budgetLimited: "budgetLimited";
             complete: "complete";
         }>;
@@ -9698,6 +10053,9 @@ declare const threadTabsResponseSchema: z$1.ZodObject<{
         id: z$1.ZodString;
         kind: z$1.ZodLiteral<"git-diff">;
     }, z$1.core.$strict>, z$1.ZodObject<{
+        id: z$1.ZodString;
+        kind: z$1.ZodLiteral<"pull-request">;
+    }, z$1.core.$strict>, z$1.ZodObject<{
         actionId: z$1.ZodString;
         id: z$1.ZodString;
         kind: z$1.ZodLiteral<"plugin-panel">;
@@ -9775,6 +10133,9 @@ declare const updateThreadTabsRequestSchema: z$1.ZodObject<{
     }, z$1.core.$strict>, z$1.ZodObject<{
         id: z$1.ZodString;
         kind: z$1.ZodLiteral<"git-diff">;
+    }, z$1.core.$strict>, z$1.ZodObject<{
+        id: z$1.ZodString;
+        kind: z$1.ZodLiteral<"pull-request">;
     }, z$1.core.$strict>, z$1.ZodObject<{
         actionId: z$1.ZodString;
         id: z$1.ZodString;
@@ -10328,6 +10689,13 @@ interface PluginSidebarProject {
     name: string;
     /** True for the implicit personal project. */
     isPersonal: boolean;
+    /**
+     * Canonical git remote configured for this project, or null when the project
+     * is not backed by a remote repository.
+     */
+    experimental_gitRemoteUrl?: string | null;
+    /** Default GitHub identity for new workspaces in this repository. */
+    experimental_githubAccountLogin?: string | null;
 }
 interface PluginSidebarThreadsState {
     status: "loading" | "ready" | "error";
@@ -10365,6 +10733,8 @@ interface PluginSidebarThreadActions {
             environmentId: string;
             locked: boolean;
         };
+        /** Open bb's GitHub branch / pull-request workflow chooser. */
+        experimental_startGithubWorkflow?: boolean;
     }): void;
     setPinned(threadId: string, pinned: boolean): Promise<void>;
     setRead(threadId: string, read: boolean): Promise<void>;
@@ -11171,15 +11541,23 @@ interface EnvironmentGetArgs extends EnvironmentActionArgs {
 }
 type EnvironmentMergeBaseBranchUpdateValue = Exclude<UpdateEnvironmentRequest["mergeBaseBranch"], undefined>;
 type EnvironmentNameUpdateValue = Exclude<UpdateEnvironmentRequest["name"], undefined>;
+type EnvironmentGithubAccountUpdateValue = Exclude<UpdateEnvironmentRequest["githubAccountLogin"], undefined>;
 interface EnvironmentMergeBaseBranchUpdate {
+    githubAccountLogin?: EnvironmentGithubAccountUpdateValue;
     mergeBaseBranch: EnvironmentMergeBaseBranchUpdateValue;
     name?: EnvironmentNameUpdateValue;
 }
 interface EnvironmentNameUpdate {
+    githubAccountLogin?: EnvironmentGithubAccountUpdateValue;
     mergeBaseBranch?: EnvironmentMergeBaseBranchUpdateValue;
     name: EnvironmentNameUpdateValue;
 }
-type EnvironmentUpdateFields = EnvironmentMergeBaseBranchUpdate | EnvironmentNameUpdate;
+interface EnvironmentGithubAccountUpdate {
+    githubAccountLogin: EnvironmentGithubAccountUpdateValue;
+    mergeBaseBranch?: EnvironmentMergeBaseBranchUpdateValue;
+    name?: EnvironmentNameUpdateValue;
+}
+type EnvironmentUpdateFields = EnvironmentMergeBaseBranchUpdate | EnvironmentNameUpdate | EnvironmentGithubAccountUpdate;
 type EnvironmentUpdateArgs = EnvironmentUpdateFields & {
     environmentId: string;
 };
@@ -11213,6 +11591,16 @@ interface EnvironmentPullRequestMergeArgs {
     environmentId: string;
     method: PullRequestMergeMethod;
 }
+interface EnvironmentPullRequestCreateArgs extends EnvironmentActionArgs {
+    baseBranch: string;
+    body: string;
+    draft: boolean;
+    title: string;
+}
+interface EnvironmentPullRequestMetadataArgs extends EnvironmentActionArgs {
+    baseBranch: string;
+    fallbackTitle: string;
+}
 type EnvironmentDiffPatchArgs = EnvironmentDiffPatchRequest & {
     environmentId: string;
     signal?: AbortSignal;
@@ -11230,6 +11618,8 @@ type EnvironmentDiffFilesResult = EnvironmentDiffFilesResponse;
 type EnvironmentDiffPatchResult = EnvironmentDiffPatchResponse;
 type EnvironmentGetResult = Environment;
 type EnvironmentMarkPullRequestDraftResult = PullRequestDraftActionResponse;
+type EnvironmentCreatePullRequestResult = PullRequestCreateActionResponse;
+type EnvironmentPullRequestMetadataResult = PullRequestMetadataActionResponse;
 type EnvironmentMarkPullRequestReadyResult = PullRequestReadyActionResponse;
 type EnvironmentMergePullRequestResult = PullRequestMergeActionResponse;
 type EnvironmentPathsResult = WorkspacePathListResponse;
@@ -11248,6 +11638,8 @@ interface EnvironmentsArea {
     diffPatch(args: EnvironmentDiffPatchArgs): Promise<EnvironmentDiffPatchResult>;
     get(args: EnvironmentGetArgs): Promise<EnvironmentGetResult>;
     pullRequest(args: EnvironmentGetArgs): Promise<EnvironmentPullRequestResult>;
+    createPullRequest(args: EnvironmentPullRequestCreateArgs): Promise<EnvironmentCreatePullRequestResult>;
+    generatePullRequestMetadata(args: EnvironmentPullRequestMetadataArgs): Promise<EnvironmentPullRequestMetadataResult>;
     rename(args: EnvironmentRenameArgs): Promise<EnvironmentRenameResult>;
     markPullRequestDraft(args: EnvironmentActionArgs): Promise<EnvironmentMarkPullRequestDraftResult>;
     markPullRequestReady(args: EnvironmentActionArgs): Promise<EnvironmentMarkPullRequestReadyResult>;
@@ -11907,6 +12299,12 @@ interface SystemExecutionOptionsArgs extends SystemExecutionOptionsQuery {
 interface SystemUsageLimitsArgs extends SystemUsageLimitsQuery {
     signal?: AbortSignal;
 }
+interface SystemGithubRepositoriesArgs extends SystemGithubRepositoriesQuery {
+    signal?: AbortSignal;
+}
+interface SystemGithubPullRequestsArgs extends SystemGithubPullRequestsQuery {
+    signal?: AbortSignal;
+}
 interface SystemVersionArgs {
     force?: boolean;
     signal?: AbortSignal;
@@ -11933,7 +12331,13 @@ type SystemUpdateExperimentsResult = Experiments;
 type SystemUpdateGeneralSettingsResult = AppSettings;
 type SystemUpdateKeyboardSettingsResult = AppKeybindingOverrides;
 type SystemUsageLimitsResult = ProviderUsageResponse;
+type SystemGithubAccountsResult = GithubAccountCatalog;
+type SystemGithubRepositoriesResult = GithubRepositoryCatalog;
+type SystemGithubPullRequestsResult = GithubPullRequestCatalog;
 interface SystemOnboardingArgs extends SystemOnboardingReposQuery {
+    signal?: AbortSignal;
+}
+interface SystemGithubAccountsArgs extends SystemGithubAccountsQuery {
     signal?: AbortSignal;
 }
 type SystemOnboardingAgentsResult = OnboardingAgentOverview;
@@ -11964,6 +12368,12 @@ interface SystemArea {
     onboardingAgents(args?: SystemOnboardingArgs): Promise<SystemOnboardingAgentsResult>;
     /** Candidate projects discovered on the host, ranked for onboarding. */
     onboardingRepos(args?: SystemOnboardingArgs): Promise<SystemOnboardingReposResult>;
+    /** GitHub accounts authenticated on the environment's host machine. */
+    githubAccounts(args?: SystemGithubAccountsArgs): Promise<SystemGithubAccountsResult>;
+    /** Repositories visible to every authenticated GitHub account on a machine. */
+    githubRepositories(args?: SystemGithubRepositoriesArgs): Promise<SystemGithubRepositoriesResult>;
+    /** Open pull requests for one GitHub repository. */
+    githubPullRequests(args: SystemGithubPullRequestsArgs): Promise<SystemGithubPullRequestsResult>;
     usageLimits(args?: SystemUsageLimitsArgs): Promise<SystemUsageLimitsResult>;
     version(args?: SystemVersionArgs): Promise<SystemVersionResult>;
 }
@@ -12857,11 +13267,49 @@ interface PluginMentionProviderRegistration {
         context: string;
     }>;
 }
+/** One live background task a plugin owns, for the thread's activity card. */
+interface PluginBackgroundActivityItem {
+    /** Unique within this plugin and stable for the life of the task. */
+    id: string;
+    /**
+     * `agent` for work a model is doing (a delegated worker, a remote job);
+     * `command` for a process. This picks the row's glyph and wording, and
+     * agent work outranks command work for the sidebar's single status glyph.
+     */
+    kind: "agent" | "command";
+    /** One line naming the work, e.g. "opus implementation". */
+    title: string;
+    /** Optional second line: what the task is doing right now. */
+    detail?: string;
+    /** Epoch ms the task started; drives the row's live elapsed time. */
+    startedAtMs: number;
+}
+interface PluginBackgroundActivityProvider {
+    /**
+     * Live background tasks for one thread.
+     *
+     * SYNCHRONOUS AND CHEAP BY CONTRACT: this runs inside the thread timeline
+     * projection, which is rebuilt on every timeline fetch. Do the I/O in a
+     * `bb.background.service` and answer from that cache — never read the
+     * filesystem or network here. A throwing provider contributes nothing.
+     */
+    list(context: {
+        threadId: string;
+    }): PluginBackgroundActivityItem[];
+}
 interface PluginUi {
     /** Block until the app submits or cancels a plugin-owned composer form. */
     requestInput(request: PluginInteractionRequest, options?: {
         signal?: AbortSignal;
     }): Promise<PluginInteractionResult>;
+    /**
+     * Contribute live background tasks into the thread's existing background
+     * activity card and sidebar status glyph, rather than drawing a competing
+     * strip above the composer. Rows merge with bb's own background commands and
+     * agents and share their grouping, ordering and priority. At most one
+     * provider per plugin.
+     */
+    experimental_contributeBackgroundActivity(provider: PluginBackgroundActivityProvider): void;
     /**
      * Register a mention provider for the shipped app's composer (design §4.9).
      * Providers default to the `@` trigger and may opt into `#`, `$`, `!`, or
@@ -12974,4 +13422,4 @@ interface BbPluginApi {
 }
 
 export { PLUGIN_CLI_OUTPUT_MAX_BYTES, defineRpcContract };
-export type { BbContext, BbNavigate, BbPluginApi, ComposerCustomization, ComposerPlusMenuItem, ComposerRichTextSpec, ComposerStructuredDraft, ComposerView, JsonValue, MarkdownProps, NewThreadComposerProps, NewThreadRequest, PluginAgentConfiguration, PluginAgentConfigurationContext, PluginAgentToolContentPart, PluginAgentToolContext, PluginAgentToolExperimentalStatusLabels, PluginAgentToolRegistrationBase, PluginAgentToolResult, PluginAgentToolSelection, PluginAgents, PluginAppBuilder, PluginAppComposer, PluginAppContentScripts, PluginAppDefinition, PluginAppSetup, PluginAppSlots, PluginBackground, PluginCli, PluginCliCommandInfo, PluginCliContext, PluginCliExecutionResult, PluginCliOutputLimitError, PluginCliRegistration, PluginCliResult, PluginComposerApi, PluginComposerMention, PluginComposerScope, PluginComposerTextEffect, PluginComposerThreadRowStatus, PluginContentScriptContext, PluginContentScriptDisposer, PluginContentScriptRegistration, PluginEvents, PluginFileOpenerProps, PluginFileOpenerRegistration, PluginFileOpenerSource, PluginHomepageSectionProps, PluginHomepageSectionRegistration, PluginHosts, PluginHttp, PluginHttpAuthMode, PluginHttpHandler, PluginInteractionCancelReason, PluginInteractionRequest, PluginInteractionResult, PluginKvStorage, PluginLogger, PluginMentionItem, PluginMentionProviderRegistration, PluginMentionSearchContext, PluginMentionTrigger, PluginMessageActionContext, PluginMessageActionRegistration, PluginMessageActionThreadPanelOptions, PluginMessageDirectiveMessage, PluginMessageDirectiveOpenWorkspaceFile, PluginMessageDirectiveProps, PluginMessageDirectiveRegistration, PluginNavPanelProps, PluginNavPanelRegistration, PluginNewThreadContextBarProps, PluginPendingInteractionProps, PluginPendingInteractionRegistration, PluginPendingInteractionView, PluginRealtime, PluginRealtimeConnectionState, PluginRpc, PluginRpcCallArgs, PluginRpcClient, PluginRpcContract, PluginRpcError, PluginRpcErrorCode, PluginRpcHandlers, PluginRpcIssuePathSegment, PluginRpcMethodContract, PluginRpcResult, PluginRpcValidationIssue, PluginSdkApp, PluginServerApi, PluginSettingDescriptor, PluginSettingDescriptors, PluginSettingValue, PluginSettings, PluginSettingsHandle, PluginSettingsSectionProps, PluginSettingsSectionRegistration, PluginSettingsState, PluginSettingsValues, PluginSharedPortTunnelIdentity, PluginSidebarFooterActionContext, PluginSidebarFooterActionProps, PluginSidebarFooterActionRegistration, PluginSidebarProject, PluginSidebarPullRequest, PluginSidebarSplitPane, PluginSidebarThread, PluginSidebarThreadActions, PluginSidebarThreadActivity, PluginSidebarThreadIndicator, PluginSidebarThreadPullRequestState, PluginSidebarThreadSplit, PluginSidebarThreadsState, PluginSidebarWorkspaceKind, PluginStatusApi, PluginStorage, PluginThreadContextBarProps, PluginThreadEventHandler, PluginThreadEventName, PluginThreadEventPayloads, PluginThreadHeaderActionProps, PluginThreadHeaderActionRegistration, PluginThreadListProps, PluginThreadListRegistration, PluginThreadPanelActionContext, PluginThreadPanelActionRegistration, PluginThreadPanelProps, PluginUi, StandardSchemaV1, StandardSchemaV1InferInput, StandardSchemaV1InferOutput, StandardSchemaV1Issue, StandardSchemaV1Result, ThreadChatMessageAction, ThreadChatMessageReference, ThreadChatProps };
+export type { BbContext, BbNavigate, BbPluginApi, ComposerCustomization, ComposerPlusMenuItem, ComposerRichTextSpec, ComposerStructuredDraft, ComposerView, JsonValue, MarkdownProps, NewThreadComposerProps, NewThreadRequest, PluginAgentConfiguration, PluginAgentConfigurationContext, PluginAgentToolContentPart, PluginAgentToolContext, PluginAgentToolExperimentalStatusLabels, PluginAgentToolRegistrationBase, PluginAgentToolResult, PluginAgentToolSelection, PluginAgents, PluginAppBuilder, PluginAppComposer, PluginAppContentScripts, PluginAppDefinition, PluginAppSetup, PluginAppSlots, PluginBackground, PluginBackgroundActivityItem, PluginBackgroundActivityProvider, PluginCli, PluginCliCommandInfo, PluginCliContext, PluginCliExecutionResult, PluginCliOutputLimitError, PluginCliRegistration, PluginCliResult, PluginComposerApi, PluginComposerMention, PluginComposerScope, PluginComposerTextEffect, PluginComposerThreadRowStatus, PluginContentScriptContext, PluginContentScriptDisposer, PluginContentScriptRegistration, PluginEvents, PluginFileOpenerProps, PluginFileOpenerRegistration, PluginFileOpenerSource, PluginHomepageSectionProps, PluginHomepageSectionRegistration, PluginHosts, PluginHttp, PluginHttpAuthMode, PluginHttpHandler, PluginInteractionCancelReason, PluginInteractionRequest, PluginInteractionResult, PluginKvStorage, PluginLogger, PluginMentionItem, PluginMentionProviderRegistration, PluginMentionSearchContext, PluginMentionTrigger, PluginMessageActionContext, PluginMessageActionRegistration, PluginMessageActionThreadPanelOptions, PluginMessageDirectiveMessage, PluginMessageDirectiveOpenWorkspaceFile, PluginMessageDirectiveProps, PluginMessageDirectiveRegistration, PluginNavPanelProps, PluginNavPanelRegistration, PluginNewThreadContextBarProps, PluginPendingInteractionProps, PluginPendingInteractionRegistration, PluginPendingInteractionView, PluginRealtime, PluginRealtimeConnectionState, PluginRpc, PluginRpcCallArgs, PluginRpcClient, PluginRpcContract, PluginRpcError, PluginRpcErrorCode, PluginRpcHandlers, PluginRpcIssuePathSegment, PluginRpcMethodContract, PluginRpcResult, PluginRpcValidationIssue, PluginSdkApp, PluginServerApi, PluginSettingDescriptor, PluginSettingDescriptors, PluginSettingValue, PluginSettings, PluginSettingsHandle, PluginSettingsSectionProps, PluginSettingsSectionRegistration, PluginSettingsState, PluginSettingsValues, PluginSharedPortTunnelIdentity, PluginSidebarFooterActionContext, PluginSidebarFooterActionProps, PluginSidebarFooterActionRegistration, PluginSidebarProject, PluginSidebarPullRequest, PluginSidebarSplitPane, PluginSidebarThread, PluginSidebarThreadActions, PluginSidebarThreadActivity, PluginSidebarThreadIndicator, PluginSidebarThreadPullRequestState, PluginSidebarThreadSplit, PluginSidebarThreadsState, PluginSidebarWorkspaceKind, PluginStatusApi, PluginStorage, PluginThreadContextBarProps, PluginThreadEventHandler, PluginThreadEventName, PluginThreadEventPayloads, PluginThreadHeaderActionProps, PluginThreadHeaderActionRegistration, PluginThreadListProps, PluginThreadListRegistration, PluginThreadPanelActionContext, PluginThreadPanelActionRegistration, PluginThreadPanelProps, PluginUi, StandardSchemaV1, StandardSchemaV1InferInput, StandardSchemaV1InferOutput, StandardSchemaV1Issue, StandardSchemaV1Result, ThreadChatMessageAction, ThreadChatMessageReference, ThreadChatProps };

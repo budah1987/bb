@@ -1,6 +1,7 @@
 import {
   createEnvironment,
   getEnvironment,
+  getProject,
   getThread,
   type CreateEnvironmentInput,
   type DbNotifier,
@@ -199,6 +200,7 @@ interface RequestPreparedEnvironmentProvisionArgs {
 }
 
 interface DirectUnmanagedEnvironmentPlanArgs {
+  githubAccountLogin: string | null;
   intent: DirectUnmanagedIntent;
   thread: Thread;
 }
@@ -234,6 +236,7 @@ type CheckoutUnmanagedEnvironmentProvisionResult =
 
 interface ManagedEnvironmentPlanArgs {
   dataDir: string;
+  githubAccountLogin: string | null;
   hostId: string;
   sourcePath: string;
   baseBranch: BaseBranchSpec;
@@ -245,6 +248,7 @@ interface ManagedEnvironmentPlanArgs {
 
 interface PersonalEnvironmentPlanArgs {
   dataDir: string;
+  githubAccountLogin: string | null;
   hostId: string;
   thread: Thread;
   workspaceProvisionType: "personal";
@@ -804,6 +808,7 @@ function buildDirectUnmanagedEnvironmentPlan(
 ): ThreadProvisionEnvironmentPlan {
   return {
     environmentInput: {
+      githubAccountLogin: args.githubAccountLogin,
       projectId: args.thread.projectId,
       hostId: args.intent.hostId,
       managed: false,
@@ -844,6 +849,7 @@ function buildManagedEnvironmentPlan(
 ): ThreadProvisionEnvironmentPlan {
   return {
     environmentInput: {
+      githubAccountLogin: args.githubAccountLogin,
       projectId: args.thread.projectId,
       hostId: args.hostId,
       managed: true,
@@ -892,6 +898,7 @@ function buildPersonalEnvironmentPlan(
 ): ThreadProvisionEnvironmentPlan {
   return {
     environmentInput: {
+      githubAccountLogin: args.githubAccountLogin,
       projectId: args.thread.projectId,
       hostId: args.hostId,
       managed: true,
@@ -922,9 +929,12 @@ async function resolveEnvironmentCreationPlan(
   deps: ThreadProvisioningDeps,
   args: ResolveEnvironmentCreationPlanArgs,
 ): Promise<ThreadProvisionEnvironmentPlan> {
+  const githubAccountLogin =
+    getProject(deps.db, args.thread.projectId)?.githubAccountLogin ?? null;
   switch (args.intent.type) {
     case "direct-unmanaged":
       return buildDirectUnmanagedEnvironmentPlan({
+        githubAccountLogin,
         intent: args.intent,
         thread: args.thread,
       });
@@ -934,6 +944,7 @@ async function resolveEnvironmentCreationPlan(
       });
       return buildManagedEnvironmentPlan({
         dataDir: hostSession.dataDir,
+        githubAccountLogin,
         hostId: args.intent.hostId,
         sourcePath: args.intent.sourcePath,
         baseBranch: args.intent.baseBranch,
@@ -949,6 +960,7 @@ async function resolveEnvironmentCreationPlan(
       });
       return buildPersonalEnvironmentPlan({
         dataDir: hostSession.dataDir,
+        githubAccountLogin,
         hostId: args.intent.hostId,
         thread: args.thread,
         workspaceProvisionType: args.intent.workspaceProvisionType,

@@ -303,6 +303,7 @@ function dropRewindAddedTables(db: DbConnection): void {
   db.$client.exec("DROP INDEX IF EXISTS `threads_origin_plugin_archived_idx`");
   db.$client.prepare("ALTER TABLE threads DROP COLUMN origin_plugin_id").run();
   dropProjectGitRemoteUrlColumn(db);
+  dropProjectGithubAccountLoginColumn(db);
 }
 
 function requirePublishedMigrationWhen(tag: string): number {
@@ -618,6 +619,20 @@ function dropProjectGitRemoteUrlColumn(db: DbConnection): void {
     .all();
   if (columns.some((column) => column.name === "git_remote_url")) {
     db.$client.prepare("ALTER TABLE projects DROP COLUMN git_remote_url").run();
+  }
+}
+
+// Migration 0088 adds the repository-level GitHub account default. Rewind
+// scenarios that clear later migration rows must remove it before replaying
+// the additive migration.
+function dropProjectGithubAccountLoginColumn(db: DbConnection): void {
+  const columns = db.$client
+    .prepare<[], TableInfoRow>("PRAGMA table_info(projects)")
+    .all();
+  if (columns.some((column) => column.name === "github_account_login")) {
+    db.$client
+      .prepare("ALTER TABLE projects DROP COLUMN github_account_login")
+      .run();
   }
 }
 

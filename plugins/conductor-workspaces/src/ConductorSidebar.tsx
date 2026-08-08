@@ -1,4 +1,5 @@
 import {
+  useCallback,
   useEffect,
   useMemo,
   useState,
@@ -35,7 +36,12 @@ import {
   ContextMenu,
   ContextMenuContent,
   ContextMenuItem,
+  ContextMenuRadioGroup,
+  ContextMenuRadioItem,
   ContextMenuSeparator,
+  ContextMenuSub,
+  ContextMenuSubContent,
+  ContextMenuSubTrigger,
   ContextMenuTrigger,
 } from "@/components/ui/context-menu";
 import {
@@ -106,6 +112,189 @@ interface RenameTarget {
 interface ArchiveTarget {
   environmentId: string;
   workspaceTitle: string;
+}
+
+interface GithubAccountOption {
+  login: string;
+  active: boolean;
+}
+
+interface GithubRepositoryOption {
+  nameWithOwner: string;
+  url: string;
+  isPrivate: boolean;
+  defaultBranch: string | null;
+  accessibleBy: string[];
+  activeAccount: string | null;
+}
+
+interface GithubCatalog {
+  hostId: string;
+  accounts: GithubAccountOption[];
+  repositories: GithubRepositoryOption[];
+}
+
+function AddRepositoryDialog({
+  catalog,
+  open,
+  pending,
+  onClose,
+  onCreate,
+  onLoad,
+}: {
+  catalog: GithubCatalog | null;
+  open: boolean;
+  pending: boolean;
+  onClose: () => void;
+  onCreate: (
+    repository: GithubRepositoryOption,
+    accountLogin: string | null,
+  ) => Promise<void>;
+  onLoad: () => Promise<void>;
+}) {
+  const [query, setQuery] = useState("");
+  const [selectedName, setSelectedName] = useState<string | null>(null);
+  const [accountLogin, setAccountLogin] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    setQuery("");
+    setSelectedName(null);
+    setAccountLogin(null);
+    setError(null);
+    void onLoad().catch((cause) => {
+      setError(
+        cause instanceof Error ? cause.message : "Unable to load repositories.",
+      );
+    });
+  }, [onLoad, open]);
+
+  useEffect(() => {
+    if (!open || !catalog || accountLogin !== null) return;
+    setAccountLogin(
+      catalog.accounts.find((account) => account.active)?.login ??
+        catalog.accounts[0]?.login ??
+        null,
+    );
+  }, [accountLogin, catalog, open]);
+
+  const filteredRepositories = useMemo(() => {
+    const normalizedQuery = query.trim().toLocaleLowerCase();
+    return (catalog?.repositories ?? []).filter((repository) =>
+      normalizedQuery.length === 0
+        ? true
+        : repository.nameWithOwner
+            .toLocaleLowerCase()
+            .includes(normalizedQuery),
+    );
+  }, [catalog?.repositories, query]);
+  const selectedRepository = filteredRepositories.find(
+    (repository) => repository.nameWithOwner === selectedName,
+  );
+
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!selectedRepository) return;
+    setError(null);
+    try {
+      await onCreate(selectedRepository, accountLogin);
+      onClose();
+    } catch (cause) {
+      setError(
+        cause instanceof Error ? cause.message : "Unable to add repository.",
+      );
+    }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={(nextOpen) => !nextOpen && onClose()}>
+      <DialogContent>
+        <form onSubmit={submit} className="space-y-4">
+          <DialogHeader>
+            <DialogTitle>Add repository</DialogTitle>
+            <DialogDescription>
+              Add a GitHub repository to the sidebar first. Start a workspace
+              later with the plus button beside it.
+            </DialogDescription>
+          </DialogHeader>
+          <label className="block space-y-1.5 text-xs font-medium text-foreground">
+            <span>Search repositories</span>
+            <Input
+              autoFocus
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="owner/repository"
+            />
+          </label>
+          <div className="max-h-64 space-y-1 overflow-y-auto rounded-md border p-1">
+            {!catalog ? (
+              <p className="px-3 py-5 text-xs text-muted-foreground">
+                Loading repositories…
+              </p>
+            ) : filteredRepositories.length === 0 ? (
+              <p className="px-3 py-5 text-xs text-muted-foreground">
+                No repositories are visible to all authenticated GitHub
+                accounts.
+              </p>
+            ) : (
+              filteredRepositories.map((repository) => (
+                <button
+                  key={repository.nameWithOwner}
+                  type="button"
+                  className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-xs hover:bg-state-hover data-[selected=true]:bg-state-active"
+                  data-selected={repository.nameWithOwner === selectedName}
+                  aria-pressed={repository.nameWithOwner === selectedName}
+                  onClick={() => setSelectedName(repository.nameWithOwner)}
+                >
+                  <Icon name="Github" className="size-4 shrink-0" aria-hidden />
+                  <span className="min-w-0 flex-1 truncate font-medium">
+                    {repository.nameWithOwner}
+                  </span>
+                  <span className="shrink-0 text-2xs text-muted-foreground">
+                    {repository.isPrivate ? "Private" : "Public"}
+                  </span>
+                </button>
+              ))
+            )}
+          </div>
+          {catalog && catalog.accounts.length > 0 ? (
+            <fieldset className="space-y-2">
+              <legend className="text-xs font-medium text-foreground">
+                Default GitHub account
+              </legend>
+              <div className="grid grid-cols-2 gap-2">
+                {catalog.accounts.map((account) => (
+                  <label
+                    key={account.login}
+                    className="flex cursor-pointer items-center gap-2 rounded-md border px-3 py-2 text-xs hover:bg-state-hover"
+                  >
+                    <input
+                      type="radio"
+                      name="github-account"
+                      value={account.login}
+                      checked={account.login === accountLogin}
+                      onChange={() => setAccountLogin(account.login)}
+                    />
+                    <span>@{account.login}</span>
+                  </label>
+                ))}
+              </div>
+            </fieldset>
+          ) : null}
+          {error ? <p className="text-xs text-destructive">{error}</p> : null}
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={onClose}>
+              Cancel
+            </Button>
+            <Button type="submit" disabled={pending || !selectedRepository}>
+              {pending ? "Adding…" : "Add repository"}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
 }
 
 const WORKSPACE_DND_PREFIX = "workspace:";
@@ -340,6 +529,7 @@ function SignalStatus({
 
 function SectionHeader({
   title,
+  meta,
   icon,
   contentId,
   collapsed,
@@ -350,6 +540,7 @@ function SectionHeader({
   dragBindings,
 }: {
   title: string;
+  meta?: ReactNode;
   icon?: ReactNode;
   contentId: string;
   collapsed: boolean;
@@ -380,6 +571,7 @@ function SectionHeader({
         />
         {icon}
         <span className="min-w-0 flex-1 truncate text-left">{title}</span>
+        {meta}
         {collapsed ? (
           <PixelMatrix
             signal={signal}
@@ -656,6 +848,8 @@ function ProjectDragPreview({
 function ProjectSection({
   project,
   customization,
+  githubAccountLogin,
+  githubAccounts,
   activeThreadId,
   collapsed,
   archivePending,
@@ -674,9 +868,13 @@ function ProjectSection({
   onSetFocused,
   onRequestRenameProject,
   onRequestChangeIcon,
+  onRequestGithubCatalog,
+  onSetGithubAccount,
 }: {
   project: ConductorProject;
   customization: ProjectCustomization | undefined;
+  githubAccountLogin: string | null;
+  githubAccounts: readonly GithubAccountOption[];
   activeThreadId: string | null;
   collapsed: boolean;
   archivePending: boolean;
@@ -698,6 +896,8 @@ function ProjectSection({
   onSetFocused: (workspace: ConductorWorkspace, focused: boolean) => void;
   onRequestRenameProject: () => void;
   onRequestChangeIcon: () => void;
+  onRequestGithubCatalog: () => void;
+  onSetGithubAccount: (accountLogin: string | null) => void;
 }) {
   const {
     attributes,
@@ -748,11 +948,18 @@ function ProjectSection({
       data-drop-target={isDropTarget || undefined}
       aria-label={projectLabel}
     >
-      <ContextMenu>
+      <ContextMenu onOpenChange={(open) => open && onRequestGithubCatalog()}>
         <ContextMenuTrigger asChild>
           <div className="min-w-0">
             <SectionHeader
               title={projectLabel}
+              meta={
+                githubAccountLogin ? (
+                  <span className="max-w-24 truncate text-2xs font-normal text-muted-foreground">
+                    @{githubAccountLogin}
+                  </span>
+                ) : null
+              }
               icon={projectIconNode}
               contentId={contentId}
               collapsed={collapsed}
@@ -773,6 +980,38 @@ function ProjectSection({
             <Icon name="Palette" aria-hidden />
             Change icon…
           </ContextMenuItem>
+          <ContextMenuSub>
+            <ContextMenuSubTrigger>
+              <Icon name="Github" aria-hidden />
+              GitHub Account
+            </ContextMenuSubTrigger>
+            <ContextMenuSubContent>
+              {githubAccounts.length === 0 ? (
+                <ContextMenuItem disabled>
+                  No authenticated accounts
+                </ContextMenuItem>
+              ) : (
+                <ContextMenuRadioGroup
+                  value={githubAccountLogin ?? "__none__"}
+                  onValueChange={(value) =>
+                    onSetGithubAccount(value === "__none__" ? null : value)
+                  }
+                >
+                  {githubAccounts.map((account) => (
+                    <ContextMenuRadioItem
+                      key={account.login}
+                      value={account.login}
+                    >
+                      @{account.login}
+                    </ContextMenuRadioItem>
+                  ))}
+                  <ContextMenuRadioItem value="__none__">
+                    Not set
+                  </ContextMenuRadioItem>
+                </ContextMenuRadioGroup>
+              )}
+            </ContextMenuSubContent>
+          </ContextMenuSub>
         </ContextMenuContent>
       </ContextMenu>
       <SectionContent id={contentId} collapsed={collapsed}>
@@ -885,6 +1124,11 @@ function FocusSection({
               />
             ))}
           </div>
+          {project.workspaces.length === 0 ? (
+            <p className="px-3 py-2 text-2xs text-muted-foreground">
+              No workspaces yet. Use + to start one.
+            </p>
+          ) : null}
         </SortableContext>
       </SectionContent>
     </section>
@@ -923,6 +1167,14 @@ export function ConductorSidebar({
     useState<ProjectRenameTarget | null>(null);
   const [projectIconTarget, setProjectIconTarget] =
     useState<ProjectIconTarget | null>(null);
+  const [githubCatalog, setGithubCatalog] = useState<GithubCatalog | null>(
+    null,
+  );
+  const [addRepositoryOpen, setAddRepositoryOpen] = useState(false);
+  const [addRepositoryPending, setAddRepositoryPending] = useState(false);
+  const [projectAccountOverrides, setProjectAccountOverrides] = useState<
+    Readonly<Record<string, string | null>>
+  >({});
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
     useSensor(KeyboardSensor, {
@@ -934,6 +1186,30 @@ export function ConductorSidebar({
       buildConductorProjection(state.threads, state.projects, legacyWorkspaces),
     [legacyWorkspaces, state.projects, state.threads],
   );
+  const loadGithubCatalog = useCallback(async () => {
+    const catalog = await rpc.call("readGithubCatalog", {});
+    setGithubCatalog(catalog);
+  }, [rpc]);
+
+  async function createGithubProject(
+    repository: GithubRepositoryOption,
+    accountLogin: string | null,
+  ) {
+    if (!githubCatalog) {
+      throw new Error("GitHub repository catalog is not loaded");
+    }
+    setAddRepositoryPending(true);
+    try {
+      await rpc.call("createGithubProject", {
+        accountLogin,
+        hostId: githubCatalog.hostId,
+        name: repository.nameWithOwner,
+        remoteUrl: repository.url,
+      });
+    } finally {
+      setAddRepositoryPending(false);
+    }
+  }
 
   useEffect(() => {
     if (state.status !== "ready" || isLoading) return;
@@ -987,31 +1263,45 @@ export function ConductorSidebar({
   )
     .map((id) => projectById.get(id))
     .filter((project): project is ConductorProject => project !== undefined)
-    .map((project) => ({
-      ...project,
-      workspaces: orderWorkspaceKeys(
-        project.workspaces.map((workspace) => workspace.key),
-        workspaceOrders[project.id] ?? [],
-      )
-        .map((workspaceKey) =>
-          project.workspaces.find(
-            (workspace) => workspace.key === workspaceKey,
-          ),
+    .map((project) => {
+      const projectMatches = [
+        project.name,
+        project.repositoryName ?? "",
+        customizations[project.id]?.name ?? "",
+      ].some((value) => value.toLocaleLowerCase().includes(query));
+      return {
+        ...project,
+        workspaces: orderWorkspaceKeys(
+          project.workspaces.map((workspace) => workspace.key),
+          workspaceOrders[project.id] ?? [],
         )
-        .filter((workspace): workspace is ConductorWorkspace => {
-          if (!workspace) return false;
-          if (!query) return true;
-          return [
-            project.name,
-            project.repositoryName ?? "",
-            customizations[project.id]?.name ?? "",
-            workspace.title,
-            workspace.branchName ?? "",
-            ...workspace.threads.map(threadDisplayTitle),
-          ].some((value) => value.toLocaleLowerCase().includes(query));
-        }),
-    }))
-    .filter((project) => project.workspaces.length > 0);
+          .map((workspaceKey) =>
+            project.workspaces.find(
+              (workspace) => workspace.key === workspaceKey,
+            ),
+          )
+          .filter((workspace): workspace is ConductorWorkspace => {
+            if (!workspace) return false;
+            if (!query || projectMatches) return true;
+            return [
+              workspace.title,
+              workspace.branchName ?? "",
+              ...workspace.threads.map(threadDisplayTitle),
+            ].some((value) => value.toLocaleLowerCase().includes(query));
+          }),
+      };
+    })
+    .filter((project) => {
+      if (!query) return true;
+      return (
+        project.workspaces.length > 0 ||
+        [
+          project.name,
+          project.repositoryName ?? "",
+          customizations[project.id]?.name ?? "",
+        ].some((value) => value.toLocaleLowerCase().includes(query))
+      );
+    });
 
   const focusedWorkspaces = orderedProjects.flatMap((project) =>
     project.workspaces.filter((workspace) =>
@@ -1099,7 +1389,8 @@ export function ConductorSidebar({
     renameThread !== null ||
     archiveTarget !== null ||
     renameProjectTarget !== null ||
-    projectIconTarget !== null;
+    projectIconTarget !== null ||
+    addRepositoryOpen;
   useEffect(() => {
     if (jumpDialogOpen) return;
 
@@ -1148,6 +1439,30 @@ export function ConductorSidebar({
   function openThread(threadId: string) {
     actions.open(threadId);
     onNavigate();
+  }
+
+  function requestSetGithubAccount(
+    project: ConductorProject,
+    accountLogin: string | null,
+  ) {
+    const previous = projectAccountOverrides[project.id];
+    setProjectAccountOverrides((current) => ({
+      ...current,
+      [project.id]: accountLogin,
+    }));
+    void rpc
+      .call("setProjectGithubAccount", {
+        accountLogin,
+        projectId: project.id,
+      })
+      .catch(() => {
+        setProjectAccountOverrides((current) => {
+          const next = { ...current };
+          if (previous === undefined) delete next[project.id];
+          else next[project.id] = previous;
+          return next;
+        });
+      });
   }
 
   function updateCustomization(
@@ -1363,6 +1678,14 @@ export function ConductorSidebar({
         data-compact={isCompactViewport || undefined}
         aria-label="BBamir workspaces"
       >
+        <button
+          type="button"
+          className="flex min-h-8 items-center gap-2 rounded-md border border-dashed px-3 text-xs font-medium text-muted-foreground hover:border-solid hover:bg-state-hover hover:text-foreground"
+          onClick={() => setAddRepositoryOpen(true)}
+        >
+          <Icon name="Plus" className="size-3.5" aria-hidden />
+          Add repository
+        </button>
         <DndContext
           sensors={sensors}
           collisionDetection={closestCenter}
@@ -1410,6 +1733,12 @@ export function ConductorSidebar({
                   key={project.id}
                   project={project}
                   customization={customizations[project.id]}
+                  githubAccountLogin={
+                    projectAccountOverrides[project.id] === undefined
+                      ? project.githubAccountLogin
+                      : projectAccountOverrides[project.id]
+                  }
+                  githubAccounts={githubCatalog?.accounts ?? []}
                   activeThreadId={activeThreadId}
                   collapsed={collapsed}
                   archivePending={archivePending}
@@ -1439,6 +1768,12 @@ export function ConductorSidebar({
                   onSetFocused={setWorkspaceFocused}
                   onRequestRenameProject={() => requestRenameProject(project)}
                   onRequestChangeIcon={() => requestChangeProjectIcon(project)}
+                  onRequestGithubCatalog={() => {
+                    void loadGithubCatalog().catch(() => undefined);
+                  }}
+                  onSetGithubAccount={(accountLogin) =>
+                    requestSetGithubAccount(project, accountLogin)
+                  }
                 />
               );
             })}
@@ -1560,6 +1895,14 @@ export function ConductorSidebar({
           </p>
         ) : null}
       </nav>
+      <AddRepositoryDialog
+        catalog={githubCatalog}
+        open={addRepositoryOpen}
+        pending={addRepositoryPending}
+        onClose={() => setAddRepositoryOpen(false)}
+        onCreate={createGithubProject}
+        onLoad={loadGithubCatalog}
+      />
       <ArchiveWorkspaceDialog
         target={archiveTarget}
         error={archiveError}
