@@ -33,6 +33,7 @@ interface FilePreviewBaseProps {
   lineRange?: FilePreviewLineRange | null;
   markdownLinkRouting?: MarkdownLinkRouting;
   onSelectionAddToChat?: (text: string) => void;
+  onEdit?: () => void;
   onOpenInEditor?: (path: string) => void;
   onRefresh?: () => void;
 }
@@ -109,6 +110,7 @@ export function SecondaryPanelFilePreview({
   lineRange = null,
   markdownLinkRouting,
   onSelectionAddToChat,
+  onEdit,
   onOpenInEditor,
   onRefresh,
   statusLabel = null,
@@ -120,6 +122,7 @@ export function SecondaryPanelFilePreview({
         path={activePath}
         copyPath={copyPath}
         onSelectionAddToChat={onSelectionAddToChat}
+        onEdit={onEdit}
         onOpenInEditor={onOpenInEditor}
         onRefresh={onRefresh}
         isRefreshing={isRefreshing}
@@ -135,6 +138,7 @@ export function SecondaryPanelFilePreview({
         path={activePath}
         copyPath={copyPath}
         onSelectionAddToChat={onSelectionAddToChat}
+        onEdit={onEdit}
         onOpenInEditor={onOpenInEditor}
         onRefresh={onRefresh}
         isRefreshing={isRefreshing}
@@ -151,6 +155,7 @@ export function SecondaryPanelFilePreview({
           path={activePath}
           copyPath={copyPath}
           onSelectionAddToChat={onSelectionAddToChat}
+          onEdit={onEdit}
           onOpenInEditor={onOpenInEditor}
           onRefresh={onRefresh}
           isRefreshing={isRefreshing}
@@ -170,6 +175,7 @@ export function SecondaryPanelFilePreview({
         path={activePath}
         copyPath={copyPath}
         onSelectionAddToChat={onSelectionAddToChat}
+        onEdit={onEdit}
         onOpenInEditor={onOpenInEditor}
         onRefresh={onRefresh}
         isRefreshing={isRefreshing}
@@ -208,6 +214,7 @@ export function SecondaryPanelFilePreview({
         path={activePath}
         copyPath={copyPath}
         onSelectionAddToChat={onSelectionAddToChat}
+        onEdit={onEdit}
         onOpenInEditor={onOpenInEditor}
         onRefresh={onRefresh}
         isRefreshing={isRefreshing}
@@ -229,6 +236,7 @@ export function SecondaryPanelFilePreview({
         path={activePath}
         copyPath={copyPath}
         onSelectionAddToChat={onSelectionAddToChat}
+        onEdit={onEdit}
         onOpenInEditor={onOpenInEditor}
         onRefresh={onRefresh}
         isRefreshing={isRefreshing}
@@ -258,6 +266,7 @@ export function SecondaryPanelFilePreview({
       path={activePath}
       copyPath={copyPath}
       onSelectionAddToChat={onSelectionAddToChat}
+      onEdit={onEdit}
       onOpenInEditor={onOpenInEditor}
       onRefresh={onRefresh}
       isRefreshing={isRefreshing}
@@ -280,6 +289,7 @@ export function ThreadStorageFilePreview({
   lineRange,
   markdownLinkRouting,
   onSelectionAddToChat,
+  onEdit,
   onOpenInEditor,
   onRefresh,
   threadId,
@@ -296,6 +306,7 @@ export function ThreadStorageFilePreview({
       lineRange={lineRange}
       markdownLinkRouting={markdownLinkRouting}
       onSelectionAddToChat={onSelectionAddToChat}
+      onEdit={onEdit}
       onOpenInEditor={onOpenInEditor}
       onRefresh={onRefresh}
     />

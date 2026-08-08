@@ -10,6 +10,7 @@ import type {
   EnvironmentDiffFilesResponse,
   EnvironmentPullRequestResponse,
   EnvironmentStatusResponse,
+  HostPathListResponse,
   WorkspacePathListResponse,
 } from "@bb/server-contract";
 import type { EnvironmentDiffArgs } from "@bb/sdk/browser";
@@ -29,6 +30,7 @@ import {
   environmentPullRequestQueryKey,
   environmentPathsQueryKey,
   environmentQueryKey,
+  environmentWorkspaceFilesQueryKey,
   environmentWorkStatusQueryKey,
 } from "./query-keys";
 import {
@@ -69,6 +71,7 @@ const MERGE_BASE_BRANCHES_STALE_MS = 30_000;
 const MERGE_BASE_BRANCHES_LIMIT = 50;
 /** Staleness window for the environment diff TOC query. */
 const ENVIRONMENT_DIFF_STALE_MS = 5_000;
+const ENVIRONMENT_WORKSPACE_FILES_LIMIT = 10_000;
 
 function requireEnvironmentId(
   environmentId: string | null | undefined,
@@ -289,6 +292,53 @@ export function useEnvironmentFilePreview(
     },
     enabled,
     ...EXPENSIVE_MANUAL_QUERY_POLICY,
+  });
+}
+
+interface UseEnvironmentWorkspaceFilesOptions extends QueryOptions {
+  hostId: string | null | undefined;
+  rootPath: string | null | undefined;
+}
+
+/**
+ * Loads the workspace file list used by the right-panel explorer. This uses
+ * the host file primitive because the environment paths endpoint is optimized
+ * for fuzzy search and intentionally rejects an empty query.
+ */
+export function useEnvironmentWorkspaceFiles(
+  environmentId: string | null | undefined,
+  options: UseEnvironmentWorkspaceFilesOptions,
+) {
+  const rootPath = options.rootPath ?? null;
+  const hostId = options.hostId ?? null;
+  const enabled =
+    (options.enabled ?? true) &&
+    Boolean(environmentId) &&
+    Boolean(hostId) &&
+    Boolean(rootPath);
+  useEnvironmentDetailRealtimeSubscription(environmentId, { enabled });
+
+  return useQuery<HostPathListResponse>({
+    queryKey: environmentWorkspaceFilesQueryKey(environmentId, rootPath),
+    queryFn: ({ signal }) =>
+      sdk.files.listPaths({
+        hostId: requireEnabledQueryArg({
+          value: hostId,
+          hookName: "useEnvironmentWorkspaceFiles",
+          argName: "hostId",
+        }),
+        path: requireEnabledQueryArg({
+          value: rootPath,
+          hookName: "useEnvironmentWorkspaceFiles",
+          argName: "rootPath",
+        }),
+        limit: ENVIRONMENT_WORKSPACE_FILES_LIMIT,
+        includeFiles: true,
+        includeDirectories: false,
+        signal,
+      }),
+    enabled,
+    staleTime: 0,
   });
 }
 
