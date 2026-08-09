@@ -3,6 +3,7 @@ import {
   FILE_LIST_QUERY_MAX_LENGTH,
   gitBranchNameSchema,
   gitBranchRefClassificationSchema,
+  jsonValueSchema,
   threadGitDiffResponseSchema,
   threadPullRequestSchema,
   workspaceDiffTargetSchema,
@@ -65,6 +66,157 @@ export const environmentPathsQuerySchema = z.object({
   includeDirectories: pathListIncludeQueryValueSchema,
 });
 export type EnvironmentPathsQuery = z.infer<typeof environmentPathsQuerySchema>;
+
+export const simulatorDeviceSchema = z
+  .object({
+    udid: z.string().min(1),
+    name: z.string().min(1),
+    runtime: z.string().min(1),
+    state: z.enum(["Booted", "Shutdown"]),
+  })
+  .strict();
+
+export const simulatorActiveSessionSchema = z
+  .object({
+    deviceUdid: z.string().min(1),
+    deviceName: z.string().min(1),
+    state: z.literal("running"),
+  })
+  .strict();
+
+export const simulatorControlActionSchema = z.discriminatedUnion("kind", [
+  z
+    .object({
+      kind: z.literal("tap"),
+      x: z.number().min(0).max(1),
+      y: z.number().min(0).max(1),
+    })
+    .strict(),
+  z
+    .object({
+      kind: z.literal("gesture"),
+      points: z
+        .array(
+          z
+            .object({
+              type: z.enum(["begin", "move", "end"]),
+              x: z.number().min(0).max(1),
+              y: z.number().min(0).max(1),
+            })
+            .strict(),
+        )
+        .min(2)
+        .max(64),
+    })
+    .strict(),
+  z.object({ kind: z.literal("type"), text: z.string().max(10_000) }).strict(),
+  z
+    .object({
+      kind: z.literal("button"),
+      button: z.enum([
+        "home",
+        "swipe_home",
+        "app_switcher",
+        "lock",
+        "siri",
+        "side_button",
+      ]),
+    })
+    .strict(),
+  z
+    .object({
+      kind: z.literal("rotate"),
+      orientation: z.enum([
+        "portrait",
+        "portrait_upside_down",
+        "landscape_left",
+        "landscape_right",
+      ]),
+    })
+    .strict(),
+]);
+export type SimulatorControlAction = z.infer<
+  typeof simulatorControlActionSchema
+>;
+
+export const simulatorStatusResponseSchema = z
+  .object({
+    supported: z.boolean(),
+    message: z.string().nullable(),
+    devices: z.array(simulatorDeviceSchema),
+    active: simulatorActiveSessionSchema.nullable(),
+  })
+  .strict();
+export type SimulatorStatusResponse = z.infer<
+  typeof simulatorStatusResponseSchema
+>;
+
+export const simulatorAttachRequestSchema = z
+  .object({ deviceUdid: z.string().min(1).optional() })
+  .strict();
+export type SimulatorAttachRequest = z.infer<
+  typeof simulatorAttachRequestSchema
+>;
+
+export const simulatorStreamConnectionSchema = z
+  .object({
+    url: z.string().url(),
+    token: z.string().min(32),
+    expiresAt: z.number().int().positive(),
+    transport: z.enum(["loopback", "tunnel"]),
+  })
+  .strict();
+export type SimulatorStreamConnection = z.infer<
+  typeof simulatorStreamConnectionSchema
+>;
+
+export const simulatorAttachResponseSchema = z
+  .object({
+    session: simulatorActiveSessionSchema,
+    stream: simulatorStreamConnectionSchema,
+  })
+  .strict();
+export type SimulatorAttachResponse = z.infer<
+  typeof simulatorAttachResponseSchema
+>;
+
+export const simulatorLeaseResponseSchema = simulatorStreamConnectionSchema;
+export type SimulatorLeaseResponse = z.infer<
+  typeof simulatorLeaseResponseSchema
+>;
+
+export const simulatorControlRequestSchema = z
+  .object({ action: simulatorControlActionSchema })
+  .strict();
+export type SimulatorControlRequest = z.infer<
+  typeof simulatorControlRequestSchema
+>;
+
+export const simulatorControlResponseSchema = z
+  .object({ ok: z.literal(true) })
+  .strict();
+export type SimulatorControlResponse = z.infer<
+  typeof simulatorControlResponseSchema
+>;
+
+export const simulatorStopResponseSchema = z
+  .object({ stopped: z.boolean(), deviceUdid: z.string().min(1).nullable() })
+  .strict();
+export type SimulatorStopResponse = z.infer<typeof simulatorStopResponseSchema>;
+
+export const simulatorAccessibilityResponseSchema = z
+  .object({ tree: jsonValueSchema })
+  .strict();
+export type SimulatorAccessibilityResponse = z.infer<
+  typeof simulatorAccessibilityResponseSchema
+>;
+
+export const simulatorScreenshotResponseSchema = z
+  .object({ dataBase64: z.string(), mimeType: z.literal("image/png") })
+  .strict();
+export type SimulatorScreenshotResponse = z.infer<
+  typeof simulatorScreenshotResponseSchema
+>;
 
 export const environmentDiffBranchesQuerySchema = branchListQuerySchema.extend({
   selectedBranch: gitBranchNameSchema.optional(),

@@ -53,6 +53,8 @@ export const ENVIRONMENT_FILE_PREVIEW_QUERY_KEY = "environmentFilePreview";
 export const ENVIRONMENT_PATHS_QUERY_KEY = "environmentPaths";
 export const ENVIRONMENT_WORKSPACE_FILES_QUERY_KEY =
   "environmentWorkspaceFiles";
+export const ENVIRONMENT_SIMULATOR_STATUS_QUERY_KEY =
+  "environmentSimulatorStatus";
 export const THREAD_TIMELINE_QUERY_KEY = "threadTimeline";
 export const THREAD_CONVERSATION_OUTLINE_QUERY_KEY =
   "threadConversationOutline";
@@ -882,6 +884,15 @@ export function environmentQueryKey(
   environmentId: string | null | undefined,
 ): EnvironmentQueryKey {
   return [ENVIRONMENT_QUERY_KEY, environmentId];
+}
+
+export function environmentSimulatorStatusQueryKey(
+  environmentId: string | null | undefined,
+) {
+  return [
+    ENVIRONMENT_SIMULATOR_STATUS_QUERY_KEY,
+    environmentId ?? null,
+  ] as const;
 }
 
 export function environmentWorkStatusQueryKey(
