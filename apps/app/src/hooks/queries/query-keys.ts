@@ -51,6 +51,8 @@ export const ENVIRONMENT_DIFF_PATCH_QUERY_KEY = "environmentDiffPatch";
 export const ENVIRONMENT_DIFF_FILE_QUERY_KEY = "environmentDiffFile";
 export const ENVIRONMENT_FILE_PREVIEW_QUERY_KEY = "environmentFilePreview";
 export const ENVIRONMENT_PATHS_QUERY_KEY = "environmentPaths";
+export const ENVIRONMENT_WORKSPACE_FILES_QUERY_KEY =
+  "environmentWorkspaceFiles";
 export const THREAD_TIMELINE_QUERY_KEY = "threadTimeline";
 export const THREAD_CONVERSATION_OUTLINE_QUERY_KEY =
   "threadConversationOutline";
@@ -437,6 +439,15 @@ export type EnvironmentPathsQueryKeyPrefix = readonly [
   typeof ENVIRONMENT_PATHS_QUERY_KEY,
   string,
 ];
+export type EnvironmentWorkspaceFilesQueryKey = readonly [
+  typeof ENVIRONMENT_WORKSPACE_FILES_QUERY_KEY,
+  string | null | undefined,
+  string | null,
+];
+export type EnvironmentWorkspaceFilesQueryKeyPrefix = readonly [
+  typeof ENVIRONMENT_WORKSPACE_FILES_QUERY_KEY,
+  string,
+];
 export type SystemProvidersQueryKey = readonly [
   typeof SYSTEM_PROVIDERS_QUERY_KEY,
   string | null,
@@ -593,6 +604,19 @@ export function environmentPathsQueryKeyPrefix(
   environmentId: string,
 ): EnvironmentPathsQueryKeyPrefix {
   return [ENVIRONMENT_PATHS_QUERY_KEY, environmentId];
+}
+
+export function environmentWorkspaceFilesQueryKey(
+  environmentId: string | null | undefined,
+  rootPath: string | null,
+): EnvironmentWorkspaceFilesQueryKey {
+  return [ENVIRONMENT_WORKSPACE_FILES_QUERY_KEY, environmentId, rootPath];
+}
+
+export function environmentWorkspaceFilesQueryKeyPrefix(
+  environmentId: string,
+): EnvironmentWorkspaceFilesQueryKeyPrefix {
+  return [ENVIRONMENT_WORKSPACE_FILES_QUERY_KEY, environmentId];
 }
 
 export function projectPromptHistoryQueryKey(

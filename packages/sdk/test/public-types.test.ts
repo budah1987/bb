@@ -367,6 +367,7 @@ type ExpectedThreadsKey =
   | "list"
   | "markRead"
   | "markUnread"
+  | "markViewed"
   | "notes"
   | "open"
   | "output"

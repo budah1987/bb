@@ -1,4 +1,4 @@
-import { useCallback, useEffect, type ReactNode } from "react";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { useAtomValue, useSetAtom } from "jotai";
 import type { WorkspaceDiffTarget } from "@bb/domain";
 import type { MarkdownLinkRouting } from "@/components/ui/markdown-link-routing.js";
@@ -23,6 +23,9 @@ import type {
   WorkspaceFilePreviewStatusLabel,
 } from "@/lib/file-preview";
 import { cn } from "@bb/shared-ui/lib/utils";
+import { appToast } from "@/components/ui/app-toast";
+import { resolveAbsoluteFilePath } from "@/lib/absolute-file-path";
+import { sdk } from "@/lib/sdk";
 import { DiffFilesPanel } from "./git-diff/DiffFilesPanel";
 import { clearDiffFileCardStates } from "./git-diff/diffFilesStore";
 import { buildGitDiffIdentity } from "./git-diff/gitDiffPanelHelpers";
@@ -32,6 +35,7 @@ import {
   SecondaryPanelFilePreview,
   ThreadStorageFilePreview,
 } from "./ThreadStorageFilePreview";
+import { TextFileEditor } from "./TextFileEditor";
 
 const GIT_DIFF_SKELETON_FILE_COUNT = 3;
 const PANEL_SCROLL_SLOT_CLASS =
@@ -60,6 +64,7 @@ export interface WorkspaceFilePreviewTabContentProps {
   activePath: string;
   copyPath?: string | null;
   environmentId?: string | null;
+  hostId?: string | null;
   lineRange: FilePreviewLineRange | null;
   markdownLinkRouting?: MarkdownLinkRouting;
   onSelectionAddToChat?: (text: string) => void;
@@ -67,6 +72,7 @@ export interface WorkspaceFilePreviewTabContentProps {
   source: EnvironmentFilePreviewSource | null;
   statusLabel: WorkspaceFilePreviewStatusLabel | null;
   threadId?: string | null;
+  rootPath?: string | null;
 }
 
 export interface ProjectFilePreviewTabContentProps {
@@ -307,6 +313,7 @@ export function WorkspaceFilePreviewTabContent({
   activePath,
   copyPath = null,
   environmentId,
+  hostId = null,
   lineRange,
   markdownLinkRouting,
   onSelectionAddToChat,
@@ -314,6 +321,7 @@ export function WorkspaceFilePreviewTabContent({
   source,
   statusLabel,
   threadId,
+  rootPath = null,
 }: WorkspaceFilePreviewTabContentProps) {
   const {
     data: workspaceFilePreview,
@@ -322,6 +330,137 @@ export function WorkspaceFilePreviewTabContent({
     isLoading: isWorkspaceFilePreviewLoading,
     refetch: refetchWorkspaceFilePreview,
   } = useEnvironmentFilePreview(environmentId, activePath, source);
+
+  const [isEditing, setIsEditing] = useState(false);
+  const [isReadingForEdit, setIsReadingForEdit] = useState(false);
+  const [isSavingEdit, setIsSavingEdit] = useState(false);
+  const [editorContents, setEditorContents] = useState<string | null>(null);
+  const [editorSha256, setEditorSha256] = useState<string | null>(null);
+  const [editorError, setEditorError] = useState<string | null>(null);
+  const [isEditorConflict, setIsEditorConflict] = useState(false);
+
+  useEffect(() => {
+    setIsEditing(false);
+    setIsReadingForEdit(false);
+    setIsSavingEdit(false);
+    setEditorContents(null);
+    setEditorSha256(null);
+    setEditorError(null);
+    setIsEditorConflict(false);
+  }, [activePath]);
+
+  const absolutePath =
+    rootPath === null
+      ? null
+      : resolveAbsoluteFilePath({ path: activePath, rootPath });
+  const canEdit =
+    source?.kind === "working-tree" &&
+    hostId !== null &&
+    absolutePath !== null &&
+    workspaceFilePreview?.kind === "text";
+
+  const startEditing = useCallback(async () => {
+    if (!canEdit || absolutePath === null || hostId === null) {
+      return;
+    }
+    setIsReadingForEdit(true);
+    setEditorError(null);
+    setIsEditorConflict(false);
+    try {
+      const result = await sdk.files.read({
+        hostId,
+        path: absolutePath,
+        ...(rootPath !== null ? { rootPath } : {}),
+      });
+      if (result.contentEncoding !== "utf8") {
+        throw new Error("This file is not a UTF-8 text file.");
+      }
+      setEditorContents(result.content);
+      setEditorSha256(result.sha256);
+      setIsEditing(true);
+    } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : "Failed to open file for editing";
+      appToast.error("Could not edit file", { description: message });
+    } finally {
+      setIsReadingForEdit(false);
+    }
+  }, [absolutePath, canEdit, hostId, rootPath]);
+
+  const handleSaveEdit = useCallback(
+    async (contents: string) => {
+      if (
+        !canEdit ||
+        absolutePath === null ||
+        hostId === null ||
+        editorSha256 === null
+      ) {
+        return;
+      }
+      setIsSavingEdit(true);
+      setEditorError(null);
+      setIsEditorConflict(false);
+      try {
+        const result = await sdk.files.write({
+          hostId,
+          path: absolutePath,
+          ...(rootPath !== null ? { rootPath } : {}),
+          content: contents,
+          expectedSha256: editorSha256,
+        });
+        if (result.outcome === "conflict") {
+          setEditorError(
+            "The file changed on the host while you were editing.",
+          );
+          setIsEditorConflict(true);
+          return;
+        }
+        setIsEditing(false);
+        setEditorContents(null);
+        setEditorSha256(null);
+        await refetchWorkspaceFilePreview();
+        appToast.success("File saved");
+      } catch (error) {
+        setEditorError(
+          error instanceof Error ? error.message : "Failed to save file",
+        );
+      } finally {
+        setIsSavingEdit(false);
+      }
+    },
+    [
+      absolutePath,
+      canEdit,
+      editorSha256,
+      hostId,
+      refetchWorkspaceFilePreview,
+      rootPath,
+    ],
+  );
+
+  const handleReloadEditor = useCallback(() => {
+    setIsEditing(false);
+    setEditorContents(null);
+    setEditorSha256(null);
+    void startEditing();
+  }, [startEditing]);
+
+  if (isEditing && editorContents !== null) {
+    return (
+      <TextFileEditor
+        path={activePath}
+        initialContents={editorContents}
+        isSaving={isSavingEdit}
+        errorMessage={editorError}
+        isConflict={isEditorConflict}
+        onCancel={() => setIsEditing(false)}
+        onReload={handleReloadEditor}
+        onSave={(contents) => void handleSaveEdit(contents)}
+      />
+    );
+  }
 
   return (
     <SecondaryPanelFilePreview
@@ -339,6 +478,9 @@ export function WorkspaceFilePreviewTabContent({
       lineRange={lineRange}
       markdownLinkRouting={markdownLinkRouting}
       onSelectionAddToChat={onSelectionAddToChat}
+      onEdit={
+        canEdit && !isReadingForEdit ? () => void startEditing() : undefined
+      }
       onOpenInEditor={onOpenInEditor}
       onRefresh={() => void refetchWorkspaceFilePreview()}
       statusLabel={statusLabel}

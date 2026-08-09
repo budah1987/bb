@@ -353,6 +353,7 @@ const commandHandlers: CommandHandlerMap = {
   "project.clone": (command, options) =>
     cloneProject({
       dataDir: options.dataDir,
+      githubAccountLogin: command.githubAccountLogin,
       projectSlug: command.projectSlug,
       remoteUrl: command.remoteUrl,
       ...(command.targetPath !== undefined

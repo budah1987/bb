@@ -1241,6 +1241,12 @@ export const publicApiRoutes = {
       request: noRequest<PathId>(),
       response: jsonResponse<ThreadResponse>(),
     }),
+    viewed: defineRoute({
+      path: "/threads/:id/viewed",
+      method: "post",
+      request: noRequest<PathId>(),
+      response: jsonResponse<ThreadResponse>(),
+    }),
     unread: defineRoute({
       path: "/threads/:id/unread",
       method: "post",

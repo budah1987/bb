@@ -86,6 +86,7 @@ export interface FilePreviewProps {
   copyPath?: string | null;
   headerMode?: FilePreviewHeaderMode;
   onSelectionAddToChat?: (text: string) => void;
+  onEdit?: () => void;
   onOpenInEditor?: (path: string) => void;
   onRefresh?: () => void;
   isRefreshing?: boolean;
@@ -113,6 +114,7 @@ interface FilePreviewHeaderProps {
   path: string;
   copyPath: string | null;
   rawContents: string | null;
+  onEdit?: () => void;
   onOpenInEditor?: (path: string) => void;
   onRefresh?: () => void;
   isRefreshing: boolean;
@@ -433,6 +435,7 @@ export function FilePreview({
   copyPath = null,
   headerMode = "file",
   onSelectionAddToChat,
+  onEdit,
   onOpenInEditor,
   onRefresh,
   isRefreshing = false,
@@ -508,6 +511,7 @@ export function FilePreview({
           path={path}
           copyPath={copyPath}
           rawContents={rawContents}
+          onEdit={onEdit}
           onOpenInEditor={onOpenInEditor}
           onRefresh={onRefresh}
           isRefreshing={isRefreshing}
@@ -615,6 +619,7 @@ function FilePreviewHeader({
   path,
   copyPath,
   rawContents,
+  onEdit,
   onOpenInEditor,
   onRefresh,
   isRefreshing,
@@ -696,6 +701,26 @@ function FilePreviewHeader({
                 </TooltipContent>
               </Tooltip>
             )}
+            {onEdit ? (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className={cn(
+                      FILE_PREVIEW_HEADER_ICON_BUTTON_CLASS,
+                      "shrink-0 text-muted-foreground hover:bg-state-hover hover:text-foreground",
+                    )}
+                    onClick={onEdit}
+                    aria-label="Edit file"
+                  >
+                    <Icon name="EditFile" aria-hidden />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom">Edit file</TooltipContent>
+              </Tooltip>
+            ) : null}
             {onOpenInEditor ? (
               <>
                 <Tooltip>
@@ -773,7 +798,7 @@ function FilePreviewPath({ path, copyPath }: FilePreviewPathProps) {
   const copyTarget = copyPath ?? path;
   const label = "Copy file path";
   const className = cn(
-    "min-w-0 font-mono font-medium leading-5 text-file-accent",
+    "min-w-0 font-sans font-medium leading-5 text-file-accent",
     COARSE_POINTER_TEXT_SM_CLASS,
   );
 

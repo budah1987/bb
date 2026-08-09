@@ -1,11 +1,23 @@
 import type { PluginSidebarThread } from "@bb/plugin-sdk/app";
 
-export type ConversationSignal = "activity" | "unread" | "idle";
+export type ConversationSignal =
+  | "working"
+  | "ready"
+  | "waiting"
+  | "failed"
+  | "awaiting-reply"
+  | "passive";
 
 export function conversationSignal(
   thread: PluginSidebarThread,
 ): ConversationSignal {
-  if (thread.hasPendingInteraction) return "unread";
+  if (
+    thread.hasPendingInteraction ||
+    thread.indicator === "waiting-for-input"
+  ) {
+    return "waiting";
+  }
+  if (thread.indicator === "unread-error") return "failed";
   const { activity } = thread;
   if (
     activity.workflows > 0 ||
@@ -23,31 +35,48 @@ export function conversationSignal(
       "working-draft",
     ].includes(thread.indicator)
   ) {
-    return "activity";
+    return "working";
   }
-  if (thread.isUnread) return "unread";
-  return "idle";
+  if (thread.isUnread || thread.indicator === "unread-success") return "ready";
+  if (
+    thread.indicator === "none" &&
+    thread.lastReadAt !== null &&
+    thread.lastReadAt > thread.latestAttentionAt
+  ) {
+    return "awaiting-reply";
+  }
+  return "passive";
 }
 
 export function workspaceSignal(
   threads: readonly PluginSidebarThread[],
 ): ConversationSignal {
-  if (threads.some((thread) => conversationSignal(thread) === "activity")) {
-    return "activity";
+  const signals = new Set(threads.map(conversationSignal));
+  for (const signal of [
+    "failed",
+    "waiting",
+    "working",
+    "ready",
+    "awaiting-reply",
+  ] as const) {
+    if (signals.has(signal)) return signal;
   }
-  if (threads.some((thread) => conversationSignal(thread) === "unread")) {
-    return "unread";
-  }
-  return "idle";
+  return "passive";
 }
 
 export function signalLabel(signal: ConversationSignal): string | null {
   switch (signal) {
-    case "activity":
+    case "working":
       return "Working";
-    case "unread":
-      return "Needs attention";
-    case "idle":
+    case "ready":
+      return "Ready";
+    case "waiting":
+      return "Waiting";
+    case "failed":
+      return "Failed";
+    case "awaiting-reply":
+      return "Awaiting Reply";
+    case "passive":
       return null;
   }
 }

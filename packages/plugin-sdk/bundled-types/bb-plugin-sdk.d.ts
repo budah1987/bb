@@ -2235,11 +2235,17 @@ declare const createProjectSourceRequestSchema: z$1.ZodDiscriminatedUnion<[z$1.Z
 type CreateProjectSourceRequest = z$1.infer<typeof createProjectSourceRequestSchema>;
 declare const createProjectRequestSchema: z$1.ZodObject<{
     name: z$1.ZodString;
-    source: z$1.ZodObject<{
+    source: z$1.ZodDiscriminatedUnion<[z$1.ZodObject<{
         hostId: z$1.ZodString;
         type: z$1.ZodLiteral<"local_path">;
         path: z$1.ZodPipe<z$1.ZodString, z$1.ZodTransform<string, string>>;
-    }, z$1.core.$strict>;
+    }, z$1.core.$strict>, z$1.ZodObject<{
+        hostId: z$1.ZodString;
+        type: z$1.ZodLiteral<"clone">;
+        targetPath: z$1.ZodOptional<z$1.ZodPipe<z$1.ZodString, z$1.ZodTransform<string, string>>>;
+        remoteUrl: z$1.ZodOptional<z$1.ZodString>;
+    }, z$1.core.$strict>], "type">;
+    githubAccountLogin: z$1.ZodOptional<z$1.ZodNullable<z$1.ZodString>>;
 }, z$1.core.$strip>;
 type CreateProjectRequest = z$1.infer<typeof createProjectRequestSchema>;
 declare const threadSectionSchema: z$1.ZodObject<{
@@ -2467,6 +2473,7 @@ declare const promptHistoryResponseSchema: z$1.ZodArray<z$1.ZodObject<{
 type PromptHistoryResponse = z$1.infer<typeof promptHistoryResponseSchema>;
 declare const updateProjectRequestSchema: z$1.ZodObject<{
     name: z$1.ZodOptional<z$1.ZodString>;
+    githubAccountLogin: z$1.ZodOptional<z$1.ZodNullable<z$1.ZodString>>;
 }, z$1.core.$strip>;
 type UpdateProjectRequest = z$1.infer<typeof updateProjectRequestSchema>;
 declare const updateProjectSourceRequestSchema: z$1.ZodObject<{
@@ -2539,11 +2546,12 @@ type SkillFilesResponse = z$1.infer<typeof skillFilesResponseSchema>;
 declare const projectResponseSchema: z$1.ZodObject<{
     id: z$1.ZodString;
     kind: z$1.ZodEnum<{
-        personal: "personal";
         standard: "standard";
+        personal: "personal";
     }>;
     name: z$1.ZodString;
     gitRemoteUrl: z$1.ZodNullable<z$1.ZodString>;
+    githubAccountLogin: z$1.ZodNullable<z$1.ZodString>;
     createdAt: z$1.ZodNumber;
     updatedAt: z$1.ZodNumber;
     sources: z$1.ZodArray<z$1.ZodObject<{
@@ -2561,11 +2569,12 @@ type ProjectResponse = z$1.infer<typeof projectResponseSchema>;
 declare const projectWithThreadsResponseSchema: z$1.ZodObject<{
     id: z$1.ZodString;
     kind: z$1.ZodEnum<{
-        personal: "personal";
         standard: "standard";
+        personal: "personal";
     }>;
     name: z$1.ZodString;
     gitRemoteUrl: z$1.ZodNullable<z$1.ZodString>;
+    githubAccountLogin: z$1.ZodNullable<z$1.ZodString>;
     createdAt: z$1.ZodNumber;
     updatedAt: z$1.ZodNumber;
     sources: z$1.ZodArray<z$1.ZodObject<{
@@ -2662,8 +2671,8 @@ declare const projectWithThreadsResponseSchema: z$1.ZodObject<{
             ultra: "ultra";
         }>;
         permissionMode: z$1.ZodEnum<{
-            auto: "auto";
             "accept-edits": "accept-edits";
+            auto: "auto";
             full: "full";
         }>;
     }, z$1.core.$strip>>;
@@ -3491,7 +3500,7 @@ declare const githubRepositoryCatalogSchema: z$1.ZodObject<{
         activeAccount: z$1.ZodNullable<z$1.ZodString>;
     }, z$1.core.$strict>>;
     scope: z$1.ZodEnum<{
-        intersection: "intersection";
+        union: "union";
         account: "account";
     }>;
 }, z$1.core.$strict>;
@@ -4795,6 +4804,7 @@ declare const hostDaemonCommandRegistry: {
     }, z$1.core.$strip>, "settled", false>;
     "project.clone": HostDaemonCommandDescriptor<"project.clone", z$1.ZodObject<{
         type: z$1.ZodLiteral<"project.clone">;
+        githubAccountLogin: z$1.ZodDefault<z$1.ZodNullable<z$1.ZodString>>;
         remoteUrl: z$1.ZodString;
         projectSlug: z$1.ZodString;
         targetPath: z$1.ZodOptional<z$1.ZodString>;
@@ -5611,7 +5621,7 @@ declare const hostDaemonCommandRegistry: {
             activeAccount: z$1.ZodNullable<z$1.ZodString>;
         }, z$1.core.$strict>>;
         scope: z$1.ZodEnum<{
-            intersection: "intersection";
+            union: "union";
             account: "account";
         }>;
     }, z$1.core.$strict>, "onlineRpc", true>;
@@ -6722,8 +6732,8 @@ declare const systemExecutionOptionsResponseSchema: z$1.ZodObject<{
             supportsUserQuestion: z$1.ZodBoolean;
             supportsFork: z$1.ZodBoolean;
             supportedPermissionModes: z$1.ZodArray<z$1.ZodEnum<{
-                auto: "auto";
                 "accept-edits": "accept-edits";
+                auto: "auto";
                 full: "full";
             }>>;
         }, z$1.core.$strip>;
@@ -6754,8 +6764,8 @@ declare const systemExecutionOptionsResponseSchema: z$1.ZodObject<{
         available: z$1.ZodBoolean;
     }, z$1.core.$strip>>;
     permissionCeiling: z$1.ZodEnum<{
-        auto: "auto";
         "accept-edits": "accept-edits";
+        auto: "auto";
         full: "full";
     }>;
     models: z$1.ZodArray<z$1.ZodObject<{
@@ -7326,9 +7336,9 @@ declare const terminalSessionSchema: z$1.ZodObject<{
     cols: z$1.ZodNumber;
     rows: z$1.ZodNumber;
     status: z$1.ZodEnum<{
+        running: "running";
         starting: "starting";
         disconnected: "disconnected";
-        running: "running";
         exited: "exited";
     }>;
     exitCode: z$1.ZodNullable<z$1.ZodNumber>;
@@ -7357,9 +7367,9 @@ declare const terminalListResponseSchema: z$1.ZodObject<{
         cols: z$1.ZodNumber;
         rows: z$1.ZodNumber;
         status: z$1.ZodEnum<{
+            running: "running";
             starting: "starting";
             disconnected: "disconnected";
-            running: "running";
             exited: "exited";
         }>;
         exitCode: z$1.ZodNullable<z$1.ZodNumber>;
@@ -8203,10 +8213,10 @@ declare const createThreadRequestSchema: z$1.ZodObject<{
         ultra: "ultra";
     }>>;
     permissionMode: z$1.ZodOptional<z$1.ZodPipe<z$1.ZodUnion<readonly [z$1.ZodEnum<{
-        auto: "auto";
         "accept-edits": "accept-edits";
+        auto: "auto";
         full: "full";
-    }>, z$1.ZodLiteral<"workspace-write">]>, z$1.ZodTransform<"auto" | "accept-edits" | "full", "auto" | "accept-edits" | "full" | "workspace-write">>>;
+    }>, z$1.ZodLiteral<"workspace-write">]>, z$1.ZodTransform<"accept-edits" | "auto" | "full", "accept-edits" | "auto" | "full" | "workspace-write">>>;
     executionInputSources: z$1.ZodOptional<z$1.ZodObject<{
         providerId: z$1.ZodOptional<z$1.ZodEnum<{
             explicit: "explicit";
@@ -8454,10 +8464,10 @@ declare const forkThreadRequestSchema: z$1.ZodObject<{
     }, z$1.core.$strip>>>>;
     title: z$1.ZodOptional<z$1.ZodString>;
     permissionMode: z$1.ZodOptional<z$1.ZodPipe<z$1.ZodUnion<readonly [z$1.ZodEnum<{
-        auto: "auto";
         "accept-edits": "accept-edits";
+        auto: "auto";
         full: "full";
-    }>, z$1.ZodLiteral<"workspace-write">]>, z$1.ZodTransform<"auto" | "accept-edits" | "full", "auto" | "accept-edits" | "full" | "workspace-write">>>;
+    }>, z$1.ZodLiteral<"workspace-write">]>, z$1.ZodTransform<"accept-edits" | "auto" | "full", "accept-edits" | "auto" | "full" | "workspace-write">>>;
     visibility: z$1.ZodDefault<z$1.ZodEnum<{
         visible: "visible";
         hidden: "hidden";
@@ -8573,10 +8583,10 @@ declare const sendMessageRequestSchema: z$1.ZodObject<{
         ultra: "ultra";
     }>>;
     permissionMode: z$1.ZodOptional<z$1.ZodPipe<z$1.ZodUnion<readonly [z$1.ZodEnum<{
-        auto: "auto";
         "accept-edits": "accept-edits";
+        auto: "auto";
         full: "full";
-    }>, z$1.ZodLiteral<"workspace-write">]>, z$1.ZodTransform<"auto" | "accept-edits" | "full", "auto" | "accept-edits" | "full" | "workspace-write">>>;
+    }>, z$1.ZodLiteral<"workspace-write">]>, z$1.ZodTransform<"accept-edits" | "auto" | "full", "accept-edits" | "auto" | "full" | "workspace-write">>>;
     executionInputSources: z$1.ZodOptional<z$1.ZodObject<{
         model: z$1.ZodOptional<z$1.ZodEnum<{
             explicit: "explicit";
@@ -8703,10 +8713,10 @@ declare const createQueuedMessageRequestSchema: z$1.ZodObject<{
         ultra: "ultra";
     }>>;
     permissionMode: z$1.ZodOptional<z$1.ZodPipe<z$1.ZodUnion<readonly [z$1.ZodEnum<{
-        auto: "auto";
         "accept-edits": "accept-edits";
+        auto: "auto";
         full: "full";
-    }>, z$1.ZodLiteral<"workspace-write">]>, z$1.ZodTransform<"auto" | "accept-edits" | "full", "auto" | "accept-edits" | "full" | "workspace-write">>>;
+    }>, z$1.ZodLiteral<"workspace-write">]>, z$1.ZodTransform<"accept-edits" | "auto" | "full", "accept-edits" | "auto" | "full" | "workspace-write">>>;
     executionInputSources: z$1.ZodOptional<z$1.ZodObject<{
         model: z$1.ZodOptional<z$1.ZodEnum<{
             explicit: "explicit";
@@ -8928,8 +8938,8 @@ declare const sendQueuedMessageResponseSchema: z$1.ZodObject<{
             ultra: "ultra";
         }>;
         permissionMode: z$1.ZodEnum<{
-            auto: "auto";
             "accept-edits": "accept-edits";
+            auto: "auto";
             full: "full";
         }>;
         serviceTier: z$1.ZodEnum<{
@@ -9298,9 +9308,9 @@ declare const threadWithIncludesResponseSchema: z$1.ZodObject<{
         isGitRepo: z$1.ZodBoolean;
         isWorktree: z$1.ZodBoolean;
         workspaceProvisionType: z$1.ZodEnum<{
-            unmanaged: "unmanaged";
-            "managed-worktree": "managed-worktree";
             personal: "personal";
+            "managed-worktree": "managed-worktree";
+            unmanaged: "unmanaged";
         }>;
         branchName: z$1.ZodNullable<z$1.ZodString>;
         baseBranch: z$1.ZodNullable<z$1.ZodString>;
@@ -9329,8 +9339,8 @@ declare const threadWithIncludesResponseSchema: z$1.ZodObject<{
             connected: "connected";
         }>;
         maxPermissionMode: z$1.ZodEnum<{
-            auto: "auto";
             "accept-edits": "accept-edits";
+            auto: "auto";
             full: "full";
         }>;
         lastSeenAt: z$1.ZodNullable<z$1.ZodNumber>;
@@ -9600,8 +9610,8 @@ declare const threadQueuedMessageListResponseSchema: z$1.ZodArray<z$1.ZodObject<
         ultra: "ultra";
     }>;
     permissionMode: z$1.ZodEnum<{
-        auto: "auto";
         "accept-edits": "accept-edits";
+        auto: "auto";
         full: "full";
     }>;
     serviceTier: z$1.ZodEnum<{
@@ -9954,8 +9964,8 @@ declare const threadTimelineResponseSchema: z$1.ZodObject<{
         updatedAt: z$1.ZodNumber;
         objective: z$1.ZodString;
         status: z$1.ZodEnum<{
-            active: "active";
             paused: "paused";
+            active: "active";
             budgetLimited: "budgetLimited";
             complete: "complete";
         }>;
@@ -9969,8 +9979,8 @@ declare const threadTimelineResponseSchema: z$1.ZodObject<{
         originalModel: z$1.ZodString;
         fallbackModel: z$1.ZodString;
         reason: z$1.ZodEnum<{
-            refusal: "refusal";
             provider: "provider";
+            refusal: "refusal";
         }>;
         message: z$1.ZodString;
     }, z$1.core.$strip>>;
@@ -10709,6 +10719,8 @@ interface PluginSidebarProject {
      * is not backed by a remote repository.
      */
     experimental_gitRemoteUrl?: string | null;
+    /** Default GitHub identity for new workspaces in this repository. */
+    experimental_githubAccountLogin?: string | null;
 }
 interface PluginSidebarThreadsState {
     status: "loading" | "ready" | "error";
@@ -12777,6 +12789,7 @@ interface ThreadsArea {
     list(args?: ThreadListArgs): Promise<ThreadListResult>;
     markRead(args: ThreadActionArgs): Promise<ThreadReadStateResult>;
     markUnread(args: ThreadActionArgs): Promise<ThreadReadStateResult>;
+    markViewed(args: ThreadActionArgs): Promise<ThreadReadStateResult>;
     open(args: ThreadOpenArgs): Promise<ThreadOpenResult>;
     paneAction(args: ThreadPaneActionArgs): Promise<ThreadPaneActionResult>;
     output(args: ThreadOutputArgs): Promise<ThreadOutputResponse>;

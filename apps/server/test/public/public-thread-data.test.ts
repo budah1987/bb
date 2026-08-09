@@ -2148,10 +2148,22 @@ describe("public thread data routes", () => {
       const readThread = threadReadResponseSchema.parse(
         await readJson(readResponse),
       );
-      expect(readThread.lastReadAt).toBeTypeOf("number");
+      expect(readThread.lastReadAt).toBe(thread.latestAttentionAt);
       const threadAfterRead = getThread(harness.db, thread.id);
-      expect(threadAfterRead?.lastReadAt).toBeTypeOf("number");
+      expect(threadAfterRead?.lastReadAt).toBe(thread.latestAttentionAt);
       expect(threadAfterRead?.latestAttentionAt).toBe(thread.latestAttentionAt);
+
+      const viewedResponse = await harness.app.request(
+        `/api/v1/threads/${thread.id}/viewed`,
+        {
+          method: "POST",
+        },
+      );
+      expect(viewedResponse.status).toBe(200);
+      const viewedThread = threadReadResponseSchema.parse(
+        await readJson(viewedResponse),
+      );
+      expect(viewedThread.lastReadAt).toBeGreaterThan(thread.latestAttentionAt);
 
       const unreadResponse = await harness.app.request(
         `/api/v1/threads/${thread.id}/unread`,

@@ -7,6 +7,7 @@ import {
   deleteProjectSource,
   getProjectSourceByHost,
   getProjectSourceForProject,
+  getDefaultProjectSource,
   listProjectExecutionDefaultsByProjectIds,
   listPublicProjects,
   listProjectSourcesByProjectIds,
@@ -81,7 +82,11 @@ import { parseFileListLimit } from "./file-list-query.js";
 import { parseSafeRelativeRoutePath } from "./relative-route-path.js";
 import { resolveSkillCatalog } from "../services/skills/skill-catalog.js";
 import { resolveWorkspaceProjectSkills } from "../services/skills/workspace-skills.js";
-import { assertUsableHostId } from "../services/hosts/primary-host.js";
+import { getGithubRepositories } from "../services/system/github-repositories.js";
+import {
+  assertUsableHostId,
+  requirePrimaryHostId,
+} from "../services/hosts/primary-host.js";
 import {
   resolveProjectCommandWorkspace,
   resolveProjectWorkspaceTarget,
@@ -91,6 +96,60 @@ type ProjectResponseProjectFields = Omit<ProjectResponse, "sources">;
 type ProjectResponseRow = ProjectResponseProjectFields;
 const PROJECT_CLONE_TIMEOUT_MS = 20 * 60 * 1000;
 
+function githubRepositoryName(remoteUrl: string | null): string | null {
+  if (!remoteUrl) return null;
+  const match = remoteUrl
+    .trim()
+    .match(/github\.com[:/]([^/\s]+)\/([^/\s]+?)(?:\.git)?\/?$/u);
+  return match ? `${match[1]}/${match[2]}` : null;
+}
+
+async function resolveGithubAccountForRepository(
+  deps: AppDeps,
+  args: { hostId: string; remoteUrl: string | null; requestedLogin: string },
+): Promise<string> {
+  const repositoryName = githubRepositoryName(args.remoteUrl);
+  if (!repositoryName) {
+    throw new ApiError(
+      400,
+      "invalid_request",
+      "A GitHub account can only be assigned to a GitHub repository",
+    );
+  }
+  const catalog = await getGithubRepositories(deps, { hostId: args.hostId });
+  const repository = catalog.repositories.find(
+    (candidate) =>
+      candidate.nameWithOwner.toLocaleLowerCase() ===
+      repositoryName.toLocaleLowerCase(),
+  );
+  const account = catalog.accounts.find(
+    (candidate) =>
+      candidate.login.toLocaleLowerCase() ===
+      args.requestedLogin.toLocaleLowerCase(),
+  );
+  if (!account) {
+    throw new ApiError(
+      400,
+      "invalid_request",
+      `GitHub account @${args.requestedLogin} is not authenticated on this machine`,
+    );
+  }
+  if (
+    !repository ||
+    !repository.accessibleBy.some(
+      (login) =>
+        login.toLocaleLowerCase() === account.login.toLocaleLowerCase(),
+    )
+  ) {
+    throw new ApiError(
+      400,
+      "invalid_request",
+      `GitHub account @${account.login} cannot access ${repositoryName}`,
+    );
+  }
+  return account.login;
+}
+
 function toProjectResponseProjectFields(
   project: ProjectResponseRow,
 ): ProjectResponseProjectFields {
@@ -99,6 +158,7 @@ function toProjectResponseProjectFields(
     kind: project.kind,
     name: project.name,
     gitRemoteUrl: project.gitRemoteUrl,
+    githubAccountLogin: project.githubAccountLogin,
     createdAt: project.createdAt,
     updatedAt: project.updatedAt,
   };
@@ -351,14 +411,62 @@ export function registerProjectRoutes(app: Hono, deps: AppDeps): void {
 
   post(routes.create, async (context, payload) => {
     const { source } = payload;
-    if (source.type === "local_path") {
-      requireNonDestroyedHostWithStatus(deps, source.hostId);
-      assertUsableHostId(deps, { hostId: source.hostId });
+    requireNonDestroyedHostWithStatus(deps, source.hostId);
+    assertUsableHostId(deps, { hostId: source.hostId });
+
+    let resolvedSource: { type: "local_path"; hostId: string; path: string };
+    let gitRemoteUrl: string | null;
+    let githubAccountLogin = payload.githubAccountLogin ?? null;
+    if (source.type === "clone") {
+      if (!source.remoteUrl) {
+        throw new ApiError(
+          400,
+          "missing_git_remote",
+          "A remoteUrl is required when creating a project from a clone",
+        );
+      }
+      if (githubAccountLogin !== null) {
+        githubAccountLogin = await resolveGithubAccountForRepository(deps, {
+          hostId: source.hostId,
+          remoteUrl: source.remoteUrl,
+          requestedLogin: githubAccountLogin,
+        });
+      }
+      const resolved = await runLiveHostCommand(deps, {
+        hostId: source.hostId,
+        timeoutMs: PROJECT_CLONE_TIMEOUT_MS,
+        command: {
+          type: "project.clone",
+          githubAccountLogin,
+          remoteUrl: source.remoteUrl,
+          projectSlug: payload.name,
+          ...(source.targetPath !== undefined
+            ? { targetPath: source.targetPath }
+            : {}),
+        },
+      });
+      resolvedSource = {
+        type: "local_path",
+        hostId: source.hostId,
+        path: resolved.path,
+      };
+      gitRemoteUrl = resolved.gitRemoteUrl ?? source.remoteUrl;
+    } else {
+      resolvedSource = source;
+      gitRemoteUrl = await inspectProjectGitRemoteBestEffort(deps, source);
+      if (githubAccountLogin !== null) {
+        githubAccountLogin = await resolveGithubAccountForRepository(deps, {
+          hostId: source.hostId,
+          remoteUrl: gitRemoteUrl,
+          requestedLogin: githubAccountLogin,
+        });
+      }
     }
-    const gitRemoteUrl = await inspectProjectGitRemoteBestEffort(deps, source);
+
     const { project } = createProject(deps.db, deps.hub, {
       name: payload.name,
-      source,
+      source: resolvedSource,
+      githubAccountLogin,
     });
     if (gitRemoteUrl !== null) {
       setProjectGitRemoteUrlIfMissing(
@@ -403,17 +511,38 @@ export function registerProjectRoutes(app: Hono, deps: AppDeps): void {
   });
 
   patch(routes.update, async (context, payload) => {
-    requirePublicStandardProject(deps.db, context.req.param("id"));
-    const project = updateProject(
-      deps.db,
-      deps.hub,
-      context.req.param("id"),
-      payload,
-    );
-    if (!project) {
+    const projectId = context.req.param("id");
+    const project = requirePublicStandardProject(deps.db, projectId);
+    let update = payload;
+    if (
+      payload.githubAccountLogin !== undefined &&
+      payload.githubAccountLogin !== null
+    ) {
+      const source = getDefaultProjectSource(deps.db, projectId);
+      const hostId = source?.hostId ?? requirePrimaryHostId(deps);
+      assertUsableHostId(deps, { hostId });
+      const requestedLogin = payload.githubAccountLogin;
+      if (requestedLogin === null || requestedLogin === undefined) {
+        throw new ApiError(
+          400,
+          "invalid_request",
+          "GitHub account is required",
+        );
+      }
+      update = {
+        ...payload,
+        githubAccountLogin: await resolveGithubAccountForRepository(deps, {
+          hostId,
+          remoteUrl: project.gitRemoteUrl,
+          requestedLogin,
+        }),
+      };
+    }
+    const updatedProject = updateProject(deps.db, deps.hub, projectId, update);
+    if (!updatedProject) {
       throw new ApiError(404, "project_not_found", "Project not found");
     }
-    return context.json(buildProjectResponses(deps, project.id)[0]);
+    return context.json(buildProjectResponses(deps, updatedProject.id)[0]);
   });
 
   patch(routes.reorder, async (context, payload) => {
@@ -466,11 +595,20 @@ export function registerProjectRoutes(app: Hono, deps: AppDeps): void {
           "A remoteUrl is required because this project has no git remote anchor",
         );
       }
+      const githubAccountLogin =
+        project.githubAccountLogin === null
+          ? null
+          : await resolveGithubAccountForRepository(deps, {
+              hostId: payload.hostId,
+              remoteUrl,
+              requestedLogin: project.githubAccountLogin,
+            });
       resolved = await runLiveHostCommand(deps, {
         hostId: payload.hostId,
         timeoutMs: PROJECT_CLONE_TIMEOUT_MS,
         command: {
           type: "project.clone",
+          githubAccountLogin,
           remoteUrl,
           projectSlug: project.name,
           ...(payload.targetPath !== undefined

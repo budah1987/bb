@@ -499,6 +499,8 @@ export interface PluginSidebarProject {
    * is not backed by a remote repository.
    */
   experimental_gitRemoteUrl?: string | null;
+  /** Default GitHub identity for new workspaces in this repository. */
+  experimental_githubAccountLogin?: string | null;
 }
 
 export interface PluginSidebarThreadsState {

@@ -11,6 +11,7 @@ import {
   promptHistoryEntrySchema,
   threadListEntrySchema,
 } from "@bb/domain";
+import { githubAccountLoginSchema } from "@bb/host-daemon-contract";
 import {
   branchListQuerySchema,
   isCommaSeparatedIncludeQueryValue,
@@ -61,7 +62,8 @@ export type CreateProjectSourceRequest = z.infer<
 
 export const createProjectRequestSchema = z.object({
   name: z.string().min(1),
-  source: createLocalPathProjectSourceRequestSchema,
+  source: createProjectSourceRequestSchema,
+  githubAccountLogin: githubAccountLoginSchema.nullable().optional(),
 });
 export type CreateProjectRequest = z.infer<typeof createProjectRequestSchema>;
 
@@ -256,6 +258,7 @@ export type ProjectAttachmentUploadForm = Record<"file", Blob>;
 export const updateProjectRequestSchema = z
   .object({
     name: z.string().min(1),
+    githubAccountLogin: githubAccountLoginSchema.nullable(),
   })
   .partial()
   .refine(

@@ -132,6 +132,8 @@ message agents, or inspect projects, providers, and environments.
   context variables. Omitted execution flags use remembered project defaults;
   without a remembered model, bb uses the explicitly requested provider or
   Codex and resolves its provider-reported default model on the target machine.
+- Use `bb thread read <id>` to acknowledge a viewed response and clear its
+  Awaiting Reply state. Use `bb thread unread <id>` to restore unread state.
 - Use `--branch-name <name> --base-branch <base>` to create a named branch in
   the current checkout, or add `--new-environment worktree` for an isolated
   worktree. Use `--pull-request <number>` to fetch a GitHub PR head; combine it
@@ -211,9 +213,14 @@ status|install` to inspect or install provider CLIs on a selected machine.
   provider CLI install/update sequentially; update bb-app itself with the
   printed upgrade command or the desktop relaunch.
 - Use `bb project create --name <name> --root <path> --machine <id-or-name>`
-  to bind a new project's local path to a connected enrolled machine. Use
-  `--host` as an alias. Omitting both selectors preserves the existing local
-  CLI machine fallback (normally the primary machine).
+  to bind a new project's local path to a connected enrolled machine, or use
+  `--remote-url <url>` to clone a repository first. Use `--host` as an alias.
+  `--github-account <login>` sets the default identity inherited by new
+  workspaces. Omitting both selectors preserves the existing local CLI machine
+  fallback (normally the primary machine).
+- Use `bb project update <project-id> --github-account <login>` to change the
+  repository default, or `--clear-github-account` to remove it. An explicit
+  workspace account still takes precedence.
 - `bb project list` preserves the ordinary-project-only default. Pass
   `--include-personal` when the singleton personal project must be discoverable.
 - Use `bb project github-repositories [--machine <id-or-name>]` to list only

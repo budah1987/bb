@@ -341,7 +341,38 @@ export function useMarkThreadRead() {
       errorMessage: "Failed to mark thread read.",
       showErrorToast: false,
     },
-    mutationFn: (threadId: string) => sdk.threads.markRead({ threadId }),
+    mutationFn: (thread: Pick<ThreadResponse, "id" | "latestAttentionAt">) =>
+      sdk.threads.markRead({ threadId: thread.id }),
+    onMutate: (
+      thread: Pick<ThreadResponse, "id" | "latestAttentionAt">,
+    ): Promise<ThreadListMutationTransaction> =>
+      beginThreadReadStateTransaction({
+        lastReadAt: thread.latestAttentionAt,
+        queryClient,
+        threadId: thread.id,
+      }),
+    onError: (_error, thread, context) => {
+      rollbackThreadListMutationTransaction({
+        queryClient,
+        threadId: thread.id,
+        transaction: context,
+      });
+    },
+    onSuccess: (thread) => {
+      applyThreadReadStateResult({ queryClient, thread });
+    },
+  });
+}
+
+export function useMarkThreadViewed() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    meta: {
+      errorMessage: "Failed to mark thread viewed.",
+      showErrorToast: false,
+    },
+    mutationFn: (threadId: string) => sdk.threads.markViewed({ threadId }),
     onMutate: (threadId): Promise<ThreadListMutationTransaction> =>
       beginThreadReadStateTransaction({
         lastReadAt: Date.now(),
