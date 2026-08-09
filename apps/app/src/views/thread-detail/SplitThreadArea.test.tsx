@@ -2269,7 +2269,7 @@ describe("SplitThreadArea", () => {
       expect(storedSplitLayout(store).focusedPaneId).toBe("pane-2");
     });
 
-    it("ignores unvalidated history state in the installed app", async () => {
+    it("keeps the workspace when the root page has no navigation state", async () => {
       stubStandaloneDisplayMode(true);
       const store = renderSplitArea({
         path: "/",
@@ -2278,12 +2278,11 @@ describe("SplitThreadArea", () => {
         locationState: { kind: "some-other-intent", returnPath: "/" },
       });
 
-      await waitFor(() => {
-        expect(paneContents(store)).toEqual([
-          threadContent("thr-a"),
-          newThreadContent,
-        ]);
-      });
+      expect(await screen.findByTestId("root-compose-view")).toBeTruthy();
+      expect(paneContents(store)).toEqual([
+        threadContent("thr-a"),
+        threadContent("thr-b"),
+      ]);
     });
   });
 
@@ -2913,7 +2912,7 @@ describe("SplitThreadArea", () => {
       await waitFor(() => expect(locationPath()).toBe("/"));
     });
 
-    it("keeps a direct root route as the plain New thread page", async () => {
+    it("keeps a direct root route as the Command Center after restart", async () => {
       renderSplitArea({
         path: "/",
         layout: twoPaneLayout("pane-2"),
@@ -2921,7 +2920,9 @@ describe("SplitThreadArea", () => {
       });
 
       expect(await screen.findByTestId("root-compose-view")).toBeTruthy();
-      expect(screen.queryByTestId("compact-command-center-intro")).toBeNull();
+      expect(
+        await screen.findByTestId("compact-command-center-intro"),
+      ).toBeTruthy();
     });
   });
 
