@@ -73,6 +73,7 @@ import {
 } from "@/lib/command-center-navigation";
 import { splitLayoutAtom } from "@/lib/split-layout/atoms";
 import type { SplitLayout } from "@/lib/split-layout";
+import { SidebarUsageLimits } from "@/components/usage/CompactUsageLimits";
 
 const NEW_THREAD_PANE_CONTENT = { kind: "new-thread" } as const;
 
@@ -515,6 +516,7 @@ export function AppSidebar({
             builtInThreadList
           )}
         </SidebarContent>
+        <SidebarUsageLimits />
         <SidebarFooter className="relative">
           <OverflowFade placement="above" tone="sidebar" size="sm" />
           {/* The footer holds a variable number of plugin action buttons, so a
