@@ -73,6 +73,7 @@ declare const appKeybindingOverridesSchema: z$1.ZodArray<z$1.ZodObject<{
         "panel.newTab": "panel.newTab";
         "panel.close": "panel.close";
         "panel.toggle": "panel.toggle";
+        "rail.toggle": "rail.toggle";
         "file.quickOpen": "file.quickOpen";
         "diff.toggle": "diff.toggle";
         "terminal.open": "terminal.open";
@@ -159,6 +160,7 @@ declare const changedMessageSchema: z$1.ZodDiscriminatedUnion<[z$1.ZodObject<{
         "order-changed": "order-changed";
         "tabs-changed": "tabs-changed";
         "terminals-changed": "terminals-changed";
+        "notes-changed": "notes-changed";
     }>>>;
 }, z$1.core.$strict>, z$1.ZodObject<{
     type: z$1.ZodLiteral<"changed">;
@@ -314,8 +316,8 @@ declare const providerPendingInteractionSchema: z$1.ZodObject<{
     id: z$1.ZodString;
     threadId: z$1.ZodString;
     status: z$1.ZodEnum<{
-        pending: "pending";
         interrupted: "interrupted";
+        pending: "pending";
         resolving: "resolving";
         resolved: "resolved";
     }>;
@@ -452,8 +454,8 @@ declare const pluginPendingInteractionSchema: z$1.ZodObject<{
     id: z$1.ZodString;
     threadId: z$1.ZodString;
     status: z$1.ZodEnum<{
-        pending: "pending";
         interrupted: "interrupted";
+        pending: "pending";
         resolving: "resolving";
         resolved: "resolved";
     }>;
@@ -700,8 +702,8 @@ declare const threadEventSchema: z$1.ZodPipe<z$1.ZodUnknown, z$1.ZodUnion<readon
     providerThreadId: z$1.ZodString;
     objective: z$1.ZodString;
     status: z$1.ZodEnum<{
-        paused: "paused";
         active: "active";
+        paused: "paused";
         budgetLimited: "budgetLimited";
         complete: "complete";
     }>;
@@ -745,10 +747,10 @@ declare const threadEventSchema: z$1.ZodPipe<z$1.ZodUnknown, z$1.ZodUnion<readon
         command: z$1.ZodString;
         cwd: z$1.ZodString;
         status: z$1.ZodEnum<{
-            pending: "pending";
             completed: "completed";
             failed: "failed";
             interrupted: "interrupted";
+            pending: "pending";
         }>;
         approvalStatus: z$1.ZodNullable<z$1.ZodEnum<{
             waiting_for_approval: "waiting_for_approval";
@@ -792,10 +794,10 @@ declare const threadEventSchema: z$1.ZodPipe<z$1.ZodUnknown, z$1.ZodUnion<readon
             diff: z$1.ZodOptional<z$1.ZodString>;
         }, z$1.core.$strip>>;
         status: z$1.ZodEnum<{
-            pending: "pending";
             completed: "completed";
             failed: "failed";
             interrupted: "interrupted";
+            pending: "pending";
         }>;
         approvalStatus: z$1.ZodNullable<z$1.ZodEnum<{
             waiting_for_approval: "waiting_for_approval";
@@ -832,10 +834,10 @@ declare const threadEventSchema: z$1.ZodPipe<z$1.ZodUnknown, z$1.ZodUnion<readon
             completed: z$1.ZodString;
         }, z$1.core.$strip>>;
         status: z$1.ZodEnum<{
-            pending: "pending";
             completed: "completed";
             failed: "failed";
             interrupted: "interrupted";
+            pending: "pending";
         }>;
         result: z$1.ZodOptional<z$1.ZodUnknown>;
         error: z$1.ZodOptional<z$1.ZodString>;
@@ -882,17 +884,17 @@ declare const threadEventSchema: z$1.ZodPipe<z$1.ZodUnknown, z$1.ZodUnion<readon
         taskType: z$1.ZodString;
         description: z$1.ZodString;
         status: z$1.ZodEnum<{
-            pending: "pending";
             completed: "completed";
             failed: "failed";
             interrupted: "interrupted";
+            pending: "pending";
         }>;
         taskStatus: z$1.ZodEnum<{
-            pending: "pending";
-            running: "running";
-            paused: "paused";
             completed: "completed";
             failed: "failed";
+            paused: "paused";
+            pending: "pending";
+            running: "running";
             killed: "killed";
             stopped: "stopped";
         }>;
@@ -908,8 +910,8 @@ declare const threadEventSchema: z$1.ZodPipe<z$1.ZodUnknown, z$1.ZodUnion<readon
                 index: z$1.ZodNumber;
                 label: z$1.ZodString;
                 state: z$1.ZodEnum<{
-                    running: "running";
                     failed: "failed";
+                    running: "running";
                     queued: "queued";
                     done: "done";
                     skipped: "skipped";
@@ -977,10 +979,10 @@ declare const threadEventSchema: z$1.ZodPipe<z$1.ZodUnknown, z$1.ZodUnion<readon
         command: z$1.ZodString;
         cwd: z$1.ZodString;
         status: z$1.ZodEnum<{
-            pending: "pending";
             completed: "completed";
             failed: "failed";
             interrupted: "interrupted";
+            pending: "pending";
         }>;
         approvalStatus: z$1.ZodNullable<z$1.ZodEnum<{
             waiting_for_approval: "waiting_for_approval";
@@ -1024,10 +1026,10 @@ declare const threadEventSchema: z$1.ZodPipe<z$1.ZodUnknown, z$1.ZodUnion<readon
             diff: z$1.ZodOptional<z$1.ZodString>;
         }, z$1.core.$strip>>;
         status: z$1.ZodEnum<{
-            pending: "pending";
             completed: "completed";
             failed: "failed";
             interrupted: "interrupted";
+            pending: "pending";
         }>;
         approvalStatus: z$1.ZodNullable<z$1.ZodEnum<{
             waiting_for_approval: "waiting_for_approval";
@@ -1064,10 +1066,10 @@ declare const threadEventSchema: z$1.ZodPipe<z$1.ZodUnknown, z$1.ZodUnion<readon
             completed: z$1.ZodString;
         }, z$1.core.$strip>>;
         status: z$1.ZodEnum<{
-            pending: "pending";
             completed: "completed";
             failed: "failed";
             interrupted: "interrupted";
+            pending: "pending";
         }>;
         result: z$1.ZodOptional<z$1.ZodUnknown>;
         error: z$1.ZodOptional<z$1.ZodString>;
@@ -1114,17 +1116,17 @@ declare const threadEventSchema: z$1.ZodPipe<z$1.ZodUnknown, z$1.ZodUnion<readon
         taskType: z$1.ZodString;
         description: z$1.ZodString;
         status: z$1.ZodEnum<{
-            pending: "pending";
             completed: "completed";
             failed: "failed";
             interrupted: "interrupted";
+            pending: "pending";
         }>;
         taskStatus: z$1.ZodEnum<{
-            pending: "pending";
-            running: "running";
-            paused: "paused";
             completed: "completed";
             failed: "failed";
+            paused: "paused";
+            pending: "pending";
+            running: "running";
             killed: "killed";
             stopped: "stopped";
         }>;
@@ -1140,8 +1142,8 @@ declare const threadEventSchema: z$1.ZodPipe<z$1.ZodUnknown, z$1.ZodUnion<readon
                 index: z$1.ZodNumber;
                 label: z$1.ZodString;
                 state: z$1.ZodEnum<{
-                    running: "running";
                     failed: "failed";
+                    running: "running";
                     queued: "queued";
                     done: "done";
                     skipped: "skipped";
@@ -1243,17 +1245,17 @@ declare const threadEventSchema: z$1.ZodPipe<z$1.ZodUnknown, z$1.ZodUnion<readon
         taskType: z$1.ZodString;
         description: z$1.ZodString;
         status: z$1.ZodEnum<{
-            pending: "pending";
             completed: "completed";
             failed: "failed";
             interrupted: "interrupted";
+            pending: "pending";
         }>;
         taskStatus: z$1.ZodEnum<{
-            pending: "pending";
-            running: "running";
-            paused: "paused";
             completed: "completed";
             failed: "failed";
+            paused: "paused";
+            pending: "pending";
+            running: "running";
             killed: "killed";
             stopped: "stopped";
         }>;
@@ -1269,8 +1271,8 @@ declare const threadEventSchema: z$1.ZodPipe<z$1.ZodUnknown, z$1.ZodUnion<readon
                 index: z$1.ZodNumber;
                 label: z$1.ZodString;
                 state: z$1.ZodEnum<{
-                    running: "running";
                     failed: "failed";
+                    running: "running";
                     queued: "queued";
                     done: "done";
                     skipped: "skipped";
@@ -1315,17 +1317,17 @@ declare const threadEventSchema: z$1.ZodPipe<z$1.ZodUnknown, z$1.ZodUnion<readon
         taskType: z$1.ZodString;
         description: z$1.ZodString;
         status: z$1.ZodEnum<{
-            pending: "pending";
             completed: "completed";
             failed: "failed";
             interrupted: "interrupted";
+            pending: "pending";
         }>;
         taskStatus: z$1.ZodEnum<{
-            pending: "pending";
-            running: "running";
-            paused: "paused";
             completed: "completed";
             failed: "failed";
+            paused: "paused";
+            pending: "pending";
+            running: "running";
             killed: "killed";
             stopped: "stopped";
         }>;
@@ -1341,8 +1343,8 @@ declare const threadEventSchema: z$1.ZodPipe<z$1.ZodUnknown, z$1.ZodUnion<readon
                 index: z$1.ZodNumber;
                 label: z$1.ZodString;
                 state: z$1.ZodEnum<{
-                    running: "running";
                     failed: "failed";
+                    running: "running";
                     queued: "queued";
                     done: "done";
                     skipped: "skipped";
@@ -1414,10 +1416,10 @@ declare const threadEventSchema: z$1.ZodPipe<z$1.ZodUnknown, z$1.ZodUnion<readon
     plan: z$1.ZodArray<z$1.ZodObject<{
         step: z$1.ZodString;
         status: z$1.ZodOptional<z$1.ZodEnum<{
-            pending: "pending";
             completed: "completed";
             failed: "failed";
             active: "active";
+            pending: "pending";
         }>>;
     }, z$1.core.$strip>>;
     explanation: z$1.ZodOptional<z$1.ZodString>;
@@ -1820,8 +1822,8 @@ declare const threadEventSchema: z$1.ZodPipe<z$1.ZodUnknown, z$1.ZodUnion<readon
     providerId: z$1.ZodString;
     providerRequestId: z$1.ZodString;
     status: z$1.ZodEnum<{
-        pending: "pending";
         interrupted: "interrupted";
+        pending: "pending";
         resolving: "resolving";
         resolved: "resolved";
     }>;
@@ -1872,8 +1874,8 @@ declare const threadEventSchema: z$1.ZodPipe<z$1.ZodUnknown, z$1.ZodUnion<readon
     providerId: z$1.ZodString;
     providerRequestId: z$1.ZodString;
     status: z$1.ZodEnum<{
-        pending: "pending";
         interrupted: "interrupted";
+        pending: "pending";
         resolving: "resolving";
         resolved: "resolved";
     }>;
@@ -2042,8 +2044,8 @@ declare const threadTimelinePendingTodosSchema: z$1.ZodObject<{
         id: z$1.ZodString;
         text: z$1.ZodString;
         status: z$1.ZodEnum<{
-            pending: "pending";
             completed: "completed";
+            pending: "pending";
             in_progress: "in_progress";
         }>;
     }, z$1.core.$strip>>;
@@ -6968,6 +6970,7 @@ declare const systemConfigResponseSchema: z$1.ZodObject<{
             "panel.newTab": "panel.newTab";
             "panel.close": "panel.close";
             "panel.toggle": "panel.toggle";
+            "rail.toggle": "rail.toggle";
             "file.quickOpen": "file.quickOpen";
             "diff.toggle": "diff.toggle";
             "terminal.open": "terminal.open";
@@ -7060,6 +7063,7 @@ declare const systemConfigResponseSchema: z$1.ZodObject<{
             "panel.newTab": "panel.newTab";
             "panel.close": "panel.close";
             "panel.toggle": "panel.toggle";
+            "rail.toggle": "rail.toggle";
             "file.quickOpen": "file.quickOpen";
             "diff.toggle": "diff.toggle";
             "terminal.open": "terminal.open";
@@ -7152,6 +7156,7 @@ declare const systemConfigResponseSchema: z$1.ZodObject<{
             "panel.newTab": "panel.newTab";
             "panel.close": "panel.close";
             "panel.toggle": "panel.toggle";
+            "rail.toggle": "rail.toggle";
             "file.quickOpen": "file.quickOpen";
             "diff.toggle": "diff.toggle";
             "terminal.open": "terminal.open";
@@ -10035,6 +10040,19 @@ declare const threadStoragePathListResponseSchema: z$1.ZodObject<{
 }, z$1.core.$strip>;
 type ThreadStoragePathListResponse = z$1.infer<typeof threadStoragePathListResponseSchema>;
 
+declare const threadNotesResponseSchema: z$1.ZodObject<{
+    recapBody: z$1.ZodNullable<z$1.ZodString>;
+    recapEnabled: z$1.ZodBoolean;
+    recapGeneratedAt: z$1.ZodNullable<z$1.ZodNumber>;
+    recapSourceSeq: z$1.ZodNullable<z$1.ZodNumber>;
+    scratchpad: z$1.ZodString;
+}, z$1.core.$strict>;
+type ThreadNotesResponse = z$1.infer<typeof threadNotesResponseSchema>;
+declare const updateThreadScratchpadRequestSchema: z$1.ZodObject<{
+    scratchpad: z$1.ZodString;
+}, z$1.core.$strict>;
+type UpdateThreadScratchpadRequest = z$1.infer<typeof updateThreadScratchpadRequestSchema>;
+
 declare const threadTabsResponseSchema: z$1.ZodObject<{
     revision: z$1.ZodNumber;
     tabs: z$1.ZodArray<z$1.ZodDiscriminatedUnion<[z$1.ZodObject<{
@@ -10102,6 +10120,9 @@ declare const threadTabsResponseSchema: z$1.ZodObject<{
     }, z$1.core.$strict>, z$1.ZodObject<{
         id: z$1.ZodString;
         kind: z$1.ZodLiteral<"new-tab">;
+    }, z$1.core.$strict>, z$1.ZodObject<{
+        id: z$1.ZodString;
+        kind: z$1.ZodLiteral<"notes">;
     }, z$1.core.$strict>, z$1.ZodObject<{
         id: z$1.ZodString;
         kind: z$1.ZodLiteral<"side-chat">;
@@ -10183,6 +10204,9 @@ declare const updateThreadTabsRequestSchema: z$1.ZodObject<{
     }, z$1.core.$strict>, z$1.ZodObject<{
         id: z$1.ZodString;
         kind: z$1.ZodLiteral<"new-tab">;
+    }, z$1.core.$strict>, z$1.ZodObject<{
+        id: z$1.ZodString;
+        kind: z$1.ZodLiteral<"notes">;
     }, z$1.core.$strict>, z$1.ZodObject<{
         id: z$1.ZodString;
         kind: z$1.ZodLiteral<"side-chat">;
@@ -12535,6 +12559,9 @@ type ThreadQueuedMessageSendResult = SendQueuedMessageResponse;
 type ThreadQueuedMessageGroupBoundaryResult = ThreadQueuedMessageListResponse;
 type ThreadTabsResult = ThreadTabsResponse;
 type ThreadTabsUpdateResult = ThreadTabsResponse;
+type ThreadNotesResult = ThreadNotesResponse;
+type ThreadScratchpadUpdateResult = ThreadNotesResponse;
+type ThreadRecapResult = ThreadNotesResponse;
 type ThreadStorageFilesResult = ThreadStorageFileListResponse;
 type ThreadStoragePathsResult = ThreadStoragePathListResponse;
 type ThreadChildSummaryResult = ThreadChildSummaryResponse;
@@ -12615,6 +12642,18 @@ interface ThreadTimelineTurnSummaryDetailsArgs extends TimelineTurnSummaryDetail
 }
 interface ThreadTabsUpdateArgs extends UpdateThreadTabsRequest {
     threadId: string;
+}
+interface ThreadScratchpadUpdateArgs extends UpdateThreadScratchpadRequest {
+    threadId: string;
+}
+interface ThreadRecapGenerateArgs {
+    threadId: string;
+    /**
+     * Regenerate even when the stored recap already reflects the thread's
+     * current event sequence. Defaults to false, which returns a current recap
+     * without paying for inference.
+     */
+    force?: boolean;
 }
 interface ThreadOpenArgs {
     threadId: string;
@@ -12717,6 +12756,11 @@ interface ThreadTabsArea {
     get(args: ThreadStatusArgs): Promise<ThreadTabsResult>;
     update(args: ThreadTabsUpdateArgs): Promise<ThreadTabsUpdateResult>;
 }
+interface ThreadNotesArea {
+    generateRecap(args: ThreadRecapGenerateArgs): Promise<ThreadRecapResult>;
+    get(args: ThreadStatusArgs): Promise<ThreadNotesResult>;
+    setScratchpad(args: ThreadScratchpadUpdateArgs): Promise<ThreadScratchpadUpdateResult>;
+}
 interface ThreadsArea {
     archive(args: ThreadActionArgs): Promise<ThreadArchiveResult>;
     archiveAll(args: ThreadActionArgs): Promise<ThreadArchiveAllResult>;
@@ -12745,6 +12789,7 @@ interface ThreadsArea {
     spawn(args: ThreadSpawnArgs): Promise<ThreadSpawnResult>;
     stop(args: ThreadActionArgs): Promise<ThreadStopResult>;
     tabs: ThreadTabsArea;
+    notes: ThreadNotesArea;
     timeline(args: ThreadTimelineArgs): Promise<ThreadTimelineResult>;
     timelineTurnSummaryDetails(args: ThreadTimelineTurnSummaryDetailsArgs): Promise<ThreadTimelineTurnSummaryDetailsResult>;
     storageFiles(args: ThreadStorageFilesArgs): Promise<ThreadStorageFilesResult>;

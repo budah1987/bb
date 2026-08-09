@@ -50,6 +50,15 @@ vi.mock("jotai", async (importOriginal) => ({
   useAtomValue: () => 50,
 }));
 
+// The blanket `useAtomValue` mock above answers 50 to every atom read, which
+// the rail's visibility preference would take as "showing". The rail is a
+// overlay on this layout with its own tests (ThreadRail.test.tsx); these cover
+// the timeline/panel split.
+vi.mock("@/components/rail/ThreadRail", () => ({
+  ThreadRail: () => null,
+  useThreadRailContentInsetPx: () => 0,
+}));
+
 vi.mock("react-resizable-panels", async () => {
   const React = await import("react");
 

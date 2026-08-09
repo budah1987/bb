@@ -147,6 +147,7 @@ import {
   SIDE_CHAT_PLUGIN_PANEL_ACTION_ID,
 } from "@/lib/side-chat-plugin";
 import { NewTabPage } from "@/components/secondary-panel/NewTabPage";
+import { NotesPanel } from "@/components/notes/NotesPanel";
 import { resolveRightPanelFileVisual } from "@/components/secondary-panel/rightPanelFileVisuals";
 import { COARSE_POINTER_COMPACT_ICON_SIZE_CLASS } from "@bb/shared-ui/coarse-pointer-sizing";
 import { PluginIcon } from "@/components/plugin/PluginIcon";
@@ -229,6 +230,8 @@ import {
 import { createNewTabFixedPanelTab } from "@/lib/fixed-panel-tabs-state";
 import { isRootThread } from "./threadParentSelectorOptions";
 import { useIsCompactViewport } from "@bb/shared-ui/hooks/use-compact-viewport";
+import { useStandaloneCompactPwa } from "@/hooks/useStandaloneCompactPwa";
+import { useRailAutoHide, useToggleRail } from "@/lib/rail-visibility";
 import { ThreadTerminalPanel } from "@/components/thread/terminal/ThreadTerminalPanel";
 import {
   DEFAULT_TERMINAL_COLS,
@@ -489,6 +492,8 @@ function ThreadDetailViewInternal(props: ThreadDetailViewInternalProps) {
   });
   const activeFixedSecondaryTabId = activeFixedSecondaryTab?.id ?? null;
   const renderSecondaryPanelAsDrawer = useIsCompactViewport();
+  const isStandaloneCompactPwa = useStandaloneCompactPwa();
+  const toggleRail = useToggleRail();
   const secondaryPanelDrawerVisibility =
     useThreadSecondaryPanelDrawerVisibility({
       isCompactViewport: renderSecondaryPanelAsDrawer,
@@ -618,6 +623,8 @@ function ThreadDetailViewInternal(props: ThreadDetailViewInternalProps) {
     activateTab,
     closeTab,
     isNewTabActive,
+    isNotesTabActive,
+    openNotesTab,
     openTab,
     openPluginPanel,
     orderedSecondaryFileTabs,
@@ -813,7 +820,7 @@ function ThreadDetailViewInternal(props: ThreadDetailViewInternalProps) {
     () => new Map(terminalSessions.map((session) => [session.id, session])),
     [terminalSessions],
   );
-  const syncedOrderedSecondaryFileTabs = useMemo(
+  const terminalSyncedSecondaryFileTabs = useMemo(
     () =>
       loadedTerminalSessions === undefined
         ? orderedSecondaryFileTabs
@@ -823,6 +830,17 @@ function ThreadDetailViewInternal(props: ThreadDetailViewInternalProps) {
             terminalSessions: loadedTerminalSessions,
           }),
     [loadedTerminalSessions, orderedSecondaryFileTabs, retainedTerminalId],
+  );
+  // Tab state is server-persisted and synced, so a Notes tab opened on the
+  // desktop arrives in the standalone compact PWA's state too. Filter it out
+  // of what this surface RENDERS and never prune it from state — a prune
+  // writes a new tabs revision and would delete the desktop's tab.
+  const syncedOrderedSecondaryFileTabs = useMemo(
+    () =>
+      isStandaloneCompactPwa
+        ? terminalSyncedSecondaryFileTabs.filter((tab) => tab.kind !== "notes")
+        : terminalSyncedSecondaryFileTabs,
+    [isStandaloneCompactPwa, terminalSyncedSecondaryFileTabs],
   );
   useEffect(() => {
     if (terminalsListQuery.data === undefined) {
@@ -1325,6 +1343,12 @@ function ThreadDetailViewInternal(props: ThreadDetailViewInternalProps) {
     toggleSecondaryPanel();
     return true;
   });
+  useRailAutoHide();
+  useAppCommandHandler("rail.toggle", () => {
+    if (!isFocused) return false;
+    toggleRail();
+    return true;
+  });
   useAppCommandHandler("panel.close", () => {
     if (!isFocused) return false;
     return handleCloseWindowRequest();
@@ -1460,6 +1484,22 @@ function ThreadDetailViewInternal(props: ThreadDetailViewInternalProps) {
               leadingVisual: (
                 <Icon
                   name="NewTab"
+                  className={COARSE_POINTER_COMPACT_ICON_SIZE_CLASS}
+                  aria-hidden
+                />
+              ),
+              statusLabel: null,
+              onSelect: () => handleActivateFileTab(tab.id),
+              onClose: () => closeTab(tab.id),
+            };
+          case "notes":
+            return {
+              id: tab.id,
+              filename: "Notes",
+              isActive: tab.id === activeFixedSecondaryTabId,
+              leadingVisual: (
+                <Icon
+                  name="EditFile"
                   className={COARSE_POINTER_COMPACT_ICON_SIZE_CLASS}
                   aria-hidden
                 />
@@ -2606,9 +2646,12 @@ function ThreadDetailViewInternal(props: ThreadDetailViewInternalProps) {
       focusRequest={newTabFocusRequest}
       onSelect={handleSelectFileSearchResult}
       onOpenBrowser={handleOpenBrowser}
+      onOpenNotes={isStandaloneCompactPwa ? undefined : openNotesTab}
       onStartTerminal={canCreateTerminal ? handleStartTerminal : undefined}
       pluginActions={pluginPanelActions}
     />
+  ) : isNotesTabActive && !isStandaloneCompactPwa ? (
+    <NotesPanel threadId={thread.id} />
   ) : activeWorkspaceFilePath ? (
     <WorkspaceFilePreviewTabContent
       activePath={activeWorkspaceFilePath}
