@@ -320,6 +320,8 @@ function resolveActiveFixedPanel({
     case "terminal":
     case "new-tab":
     case "notes":
+    case "local-servers":
+    case "preview":
       return null;
   }
 }

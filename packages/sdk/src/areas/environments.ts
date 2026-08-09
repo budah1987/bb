@@ -21,9 +21,12 @@ import type {
   EnvironmentDiffPatchResponse,
   EnvironmentDiffQuery,
   EnvironmentDiffResponse,
+  EnvironmentDockerActivityResponse,
+  EnvironmentDockerProvenanceResponse,
   EnvironmentDiffFilesResponse,
   EnvironmentPathsQuery,
   EnvironmentPullRequestResponse,
+  EnvironmentPreviewsResponse,
   EnvironmentStatusResponse,
   PullRequestMergeMethod,
   PullRequestCreateActionResponse,
@@ -94,6 +97,18 @@ export type EnvironmentRenameArgs = RenameEnvironmentRequest & {
 
 export interface EnvironmentStatusArgs extends EnvironmentStatusQuery {
   environmentId: string;
+  signal?: AbortSignal;
+}
+
+export interface EnvironmentDockerProvenanceArgs extends EnvironmentActionArgs {
+  signal?: AbortSignal;
+}
+
+export interface EnvironmentDockerActivityArgs extends EnvironmentActionArgs {
+  signal?: AbortSignal;
+}
+
+export interface EnvironmentPreviewsArgs extends EnvironmentActionArgs {
   signal?: AbortSignal;
 }
 
@@ -170,6 +185,10 @@ export type EnvironmentPullRequestResult = EnvironmentPullRequestResponse;
 export type EnvironmentRenameResult = Environment;
 export type EnvironmentSquashMergeResult = SquashMergeActionResponse;
 export type EnvironmentStatusResult = EnvironmentStatusResponse;
+export type EnvironmentDockerProvenanceResult =
+  EnvironmentDockerProvenanceResponse;
+export type EnvironmentDockerActivityResult = EnvironmentDockerActivityResponse;
+export type EnvironmentPreviewsResult = EnvironmentPreviewsResponse;
 export type EnvironmentUpdateResult = Environment;
 
 export interface EnvironmentsArea {
@@ -186,8 +205,15 @@ export interface EnvironmentsArea {
   diffPatch(
     args: EnvironmentDiffPatchArgs,
   ): Promise<EnvironmentDiffPatchResult>;
+  dockerProvenance(
+    args: EnvironmentDockerProvenanceArgs,
+  ): Promise<EnvironmentDockerProvenanceResult>;
+  dockerActivity(
+    args: EnvironmentDockerActivityArgs,
+  ): Promise<EnvironmentDockerActivityResult>;
   get(args: EnvironmentGetArgs): Promise<EnvironmentGetResult>;
   pullRequest(args: EnvironmentGetArgs): Promise<EnvironmentPullRequestResult>;
+  previews(args: EnvironmentPreviewsArgs): Promise<EnvironmentPreviewsResult>;
   createPullRequest(
     args: EnvironmentPullRequestCreateArgs,
   ): Promise<EnvironmentCreatePullRequestResult>;
@@ -508,6 +534,30 @@ export function createEnvironmentsArea(
             param: { id: input.environmentId },
             query: environmentStatusQuery(input),
           },
+          ...signalRequestArgs(input.signal),
+        ),
+      );
+    },
+    async dockerProvenance(input) {
+      return transport.readJson(
+        transport.api.v1.environments[":id"]["docker-provenance"].$get(
+          { param: { id: input.environmentId } },
+          ...signalRequestArgs(input.signal),
+        ),
+      );
+    },
+    async dockerActivity(input) {
+      return transport.readJson(
+        transport.api.v1.environments[":id"]["docker-activity"].$get(
+          { param: { id: input.environmentId } },
+          ...signalRequestArgs(input.signal),
+        ),
+      );
+    },
+    async previews(input) {
+      return transport.readJson(
+        transport.api.v1.environments[":id"].previews.$get(
+          { param: { id: input.environmentId } },
           ...signalRequestArgs(input.signal),
         ),
       );

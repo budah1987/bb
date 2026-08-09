@@ -1,7 +1,13 @@
-import type { ThreadTab } from "@bb/server-contract";
+import { threadTabsSchema, type ThreadTab } from "@bb/server-contract";
 import { describe, expect, it } from "vitest";
-import { createEmptyFixedPanelTabsState } from "./fixed-panel-tabs-state";
-import { reconcileFixedPanelTabsState } from "./thread-tabs-sync";
+import {
+  createEmptyFixedPanelTabsState,
+  createPreviewFixedPanelTab,
+} from "./fixed-panel-tabs-state";
+import {
+  reconcileFixedPanelTabsState,
+  toSyncedThreadTabs,
+} from "./thread-tabs-sync";
 
 function browserTab(
   id: string,
@@ -64,5 +70,48 @@ describe("thread tab synchronization", () => {
     ]);
 
     expect(reconciled.secondary.tabs).toEqual([browser]);
+  });
+
+  it("persists preview tabs with the server list", () => {
+    const first = browserTab("first", "First");
+    const second = browserTab("second", "Second");
+    const preview = createPreviewFixedPanelTab({
+      environmentId: "env_1",
+      label: "Local",
+      providerId: "preview_local",
+    });
+    const current = createEmptyFixedPanelTabsState({
+      secondary: {
+        activeTabId: preview.id,
+        isOpen: true,
+        tabs: [first, preview],
+      },
+    });
+
+    expect(toSyncedThreadTabs(current.secondary.tabs)).toEqual([
+      first,
+      preview,
+    ]);
+    expect(() =>
+      threadTabsSchema.parse(toSyncedThreadTabs(current.secondary.tabs)),
+    ).not.toThrow();
+
+    const reconciled = reconcileFixedPanelTabsState(current, [first, second]);
+    expect(reconciled.secondary.tabs).toEqual([first, second]);
+    expect(reconciled.secondary.activeTabId).toBeNull();
+  });
+
+  it("rewrites state when only a preview tab distinguishes the lists", () => {
+    const browser = browserTab("first", "First");
+    const preview = createPreviewFixedPanelTab({
+      environmentId: "env_1",
+      label: "Local",
+      providerId: "preview_local",
+    });
+    const current = createEmptyFixedPanelTabsState({
+      secondary: { activeTabId: null, isOpen: true, tabs: [browser, preview] },
+    });
+
+    expect(reconcileFixedPanelTabsState(current, [browser])).not.toBe(current);
   });
 });

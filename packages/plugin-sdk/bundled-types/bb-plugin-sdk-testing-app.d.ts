@@ -7,7 +7,7 @@
 
 import { ReactNode, ComponentType } from 'react';
 import { RenderResult } from '@testing-library/react';
-import { PluginHomepageSectionRegistration, PluginSettingsSectionRegistration, PluginNavPanelRegistration, PluginThreadPanelActionRegistration, ComposerCustomization, PluginPendingInteractionRegistration, PluginSidebarFooterActionRegistration, PluginThreadListRegistration, PluginThreadHeaderActionRegistration, PluginFileOpenerRegistration, PluginMessageDirectiveRegistration, PluginMessageActionRegistration, PluginContentScriptRegistration, PluginComposerScope, PluginComposerTextEffect, PluginComposerMention, PluginComposerThreadRowStatus, BbNavigate, PluginAppDefinition, PluginRpcContract, StandardSchemaV1InferInput, PluginRpcResult, PluginRealtimeConnectionState, PluginSidebarThreadsState, PluginSidebarPullRequest, PluginSidebarThreadActions } from '@bb/plugin-sdk';
+import { PluginHomepageSectionRegistration, PluginSettingsSectionRegistration, PluginNavPanelRegistration, PluginThreadPanelActionRegistration, ComposerCustomization, PluginPendingInteractionRegistration, PluginSidebarFooterActionRegistration, PluginThreadListRegistration, PluginThreadHeaderActionRegistration, PluginThreadRailSectionRegistration, PluginFileOpenerRegistration, PluginMessageDirectiveRegistration, PluginMessageActionRegistration, PluginContentScriptRegistration, PluginComposerScope, PluginComposerTextEffect, PluginComposerMention, PluginComposerThreadRowStatus, BbNavigate, PluginAppDefinition, PluginRpcContract, StandardSchemaV1InferInput, PluginRpcResult, PluginRealtimeConnectionState, PluginSidebarThreadsState, PluginSidebarPullRequest, PluginSidebarThreadActions } from '@bb/plugin-sdk';
 
 /**
  * `@bb/plugin-sdk/testing/app` — the frontend plugin test harness. Tests a
@@ -102,6 +102,7 @@ interface CapturedPluginApp {
     sidebarFooterActions: PluginSidebarFooterActionRegistration[];
     threadLists: PluginThreadListRegistration[];
     threadHeaderActions: PluginThreadHeaderActionRegistration[];
+    threadRailSections: PluginThreadRailSectionRegistration[];
     fileOpeners: PluginFileOpenerRegistration[];
     messageDirectives: PluginMessageDirectiveRegistration[];
     messageActions: PluginMessageActionRegistration[];

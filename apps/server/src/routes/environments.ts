@@ -47,6 +47,11 @@ import { parsePathKindInclusion } from "./path-list-inclusion.js";
 const PULL_REQUEST_CREATE_TIMEOUT_MS = 3 * 60_000;
 import { requireWorkspaceCommandTarget } from "../services/environments/workspace-command-target.js";
 import { callEnvironmentWorkspaceStatus } from "../services/environments/workspace-status.js";
+import {
+  getEnvironmentDockerActivity,
+  getEnvironmentDockerProvenance,
+} from "../services/environments/docker-provenance.js";
+import { getEnvironmentPreviews } from "../services/environments/previews.js";
 import { assembleThreadPullRequest } from "../services/environments/pull-request.js";
 import { getGithubAccounts } from "../services/system/github-repositories.js";
 import {
@@ -436,6 +441,33 @@ export function registerEnvironmentRoutes(app: Hono, deps: AppDeps): void {
       outcome: "available",
       workspace: result.workspaceStatus,
     });
+  });
+
+  get(routes.dockerProvenance, async (context) => {
+    const environment = requireReadyEnvironment(
+      deps.db,
+      context.req.param("id"),
+    );
+    const target = requireWorkspaceCommandTarget(environment);
+    return context.json(await getEnvironmentDockerProvenance(deps, { target }));
+  });
+
+  get(routes.dockerActivity, async (context) => {
+    const environment = requireReadyEnvironment(
+      deps.db,
+      context.req.param("id"),
+    );
+    const target = requireWorkspaceCommandTarget(environment);
+    return context.json(await getEnvironmentDockerActivity(deps, { target }));
+  });
+
+  get(routes.previews, async (context) => {
+    const environment = requireReadyEnvironment(
+      deps.db,
+      context.req.param("id"),
+    );
+    const target = requireWorkspaceCommandTarget(environment);
+    return context.json(await getEnvironmentPreviews(deps, { target }));
   });
 
   get(routes.pullRequest, async (context) => {

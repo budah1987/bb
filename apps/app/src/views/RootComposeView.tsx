@@ -2889,6 +2889,43 @@ export function RootComposeView() {
               onSelect: () => handleActivateFileTab(tab.id),
               onClose: () => closeTab(tab.id),
             };
+          case "local-servers":
+            return {
+              id: tab.id,
+              filename: "Servers",
+              isHidden: true,
+              isActive: tab.id === activeFixedSecondaryTabId,
+              leadingVisual: (
+                <Icon
+                  name="PackageReceive"
+                  className={COARSE_POINTER_COMPACT_ICON_SIZE_CLASS}
+                  aria-hidden
+                />
+              ),
+              statusLabel: null,
+              onSelect: () => handleActivateFileTab(tab.id),
+              onClose: () => closeTab(tab.id),
+            };
+          // Previews belong to a thread's environment, which the root compose
+          // view does not have. Persisted state can still hold one, so it is
+          // parsed and kept but never shown here.
+          case "preview":
+            return {
+              id: tab.id,
+              filename: tab.label,
+              isHidden: true,
+              isActive: tab.id === activeFixedSecondaryTabId,
+              leadingVisual: (
+                <Icon
+                  name="Browser"
+                  className={COARSE_POINTER_COMPACT_ICON_SIZE_CLASS}
+                  aria-hidden
+                />
+              ),
+              statusLabel: null,
+              onSelect: () => handleActivateFileTab(tab.id),
+              onClose: () => closeTab(tab.id),
+            };
           case "plugin-panel":
             // Plugin action tabs are opened from a thread's launcher; the
             // root panel offers no plugin actions, but file-opener tabs open

@@ -26,6 +26,7 @@ const GIT_DIFF_TAB_ID = "git-diff:git-diff:none";
 const PULL_REQUEST_TAB_ID = "pull-request:pull-request:none";
 const NEW_TAB_TAB_ID = "new-tab:new-tab:none";
 export const NOTES_TAB_ID = "notes:notes:none";
+export const LOCAL_SERVERS_TAB_ID = "local-servers:local-servers:none";
 
 const environmentFilePreviewSourceSchema: z.ZodType<EnvironmentFilePreviewSource> =
   z.discriminatedUnion("kind", [
@@ -131,6 +132,21 @@ const notesFixedPanelTabSchema = z
     kind: z.literal("notes"),
   })
   .strict();
+const localServersFixedPanelTabSchema = z
+  .object({
+    id: z.string().min(1),
+    kind: z.literal("local-servers"),
+  })
+  .strict();
+const previewFixedPanelTabSchema = z
+  .object({
+    environmentId: z.string().min(1).nullable(),
+    id: z.string().min(1),
+    kind: z.literal("preview"),
+    label: z.string().min(1),
+    providerId: z.string().min(1),
+  })
+  .strict();
 const terminalFixedPanelTabSchema = z
   .object({
     id: z.string().min(1),
@@ -159,6 +175,8 @@ const secondaryFixedPanelTabSchema = z.union([
   browserFixedPanelTabSchema,
   newTabFixedPanelTabSchema,
   notesFixedPanelTabSchema,
+  localServersFixedPanelTabSchema,
+  previewFixedPanelTabSchema,
   terminalFixedPanelTabSchema,
 ]);
 /**
@@ -289,6 +307,26 @@ export interface NotesFixedPanelTab {
   kind: "notes";
 }
 
+export interface LocalServersFixedPanelTab {
+  id: string;
+  kind: "local-servers";
+}
+
+/**
+ * One preview provider, opened as its own tab beside its siblings. Identity is
+ * the environment plus the provider id, so re-opening the same provider focuses
+ * the tab already showing it while a second provider opens next to it. `label`
+ * is the provider's name at open time; it keeps the pill readable while the
+ * providers query is still in flight after a reload.
+ */
+export interface PreviewFixedPanelTab {
+  environmentId: string | null;
+  id: string;
+  kind: "preview";
+  label: string;
+  providerId: string;
+}
+
 export interface TerminalFixedPanelTab {
   id: string;
   kind: "terminal";
@@ -306,6 +344,8 @@ export type SecondaryFixedPanelTab =
   | BrowserFixedPanelTab
   | NewTabFixedPanelTab
   | NotesFixedPanelTab
+  | LocalServersFixedPanelTab
+  | PreviewFixedPanelTab
   | TerminalFixedPanelTab;
 
 /**
@@ -320,6 +360,8 @@ export type SecondaryFileFixedPanelTab =
   | BrowserFixedPanelTab
   | NewTabFixedPanelTab
   | NotesFixedPanelTab
+  | LocalServersFixedPanelTab
+  | PreviewFixedPanelTab
   | TerminalFixedPanelTab
   | PluginPanelFixedPanelTab;
 
@@ -407,6 +449,12 @@ interface CreateWorkspaceFilePreviewFixedPanelTabArgs {
   environmentId: string | null;
   projectId: string | null;
   tab: WorkspaceFileTabState;
+}
+
+interface CreatePreviewFixedPanelTabArgs {
+  environmentId: string | null;
+  label: string;
+  providerId: string;
 }
 
 interface CreateTerminalFixedPanelTabArgs {
@@ -664,6 +712,38 @@ export function createNotesFixedPanelTab(): NotesFixedPanelTab {
   };
 }
 
+export function createLocalServersFixedPanelTab(): LocalServersFixedPanelTab {
+  return {
+    id: LOCAL_SERVERS_TAB_ID,
+    kind: "local-servers",
+  };
+}
+
+function buildPreviewTabId({
+  environmentId,
+  providerId,
+}: Omit<CreatePreviewFixedPanelTabArgs, "label">): string {
+  return buildFixedPanelTabId({
+    environmentId,
+    kind: "preview",
+    path: providerId,
+  });
+}
+
+export function createPreviewFixedPanelTab({
+  environmentId,
+  label,
+  providerId,
+}: CreatePreviewFixedPanelTabArgs): PreviewFixedPanelTab {
+  return {
+    environmentId,
+    id: buildPreviewTabId({ environmentId, providerId }),
+    kind: "preview",
+    label,
+    providerId,
+  };
+}
+
 export function createTerminalFixedPanelTab({
   terminalId,
 }: CreateTerminalFixedPanelTabArgs): TerminalFixedPanelTab {
@@ -751,6 +831,20 @@ function normalizeFixedPanelTabId(tab: FixedPanelTab): FixedPanelTab {
             ...tab,
             id: NOTES_TAB_ID,
           };
+    case "local-servers":
+      return tab.id === LOCAL_SERVERS_TAB_ID
+        ? tab
+        : {
+            ...tab,
+            id: LOCAL_SERVERS_TAB_ID,
+          };
+    case "preview": {
+      const id = buildPreviewTabId({
+        environmentId: tab.environmentId,
+        providerId: tab.providerId,
+      });
+      return tab.id === id ? tab : { ...tab, id };
+    }
     case "plugin-panel": {
       const id = createPluginPanelFixedPanelTab({
         actionId: tab.actionId,
@@ -834,6 +928,8 @@ function stripTransientFixedPanelTabForStorage(
     case "browser":
     case "new-tab":
     case "notes":
+    case "local-servers":
+    case "preview":
     case "terminal":
       return tab;
   }
@@ -1013,6 +1109,7 @@ export function areFixedPanelTabsEquivalent(
     case "pull-request":
     case "new-tab":
     case "notes":
+    case "local-servers":
       return true;
     case "plugin-panel":
       return (
@@ -1064,6 +1161,13 @@ export function areFixedPanelTabsEquivalent(
         }) &&
         a.path === b.path &&
         a.threadId === b.threadId
+      );
+    case "preview":
+      return (
+        b.kind === "preview" &&
+        a.environmentId === b.environmentId &&
+        a.label === b.label &&
+        a.providerId === b.providerId
       );
     case "terminal":
       return b.kind === "terminal" && a.terminalId === b.terminalId;

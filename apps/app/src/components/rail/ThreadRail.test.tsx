@@ -23,6 +23,24 @@ vi.mock("@/components/notes/NotesPanel", () => ({
   ),
 }));
 
+vi.mock("./LocalServersSection", () => ({
+  LocalServersSection: ({ threadId }: { threadId: string }) => (
+    <div data-testid="local-servers-section">{threadId}</div>
+  ),
+}));
+
+vi.mock("./PreviewSection", () => ({
+  PreviewSection: ({ threadId }: { threadId: string }) => (
+    <div data-testid="preview-section">{threadId}</div>
+  ),
+}));
+
+vi.mock("@/components/plugin/PluginThreadRailSections", () => ({
+  PluginThreadRailSections: ({ threadId }: { threadId: string }) => (
+    <div data-testid="plugin-rail-sections">{threadId}</div>
+  ),
+}));
+
 function renderRail() {
   const store = createStore();
   window.localStorage.setItem("bb.thread.railVisible", "true");
@@ -49,6 +67,13 @@ describe("ThreadRail", () => {
 
     expect(screen.getByRole("complementary", { name: "Rail" })).not.toBeNull();
     expect(screen.getByTestId("notes-panel").textContent).toBe("thr_1");
+    expect(screen.getByTestId("local-servers-section").textContent).toBe(
+      "thr_1",
+    );
+    expect(screen.getByTestId("preview-section").textContent).toBe("thr_1");
+    expect(screen.getByTestId("plugin-rail-sections").textContent).toBe(
+      "thr_1",
+    );
   });
 
   it("renders nothing in the standalone compact PWA even when visible", () => {

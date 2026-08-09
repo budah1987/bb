@@ -485,6 +485,64 @@ const ONLINE_RPC_RESPONSE_RESULT_FIXTURES: OnlineRpcResponseResultFixtures = {
     truncated: false,
   },
   "workspace.status": WORKSPACE_UNAVAILABLE_RESULT,
+  "workspace.docker_mounts": {
+    outcome: "available",
+    workspaceGit: {
+      branch: "feature/right-rail",
+      commonDir: "/home/user/project/.git",
+      root: "/home/user/project",
+    },
+    containers: [
+      {
+        composeWorkingDirGit: {
+          branch: "feature/right-rail",
+          commonDir: "/home/user/project/.git",
+          root: "/home/user/project",
+        },
+        id: "container-1",
+        image: "example/api:latest",
+        labels: {
+          composeProject: "project",
+          composeService: "api",
+          composeWorkingDir: "/home/user/project",
+          getbbRole: null,
+        },
+        mounts: [
+          {
+            destination: "/app/apps/api/dist",
+            readOnly: false,
+            source: "/home/user/project/apps/api/dist",
+            sourceGit: {
+              branch: "feature/right-rail",
+              commonDir: "/home/user/project/.git",
+              root: "/home/user/project",
+            },
+          },
+        ],
+        name: "api",
+        publishedPorts: [3000],
+        state: "running",
+      },
+    ],
+  },
+  "workspace.docker_path_activity": {
+    outcome: "available",
+    paths: [
+      {
+        limited: false,
+        newestFileMtimeMs: 1_700_000_000_000,
+        newestFilePath: "/home/user/project/apps/api/src/index.ts",
+        path: "apps/api/src",
+        scannedFiles: 42,
+      },
+    ],
+  },
+  "workspace.github_deployments": {
+    outcome: "available",
+    repository: "acme/project",
+    ref: "feature/right-rail",
+    deployments: [],
+  },
   "workspace.diff": WORKSPACE_UNAVAILABLE_RESULT,
   "workspace.diffFiles": WORKSPACE_UNAVAILABLE_RESULT,
   "workspace.diffPatch": WORKSPACE_UNAVAILABLE_RESULT,
@@ -1096,11 +1154,10 @@ describe("host-daemon local schemas", () => {
 });
 
 describe("host-daemon command schemas", () => {
-  // Version 80 includes live workspace metadata refresh and scopes GitHub PR
-  // commands to an authenticated account. Older daemons do not support the
-  // added messages and fields, so the bump forces an update.
-  it("uses protocol version 80 for account-scoped GitHub workflows", () => {
-    expect(HOST_DAEMON_PROTOCOL_VERSION).toBe(80);
+  // Version 82 adds Docker ownership and activity facts plus GitHub deployment
+  // discovery. Older daemons cannot parse these RPCs, so the bump updates them.
+  it("uses protocol version 82 for environment preview facts", () => {
+    expect(HOST_DAEMON_PROTOCOL_VERSION).toBe(82);
   });
 
   it("binds Plan cancellation to a required turn id and typed result", () => {

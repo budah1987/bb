@@ -65,6 +65,7 @@ output.txt
 .codex
 .hermes/plans/
 .otto/
+.context/model-relay/
 
 # turborepo
 .turbo

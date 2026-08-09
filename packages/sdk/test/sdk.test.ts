@@ -914,6 +914,80 @@ describe("@bb/sdk", () => {
     ]);
   });
 
+  it("routes Docker provenance calls through the HTTP transport", async () => {
+    const response = {
+      outcome: "available",
+      environmentPath: "/repo-feature",
+      services: [],
+    };
+    const queue = createFetchQueue([{ body: response }]);
+    const sdk = createBbSdk({
+      transport: createHttpTransport({
+        baseUrl: "http://bb.test",
+        fetch: queue.fetch,
+        runtime: "node",
+      }),
+    });
+
+    await expect(
+      sdk.environments.dockerProvenance({ environmentId: "env_feature" }),
+    ).resolves.toEqual(response);
+
+    expect(queue.requests).toEqual([
+      {
+        bodyText: undefined,
+        method: "GET",
+        url: "http://bb.test/api/v1/environments/env_feature/docker-provenance",
+      },
+    ]);
+  });
+
+  it("routes Docker activity calls through the HTTP transport", async () => {
+    const response = { activities: [], outcome: "available" };
+    const queue = createFetchQueue([{ body: response }]);
+    const sdk = createBbSdk({
+      transport: createHttpTransport({
+        baseUrl: "http://bb.test",
+        fetch: queue.fetch,
+        runtime: "node",
+      }),
+    });
+
+    await expect(
+      sdk.environments.dockerActivity({ environmentId: "env_feature" }),
+    ).resolves.toEqual(response);
+    expect(queue.requests).toEqual([
+      {
+        bodyText: undefined,
+        method: "GET",
+        url: "http://bb.test/api/v1/environments/env_feature/docker-activity",
+      },
+    ]);
+  });
+
+  it("routes preview calls through the HTTP transport", async () => {
+    const response = { issues: [], providers: [] };
+    const queue = createFetchQueue([{ body: response }]);
+    const sdk = createBbSdk({
+      transport: createHttpTransport({
+        baseUrl: "http://bb.test",
+        fetch: queue.fetch,
+        runtime: "node",
+      }),
+    });
+
+    await expect(
+      sdk.environments.previews({ environmentId: "env_feature" }),
+    ).resolves.toEqual(response);
+    expect(queue.requests).toEqual([
+      {
+        bodyText: undefined,
+        method: "GET",
+        url: "http://bb.test/api/v1/environments/env_feature/previews",
+      },
+    ]);
+  });
+
   it("generates pull request metadata through the environment action transport", async () => {
     const response = {
       ok: true,

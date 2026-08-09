@@ -1,9 +1,14 @@
 import { useIsCompactViewport } from "@bb/shared-ui/hooks/use-compact-viewport";
 import { cn } from "@bb/shared-ui/lib/utils";
 import { NotesPanel } from "@/components/notes/NotesPanel";
+import { PluginThreadRailSections } from "@/components/plugin/PluginThreadRailSections";
 import { PANEL_COLLAPSE_TRANSITION_CLASS } from "@/components/secondary-panel/panelTransitionTokens";
 import { useStandaloneCompactPwa } from "@/hooks/useStandaloneCompactPwa";
 import { useIsRailVisible } from "@/lib/rail-visibility";
+import { LocalServersSection } from "./LocalServersSection";
+import { PreviewSection } from "./PreviewSection";
+import { RailPanelTitle } from "./RailPanelTitle";
+import { RAIL_SECTION_STACK_CLASS } from "./railStyleTokens";
 
 /**
  * Fixed, not resizable. The rail is a reading column of short rows, so it has
@@ -36,7 +41,9 @@ export type ThreadRailVariant = "docked" | "floating";
  * is not on screen. Shares the visibility gates with {@link ThreadRail} rather
  * than threading them through props, so the two can never disagree.
  */
-export function useThreadRailContentInsetPx(variant: ThreadRailVariant): number {
+export function useThreadRailContentInsetPx(
+  variant: ThreadRailVariant,
+): number {
   const isRailVisible = useIsRailVisible();
   const isCompactViewport = useIsCompactViewport();
   const isStandaloneCompactPwa = useStandaloneCompactPwa();
@@ -117,7 +124,17 @@ export function ThreadRail({ threadId }: ThreadRailProps) {
         )}
       >
         <div className="min-h-0 overflow-y-auto py-1">
-          <NotesPanel threadId={threadId} />
+          <div className="flex min-w-0 flex-col px-1.5">
+            <RailPanelTitle>Environment</RailPanelTitle>
+            <div className={RAIL_SECTION_STACK_CLASS}>
+              <LocalServersSection threadId={threadId} />
+              <PreviewSection threadId={threadId} />
+              <PluginThreadRailSections threadId={threadId} />
+            </div>
+          </div>
+          <div className="mt-1 border-t border-border-hairline pt-1">
+            <NotesPanel threadId={threadId} />
+          </div>
         </div>
       </aside>
     </div>

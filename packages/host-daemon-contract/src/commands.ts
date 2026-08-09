@@ -36,7 +36,7 @@ import {
   providerCliStatusResponseSchema,
 } from "./local.js";
 
-export const HOST_DAEMON_PROTOCOL_VERSION = 80 as const;
+export const HOST_DAEMON_PROTOCOL_VERSION = 82 as const;
 export const githubAccountLoginSchema = z.string().trim().min(1).max(255);
 
 export {
@@ -1027,6 +1027,25 @@ const workspaceStatusCommandSchema = hostDaemonWorkspaceTargetSchema.extend({
   mergeBaseBranch: gitBranchNameSchema.optional(),
 });
 
+const workspaceDockerMountsCommandSchema = hostDaemonWorkspaceTargetSchema
+  .extend({
+    type: z.literal("workspace.docker_mounts"),
+  })
+  .strict();
+
+const workspaceDockerPathActivityCommandSchema = hostDaemonWorkspaceTargetSchema
+  .extend({
+    type: z.literal("workspace.docker_path_activity"),
+    paths: z.array(z.string().min(1)).min(1).max(8),
+  })
+  .strict();
+
+const workspaceGithubDeploymentsCommandSchema = hostDaemonWorkspaceTargetSchema
+  .extend({
+    type: z.literal("workspace.github_deployments"),
+  })
+  .strict();
+
 const workspaceDiffCommandSchema = hostDaemonWorkspaceTargetSchema.extend({
   type: z.literal("workspace.diff"),
   target: workspaceDiffTargetSchema,
@@ -1180,6 +1199,134 @@ const workspaceStatusResultSchema = z.discriminatedUnion("outcome", [
     .object({
       outcome: z.literal("unavailable"),
       failure: workspaceResolutionFailureSchema,
+    })
+    .strict(),
+]);
+
+const dockerGitLocationSchema = z
+  .object({
+    branch: z.string().min(1).nullable(),
+    commonDir: z.string().min(1),
+    root: z.string().min(1),
+  })
+  .strict();
+
+const dockerContainerLabelsSchema = z
+  .object({
+    composeProject: z.string().min(1).nullable(),
+    composeService: z.string().min(1).nullable(),
+    composeWorkingDir: z.string().min(1).nullable(),
+    getbbRole: z.string().min(1).nullable(),
+  })
+  .strict();
+
+const dockerBindMountSchema = z
+  .object({
+    destination: z.string().min(1),
+    readOnly: z.boolean(),
+    source: z.string().min(1),
+    sourceGit: dockerGitLocationSchema.nullable(),
+  })
+  .strict();
+
+const dockerContainerSchema = z
+  .object({
+    composeWorkingDirGit: dockerGitLocationSchema.nullable(),
+    id: z.string().min(1),
+    image: z.string().min(1),
+    labels: dockerContainerLabelsSchema,
+    mounts: z.array(dockerBindMountSchema),
+    name: z.string().min(1),
+    publishedPorts: z.array(z.number().int().min(1).max(65_535)),
+    state: z.string().min(1),
+  })
+  .strict();
+
+const workspaceDockerMountsResultSchema = z.discriminatedUnion("outcome", [
+  z
+    .object({
+      outcome: z.literal("available"),
+      containers: z.array(dockerContainerSchema),
+      workspaceGit: dockerGitLocationSchema,
+    })
+    .strict(),
+  z
+    .object({
+      outcome: z.literal("unavailable"),
+      reason: z.enum(["docker_not_installed", "docker_unavailable"]),
+      message: z.string().min(1),
+    })
+    .strict(),
+]);
+
+const dockerPathActivitySchema = z
+  .object({
+    limited: z.boolean(),
+    newestFileMtimeMs: z.number().nonnegative().nullable(),
+    newestFilePath: z.string().min(1).nullable(),
+    path: z.string().min(1),
+    scannedFiles: z.number().int().nonnegative(),
+  })
+  .strict();
+
+const workspaceDockerPathActivityResultSchema = z.discriminatedUnion(
+  "outcome",
+  [
+    z
+      .object({
+        outcome: z.literal("available"),
+        paths: z.array(dockerPathActivitySchema),
+      })
+      .strict(),
+    z
+      .object({
+        outcome: z.literal("unavailable"),
+        reason: z.enum(["invalid_path", "scan_failed"]),
+        message: z.string().min(1),
+      })
+      .strict(),
+  ],
+);
+
+const githubDeploymentStatusSchema = z
+  .object({
+    createdAt: z.string().min(1),
+    environmentUrl: z.string().min(1).nullable(),
+    logUrl: z.string().min(1).nullable(),
+    state: z.string().min(1),
+    updatedAt: z.string().min(1),
+  })
+  .strict();
+
+const githubDeploymentSchema = z
+  .object({
+    createdAt: z.string().min(1),
+    environment: z.string().min(1),
+    id: z.number().int().positive(),
+    latestStatus: githubDeploymentStatusSchema.nullable(),
+    ref: z.string().min(1),
+    updatedAt: z.string().min(1),
+  })
+  .strict();
+
+const workspaceGithubDeploymentsResultSchema = z.discriminatedUnion("outcome", [
+  z
+    .object({
+      deployments: z.array(githubDeploymentSchema),
+      outcome: z.literal("available"),
+      ref: z.string().min(1),
+      repository: z.string().min(1),
+    })
+    .strict(),
+  z
+    .object({
+      message: z.string().min(1),
+      outcome: z.literal("unavailable"),
+      reason: z.enum([
+        "github_not_installed",
+        "github_unavailable",
+        "not_github_repository",
+      ]),
     })
     .strict(),
 ]);
@@ -2150,6 +2297,33 @@ export const hostDaemonCommandRegistry = {
     type: "workspace.status",
     schema: workspaceStatusCommandSchema,
     resultSchema: workspaceStatusResultSchema,
+    transport: "onlineRpc",
+    retryable: true,
+    flushEventsBeforeResult: false,
+    envLane: "read",
+  }),
+  "workspace.docker_mounts": defineHostDaemonCommandDescriptor({
+    type: "workspace.docker_mounts",
+    schema: workspaceDockerMountsCommandSchema,
+    resultSchema: workspaceDockerMountsResultSchema,
+    transport: "onlineRpc",
+    retryable: true,
+    flushEventsBeforeResult: false,
+    envLane: "read",
+  }),
+  "workspace.docker_path_activity": defineHostDaemonCommandDescriptor({
+    type: "workspace.docker_path_activity",
+    schema: workspaceDockerPathActivityCommandSchema,
+    resultSchema: workspaceDockerPathActivityResultSchema,
+    transport: "onlineRpc",
+    retryable: true,
+    flushEventsBeforeResult: false,
+    envLane: "read",
+  }),
+  "workspace.github_deployments": defineHostDaemonCommandDescriptor({
+    type: "workspace.github_deployments",
+    schema: workspaceGithubDeploymentsCommandSchema,
+    resultSchema: workspaceGithubDeploymentsResultSchema,
     transport: "onlineRpc",
     retryable: true,
     flushEventsBeforeResult: false,

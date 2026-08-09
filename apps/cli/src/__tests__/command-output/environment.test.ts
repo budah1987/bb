@@ -86,6 +86,9 @@ describe("bb environment command output", () => {
     const help = await getHelpOutput(["environment"], register);
 
     expect(help).toContain("status [options] <id>");
+    expect(help).toContain("docker-provenance [options] <id>");
+    expect(help).toContain("docker-activity [options] <id>");
+    expect(help).toContain("previews [options] <id>");
     expect(help).toContain("branches [options] <id>");
     expect(help).toContain("paths [options] <id>");
     expect(help).toContain("diff [options] <id>");
@@ -160,6 +163,118 @@ describe("bb environment command output", () => {
 
     expect(collectLogLines(vi.mocked(console.log))).toContain(
       "Status unavailable: Workspace status is not available for non-git environments",
+    );
+  });
+
+  it("bb environment docker-provenance reports checkout ownership", async () => {
+    stubServerApi({
+      "v1.environments.:id.docker-provenance.$get": vi.fn(async () => ({
+        outcome: "available",
+        environmentPath: "/repo-feature",
+        services: [
+          {
+            checkoutStatus: "wrong_checkout",
+            id: "container-1",
+            image: "example/api:latest",
+            kind: "server",
+            mounts: [
+              {
+                checkoutRoot: "/repo-main",
+                destination: "/app/apps/api/dist",
+                readOnly: false,
+                source: "/repo-main/apps/api/dist",
+              },
+            ],
+            name: "api",
+            ownerBranch: "main",
+            ownerCheckoutRoot: "/repo-main",
+            publishedPorts: [43100],
+            state: "running",
+          },
+        ],
+      })),
+    });
+
+    await runCommand(
+      ["environment", "docker-provenance", "env-feature"],
+      register,
+    );
+
+    expect(collectLogLines(vi.mocked(console.log))).toEqual(
+      expect.arrayContaining([
+        "Environment checkout: /repo-feature",
+        "api\tserver\trunning\twrong_checkout ports 43100",
+        "  owner main at /repo-main",
+        "  /repo-main/apps/api/dist -> /app/apps/api/dist",
+      ]),
+    );
+  });
+
+  it("bb environment docker-activity reports stale builds", async () => {
+    stubServerApi({
+      "v1.environments.:id.docker-activity.$get": vi.fn(async () => ({
+        activities: [
+          {
+            build: {
+              limited: false,
+              newestFileMtimeMs: 1_000,
+              newestFilePath: "apps/api/dist/index.js",
+              path: "apps/api/dist",
+              scannedFiles: 4,
+            },
+            freshness: "stale",
+            serviceId: "container-1",
+            source: {
+              limited: false,
+              newestFileMtimeMs: 3_000,
+              newestFilePath: "apps/api/src/index.ts",
+              path: "apps/api/src",
+              scannedFiles: 8,
+            },
+          },
+        ],
+        outcome: "available",
+      })),
+    });
+
+    await runCommand(
+      ["environment", "docker-activity", "env-feature"],
+      register,
+    );
+    expect(collectLogLines(vi.mocked(console.log))).toEqual(
+      expect.arrayContaining([
+        "container-1\tstale",
+        "  source apps/api/src/index.ts 3000",
+        "  build apps/api/dist/index.js 1000",
+      ]),
+    );
+  });
+
+  it("bb environment previews reports every provider", async () => {
+    stubServerApi({
+      "v1.environments.:id.previews.$get": vi.fn(async () => ({
+        issues: [],
+        providers: [
+          {
+            environment: "Preview",
+            framePolicy: "allowed",
+            frameReason: null,
+            id: "github:Preview",
+            kind: "deployment",
+            label: "Preview",
+            logUrl: "https://github.com/get-bb/bb/actions/runs/1",
+            source: "github",
+            state: "ready",
+            updatedAt: "2026-08-09T12:00:00Z",
+            url: "https://preview.example.com",
+          },
+        ],
+      })),
+    });
+
+    await runCommand(["environment", "previews", "env-feature"], register);
+    expect(collectLogLines(vi.mocked(console.log))).toContain(
+      "Preview\tdeployment\tready\thttps://preview.example.com",
     );
   });
 

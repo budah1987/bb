@@ -43,6 +43,11 @@ export const THREAD_STORAGE_FILE_PREVIEW_QUERY_KEY = "threadStorageFilePreview";
 export const THREAD_HOST_FILE_PREVIEW_QUERY_KEY = "threadHostFilePreview";
 export const ENVIRONMENT_QUERY_KEY = "environment";
 export const ENVIRONMENT_WORK_STATUS_QUERY_KEY = "environmentWorkStatus";
+export const ENVIRONMENT_DOCKER_PROVENANCE_QUERY_KEY =
+  "environmentDockerProvenance";
+export const ENVIRONMENT_DOCKER_ACTIVITY_QUERY_KEY =
+  "environmentDockerActivity";
+export const ENVIRONMENT_PREVIEWS_QUERY_KEY = "environmentPreviews";
 export const ENVIRONMENT_PULL_REQUEST_QUERY_KEY = "environmentPullRequest";
 export const ENVIRONMENT_MERGE_BASE_BRANCHES_QUERY_KEY =
   "environmentMergeBaseBranches";
@@ -316,6 +321,18 @@ export type EnvironmentWorkStatusQueryKey = readonly [
 export type EnvironmentWorkStatusQueryKeyPrefix = readonly [
   typeof ENVIRONMENT_WORK_STATUS_QUERY_KEY,
   string,
+];
+export type EnvironmentDockerProvenanceQueryKey = readonly [
+  typeof ENVIRONMENT_DOCKER_PROVENANCE_QUERY_KEY,
+  string | null | undefined,
+];
+export type EnvironmentDockerActivityQueryKey = readonly [
+  typeof ENVIRONMENT_DOCKER_ACTIVITY_QUERY_KEY,
+  string | null | undefined,
+];
+export type EnvironmentPreviewsQueryKey = readonly [
+  typeof ENVIRONMENT_PREVIEWS_QUERY_KEY,
+  string | null | undefined,
 ];
 export type EnvironmentPullRequestQueryKey = readonly [
   typeof ENVIRONMENT_PULL_REQUEST_QUERY_KEY,
@@ -865,6 +882,24 @@ export function environmentWorkStatusQueryKey(
   mergeBaseBranch: string | null,
 ): EnvironmentWorkStatusQueryKey {
   return [ENVIRONMENT_WORK_STATUS_QUERY_KEY, environmentId, mergeBaseBranch];
+}
+
+export function environmentDockerProvenanceQueryKey(
+  environmentId: string | null | undefined,
+): EnvironmentDockerProvenanceQueryKey {
+  return [ENVIRONMENT_DOCKER_PROVENANCE_QUERY_KEY, environmentId];
+}
+
+export function environmentDockerActivityQueryKey(
+  environmentId: string | null | undefined,
+): EnvironmentDockerActivityQueryKey {
+  return [ENVIRONMENT_DOCKER_ACTIVITY_QUERY_KEY, environmentId];
+}
+
+export function environmentPreviewsQueryKey(
+  environmentId: string | null | undefined,
+): EnvironmentPreviewsQueryKey {
+  return [ENVIRONMENT_PREVIEWS_QUERY_KEY, environmentId];
 }
 
 export function allEnvironmentWorkStatusQueryKeyPrefix(): EnvironmentWorkStatusQueryKeyRootPrefix {
