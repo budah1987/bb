@@ -1,0 +1,11 @@
+{
+  "run_number": 3,
+  "session_id": "5c128d41-ad4b-4ba1-a735-e6c476db6a2f",
+  "followup": "Review the completed implementation against the plan you approved. Focus only on release-blocking P0/P1 product, UX, accessibility, lifecycle, or security issues; do not request optional polish.\n\nImplemented:\n- New Tab Actions entry after Start terminal: Smartphone icon, “Open simulator”, Running indicator. Singleton persisted simulator tab per environment.\n- Full simulator states: checking, unsupported Mac/Xcode, no runtimes, device picker/start, cancellable boot, live/connecting/reconnecting/error, stop.\n- Live MJPEG inside a phone surface with pointer tap/swipe, wheel scroll, keyboard typing/paste, Escape focus release, Home and rotate.\n- Closing the tab leaves the environment-scoped simulator alive; Stop or environment destroy ends it. A simulator already booted outside BB is not shut down.\n- Host daemon owns xcrun/serve-sim, environment session registry, bearer leases, loopback-only gateway, origin CORS, and localhost upstream validation. Remote access uses the existing BB host tunnel.\n- Typed public server contract, SDK methods, bb simulator CLI, and guide chapter. Host protocol bumped.\n- Verification: 2,495 app tests, 90 SDK tests, 48 bb-app tests, all relevant typechecks, production bb-app build, and install-from-tarball smoke pass.\n\nPrimary files:\napps/app/src/components/secondary-panel/SimulatorTabContent.tsx\napps/app/src/components/secondary-panel/NewTabFileSearch.tsx\napps/host-daemon/src/simulator/simulator-manager.ts\napps/server/src/routes/environments.ts\npackages/server-contract/src/api/environments.ts\npackages/sdk/src/areas/environments.ts\napps/cli/src/commands/simulator.ts\npackages/templates/src/templates/bb-guide-simulators.md\n\nReturn a concise verdict and use the relay result tag.",
+  "effective_role": "plan_review",
+  "stage_id": "plan-review",
+  "route_reason": "Resume the same Fable Plan Council session for final acceptance of the implemented iOS Simulator feature.",
+  "external_write_targets": [],
+  "executable": "/Users/amir/.local/share/claude/versions/2.1.226",
+  "writer_lock_token": null
+}

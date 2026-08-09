@@ -147,6 +147,7 @@ import {
   SIDE_CHAT_PLUGIN_PANEL_ACTION_ID,
 } from "@/lib/side-chat-plugin";
 import { NewTabPage } from "@/components/secondary-panel/NewTabPage";
+import { SimulatorTabContent } from "@/components/secondary-panel/SimulatorTabContent";
 import { resolveRightPanelFileVisual } from "@/components/secondary-panel/rightPanelFileVisuals";
 import { COARSE_POINTER_COMPACT_ICON_SIZE_CLASS } from "@bb/shared-ui/coarse-pointer-sizing";
 import { PluginIcon } from "@/components/plugin/PluginIcon";
@@ -613,6 +614,7 @@ function ThreadDetailViewInternal(props: ThreadDetailViewInternalProps) {
     activeWorkspaceFileSource,
     activeWorkspaceFileStatusLabel,
     activePluginPanelTab,
+    activeSimulatorTab,
     browserTabs,
     clearActiveFileTabs,
     activateTab,
@@ -1220,6 +1222,10 @@ function ThreadDetailViewInternal(props: ThreadDetailViewInternalProps) {
   const handleOpenBrowser = useCallback(() => {
     openBrowserTabAndReveal();
   }, [openBrowserTabAndReveal]);
+  const handleOpenSimulator = useCallback(() => {
+    openTab({ kind: "simulator" });
+    openCompactDrawer();
+  }, [openCompactDrawer, openTab]);
   const handleStartTerminal = useCallback(() => {
     if (!canCreateTerminal || createTerminal.isPending || !threadId) {
       return;
@@ -1400,6 +1406,22 @@ function ThreadDetailViewInternal(props: ThreadDetailViewInternalProps) {
               onClose: () => closeTab(tab.id),
             };
           }
+          case "simulator":
+            return {
+              id: tab.id,
+              filename: "Simulator",
+              isActive: tab.id === activeFixedSecondaryTabId,
+              leadingVisual: (
+                <Icon
+                  name="Smartphone"
+                  className={COARSE_POINTER_COMPACT_ICON_SIZE_CLASS}
+                  aria-hidden
+                />
+              ),
+              statusLabel: null,
+              onSelect: () => handleActivateFileTab(tab.id),
+              onClose: () => closeTab(tab.id),
+            };
           case "terminal": {
             const session = terminalsById.get(tab.terminalId);
             return {
@@ -2606,8 +2628,14 @@ function ThreadDetailViewInternal(props: ThreadDetailViewInternalProps) {
       focusRequest={newTabFocusRequest}
       onSelect={handleSelectFileSearchResult}
       onOpenBrowser={handleOpenBrowser}
+      onOpenSimulator={thread.environmentId ? handleOpenSimulator : undefined}
       onStartTerminal={canCreateTerminal ? handleStartTerminal : undefined}
       pluginActions={pluginPanelActions}
+    />
+  ) : activeSimulatorTab ? (
+    <SimulatorTabContent
+      environmentId={activeSimulatorTab.environmentId}
+      isActive={isSecondaryPanelOpen}
     />
   ) : activeWorkspaceFilePath ? (
     <WorkspaceFilePreviewTabContent

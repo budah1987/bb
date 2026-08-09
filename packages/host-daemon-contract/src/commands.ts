@@ -21,6 +21,7 @@ import {
   clientTurnRequestIdSchema,
   gitBranchNameSchema,
   jsonObjectSchema,
+  jsonValueSchema,
   BRANCH_LIST_LIMIT_MAX,
   BRANCH_LIST_QUERY_MAX_LENGTH,
   FILE_LIST_LIMIT_MAX,
@@ -36,7 +37,7 @@ import {
   providerCliStatusResponseSchema,
 } from "./local.js";
 
-export const HOST_DAEMON_PROTOCOL_VERSION = 80 as const;
+export const HOST_DAEMON_PROTOCOL_VERSION = 81 as const;
 export const githubAccountLoginSchema = z.string().trim().min(1).max(255);
 
 export {
@@ -633,6 +634,174 @@ const hostCaffeinateCommandSchema = z
 const connectTunnelEnsureIdentityCommandSchema = z
   .object({
     type: z.literal("connect-tunnel.ensure-identity"),
+  })
+  .strict();
+
+export const simulatorDeviceSchema = z
+  .object({
+    udid: z.string().min(1),
+    name: z.string().min(1),
+    runtime: z.string().min(1),
+    state: z.enum(["Booted", "Shutdown"]),
+  })
+  .strict();
+export type SimulatorDevice = z.infer<typeof simulatorDeviceSchema>;
+
+export const simulatorActiveSessionSchema = z
+  .object({
+    deviceUdid: z.string().min(1),
+    deviceName: z.string().min(1),
+    state: z.literal("running"),
+  })
+  .strict();
+export type SimulatorActiveSession = z.infer<
+  typeof simulatorActiveSessionSchema
+>;
+
+export const simulatorStatusResultSchema = z
+  .object({
+    supported: z.boolean(),
+    message: z.string().nullable(),
+    devices: z.array(simulatorDeviceSchema),
+    active: simulatorActiveSessionSchema.nullable(),
+  })
+  .strict();
+export type SimulatorStatusResult = z.infer<typeof simulatorStatusResultSchema>;
+
+export const simulatorStreamLeaseSchema = z
+  .object({
+    gatewayPort: z.number().int().min(1).max(65535),
+    token: z.string().min(32),
+    expiresAt: z.number().int().positive(),
+  })
+  .strict();
+export type SimulatorStreamLease = z.infer<typeof simulatorStreamLeaseSchema>;
+
+export const simulatorAttachResultSchema = z
+  .object({
+    session: simulatorActiveSessionSchema,
+    lease: simulatorStreamLeaseSchema,
+  })
+  .strict();
+export type SimulatorAttachResult = z.infer<typeof simulatorAttachResultSchema>;
+
+export const simulatorControlActionSchema = z.discriminatedUnion("kind", [
+  z
+    .object({
+      kind: z.literal("tap"),
+      x: z.number().min(0).max(1),
+      y: z.number().min(0).max(1),
+    })
+    .strict(),
+  z
+    .object({
+      kind: z.literal("gesture"),
+      points: z
+        .array(
+          z
+            .object({
+              type: z.enum(["begin", "move", "end"]),
+              x: z.number().min(0).max(1),
+              y: z.number().min(0).max(1),
+            })
+            .strict(),
+        )
+        .min(2)
+        .max(64),
+    })
+    .strict(),
+  z.object({ kind: z.literal("type"), text: z.string().max(10_000) }).strict(),
+  z
+    .object({
+      kind: z.literal("button"),
+      button: z.enum([
+        "home",
+        "swipe_home",
+        "app_switcher",
+        "lock",
+        "siri",
+        "side_button",
+      ]),
+    })
+    .strict(),
+  z
+    .object({
+      kind: z.literal("rotate"),
+      orientation: z.enum([
+        "portrait",
+        "portrait_upside_down",
+        "landscape_left",
+        "landscape_right",
+      ]),
+    })
+    .strict(),
+]);
+export type SimulatorControlAction = z.infer<
+  typeof simulatorControlActionSchema
+>;
+
+const simulatorStatusCommandSchema = z
+  .object({
+    type: z.literal("simulator.status"),
+    environmentId: z.string().min(1),
+  })
+  .strict();
+
+const simulatorAttachCommandSchema = z
+  .object({
+    type: z.literal("simulator.attach"),
+    environmentId: z.string().min(1),
+    deviceUdid: z.string().min(1),
+  })
+  .strict();
+
+const simulatorLeaseCommandSchema = z
+  .object({
+    type: z.literal("simulator.lease"),
+    environmentId: z.string().min(1),
+  })
+  .strict();
+
+const simulatorControlCommandSchema = z
+  .object({
+    type: z.literal("simulator.control"),
+    environmentId: z.string().min(1),
+    action: simulatorControlActionSchema,
+  })
+  .strict();
+
+const simulatorStopCommandSchema = z
+  .object({
+    type: z.literal("simulator.stop"),
+    environmentId: z.string().min(1),
+  })
+  .strict();
+
+const simulatorAccessibilityCommandSchema = z
+  .object({
+    type: z.literal("simulator.accessibility"),
+    environmentId: z.string().min(1),
+  })
+  .strict();
+
+const simulatorScreenshotCommandSchema = z
+  .object({
+    type: z.literal("simulator.screenshot"),
+    environmentId: z.string().min(1),
+  })
+  .strict();
+
+const simulatorControlResultSchema = z.object({ ok: z.literal(true) }).strict();
+const simulatorStopResultSchema = z
+  .object({ stopped: z.boolean(), deviceUdid: z.string().min(1).nullable() })
+  .strict();
+const simulatorAccessibilityResultSchema = z
+  .object({ tree: jsonValueSchema })
+  .strict();
+const simulatorScreenshotResultSchema = z
+  .object({
+    dataBase64: z.string(),
+    mimeType: z.literal("image/png"),
   })
   .strict();
 
@@ -1956,6 +2125,69 @@ export const hostDaemonCommandRegistry = {
     retryable: true,
     flushEventsBeforeResult: false,
     envLane: null,
+  }),
+  "simulator.status": defineHostDaemonCommandDescriptor({
+    type: "simulator.status",
+    schema: simulatorStatusCommandSchema,
+    resultSchema: simulatorStatusResultSchema,
+    transport: "onlineRpc",
+    retryable: true,
+    flushEventsBeforeResult: false,
+    envLane: "read",
+  }),
+  "simulator.attach": defineHostDaemonCommandDescriptor({
+    type: "simulator.attach",
+    schema: simulatorAttachCommandSchema,
+    resultSchema: simulatorAttachResultSchema,
+    transport: "onlineRpc",
+    retryable: false,
+    flushEventsBeforeResult: false,
+    envLane: "write",
+  }),
+  "simulator.lease": defineHostDaemonCommandDescriptor({
+    type: "simulator.lease",
+    schema: simulatorLeaseCommandSchema,
+    resultSchema: simulatorStreamLeaseSchema,
+    transport: "onlineRpc",
+    retryable: false,
+    flushEventsBeforeResult: false,
+    envLane: "read",
+  }),
+  "simulator.control": defineHostDaemonCommandDescriptor({
+    type: "simulator.control",
+    schema: simulatorControlCommandSchema,
+    resultSchema: simulatorControlResultSchema,
+    transport: "onlineRpc",
+    retryable: false,
+    flushEventsBeforeResult: false,
+    envLane: "write",
+  }),
+  "simulator.stop": defineHostDaemonCommandDescriptor({
+    type: "simulator.stop",
+    schema: simulatorStopCommandSchema,
+    resultSchema: simulatorStopResultSchema,
+    transport: "onlineRpc",
+    retryable: false,
+    flushEventsBeforeResult: false,
+    envLane: "write",
+  }),
+  "simulator.accessibility": defineHostDaemonCommandDescriptor({
+    type: "simulator.accessibility",
+    schema: simulatorAccessibilityCommandSchema,
+    resultSchema: simulatorAccessibilityResultSchema,
+    transport: "onlineRpc",
+    retryable: true,
+    flushEventsBeforeResult: false,
+    envLane: "read",
+  }),
+  "simulator.screenshot": defineHostDaemonCommandDescriptor({
+    type: "simulator.screenshot",
+    schema: simulatorScreenshotCommandSchema,
+    resultSchema: simulatorScreenshotResultSchema,
+    transport: "onlineRpc",
+    retryable: true,
+    flushEventsBeforeResult: false,
+    envLane: "read",
   }),
   "host.list_commands": defineHostDaemonCommandDescriptor({
     type: "host.list_commands",

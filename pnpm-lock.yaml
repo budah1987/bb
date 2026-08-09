@@ -678,6 +678,9 @@ importers:
       semver:
         specifier: ^7.7.4
         version: 7.7.4
+      serve-sim:
+        specifier: 0.1.45
+        version: 0.1.45(@typescript/typescript6@6.0.2)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
       ws:
         specifier: ^8.19.0
         version: 8.21.0
@@ -1167,6 +1170,9 @@ importers:
       pino-roll:
         specifier: ^4.0.0
         version: 4.0.0
+      serve-sim:
+        specifier: 0.1.45
+        version: 0.1.45(@typescript/typescript6@6.0.2)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
       zod:
         specifier: 4.3.6
         version: 4.3.6
@@ -9070,6 +9076,12 @@ packages:
       react: ^16.8 || ^17.0 || ^18.0 || ^19.0.0 || ^19.0.0-rc
       react-dom: ^16.8 || ^17.0 || ^18.0 || ^19.0.0 || ^19.0.0-rc
 
+  inspect-webkit@0.0.5:
+    resolution: {integrity: sha512-584wP/2nJO1LX74nqHP2j0tQzlK9ZTi+D0Z9qeLQjtUR/LCMXQHGX8M0vrsqBwTeGakF7q5GMFpg81nxUYlCvw==}
+    hasBin: true
+    peerDependencies:
+      typescript: ^5
+
   internmap@1.0.1:
     resolution: {integrity: sha512-lDB5YccMydFBtasVtxnZ3MRBHuaoE8GKsppq+EchKL2U4nK/DmEpPHNH8MZe5HkMtpSiTSOZwfN0tzYjO/lJEw==}
 
@@ -10723,6 +10735,11 @@ packages:
   seroval@1.5.4:
     resolution: {integrity: sha512-46uFvgrXTVxZcUorgSSRZ4y+ieqLLQRMlG4bnCZKW3qI6BZm7Rg4ntMW4p1mILEEBZWrFlcpp0AyIIlM6jD9iw==}
     engines: {node: '>=10'}
+
+  serve-sim@0.1.45:
+    resolution: {integrity: sha512-I9YBJRz7DETanzh6hRD1yaVcUPO+xe4egjGNArk22mO7SIWZVCunHVTwpAbriP7H0aZMIKfQyVpuqvYonuKxBw==}
+    engines: {node: '>=20'}
+    hasBin: true
 
   serve-static@2.2.1:
     resolution: {integrity: sha512-xRXBn0pPqQTVQiC8wyQrKs2MOlX24zQ0POGaj0kultvoOCstBQM5yvOhAVSUwOMjQtTvsPWoNCHfPGwaaQJhTw==}
@@ -18082,6 +18099,10 @@ snapshots:
       react: 19.2.4
       react-dom: 19.2.4(react@19.2.4)
 
+  inspect-webkit@0.0.5(@typescript/typescript6@6.0.2):
+    dependencies:
+      typescript: '@typescript/typescript6@6.0.2'
+
   internmap@1.0.1: {}
 
   internmap@2.0.3: {}
@@ -20201,6 +20222,18 @@ snapshots:
       seroval: 1.5.4
 
   seroval@1.5.4: {}
+
+  serve-sim@0.1.45(@typescript/typescript6@6.0.2)(react-dom@19.2.4(react@19.2.4))(react@19.2.4):
+    dependencies:
+      inspect-webkit: 0.0.5(@typescript/typescript6@6.0.2)
+      sonner: 2.0.7(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
+      ws: 8.21.0
+    transitivePeerDependencies:
+      - bufferutil
+      - react
+      - react-dom
+      - typescript
+      - utf-8-validate
 
   serve-static@2.2.1:
     dependencies:
