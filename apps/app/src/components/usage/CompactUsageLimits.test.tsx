@@ -106,6 +106,47 @@ describe("buildCompactUsageLimitsModel", () => {
       ],
     });
   });
+
+  it("keeps Codex visible when only its weekly window is available", () => {
+    const usage = usageFixture();
+    usage.codex = {
+      status: "ok",
+      accountEmail: "codex@example.com",
+      planLabel: "Pro",
+      windows: [
+        {
+          label: "Weekly limit",
+          usedPercent: 6,
+          resetsAt: "2026-08-15T21:58:24.000Z",
+        },
+      ],
+    };
+
+    const model = buildCompactUsageLimitsModel(usage);
+    expect(model?.providers[1]).toEqual({
+      name: "Codex",
+      summaryMetrics: [
+        {
+          label: "Weekly",
+          usedPercent: 6,
+          resetsAt: "2026-08-15T21:58:24.000Z",
+        },
+      ],
+      detailMetrics: [
+        { label: "5hr", usedPercent: null, resetsAt: null },
+        {
+          label: "Weekly",
+          usedPercent: 6,
+          resetsAt: "2026-08-15T21:58:24.000Z",
+        },
+      ],
+    });
+
+    if (model === null) throw new Error("Expected weekly-only Codex model");
+    render(<CompactUsageSummary model={model} />);
+    expect(screen.getByText("Weekly")).not.toBeNull();
+    expect(screen.getByText("6%")).not.toBeNull();
+  });
 });
 
 describe("CompactUsageSummary", () => {
@@ -128,14 +169,34 @@ describe("CompactUsageSummary", () => {
 });
 
 describe("CommandCenterUsageRailContent", () => {
-  it("keeps the mobile summary fixed to a 16px non-expanding rail", () => {
-    render(<CommandCenterUsageRailContent model={requiredModel()} />);
+  function Harness() {
+    const [open, setOpen] = useState(false);
+    return (
+      <CommandCenterUsageRailContent
+        model={requiredModel()}
+        open={open}
+        onOpenChange={setOpen}
+      />
+    );
+  }
+
+  it("expands mobile details from a 16px summary rail", () => {
+    render(<Harness />);
 
     const rail = screen.getByTestId("command-center-usage-rail");
-    expect(rail.className).toContain("h-4");
-    expect(rail.className).toContain("max-md:flex");
-    expect(screen.queryByRole("button")).toBeNull();
+    expect(rail.className).toContain("max-md:block");
+    const trigger = screen.getByRole("button", { name: /Expand details/u });
+    expect(trigger.className).toContain("h-4");
     expect(screen.queryByText("Weekly")).toBeNull();
+
+    fireEvent.click(trigger);
+
+    expect(
+      screen
+        .getByRole("button", { name: /Collapse details/u })
+        .getAttribute("aria-expanded"),
+    ).toBe("true");
+    expect(screen.getAllByText("Weekly")).toHaveLength(2);
   });
 });
 
