@@ -256,6 +256,13 @@ type ExpectedEnvironmentsKey =
   | "rename"
   | "squashMerge"
   | "status"
+  | "simulatorAccessibility"
+  | "simulatorAttach"
+  | "simulatorControl"
+  | "simulatorLease"
+  | "simulatorScreenshot"
+  | "simulatorStatus"
+  | "simulatorStop"
   | "update";
 
 type ExpectedFilesKey =

@@ -86,6 +86,10 @@ import {
   resolveWorkspaceForCommand,
   workspaceResolutionFailureFromError,
 } from "./workspace-resolution.js";
+import {
+  SimulatorManagerError,
+  type SimulatorManager,
+} from "./simulator/simulator-manager.js";
 
 const THREAD_STOP_ACTIVE_TURN_WAIT_MS = 5_000;
 const defaultCaffeinateManager = createCaffeinateManager();
@@ -128,6 +132,31 @@ function getCaffeinateManager(
   options: CommandDispatchOptions,
 ): CaffeinateManager {
   return options.caffeinateManager ?? defaultCaffeinateManager;
+}
+
+function getSimulatorManager(
+  options: CommandDispatchOptions,
+): SimulatorManager {
+  if (!options.simulatorManager) {
+    throw new ExpectedCommandDispatchError(
+      "simulator_unavailable",
+      "Simulator support is unavailable on this host.",
+    );
+  }
+  return options.simulatorManager;
+}
+
+async function runSimulatorCommand<TResult>(
+  run: () => Promise<TResult>,
+): Promise<TResult> {
+  try {
+    return await run();
+  } catch (error) {
+    if (error instanceof SimulatorManagerError) {
+      throw new ExpectedCommandDispatchError(error.code, error.message);
+    }
+    throw error;
+  }
 }
 
 function handleProviderCliInstallEventLine(
@@ -361,6 +390,7 @@ const commandHandlers: CommandHandlerMap = {
     }),
   "environment.provision.cancel": cancelEnvironmentProvision,
   "environment.destroy": async (command, options) => {
+    await options.simulatorManager?.stop(command.environmentId);
     const resolution = await resolveWorkspaceForCommand({
       dataDir: options.dataDir,
       environmentId: command.environmentId,
@@ -479,6 +509,49 @@ const onlineRpcHandlers: OnlineRpcHandlerMap = {
     }
     return options.ensureConnectTunnelIdentity();
   },
+  "simulator.status": async (command, options) =>
+    runSimulatorCommand(() =>
+      getSimulatorManager(options).status(command.environmentId),
+    ),
+  "simulator.attach": async (command, options) =>
+    runSimulatorCommand(() =>
+      getSimulatorManager(options).attach(
+        command.environmentId,
+        command.deviceUdid,
+      ),
+    ),
+  "simulator.lease": async (command, options) =>
+    runSimulatorCommand(() =>
+      getSimulatorManager(options).createLease(command.environmentId),
+    ),
+  "simulator.control": async (command, options) =>
+    runSimulatorCommand(async () => {
+      await getSimulatorManager(options).control(
+        command.environmentId,
+        command.action,
+      );
+      return { ok: true as const };
+    }),
+  "simulator.stop": async (command, options) =>
+    runSimulatorCommand(async () => {
+      const deviceUdid = await getSimulatorManager(options).stop(
+        command.environmentId,
+      );
+      return { stopped: deviceUdid !== null, deviceUdid };
+    }),
+  "simulator.accessibility": async (command, options) =>
+    runSimulatorCommand(async () => ({
+      tree: await getSimulatorManager(options).accessibility(
+        command.environmentId,
+      ),
+    })),
+  "simulator.screenshot": async (command, options) =>
+    runSimulatorCommand(async () => ({
+      dataBase64: (
+        await getSimulatorManager(options).screenshot(command.environmentId)
+      ).toString("base64"),
+      mimeType: "image/png" as const,
+    })),
   "host.list_files": listHostFiles,
   "host.list_paths": listHostPaths,
   "host.mkdir": mkdirHostPath,

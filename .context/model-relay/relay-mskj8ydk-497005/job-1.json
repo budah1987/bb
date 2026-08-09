@@ -1,0 +1,11 @@
+{
+  "run_number": 1,
+  "session_id": null,
+  "followup": null,
+  "effective_role": "plan_review",
+  "stage_id": "plan-review",
+  "route_reason": "Model Relay selected a bounded Plan Council; Fable is reviewing product intent and UX while Sol owns technical discovery and implementation.",
+  "external_write_targets": [],
+  "executable": "/Users/amir/.local/share/claude/versions/2.1.226",
+  "writer_lock_token": null
+}
