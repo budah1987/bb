@@ -212,6 +212,7 @@ import {
   resolveRootComposeProviderRouting,
 } from "./root-compose-environment-selection";
 import { RootComposeMobileSessions } from "./RootComposeMobileSessions";
+import { CommandCenterUsageRail } from "@/components/usage/CompactUsageLimits";
 import { RootComposeEmptyWelcome } from "./RootComposeEmptyWelcome";
 import { useThreadStorageViewer } from "@/components/secondary-panel/useThreadStorageViewer";
 import {
@@ -3841,6 +3842,7 @@ export function RootComposeView() {
             onPanelChange: handleSecondaryPanelChange,
           }}
         >
+          <CommandCenterUsageRail />
           {showEmptyWelcome ? (
             <RootComposeEmptyWelcome
               onCompose={handleStartComposing}
