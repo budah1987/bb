@@ -73,6 +73,9 @@ interface ConversationMessageContentBaseProps {
   text: string;
 }
 
+const CONVERSATION_PROSE_CLASS =
+  "text-base [&_h1]:!text-xl [&_h2]:!text-lg [&_h3]:!text-base [&_h4]:!text-base";
+
 export interface ConversationMessageContentUserProps extends ConversationMessageContentBaseProps {
   role: "user";
   /** Mobile presentation for the regular user message's action footer. */
@@ -328,6 +331,7 @@ function CollapsibleMessageText({
       >
         <MarkdownPreview
           content={body.text}
+          className={CONVERSATION_PROSE_CLASS}
           promptMentions={promptMentions}
           threadMentions={rawThreadMentions}
           linkRouting={linkRouting}
@@ -470,7 +474,7 @@ function UserConversationMessage({
             />
           </div>
         ) : null}
-        <div className="rounded-xl border border-border-seam bg-surface-recessed px-4 py-2.5 text-sm leading-relaxed text-foreground">
+        <div className="rounded-xl border border-border-seam bg-surface-recessed px-4 py-2.5 text-base leading-relaxed text-foreground">
           {messageText ? (
             <CollapsibleMessageText
               mentions={mentions}
@@ -624,7 +628,7 @@ function AssistantConversationMessage({
   ]);
 
   return (
-    <div className="group/message w-full px-2 text-sm font-normal leading-relaxed">
+    <div className="group/message w-full px-2 text-base font-normal leading-relaxed">
       {/*
         Reports in-bounds text selections up to the timeline-level controller
         that drives the single floating selection menu (Add to chat / Reply in
@@ -633,6 +637,7 @@ function AssistantConversationMessage({
       <SelectableMessageProse onSelect={onSelectProse}>
         <MarkdownPreview
           content={text}
+          className={CONVERSATION_PROSE_CLASS}
           linkRouting={linkRouting}
           messageDirectives={messageDirectives}
           threadMentions={ASSISTANT_THREAD_MENTIONS}

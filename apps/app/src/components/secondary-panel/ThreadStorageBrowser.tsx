@@ -46,8 +46,7 @@ interface FileTreeHostStyle extends CSSProperties {
 
 const FILE_TREE_BASE_HOST_STYLE: FileTreeHostStyle = {
   "--trees-accent-override": "var(--ring)",
-  "--trees-bg-muted-override":
-    "color-mix(in srgb, var(--muted) 45%, transparent)",
+  "--trees-bg-muted-override": "var(--state-hover)",
   "--trees-bg-override": "transparent",
   "--trees-border-color-override": "var(--border)",
   "--trees-fg-muted-override": "var(--muted-foreground)",
@@ -62,8 +61,7 @@ const FILE_TREE_BASE_HOST_STYLE: FileTreeHostStyle = {
   "--trees-padding-inline-override": "0",
   "--trees-scrollbar-thumb-override":
     "color-mix(in srgb, var(--muted-foreground) 35%, transparent)",
-  "--trees-selected-bg-override":
-    "color-mix(in srgb, var(--accent) 65%, transparent)",
+  "--trees-selected-bg-override": "var(--surface-recessed)",
   "--trees-selected-fg-override": "var(--foreground)",
   "--trees-selected-focused-border-color-override": "var(--ring)",
   height: "100%",
@@ -73,12 +71,16 @@ interface ThreadStorageBrowserProps {
   controller: ThreadStorageBrowserController;
   filesError?: Error | null;
   isFilesLoading: boolean;
+  ariaLabel?: string;
+  emptyMessage?: string;
 }
 
 export function ThreadStorageBrowser({
   controller,
   filesError,
   isFilesLoading,
+  ariaLabel = "Thread storage file tree",
+  emptyMessage = "No files yet.",
 }: ThreadStorageBrowserProps) {
   const {
     closeSearch,
@@ -137,13 +139,13 @@ export function ThreadStorageBrowser({
       />
     );
   } else if (loadedFiles.length === 0) {
-    body = <EmptyState message="No files yet." />;
+    body = <EmptyState message={emptyMessage} />;
   } else if (filteredFiles.length === 0) {
     body = <EmptyState message="No files match search." />;
   } else {
     body = (
       <FileTree
-        aria-label="Thread storage file tree"
+        aria-label={ariaLabel}
         className="block h-full min-h-0"
         model={model}
         style={fileTreeHostStyle}

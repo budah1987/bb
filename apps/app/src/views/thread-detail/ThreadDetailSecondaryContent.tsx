@@ -28,6 +28,10 @@ import {
   type ThreadMetadataContentProps,
 } from "@/components/secondary-panel/ThreadMetadataContent";
 import { useThreads } from "@/hooks/queries/thread-queries";
+import {
+  ThreadRail,
+  useThreadRailContentInsetPx,
+} from "@/components/rail/ThreadRail";
 import { ThreadTimelinePane } from "./ThreadTimelinePane";
 import { PANEL_COLLAPSE_TRANSITION_CLASS } from "@/components/secondary-panel/panelTransitionTokens";
 import { dispatchBrowserViewBoundsSync } from "@/lib/browser-view-bounds-sync";
@@ -125,6 +129,13 @@ function ThreadDetailSecondaryContentBody({
   const canCollapseConversation = isSecondaryPanelOpen && !renderAsDrawer;
   const isConversationCollapsedActive =
     canCollapseConversation && isConversationCollapsed;
+  // The rail overlays the conversation either way; this only decides whether
+  // the transcript gets out of its way. A column that already gave width to the
+  // secondary panel, or that is a bounded split pane, cannot spare another
+  // 312px, so the card floats over it instead.
+  const railContentInsetPx = useThreadRailContentInsetPx(
+    isSecondaryPanelOpen || isBoundedPane ? "floating" : "docked",
+  );
   const [isCompactDrawerContentSettled, setIsCompactDrawerContentSettled] =
     useState(false);
   const compactDrawerContentSettleFrameRef = useRef<number | null>(null);
@@ -429,11 +440,25 @@ function ThreadDetailSecondaryContentBody({
               )}
             >
               {header}
+              {/*
+                `relative` makes this the rail's positioning container: the rail
+                is an absolutely positioned overlay that takes no layout space,
+                so it floats over the conversation without touching the
+                timeline/panel split or the resize handle between them. The
+                padding is the space the transcript yields to it.
+              */}
               <div
-                className="flex min-h-0 flex-1 flex-col"
-                style={{ viewTransitionName: conversationViewTransitionName }}
+                className={cn(
+                  "relative flex min-h-0 flex-1 flex-col transition-[padding-right] motion-reduce:transition-none",
+                  PANEL_COLLAPSE_TRANSITION_CLASS,
+                )}
+                style={{
+                  paddingRight: railContentInsetPx,
+                  viewTransitionName: conversationViewTransitionName,
+                }}
               >
                 <ThreadTimelinePane {...stableTimeline} footer={footer} />
+                <ThreadRail threadId={stableTimeline.threadId} />
               </div>
             </div>
           </Panel>

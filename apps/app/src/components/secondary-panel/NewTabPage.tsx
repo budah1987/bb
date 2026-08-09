@@ -4,6 +4,7 @@ import {
   NewTabFileSearch,
   type NewTabFileSearchProps,
   type OpenBrowserHandler,
+  type OpenNotesHandler,
   type OpenSimulatorHandler,
   type StartTerminalHandler,
 } from "./NewTabFileSearch";
@@ -13,6 +14,7 @@ type NewTabPageFileSearchProps = Omit<NewTabFileSearchProps, "idleActions">;
 
 export interface NewTabPageProps extends NewTabPageFileSearchProps {
   onOpenBrowser?: OpenBrowserHandler;
+  onOpenNotes?: OpenNotesHandler;
   onOpenSimulator?: OpenSimulatorHandler;
   simulatorRunning?: boolean;
   onStartTerminal?: StartTerminalHandler;
@@ -22,6 +24,7 @@ export interface NewTabPageProps extends NewTabPageFileSearchProps {
 function SimulatorActions({
   environmentId,
   onOpenBrowser,
+  onOpenNotes,
   onOpenSimulator,
   onStartTerminal,
   pluginActions,
@@ -30,6 +33,7 @@ function SimulatorActions({
   NewTabPageProps,
   | "environmentId"
   | "onOpenBrowser"
+  | "onOpenNotes"
   | "onOpenSimulator"
   | "onStartTerminal"
   | "pluginActions"
@@ -39,6 +43,7 @@ function SimulatorActions({
   return (
     <NewTabActions
       onOpenBrowser={onOpenBrowser}
+      onOpenNotes={onOpenNotes}
       onOpenSimulator={onOpenSimulator}
       onStartTerminal={onStartTerminal}
       pluginActions={pluginActions}
@@ -61,6 +66,7 @@ export function NewTabPage({
   focusRequest,
   initialQuery,
   onOpenBrowser,
+  onOpenNotes,
   onOpenSimulator,
   onSelect,
   onStartTerminal,
@@ -83,6 +89,7 @@ export function NewTabPage({
             <SimulatorActions
               environmentId={environmentId}
               onOpenBrowser={onOpenBrowser}
+              onOpenNotes={onOpenNotes}
               onOpenSimulator={onOpenSimulator}
               onStartTerminal={onStartTerminal}
               pluginActions={pluginActions}
@@ -91,6 +98,7 @@ export function NewTabPage({
           ) : (
             <NewTabActions
               onOpenBrowser={onOpenBrowser}
+              onOpenNotes={onOpenNotes}
               onStartTerminal={onStartTerminal}
               pluginActions={pluginActions}
             />

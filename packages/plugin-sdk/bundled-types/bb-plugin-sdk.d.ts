@@ -73,6 +73,7 @@ declare const appKeybindingOverridesSchema: z$1.ZodArray<z$1.ZodObject<{
         "panel.newTab": "panel.newTab";
         "panel.close": "panel.close";
         "panel.toggle": "panel.toggle";
+        "rail.toggle": "rail.toggle";
         "file.quickOpen": "file.quickOpen";
         "diff.toggle": "diff.toggle";
         "terminal.open": "terminal.open";
@@ -159,6 +160,7 @@ declare const changedMessageSchema: z$1.ZodDiscriminatedUnion<[z$1.ZodObject<{
         "order-changed": "order-changed";
         "tabs-changed": "tabs-changed";
         "terminals-changed": "terminals-changed";
+        "notes-changed": "notes-changed";
     }>>>;
 }, z$1.core.$strict>, z$1.ZodObject<{
     type: z$1.ZodLiteral<"changed">;
@@ -2233,11 +2235,17 @@ declare const createProjectSourceRequestSchema: z$1.ZodDiscriminatedUnion<[z$1.Z
 type CreateProjectSourceRequest = z$1.infer<typeof createProjectSourceRequestSchema>;
 declare const createProjectRequestSchema: z$1.ZodObject<{
     name: z$1.ZodString;
-    source: z$1.ZodObject<{
+    source: z$1.ZodDiscriminatedUnion<[z$1.ZodObject<{
         hostId: z$1.ZodString;
         type: z$1.ZodLiteral<"local_path">;
         path: z$1.ZodPipe<z$1.ZodString, z$1.ZodTransform<string, string>>;
-    }, z$1.core.$strict>;
+    }, z$1.core.$strict>, z$1.ZodObject<{
+        hostId: z$1.ZodString;
+        type: z$1.ZodLiteral<"clone">;
+        targetPath: z$1.ZodOptional<z$1.ZodPipe<z$1.ZodString, z$1.ZodTransform<string, string>>>;
+        remoteUrl: z$1.ZodOptional<z$1.ZodString>;
+    }, z$1.core.$strict>], "type">;
+    githubAccountLogin: z$1.ZodOptional<z$1.ZodNullable<z$1.ZodString>>;
 }, z$1.core.$strip>;
 type CreateProjectRequest = z$1.infer<typeof createProjectRequestSchema>;
 declare const threadSectionSchema: z$1.ZodObject<{
@@ -2465,6 +2473,7 @@ declare const promptHistoryResponseSchema: z$1.ZodArray<z$1.ZodObject<{
 type PromptHistoryResponse = z$1.infer<typeof promptHistoryResponseSchema>;
 declare const updateProjectRequestSchema: z$1.ZodObject<{
     name: z$1.ZodOptional<z$1.ZodString>;
+    githubAccountLogin: z$1.ZodOptional<z$1.ZodNullable<z$1.ZodString>>;
 }, z$1.core.$strip>;
 type UpdateProjectRequest = z$1.infer<typeof updateProjectRequestSchema>;
 declare const updateProjectSourceRequestSchema: z$1.ZodObject<{
@@ -2542,6 +2551,7 @@ declare const projectResponseSchema: z$1.ZodObject<{
     }>;
     name: z$1.ZodString;
     gitRemoteUrl: z$1.ZodNullable<z$1.ZodString>;
+    githubAccountLogin: z$1.ZodNullable<z$1.ZodString>;
     createdAt: z$1.ZodNumber;
     updatedAt: z$1.ZodNumber;
     sources: z$1.ZodArray<z$1.ZodObject<{
@@ -2564,6 +2574,7 @@ declare const projectWithThreadsResponseSchema: z$1.ZodObject<{
     }>;
     name: z$1.ZodString;
     gitRemoteUrl: z$1.ZodNullable<z$1.ZodString>;
+    githubAccountLogin: z$1.ZodNullable<z$1.ZodString>;
     createdAt: z$1.ZodNumber;
     updatedAt: z$1.ZodNumber;
     sources: z$1.ZodArray<z$1.ZodObject<{
@@ -2881,7 +2892,7 @@ declare const githubRepositoryCatalogSchema: z$1.ZodObject<{
         activeAccount: z$1.ZodNullable<z$1.ZodString>;
     }, z$1.core.$strict>>;
     scope: z$1.ZodEnum<{
-        intersection: "intersection";
+        union: "union";
         account: "account";
     }>;
 }, z$1.core.$strict>;
@@ -4185,6 +4196,7 @@ declare const hostDaemonCommandRegistry: {
     }, z$1.core.$strip>, "settled", false>;
     "project.clone": HostDaemonCommandDescriptor<"project.clone", z$1.ZodObject<{
         type: z$1.ZodLiteral<"project.clone">;
+        githubAccountLogin: z$1.ZodDefault<z$1.ZodNullable<z$1.ZodString>>;
         remoteUrl: z$1.ZodString;
         projectSlug: z$1.ZodString;
         targetPath: z$1.ZodOptional<z$1.ZodString>;
@@ -5109,7 +5121,7 @@ declare const hostDaemonCommandRegistry: {
             activeAccount: z$1.ZodNullable<z$1.ZodString>;
         }, z$1.core.$strict>>;
         scope: z$1.ZodEnum<{
-            intersection: "intersection";
+            union: "union";
             account: "account";
         }>;
     }, z$1.core.$strict>, "onlineRpc", true>;
@@ -7178,6 +7190,7 @@ declare const systemConfigResponseSchema: z$1.ZodObject<{
             "panel.newTab": "panel.newTab";
             "panel.close": "panel.close";
             "panel.toggle": "panel.toggle";
+            "rail.toggle": "rail.toggle";
             "file.quickOpen": "file.quickOpen";
             "diff.toggle": "diff.toggle";
             "terminal.open": "terminal.open";
@@ -7270,6 +7283,7 @@ declare const systemConfigResponseSchema: z$1.ZodObject<{
             "panel.newTab": "panel.newTab";
             "panel.close": "panel.close";
             "panel.toggle": "panel.toggle";
+            "rail.toggle": "rail.toggle";
             "file.quickOpen": "file.quickOpen";
             "diff.toggle": "diff.toggle";
             "terminal.open": "terminal.open";
@@ -7362,6 +7376,7 @@ declare const systemConfigResponseSchema: z$1.ZodObject<{
             "panel.newTab": "panel.newTab";
             "panel.close": "panel.close";
             "panel.toggle": "panel.toggle";
+            "rail.toggle": "rail.toggle";
             "file.quickOpen": "file.quickOpen";
             "diff.toggle": "diff.toggle";
             "terminal.open": "terminal.open";
@@ -7531,9 +7546,9 @@ declare const terminalSessionSchema: z$1.ZodObject<{
     cols: z$1.ZodNumber;
     rows: z$1.ZodNumber;
     status: z$1.ZodEnum<{
+        running: "running";
         starting: "starting";
         disconnected: "disconnected";
-        running: "running";
         exited: "exited";
     }>;
     exitCode: z$1.ZodNullable<z$1.ZodNumber>;
@@ -7562,9 +7577,9 @@ declare const terminalListResponseSchema: z$1.ZodObject<{
         cols: z$1.ZodNumber;
         rows: z$1.ZodNumber;
         status: z$1.ZodEnum<{
+            running: "running";
             starting: "starting";
             disconnected: "disconnected";
-            running: "running";
             exited: "exited";
         }>;
         exitCode: z$1.ZodNullable<z$1.ZodNumber>;
@@ -10159,8 +10174,8 @@ declare const threadTimelineResponseSchema: z$1.ZodObject<{
         updatedAt: z$1.ZodNumber;
         objective: z$1.ZodString;
         status: z$1.ZodEnum<{
-            active: "active";
             paused: "paused";
+            active: "active";
             budgetLimited: "budgetLimited";
             complete: "complete";
         }>;
@@ -10245,6 +10260,19 @@ declare const threadStoragePathListResponseSchema: z$1.ZodObject<{
 }, z$1.core.$strip>;
 type ThreadStoragePathListResponse = z$1.infer<typeof threadStoragePathListResponseSchema>;
 
+declare const threadNotesResponseSchema: z$1.ZodObject<{
+    recapBody: z$1.ZodNullable<z$1.ZodString>;
+    recapEnabled: z$1.ZodBoolean;
+    recapGeneratedAt: z$1.ZodNullable<z$1.ZodNumber>;
+    recapSourceSeq: z$1.ZodNullable<z$1.ZodNumber>;
+    scratchpad: z$1.ZodString;
+}, z$1.core.$strict>;
+type ThreadNotesResponse = z$1.infer<typeof threadNotesResponseSchema>;
+declare const updateThreadScratchpadRequestSchema: z$1.ZodObject<{
+    scratchpad: z$1.ZodString;
+}, z$1.core.$strict>;
+type UpdateThreadScratchpadRequest = z$1.infer<typeof updateThreadScratchpadRequestSchema>;
+
 declare const threadTabsResponseSchema: z$1.ZodObject<{
     revision: z$1.ZodNumber;
     tabs: z$1.ZodArray<z$1.ZodDiscriminatedUnion<[z$1.ZodObject<{
@@ -10316,6 +10344,9 @@ declare const threadTabsResponseSchema: z$1.ZodObject<{
     }, z$1.core.$strict>, z$1.ZodObject<{
         id: z$1.ZodString;
         kind: z$1.ZodLiteral<"new-tab">;
+    }, z$1.core.$strict>, z$1.ZodObject<{
+        id: z$1.ZodString;
+        kind: z$1.ZodLiteral<"notes">;
     }, z$1.core.$strict>, z$1.ZodObject<{
         id: z$1.ZodString;
         kind: z$1.ZodLiteral<"side-chat">;
@@ -10401,6 +10432,9 @@ declare const updateThreadTabsRequestSchema: z$1.ZodObject<{
     }, z$1.core.$strict>, z$1.ZodObject<{
         id: z$1.ZodString;
         kind: z$1.ZodLiteral<"new-tab">;
+    }, z$1.core.$strict>, z$1.ZodObject<{
+        id: z$1.ZodString;
+        kind: z$1.ZodLiteral<"notes">;
     }, z$1.core.$strict>, z$1.ZodObject<{
         id: z$1.ZodString;
         kind: z$1.ZodLiteral<"side-chat">;
@@ -10903,6 +10937,8 @@ interface PluginSidebarProject {
      * is not backed by a remote repository.
      */
     experimental_gitRemoteUrl?: string | null;
+    /** Default GitHub identity for new workspaces in this repository. */
+    experimental_githubAccountLogin?: string | null;
 }
 interface PluginSidebarThreadsState {
     status: "loading" | "ready" | "error";
@@ -12773,6 +12809,9 @@ type ThreadQueuedMessageSendResult = SendQueuedMessageResponse;
 type ThreadQueuedMessageGroupBoundaryResult = ThreadQueuedMessageListResponse;
 type ThreadTabsResult = ThreadTabsResponse;
 type ThreadTabsUpdateResult = ThreadTabsResponse;
+type ThreadNotesResult = ThreadNotesResponse;
+type ThreadScratchpadUpdateResult = ThreadNotesResponse;
+type ThreadRecapResult = ThreadNotesResponse;
 type ThreadStorageFilesResult = ThreadStorageFileListResponse;
 type ThreadStoragePathsResult = ThreadStoragePathListResponse;
 type ThreadChildSummaryResult = ThreadChildSummaryResponse;
@@ -12853,6 +12892,18 @@ interface ThreadTimelineTurnSummaryDetailsArgs extends TimelineTurnSummaryDetail
 }
 interface ThreadTabsUpdateArgs extends UpdateThreadTabsRequest {
     threadId: string;
+}
+interface ThreadScratchpadUpdateArgs extends UpdateThreadScratchpadRequest {
+    threadId: string;
+}
+interface ThreadRecapGenerateArgs {
+    threadId: string;
+    /**
+     * Regenerate even when the stored recap already reflects the thread's
+     * current event sequence. Defaults to false, which returns a current recap
+     * without paying for inference.
+     */
+    force?: boolean;
 }
 interface ThreadOpenArgs {
     threadId: string;
@@ -12955,6 +13006,11 @@ interface ThreadTabsArea {
     get(args: ThreadStatusArgs): Promise<ThreadTabsResult>;
     update(args: ThreadTabsUpdateArgs): Promise<ThreadTabsUpdateResult>;
 }
+interface ThreadNotesArea {
+    generateRecap(args: ThreadRecapGenerateArgs): Promise<ThreadRecapResult>;
+    get(args: ThreadStatusArgs): Promise<ThreadNotesResult>;
+    setScratchpad(args: ThreadScratchpadUpdateArgs): Promise<ThreadScratchpadUpdateResult>;
+}
 interface ThreadsArea {
     archive(args: ThreadActionArgs): Promise<ThreadArchiveResult>;
     archiveAll(args: ThreadActionArgs): Promise<ThreadArchiveAllResult>;
@@ -12971,6 +13027,7 @@ interface ThreadsArea {
     list(args?: ThreadListArgs): Promise<ThreadListResult>;
     markRead(args: ThreadActionArgs): Promise<ThreadReadStateResult>;
     markUnread(args: ThreadActionArgs): Promise<ThreadReadStateResult>;
+    markViewed(args: ThreadActionArgs): Promise<ThreadReadStateResult>;
     open(args: ThreadOpenArgs): Promise<ThreadOpenResult>;
     paneAction(args: ThreadPaneActionArgs): Promise<ThreadPaneActionResult>;
     output(args: ThreadOutputArgs): Promise<ThreadOutputResponse>;
@@ -12983,6 +13040,7 @@ interface ThreadsArea {
     spawn(args: ThreadSpawnArgs): Promise<ThreadSpawnResult>;
     stop(args: ThreadActionArgs): Promise<ThreadStopResult>;
     tabs: ThreadTabsArea;
+    notes: ThreadNotesArea;
     timeline(args: ThreadTimelineArgs): Promise<ThreadTimelineResult>;
     timelineTurnSummaryDetails(args: ThreadTimelineTurnSummaryDetailsArgs): Promise<ThreadTimelineTurnSummaryDetailsResult>;
     storageFiles(args: ThreadStorageFilesArgs): Promise<ThreadStorageFilesResult>;

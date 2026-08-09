@@ -8,6 +8,7 @@ import {
   environmentFilePreviewQueryKeyPrefix,
   environmentMergeBaseBranchesQueryKeyPrefix,
   environmentPathsQueryKeyPrefix,
+  environmentWorkspaceFilesQueryKeyPrefix,
   environmentWorkStatusQueryKeyPrefix,
   systemExecutionOptionsEnvironmentQueryKeyPrefix,
 } from "../queries/query-keys";
@@ -40,6 +41,9 @@ export function removeEnvironmentScopedQueries({
   });
   queryClient.removeQueries({
     queryKey: environmentPathsQueryKeyPrefix(environmentId),
+  });
+  queryClient.removeQueries({
+    queryKey: environmentWorkspaceFilesQueryKeyPrefix(environmentId),
   });
   queryClient.removeQueries({
     queryKey: environmentMergeBaseBranchesQueryKeyPrefix(environmentId),

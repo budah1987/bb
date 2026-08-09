@@ -612,6 +612,7 @@ const projectCloneDefaultPathCommandSchema = z
 const projectCloneCommandSchema = z
   .object({
     type: z.literal("project.clone"),
+    githubAccountLogin: githubAccountLoginSchema.nullable().default(null),
     remoteUrl: z.string().min(1),
     projectSlug: z.string().min(1),
     targetPath: z.string().min(1).optional(),
@@ -1686,7 +1687,7 @@ export const githubRepositoryCatalogSchema = z
   .object({
     accounts: z.array(githubAccountSchema).min(1),
     repositories: z.array(githubRepositorySchema),
-    scope: z.enum(["account", "intersection"]),
+    scope: z.enum(["account", "union"]),
   })
   .strict();
 export type GithubRepositoryCatalog = z.infer<

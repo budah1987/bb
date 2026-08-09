@@ -1,12 +1,18 @@
 import type { RefObject } from "react";
 import { RenameDialog, RenameDialogContent } from "./RenameDialog";
 
-const ENVIRONMENT_NAME_MAX_LENGTH = 80;
+const NAME_MAX_LENGTH = 80;
 
-const ENVIRONMENT_NAME_LENGTH_RULE = {
-  limit: ENVIRONMENT_NAME_MAX_LENGTH,
-  message: `Environment name must be ${ENVIRONMENT_NAME_MAX_LENGTH} characters or fewer.`,
-};
+const NAME_LENGTH_RULES = {
+  environment: {
+    limit: NAME_MAX_LENGTH,
+    message: `Environment name must be ${NAME_MAX_LENGTH} characters or fewer.`,
+  },
+  workspace: {
+    limit: NAME_MAX_LENGTH,
+    message: `Workspace name must be ${NAME_MAX_LENGTH} characters or fewer.`,
+  },
+} as const;
 
 export interface EnvironmentRenameDialogTarget {
   branchName?: string;
@@ -16,6 +22,7 @@ export interface EnvironmentRenameDialogTarget {
 }
 
 interface EnvironmentRenameDialogProps {
+  entityLabel?: "environment" | "workspace";
   errorMessage?: string | null;
   target: EnvironmentRenameDialogTarget | null;
   pending?: boolean;
@@ -24,6 +31,7 @@ interface EnvironmentRenameDialogProps {
 }
 
 export interface EnvironmentRenameDialogContentProps {
+  entityLabel?: "environment" | "workspace";
   target: EnvironmentRenameDialogTarget;
   pending: boolean;
   errorMessage?: string | null;
@@ -32,6 +40,7 @@ export interface EnvironmentRenameDialogContentProps {
 }
 
 export function EnvironmentRenameDialog({
+  entityLabel = "environment",
   errorMessage,
   target,
   pending = false,
@@ -44,6 +53,7 @@ export function EnvironmentRenameDialog({
         target ? (
           <EnvironmentRenameDialogContent
             key={target.id}
+            entityLabel={entityLabel}
             target={target}
             pending={pending}
             errorMessage={errorMessage}
@@ -57,6 +67,7 @@ export function EnvironmentRenameDialog({
 }
 
 export function EnvironmentRenameDialogContent({
+  entityLabel = "environment",
   target,
   pending,
   errorMessage,
@@ -65,12 +76,12 @@ export function EnvironmentRenameDialogContent({
 }: EnvironmentRenameDialogContentProps) {
   return (
     <RenameDialogContent
-      entityLabel="environment"
+      entityLabel={entityLabel}
       initialName={target.currentName}
       pending={pending}
       errorMessage={errorMessage}
-      placeholder={target.branchName ?? "Environment name"}
-      maxLength={ENVIRONMENT_NAME_LENGTH_RULE}
+      placeholder={target.branchName ?? `${entityLabel} name`}
+      maxLength={NAME_LENGTH_RULES[entityLabel]}
       autoCapitalize="sentences"
       clearAction={
         target.canClearName

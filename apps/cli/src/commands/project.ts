@@ -24,9 +24,11 @@ interface ProjectListCommandOptions {
 }
 
 interface ProjectCreateCommandOptions {
+  githubAccount?: string;
   host?: string;
   machine?: string;
   name: string;
+  remoteUrl?: string;
   root?: string;
   json?: boolean;
 }
@@ -73,6 +75,8 @@ function addProjectWorkspaceRoutingOptions(command: Command): Command {
 }
 
 interface ProjectUpdateCommandOptions {
+  clearGithubAccount?: boolean;
+  githubAccount?: string;
   name?: string;
   json?: boolean;
 }
@@ -116,10 +120,6 @@ interface ProjectSourceDeleteCommandOptions {
   json?: boolean;
 }
 
-interface ProjectSourceInputOptions {
-  path?: string;
-}
-
 type ProjectSource = ProjectResponse["sources"][number];
 
 function validateProjectSourceAddOptions(
@@ -157,17 +157,27 @@ function buildProjectSourceAddRequest(
   };
 }
 
-function buildProjectSourceFromOptions(
-  args: ProjectSourceInputOptions & { hostId: string },
-): Extract<CreateProjectSourceRequest, { type: "local_path" }> {
-  if (args.path) {
+function buildProjectCreateSourceFromOptions(
+  args: ProjectCreateCommandOptions & { hostId: string },
+): CreateProjectSourceRequest {
+  if (args.root && args.remoteUrl) {
+    throw new Error("Cannot combine --root with --remote-url.");
+  }
+  if (args.remoteUrl) {
     return {
       hostId: args.hostId,
-      path: args.path,
+      remoteUrl: args.remoteUrl,
+      type: "clone",
+    };
+  }
+  if (args.root) {
+    return {
+      hostId: args.hostId,
+      path: args.root,
       type: "local_path",
     };
   }
-  throw new Error("Provide --path.");
+  throw new Error("Provide --root or --remote-url.");
 }
 
 async function resolveProjectSourceHostId(
@@ -602,6 +612,14 @@ export function registerProjectCommands(
     .requiredOption("--name <name>", "Project name")
     .option("--root <path>", "Project source path")
     .option(
+      "--remote-url <url>",
+      "Clone a Git repository as the project source",
+    )
+    .option(
+      "--github-account <login>",
+      "Default GitHub account for new workspaces",
+    )
+    .option(
       "--machine <id-or-name>",
       "Execution machine ID or unambiguous name",
     )
@@ -612,13 +630,16 @@ export function registerProjectCommands(
         const serverUrl = getUrl();
         const sdk = createCliBbSdk(serverUrl);
         const hostId = await resolveProjectSourceHostId(opts, serverUrl);
-        const source = buildProjectSourceFromOptions({
+        const source = buildProjectCreateSourceFromOptions({
           hostId,
-          path: opts.root,
+          ...opts,
         });
         const created = await sdk.projects.create({
           name: opts.name,
           source,
+          ...(opts.githubAccount === undefined
+            ? {}
+            : { githubAccountLogin: opts.githubAccount }),
         });
         if (outputJson(opts, created)) return;
         console.log(`Project created: ${created.id}`);
@@ -643,16 +664,35 @@ export function registerProjectCommands(
     .command("update <id>")
     .description("Update a project")
     .option("--name <name>", "Set the project name")
+    .option("--github-account <login>", "Set the default GitHub account")
+    .option(
+      "--clear-github-account",
+      "Clear the default GitHub account and follow the workspace choice",
+    )
     .option("--json", "Print machine-readable JSON output")
     .action(
       action(async (id: string, opts: ProjectUpdateCommandOptions) => {
-        if (!opts.name) {
-          throw new Error("No changes requested. Provide --name.");
+        if (!opts.name && !opts.githubAccount && !opts.clearGithubAccount) {
+          throw new Error(
+            "No changes requested. Provide --name, --github-account, or --clear-github-account.",
+          );
+        }
+        if (opts.githubAccount && opts.clearGithubAccount) {
+          throw new Error(
+            "Cannot combine --github-account with --clear-github-account.",
+          );
         }
         const sdk = createCliBbSdk(getUrl());
         const updated = await sdk.projects.update({
           projectId: id,
-          name: opts.name,
+          ...(opts.name === undefined ? {} : { name: opts.name }),
+          ...(opts.githubAccount === undefined && !opts.clearGithubAccount
+            ? {}
+            : {
+                githubAccountLogin: opts.clearGithubAccount
+                  ? null
+                  : (opts.githubAccount ?? null),
+              }),
         });
         if (outputJson(opts, updated)) return;
         console.log(`Project ${updated.id} updated`);
@@ -797,6 +837,9 @@ function printProject(project: ProjectResponse): void {
   console.log("");
   console.log(`  ID:       ${project.id}`);
   console.log(`  Name:     ${project.name}`);
+  console.log(
+    `  GitHub:   ${project.githubAccountLogin ? `@${project.githubAccountLogin}` : "not set"}`,
+  );
   console.log(`  Created:  ${new Date(project.createdAt).toLocaleString()}`);
   console.log(`  Updated:  ${new Date(project.updatedAt).toLocaleString()}`);
   if (project.sources.length > 0) {

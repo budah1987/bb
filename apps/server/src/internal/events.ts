@@ -39,6 +39,7 @@ import {
 } from "../services/system/event-pruning.js";
 import { queueChildThreadTurnNotificationBestEffort } from "../services/threads/child-thread-notifications.js";
 import { isParentNotifiableChildThread } from "../services/threads/thread-parent.js";
+import { maybeGenerateThreadRecapInBackground } from "../services/threads/recap-auto-trigger.js";
 import { runQueuedMessageAutoSendForThread } from "../services/threads/queued-messages.js";
 import { deferAfterResponse } from "../services/lib/response-deferral.js";
 import {
@@ -442,6 +443,19 @@ async function applyEventEffects(
               turnStatus: event.status,
             });
           }
+        }
+        if (
+          turnCompleted.thread &&
+          turnCompleted.isRootTurnCompletion &&
+          event.status === "completed"
+        ) {
+          // Fire-and-forget: decides in two indexed reads and returns, so event
+          // ingestion never waits on inference. Only completed root turns count
+          // — a recap of an interrupted or failed turn would describe a state
+          // the thread is about to leave.
+          maybeGenerateThreadRecapInBackground(deps, {
+            thread: turnCompleted.thread,
+          });
         }
         if (
           event.status === "completed" &&

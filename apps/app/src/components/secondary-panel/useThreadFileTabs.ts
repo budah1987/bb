@@ -8,6 +8,7 @@ import {
   createBrowserFixedPanelTab,
   createHostFilePreviewFixedPanelTab,
   createNewTabFixedPanelTab,
+  createNotesFixedPanelTab,
   createPluginPanelFixedPanelTab,
   createSimulatorFixedPanelTab,
   createThreadStorageFilePreviewFixedPanelTab,
@@ -522,6 +523,16 @@ export function useThreadFileTabs({
     [updateFixedPanelTabsState],
   );
 
+  // Opens (or focuses) the thread's singleton Notes tab. Launched from the
+  // new-tab page, so the transient new-tab is replaced like the other
+  // launchers do.
+  const openNotesTab = useCallback(() => {
+    const tab = createNotesFixedPanelTab();
+    updateFixedPanelTabsState((state) =>
+      replaceNewTabWithSecondaryPanelTabInState({ state, tab }),
+    );
+  }, [updateFixedPanelTabsState]);
+
   const selectFileSearchResult = useCallback(
     (selection: FileSearchSelection) => {
       const tab = createTabForFileSearchSelection({
@@ -607,6 +618,7 @@ export function useThreadFileTabs({
   const activeBrowserTab = activeTab?.kind === "browser" ? activeTab : null;
   const activeSimulatorTab = activeTab?.kind === "simulator" ? activeTab : null;
   const activeNewTab = activeTab?.kind === "new-tab" ? activeTab : null;
+  const activeNotesTab = activeTab?.kind === "notes" ? activeTab : null;
   const activePluginPanelTab =
     activeTab?.kind === "plugin-panel" ? activeTab : null;
 
@@ -634,6 +646,8 @@ export function useThreadFileTabs({
     clearActiveFileTabs,
     closeTab,
     isNewTabActive: activeNewTab !== null,
+    isNotesTabActive: activeNotesTab !== null,
+    openNotesTab,
     openPluginPanel,
     openTab,
     orderedSecondaryFileTabs,
