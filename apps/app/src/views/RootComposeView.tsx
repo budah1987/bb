@@ -104,7 +104,6 @@ import {
   useHostProviderCliStatus,
   useOnboardingAgents,
   useSystemConfig,
-  useSystemUsageLimits,
 } from "@/hooks/queries/system-queries";
 import { parseGithubRepositoryName } from "@/lib/github-repository";
 import { useSidebarNavigation } from "@/hooks/queries/sidebar-navigation-query";
@@ -915,10 +914,6 @@ export function RootComposeView() {
     [hostsQuery.data, serverPrimaryHostId],
   );
   const primaryHostId = primaryHost?.id ?? null;
-  const usageLimitsQuery = useSystemUsageLimits({
-    ...(primaryHostId === null ? {} : { hostId: primaryHostId }),
-    enabled: isPointerCoarse && primaryHostId !== null,
-  });
   const [githubRepositoryChooserOpen, setGithubRepositoryChooserOpen] =
     useState(false);
   const [githubWorkflowOpen, setGithubWorkflowOpen] = useState(false);
@@ -3855,11 +3850,9 @@ export function RootComposeView() {
             <>
               <RootComposeMobileSessions
                 highlightedThreadId={lastCreatedThreadId}
-                isUsageLoading={usageLimitsQuery.isLoading}
                 projectNamesById={mobileSessionProjectNamesById}
                 showCreatingRow={createThread.isPending}
                 threads={mobileSessionThreads}
-                usage={usageLimitsQuery.data}
               />
               <div className="sticky bottom-0 z-10 -mx-1 mt-4 bg-background/95 px-1 pb-[max(0.25rem,env(safe-area-inset-bottom))] pt-2 backdrop-blur-sm md:static md:mx-0 md:mt-0 md:bg-transparent md:p-0 md:backdrop-blur-none">
                 <OverflowFade
