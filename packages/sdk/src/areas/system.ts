@@ -24,6 +24,7 @@ import type {
   SystemGithubAccountsQuery,
   SystemGithubPullRequestsQuery,
   SystemGithubRepositoriesQuery,
+  SystemProvidersQuery,
   SystemOnboardingReposQuery,
   SystemUsageLimitsQuery,
   SystemVersionQuery,
@@ -88,7 +89,10 @@ export type SystemUsageLimitsResult = ProviderUsageResponse;
 export type SystemGithubAccountsResult = GithubAccountCatalog;
 export type SystemGithubRepositoriesResult = GithubRepositoryCatalog;
 export type SystemGithubPullRequestsResult = GithubPullRequestCatalog;
-export interface SystemOnboardingArgs extends SystemOnboardingReposQuery {
+export interface SystemOnboardingArgs extends SystemProvidersQuery {
+  signal?: AbortSignal;
+}
+export interface SystemOnboardingReposArgs extends SystemOnboardingReposQuery {
   signal?: AbortSignal;
 }
 export interface SystemGithubAccountsArgs extends SystemGithubAccountsQuery {
@@ -135,7 +139,7 @@ export interface SystemArea {
   ): Promise<SystemOnboardingAgentsResult>;
   /** Candidate projects discovered on the host, ranked for onboarding. */
   onboardingRepos(
-    args?: SystemOnboardingArgs,
+    args?: SystemOnboardingReposArgs,
   ): Promise<SystemOnboardingReposResult>;
   /** GitHub accounts authenticated on the environment's host machine. */
   githubAccounts(
@@ -255,7 +259,12 @@ export function createSystemArea(args: CreateSdkAreaArgs): SystemArea {
     async onboardingAgents(input = {}) {
       return transport.readJson(
         transport.api.v1.system.onboarding.agents.$get(
-          { query: { hostId: input.hostId } },
+          {
+            query: {
+              environmentId: input.environmentId,
+              hostId: input.hostId,
+            },
+          },
           ...signalRequestArgs(input.signal),
         ),
       );

@@ -115,6 +115,12 @@ interface ArchiveOrUnarchiveThreadArgs {
   threadId: string;
 }
 
+interface CodexArchivedSessionRecoveryArgs {
+  providerId: string;
+  providerThreadId: string;
+  threadId: string;
+}
+
 interface AgentRuntimeInternalOptions extends AgentRuntimeOptions {
   adapterFactory?: ProviderAdapterFactory;
 }
@@ -193,6 +199,8 @@ const CODEX_ACCOUNT_RESTART_PROVIDER_ERROR_CATEGORIES =
   new Set<ProviderErrorCategory>(["rate-limit", "unauthorized"]);
 const CODEX_ACCOUNT_RESTART_PROVIDER_ERROR_TEXT_PATTERN =
   /\b(?:40[19]|429|auth(?:entication|orization)?|credits?|quota|rate[-\s]?limit(?:ed)?|unauthori[sz]ed|usage limit)\b/i;
+const CODEX_ARCHIVED_SESSION_ERROR_PATTERN =
+  /\b(?:session|thread)\s+\S+\s+is archived\b/i;
 
 function resolveThreadStoragePath(
   args: ResolveThreadStoragePathArgs,
@@ -334,20 +342,61 @@ function createAgentRuntimeInternal(
     });
   }
 
-  function sendCommand<TResult>(args: {
+  async function sendCommand<TResult>(args: {
     proc: ProviderProcess;
     message: SendJsonRpcRequestArgs<TResult>["message"];
     resultSchema: SendJsonRpcRequestArgs<TResult>["resultSchema"];
     timeoutMs?: number;
+    recovery?: CodexArchivedSessionRecoveryArgs;
   }): Promise<TResult> {
-    return sendJsonRpcRequest({
+    const request = {
       child: args.proc.child,
       getNextId: () => nextRequestId++,
       message: args.message,
       pending: args.proc.pending,
       resultSchema: args.resultSchema,
       ...(args.timeoutMs !== undefined ? { timeoutMs: args.timeoutMs } : {}),
-    });
+    };
+
+    try {
+      return await sendJsonRpcRequest(request);
+    } catch (error) {
+      const recovery = args.recovery;
+      if (
+        !recovery ||
+        !isCodexArchivedSessionError(recovery.providerId, error)
+      ) {
+        throw error;
+      }
+
+      options.onStderr?.(
+        `Codex session "${recovery.providerThreadId}" is archived; unarchiving before retrying thread "${recovery.threadId}".`,
+      );
+      let retryProc: ProviderProcess;
+      try {
+        await archiveOrUnarchiveThread({
+          commandType: "thread/unarchive",
+          ...recovery,
+        });
+        // Unarchiving can replace an exited provider process, so resolve the
+        // process again instead of writing to the captured child's stdin.
+        retryProc = requireProviderProcess({
+          processKey: args.proc.processKey,
+          providerId: args.proc.providerId,
+        });
+      } catch (recoveryError) {
+        // The archived-session error names the session and the CLI command
+        // that fixes it, so keep it as the reported failure whenever the
+        // recovery itself could not run.
+        throw new Error(error.message, { cause: recoveryError });
+      }
+
+      return sendJsonRpcRequest({
+        ...request,
+        child: retryProc.child,
+        pending: retryProc.pending,
+      });
+    }
   }
 
   function resolveProviderForThread(threadId: string): string {
@@ -741,6 +790,17 @@ function createAgentRuntimeInternal(
     await shutdownThreadScopedCodexProcessIfIdle(proc);
   }
 
+  function isCodexArchivedSessionError(
+    providerId: string,
+    error: unknown,
+  ): error is Error {
+    return (
+      providerId === CODEX_PROVIDER_ID &&
+      error instanceof Error &&
+      CODEX_ARCHIVED_SESSION_ERROR_PATTERN.test(error.message)
+    );
+  }
+
   async function reconfigureThreadIfNeeded(
     args: ReconfigureThreadIfNeededArgs,
   ): Promise<void> {
@@ -799,6 +859,11 @@ function createAgentRuntimeInternal(
         proc,
         message: plan,
         resultSchema: threadIdentityResultSchema,
+        recovery: {
+          providerId: currentConfig.providerId,
+          providerThreadId: adapterCommand.providerThreadId,
+          threadId: args.threadId,
+        },
       });
       const providerThreadId = resolveThreadIdentityResult({
         result,
@@ -866,39 +931,43 @@ function createAgentRuntimeInternal(
           sourceThreadId: args.sourceThreadId,
         });
 
-      if (!resolvedBbThreadId) {
+      const targetThreadIds = resolvedBbThreadId ? [resolvedBbThreadId] : [];
+
+      if (targetThreadIds.length === 0) {
         options.onStderr?.(
           `Dropping unscoped provider event ${event.type}; no bb thread could be resolved`,
         );
         continue;
       }
 
-      const stampedEvent = stampThreadEventScope({
-        event,
-        providerThreadId:
-          threadIdentityRegistry.getProviderThreadId(resolvedBbThreadId),
-        threadId: resolvedBbThreadId,
-      });
+      for (const targetThreadId of targetThreadIds) {
+        const stampedEvent = stampThreadEventScope({
+          event,
+          providerThreadId:
+            threadIdentityRegistry.getProviderThreadId(targetThreadId),
+          threadId: targetThreadId,
+        });
 
-      const replayResult = turnReplayFilter.observe(stampedEvent);
-      if (replayResult.kind === "drop-replayed-turn-start") {
-        options.onStderr?.(
-          `Dropping replayed turn/started on already completed turn "${replayResult.turnId}" in thread "${replayResult.threadId}".`,
+        const replayResult = turnReplayFilter.observe(stampedEvent);
+        if (replayResult.kind === "drop-replayed-turn-start") {
+          options.onStderr?.(
+            `Dropping replayed turn/started on already completed turn "${replayResult.turnId}" in thread "${replayResult.threadId}".`,
+          );
+          continue;
+        }
+
+        const normalizedEvent = normalizeProviderThreadNameEvent(
+          replayResult.event,
         );
-        continue;
+        turnState.observe(normalizedEvent);
+        backgroundWorkState.observe(normalizedEvent);
+        observeProviderSessionIdleState(normalizedEvent);
+        if (shouldRestartCodexThreadAfterEvent(normalizedEvent, args.proc)) {
+          codexThreadsRequiringAccountRestart.add(normalizedEvent.threadId);
+        }
+        options.onEvent(normalizedEvent);
+        threadGoalState.observe(normalizedEvent);
       }
-
-      const normalizedEvent = normalizeProviderThreadNameEvent(
-        replayResult.event,
-      );
-      turnState.observe(normalizedEvent);
-      backgroundWorkState.observe(normalizedEvent);
-      observeProviderSessionIdleState(normalizedEvent);
-      if (shouldRestartCodexThreadAfterEvent(normalizedEvent, args.proc)) {
-        codexThreadsRequiringAccountRestart.add(normalizedEvent.threadId);
-      }
-      options.onEvent(normalizedEvent);
-      threadGoalState.observe(normalizedEvent);
     }
   }
 
@@ -1105,6 +1174,17 @@ function createAgentRuntimeInternal(
             message: cmd,
             resultSchema: threadIdentityResultSchema,
             timeoutMs: THREAD_CREATION_REQUEST_TIMEOUT_MS,
+            // A fork reads the source session, so an archived source fails the
+            // same way a resume does. A plain start has no session to unarchive.
+            ...(fork
+              ? {
+                  recovery: {
+                    providerId,
+                    providerThreadId: fork.sourceProviderThreadId,
+                    threadId,
+                  },
+                }
+              : {}),
           });
           const providerThreadId = resolveThreadIdentityResult({
             result,
@@ -1256,6 +1336,11 @@ function createAgentRuntimeInternal(
             proc,
             message: cmd,
             resultSchema: threadIdentityResultSchema,
+            recovery: {
+              providerId,
+              providerThreadId: adapterCommand.providerThreadId,
+              threadId,
+            },
           });
           const resolvedId =
             resolveThreadIdentityResult({ result, threadId }) ??
@@ -1336,6 +1421,11 @@ function createAgentRuntimeInternal(
               proc,
               message: cmd,
               resultSchema: ignoredJsonRpcResultSchema,
+              recovery: {
+                providerId: pid,
+                providerThreadId: adapterCommand.providerThreadId,
+                threadId,
+              },
             });
           } catch (error) {
             pendingTurnStartThreadIds.delete(threadId);
@@ -1417,6 +1507,11 @@ function createAgentRuntimeInternal(
             proc,
             message: cmd,
             resultSchema: ignoredJsonRpcResultSchema,
+            recovery: {
+              providerId: pid,
+              providerThreadId: adapterCommand.providerThreadId,
+              threadId,
+            },
           });
           emitAcceptedCommandEvents({
             command: adapterCommand,
@@ -1574,7 +1669,7 @@ function createAgentRuntimeInternal(
       });
     },
 
-    async listModels({ providerId, acpLaunchSpec }) {
+    async listModels({ providerId, acpLaunchSpec, cwd }) {
       await runtime.ensureProvider({
         providerId,
         ...(acpLaunchSpec !== undefined ? { acpLaunchSpec } : {}),
@@ -1588,7 +1683,10 @@ function createAgentRuntimeInternal(
       });
       const command = requireProviderRequestPlan({
         commandType: "model/list",
-        plan: proc.adapter.buildCommandPlan({ type: "model/list" }),
+        plan: proc.adapter.buildCommandPlan({
+          type: "model/list",
+          ...(cwd !== undefined ? { cwd } : {}),
+        }),
         providerId,
       });
       const result = await sendCommand({
@@ -1660,8 +1758,13 @@ function createAgentRuntimeInternal(
       return threadIdentityRegistry.getProviderSession(threadId) !== null;
     },
 
-    getActiveThreadIds() {
-      return turnState.getActiveThreadIds();
+    getLiveThreadIds() {
+      return [
+        ...new Set([
+          ...turnState.getActiveThreadIds(),
+          ...pendingTurnStartThreadIds,
+        ]),
+      ];
     },
 
     hasOpenBackgroundWork() {

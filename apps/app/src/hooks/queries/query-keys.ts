@@ -508,6 +508,8 @@ export type SystemGithubPullRequestsQueryKey = readonly [
 ];
 export type OnboardingAgentsQueryKey = readonly [
   typeof ONBOARDING_AGENTS_QUERY_KEY,
+  string | null,
+  string | null,
 ];
 export type OnboardingReposQueryKey = readonly [
   typeof ONBOARDING_REPOS_QUERY_KEY,
@@ -1211,8 +1213,10 @@ export function systemGithubPullRequestsQueryKey(
   return [SYSTEM_GITHUB_PULL_REQUESTS_QUERY_KEY, repository, hostId];
 }
 
-export function onboardingAgentsQueryKey(): OnboardingAgentsQueryKey {
-  return [ONBOARDING_AGENTS_QUERY_KEY];
+export function onboardingAgentsQueryKey(
+  args: Pick<SystemExecutionOptionsQueryKeyArgs, "environmentId" | "hostId">,
+): OnboardingAgentsQueryKey {
+  return [ONBOARDING_AGENTS_QUERY_KEY, args.environmentId, args.hostId];
 }
 
 export function onboardingReposQueryKey(): OnboardingReposQueryKey {

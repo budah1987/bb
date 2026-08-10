@@ -41,7 +41,7 @@ import {
   providerCliStatusResponseSchema,
 } from "./local.js";
 
-export const HOST_DAEMON_PROTOCOL_VERSION = 84 as const;
+export const HOST_DAEMON_PROTOCOL_VERSION = 89 as const;
 export const githubAccountLoginSchema = z.string().trim().min(1).max(255);
 
 export {
@@ -1046,6 +1046,7 @@ const providerListModelsCommandSchema = z.object({
   type: z.literal("provider.list_models"),
   providerId: z.string().min(1),
   acpLaunchSpec: hostDaemonAcpLaunchSpecSchema.optional(),
+  cwd: z.string().min(1).optional(),
 });
 
 const knownAcpAgentExecutableQuerySchema = z

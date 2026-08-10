@@ -1,10 +1,4 @@
-import {
-  useCallback,
-  useEffect,
-  useRef,
-  useState,
-  type KeyboardEventHandler,
-} from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { cn } from "@bb/shared-ui/lib/utils";
 import { THREAD_JUMP_APP_COMMAND_IDS } from "@bb/domain";
 import { Link, useLocation, useNavigate } from "react-router-dom";
@@ -47,10 +41,8 @@ import { getRootComposeRoutePath, getThreadRoutePath } from "@/lib/route-paths";
 import { useThreadSplitsEnabled } from "@/hooks/useThreadSplitsEnabled";
 import { usePaneContentSplitDrag } from "./usePaneContentSplitDrag";
 import { openUrlInExternalBrowser } from "@/lib/url-open-routing";
-import {
-  haveSameSidebarThreadSearchNavigationItems,
-  type SidebarThreadSearchNavigationItem,
-} from "./sidebarThreadSearch";
+import type { SidebarThreadSearchNavigationItem } from "./sidebarThreadSearch";
+import { useSidebarThreadSearch } from "./useSidebarThreadSearch";
 import {
   EMPTY_SIDEBAR_THREAD_SHORTCUT_KEYS,
   getSidebarThreadNavigationTargets,
@@ -174,11 +166,6 @@ export function AppSidebar({
   const closeOnMobile = useCloseMobileSidebar();
   const { isCompactViewport, setOpen, setOpenMobile } = useSidebar();
   const [desktopInfo] = useState(getBbDesktopInfo);
-  const [isThreadSearchActive, setIsThreadSearchActive] = useState(false);
-  const [threadSearchQuery, setThreadSearchQuery] = useState("");
-  const [threadSearchActiveIndex, setThreadSearchActiveIndex] = useState(0);
-  const [threadSearchNavigationItems, setThreadSearchNavigationItems] =
-    useState<readonly SidebarThreadSearchNavigationItem[]>([]);
   const [threadShortcutKeysById, setThreadShortcutKeysById] = useState<
     ReadonlyMap<string, SidebarThreadShortcutPresentation>
   >(EMPTY_SIDEBAR_THREAD_SHORTCUT_KEYS);
@@ -186,10 +173,7 @@ export function AppSidebar({
   const threadShortcutTargetsRef = useRef<
     readonly SidebarThreadShortcutTarget[]
   >([]);
-  const threadSearchInputRef = useRef<HTMLInputElement | null>(null);
   const isPointerCoarse = usePointerCoarse();
-  const threadSearchActiveDescendantId =
-    threadSearchNavigationItems[threadSearchActiveIndex]?.optionId;
   const usesDesktopChrome = shouldUseMacosDesktopChrome(desktopInfo);
   const threadJumpShortcuts = useAppCommandShortcuts(
     THREAD_JUMP_APP_COMMAND_IDS,
@@ -197,49 +181,15 @@ export function AppSidebar({
   const isAppCommandModifierHeld = useIsAppCommandModifierHeld();
   const settingsShortcut = useAppCommandShortcut("settings.open");
 
-  const focusThreadSearchInput = useCallback(() => {
-    if (isPointerCoarse) return;
-
-    window.requestAnimationFrame(() => {
-      threadSearchInputRef.current?.focus();
-    });
-  }, [isPointerCoarse]);
-
-  const handleThreadSearchActivate = useCallback(() => {
-    setIsThreadSearchActive(true);
+  const openSidebarForThreadSearch = useCallback(() => {
     if (isCompactViewport) {
       setOpenMobile(true);
     } else {
       setOpen(true);
     }
-    focusThreadSearchInput();
-  }, [focusThreadSearchInput, isCompactViewport, setOpen, setOpenMobile]);
+  }, [isCompactViewport, setOpen, setOpenMobile]);
 
-  const handleThreadSearchClose = useCallback(() => {
-    setIsThreadSearchActive(false);
-    setThreadSearchQuery("");
-    setThreadSearchActiveIndex(0);
-    setThreadSearchNavigationItems([]);
-  }, []);
-
-  const handleThreadSearchNavigationItemsChange = useCallback(
-    (items: readonly SidebarThreadSearchNavigationItem[]) => {
-      setThreadSearchNavigationItems((current) =>
-        haveSameSidebarThreadSearchNavigationItems(current, items)
-          ? current
-          : items,
-      );
-      setThreadSearchActiveIndex((current) => {
-        if (items.length === 0) {
-          return 0;
-        }
-        return Math.min(current, items.length - 1);
-      });
-    },
-    [],
-  );
-
-  const handleThreadSearchSelectItem = useCallback(
+  const openSearchedThread = useCallback(
     (item: SidebarThreadSearchNavigationItem) => {
       void navigate(
         getThreadRoutePath({
@@ -258,10 +208,16 @@ export function AppSidebar({
             }
           : undefined,
       );
-      closeOnMobile();
     },
-    [closeOnMobile, navigate],
+    [navigate],
   );
+
+  const threadSearch = useSidebarThreadSearch({
+    isPointerCoarse,
+    onOpenSidebar: openSidebarForThreadSearch,
+    onOpenThread: openSearchedThread,
+    onThreadOpened: closeOnMobile,
+  });
 
   const handleNewChat = useCallback(() => {
     closeOnMobile();
@@ -335,7 +291,7 @@ export function AppSidebar({
   );
 
   useAppCommandHandler("thread.search", () => {
-    handleThreadSearchActivate();
+    threadSearch.onActivate();
     return true;
   });
   useIndexedAppCommandHandlers(
@@ -344,75 +300,6 @@ export function AppSidebar({
   );
   useAppCommandHandler("thread.previous", () => activateAdjacentThread(-1));
   useAppCommandHandler("thread.next", () => activateAdjacentThread(1));
-
-  const handleThreadSearchKeyDown = useCallback<
-    KeyboardEventHandler<HTMLDivElement>
-  >(
-    (event) => {
-      if (!isThreadSearchActive || event.defaultPrevented) {
-        return;
-      }
-      if (
-        !isThreadSearchKeyboardEventTarget(
-          event.target,
-          threadSearchInputRef.current,
-        )
-      ) {
-        return;
-      }
-
-      if (event.key === "ArrowDown") {
-        if (threadSearchNavigationItems.length === 0) {
-          return;
-        }
-        event.preventDefault();
-        setThreadSearchActiveIndex((current) =>
-          current >= threadSearchNavigationItems.length - 1 ? 0 : current + 1,
-        );
-        return;
-      }
-
-      if (event.key === "ArrowUp") {
-        if (threadSearchNavigationItems.length === 0) {
-          return;
-        }
-        event.preventDefault();
-        setThreadSearchActiveIndex((current) =>
-          current <= 0 ? threadSearchNavigationItems.length - 1 : current - 1,
-        );
-        return;
-      }
-
-      if (event.key === "Enter") {
-        const item = threadSearchNavigationItems[threadSearchActiveIndex];
-        if (!item) {
-          return;
-        }
-        event.preventDefault();
-        handleThreadSearchSelectItem(item);
-        return;
-      }
-
-      if (event.key === "Escape") {
-        event.preventDefault();
-        if (threadSearchQuery.length > 0) {
-          setThreadSearchQuery("");
-          focusThreadSearchInput();
-          return;
-        }
-        handleThreadSearchClose();
-      }
-    },
-    [
-      focusThreadSearchInput,
-      handleThreadSearchClose,
-      handleThreadSearchSelectItem,
-      isThreadSearchActive,
-      threadSearchActiveIndex,
-      threadSearchNavigationItems,
-      threadSearchQuery.length,
-    ],
-  );
 
   useEffect(() => {
     if (isAppCommandModifierHeld) {
@@ -432,19 +319,19 @@ export function AppSidebar({
       onProjectSelect={closeOnMobile}
       isCreatingProject={quickCreateProject.isCreating}
       threadSearch={{
-        activeIndex: threadSearchActiveIndex,
-        isActive: isThreadSearchActive,
-        onActiveIndexChange: setThreadSearchActiveIndex,
-        onNavigationItemsChange: handleThreadSearchNavigationItemsChange,
-        onSelectItem: handleThreadSearchSelectItem,
-        query: threadSearchQuery,
+        activeIndex: threadSearch.activeIndex,
+        isActive: threadSearch.isActive,
+        onActiveIndexChange: threadSearch.onActiveIndexChange,
+        onNavigationItemsChange: threadSearch.onNavigationItemsChange,
+        onSelectItem: threadSearch.onSelectItem,
+        query: threadSearch.query,
       }}
     />
   );
 
   return (
     <SidebarThreadShortcutKeysContext.Provider value={threadShortcutKeysById}>
-      <Sidebar ref={sidebarRef} onKeyDown={handleThreadSearchKeyDown}>
+      <Sidebar ref={sidebarRef} onKeyDown={threadSearch.onKeyDown}>
         {showTopReserve ? (
           /* Top reserve that keeps the sidebar's content (New Thread / New
              Projects) anchored below the title-bar chrome, mirroring
@@ -485,13 +372,13 @@ export function AppSidebar({
             newThreadSplit={newThreadSplit}
             onNewChat={handleNewChat}
             threadSearch={{
-              activeDescendantId: threadSearchActiveDescendantId,
-              inputRef: threadSearchInputRef,
-              isActive: isThreadSearchActive,
-              onActivate: handleThreadSearchActivate,
-              onClose: handleThreadSearchClose,
-              onQueryChange: setThreadSearchQuery,
-              query: threadSearchQuery,
+              activeDescendantId: threadSearch.activeDescendantId,
+              inputRef: threadSearch.inputRef,
+              isActive: threadSearch.isActive,
+              onActivate: threadSearch.onActivate,
+              onClose: threadSearch.onClose,
+              onQueryChange: threadSearch.onQueryChange,
+              query: threadSearch.query,
             }}
           />
         </div>
@@ -509,8 +396,8 @@ export function AppSidebar({
             <PluginThreadList
               slot={threadListProvider}
               builtInFallback={builtInThreadList}
-              searchQuery={threadSearchQuery}
-              onNavigate={closeOnMobile}
+              searchQuery={threadSearch.query}
+              onNavigate={threadSearch.onExternalThreadOpen}
             />
           ) : (
             builtInThreadList

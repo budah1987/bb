@@ -293,6 +293,7 @@ function dropRewindAddedTables(db: DbConnection): void {
   }
   dropSideChatPluginExperimentColumn(db);
   dropToolsHubExperimentColumn(db);
+  dropNewOnboardingExperimentColumn(db);
   dropSteerActiveThreadOnEnterColumn(db);
   dropOnboardingCompletedAtColumn(db);
   // Thread visibility was added after the legacy checkpoints these tests
@@ -458,6 +459,19 @@ function dropToolsHubExperimentColumn(db: DbConnection): void {
   if (columns.some((column) => column.name === "tools_hub")) {
     db.$client
       .prepare("ALTER TABLE system_experiments DROP COLUMN tools_hub")
+      .run();
+  }
+}
+
+// Migration 0087 adds the new onboarding experiment column. Rewind scenarios
+// that clear its migration row must drop the column before replay.
+function dropNewOnboardingExperimentColumn(db: DbConnection): void {
+  const columns = db.$client
+    .prepare<[], TableInfoRow>("PRAGMA table_info(system_experiments)")
+    .all();
+  if (columns.some((column) => column.name === "new_onboarding")) {
+    db.$client
+      .prepare("ALTER TABLE system_experiments DROP COLUMN new_onboarding")
       .run();
   }
 }
@@ -1224,6 +1238,7 @@ describe("migrate", () => {
     // Rewind 0085 so it replays against an install that already has a project —
     // exactly what an upgrading user's database looks like.
     dropOnboardingCompletedAtColumn(db);
+    dropNewOnboardingExperimentColumn(db);
     // Delete by the journal timestamp, not a hash substring: migration hashes
     // are hex and can contain "0085" by coincidence.
     db.$client
@@ -1509,6 +1524,7 @@ describe("migrate", () => {
       restorePluginsExperimentColumn(db);
       dropSteerActiveThreadOnEnterColumn(db);
       dropOnboardingCompletedAtColumn(db);
+      dropNewOnboardingExperimentColumn(db);
       dropHostMaxPermissionModeColumn(db);
 
       migrate(db);
@@ -1905,6 +1921,7 @@ describe("migrate", () => {
       restorePluginsExperimentColumn(db);
       dropSteerActiveThreadOnEnterColumn(db);
       dropOnboardingCompletedAtColumn(db);
+      dropNewOnboardingExperimentColumn(db);
       dropHostMaxPermissionModeColumn(db);
 
       expect(
@@ -1998,6 +2015,7 @@ describe("migrate", () => {
       restorePluginsExperimentColumn(db);
       dropSteerActiveThreadOnEnterColumn(db);
       dropOnboardingCompletedAtColumn(db);
+      dropNewOnboardingExperimentColumn(db);
       dropHostMaxPermissionModeColumn(db);
 
       expect(() => migrate(db)).not.toThrow();
@@ -3531,8 +3549,10 @@ describe("migrate", () => {
         tableName: "events",
       }).filter((name) => !name.startsWith("sqlite_"));
       expect(eventIndexNames).toEqual([
+        "events_background_task_thread_type_item_sequence_idx",
         "events_completed_item_truncation_idx",
         "events_environment_idx",
+        "events_goal_thread_sequence_idx",
         "events_thread_sequence_idx",
         "events_thread_turn_type_item_sequence_idx",
         "events_thread_type_item_kind_sequence_idx",

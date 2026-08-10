@@ -44,7 +44,7 @@ export async function renameWorkspace(
     runtimeManager: options.runtimeManager,
     workspaceContext: command.workspaceContext,
   });
-  if (entry.runtime.getActiveThreadIds().length > 0) {
+  if (entry.runtime.getLiveThreadIds().length > 0) {
     throw new ExpectedCommandDispatchError(
       "environment_busy",
       "Wait for active work in this workspace to finish before renaming it",

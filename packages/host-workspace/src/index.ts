@@ -58,7 +58,8 @@ export type {
 
 export {
   createPullRequestForBranch,
-  getPullRequestForBranch,
+  getPullRequestForCurrentBranch,
+  runPullRequestActionForCurrentBranch,
   parseGitHostPullRequest,
   type GitHostPullRequestLookup,
   type GitHostCommandOptions,

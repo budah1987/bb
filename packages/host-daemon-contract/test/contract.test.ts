@@ -386,6 +386,7 @@ const ONLINE_RPC_RESPONSE_RESULT_FIXTURES: OnlineRpcResponseResultFixtures = {
         id: "codex/gpt-5",
         model: "gpt-5",
         displayName: "GPT-5",
+        routeProviderId: "openai-codex",
         description: "Test model",
         supportedReasoningEfforts: [
           {
@@ -898,6 +899,8 @@ const INTENTIONAL_OPTIONAL_HOST_DAEMON_FIELDS: Record<string, string> = {
     "workspace.status may omit mergeBaseBranch when the caller only needs working-tree state.",
   "hostDaemonOnlineRpcCommandSchema.acpLaunchSpec":
     "provider.list_models includes an ACP launch spec only for dynamic ACP providers; built-ins resolve from daemon-side profiles.",
+  "hostDaemonOnlineRpcCommandSchema.cwd":
+    "provider.list_models may omit cwd when only user-level provider configuration applies.",
   "hostDaemonOnlineRpcCommandSchema.acpLaunchSpec.cwd":
     "dynamic ACP launch specs may omit cwd so the daemon uses the caller's workspace cwd.",
   "hostDaemonOnlineRpcCommandSchema.acpLaunchSpec.modelCli":
@@ -1222,10 +1225,12 @@ describe("host-daemon local schemas", () => {
 });
 
 describe("host-daemon command schemas", () => {
-  // Version 84 adds selected-path workspace diff and commit fields to the
-  // version 83 environment preview contract. Older daemons cannot parse them.
-  it("uses protocol version 84 for selected-path workspace commits", () => {
-    expect(HOST_DAEMON_PROTOCOL_VERSION).toBe(84);
+  // Version 89 makes the ACP adapter mint turn-qualified fileChange item ids.
+  // An enrolled daemon on an older build still emits session-scoped counters
+  // that collide across resumed sessions, so it must update before it reports
+  // more file edits.
+  it("uses protocol version 89 for turn-qualified ACP fileChange item ids", () => {
+    expect(HOST_DAEMON_PROTOCOL_VERSION).toBe(89);
   });
 
   it("binds Plan cancellation to a required turn id and typed result", () => {
@@ -2231,6 +2236,7 @@ describe("host-daemon command schemas", () => {
       type: "provider.list_models",
       providerId: "acp-local",
       acpLaunchSpec: ACP_LAUNCH_SPEC,
+      cwd: "/tmp/workspace",
     };
     const providerListModelsRoundTrip = JSON.parse(
       JSON.stringify(providerListModelsCommand),
@@ -3763,6 +3769,23 @@ describe("host-daemon session schemas", () => {
 
     expect(
       hostDaemonServerWsMessageSchema.safeParse({
+        type: "terminal.attach",
+        requestId: "request-1",
+        terminalId: "term_123",
+        sinceSeq: 12,
+        tailBytes: 512 * 1024,
+      }).success,
+    ).toBe(true);
+    expect(
+      hostDaemonServerWsMessageSchema.safeParse({
+        type: "terminal.attach",
+        requestId: "request-1",
+        terminalId: "term_123",
+        sinceSeq: 12,
+      }).success,
+    ).toBe(false);
+    expect(
+      hostDaemonServerWsMessageSchema.safeParse({
         type: "terminal.input",
         terminalId: "term_123",
         dataBase64: maxPayload,
@@ -3785,6 +3808,7 @@ describe("host-daemon session schemas", () => {
             dataBase64: oversizedDecodedPayload,
           },
         ],
+        replayStartSeq: 0,
         nextSeq: 1,
       }).success,
     ).toBe(false);

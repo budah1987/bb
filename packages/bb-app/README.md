@@ -121,22 +121,30 @@ console.log(await bb.threads.output({ threadId: String(thread.id) }));
 
 `new BBSdk()` uses the same `BB_SERVER_URL` and bb config resolution as the
 CLI. Pass `new BBSdk({ baseUrl: "http://host:38886" })` for remote or test
-targets. Scripts launched by bb already receive `BB_SERVER_URL` and
+targets (see the remote-access note below). Scripts launched by bb already receive `BB_SERVER_URL` and
 `BB_THREAD_ID` in their environment.
 
 ## Provider Credentials
 
 bb uses whichever providers you have configured. Common providers:
 
-| Provider       | Setup                                                                                                                                                                                  |
-| -------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `codex`        | Install the [Codex CLI](https://developers.openai.com/codex/cli). Then run `codex login` or configure credentials per the Codex docs.                                                  |
-| `claude-code`  | Install [Claude Code](https://docs.anthropic.com/en/docs/claude-code) and authenticate per its docs.                                                                                   |
-| `cursor`       | Install [Cursor's agent CLI](https://cursor.com/cli) (`agent`) and authenticate per Cursor's docs.                                                                                     |
-| `pi`           | See the [Pi coding agent docs](https://github.com/earendil-works/pi/tree/main/packages/coding-agent). Run `pi` and then `/login` for interactive setup.                                |
-| `opencode`     | Install [opencode](https://opencode.ai/) and authenticate per its docs.                                                                                                                |
-| `grok`         | Install [Grok Build](https://docs.x.ai/build/overview) and authenticate with `grok login` or `XAI_API_KEY`.                                                                            |
-| `hermes-agent` | Install [Hermes Agent](https://hermes-agent.nousresearch.com/docs/getting-started/installation), configure credentials with `hermes model`, then verify ACP with `hermes acp --check`. |
+| Provider       | Setup                                                                                                                                                                                     |
+| -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `codex`        | Install the [Codex CLI](https://developers.openai.com/codex/cli). Then run `codex login` or configure credentials per the Codex docs.                                                     |
+| `claude-code`  | Install [Claude Code](https://docs.anthropic.com/en/docs/claude-code) and authenticate per its docs.                                                                                      |
+| `cursor`       | Install [Cursor's agent CLI](https://cursor.com/cli) (`cursor-agent`) and authenticate per Cursor's docs.                                                                                 |
+| `pi`           | See the [Pi coding agent docs](https://github.com/earendil-works/pi/tree/main/packages/coding-agent). BB includes a pinned Pi runtime, so it does not require an installed Pi executable. |
+| `opencode`     | Install [opencode](https://opencode.ai/) and authenticate per its docs.                                                                                                                   |
+| `grok`         | Install [Grok Build](https://docs.x.ai/build/overview) and authenticate with `grok login` or `XAI_API_KEY`.                                                                               |
+| `hermes-agent` | Install [Hermes Agent](https://hermes-agent.nousresearch.com/docs/getting-started/installation), configure credentials with `hermes model`, then verify ACP with `hermes acp --check`.    |
+
+BB reads Pi's global `~/.pi/agent` files and each workspace's `.pi` files.
+This includes settings, credentials, models, packages, extensions, skills,
+prompts, themes, and context files. Pi extensions can add models and tools.
+BB loads project resources only after Pi's saved or global trust policy approves
+the workspace. An unresolved `ask` decision stays untrusted because BB has no Pi
+trust prompt.
+You can still use the Pi CLI and `/login` to create this configuration.
 
 Custom ACP agents can be configured through `customAcpAgents` in
 `~/.bb/config.json`; see the configuration docs for optional `modelCli` and
@@ -149,12 +157,17 @@ Use `bb-app config` for persistent non-secret package settings under
 `~/.bb/config.json`:
 
 ```bash
-npx bb-app config set BB_APP_URL http://<machine>.<tailnet>.ts.net:38886
+npx bb-app config set BB_APP_URL https://<machine>.<tailnet>.ts.net
 npx bb-app config set BB_INFERENCE codex/gpt-5.6-luna
 npx bb-app config set BB_TRANSCRIPTION codex/gpt-transcribe
 npx bb-app config list
 npx bb-app config refresh
 ```
+
+For remote access, use bb connect or publish the default loopback listener with
+Tailscale Serve. Direct tailnet or LAN access to port `38886` requires the
+explicit, security-sensitive `--server-bind-host 0.0.0.0` compatibility option;
+see the multiple-devices guide.
 
 Use `bb-app client ssh-target` to configure local editor opens for remote
 bb servers under `~/.bb/client.json`. The target is the value that works after

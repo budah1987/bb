@@ -1,4 +1,10 @@
-import { chmodSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import {
+  chmodSync,
+  mkdirSync,
+  mkdtempSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -731,6 +737,31 @@ describe("bridge", () => {
     expect(options.pathToClaudeCodeExecutable).toBe(executablePath);
   });
 
+  it("falls back to well-known install locations when PATH discovery fails", () => {
+    const homeDir = mkdtempSync(join(tmpdir(), "bb-claude-home-"));
+    tempDirs.push(homeDir);
+    const localBinDir = join(homeDir, ".local", "bin");
+    mkdirSync(localBinDir, { recursive: true });
+    const executablePath = join(localBinDir, "claude");
+    writeFileSync(executablePath, "#!/bin/sh\nexit 0\n");
+    chmodSync(executablePath, 0o755);
+
+    const options = buildSessionOptions(
+      {
+        workflowsEnabled: false,
+        baseInstructions: "You are a coder.",
+        cwd: "/tmp/worktree",
+        instructionMode: "append",
+        permissionEscalation: "ask",
+        permissionMode: "default",
+        permissionScope: "workspace",
+      },
+      { HOME: homeDir, PATH: "/nonexistent-bb-test-dir" },
+    );
+
+    expect(options.pathToClaudeCodeExecutable).toBe(executablePath);
+  });
+
   it("lets an explicit Claude executable override PATH discovery", () => {
     const { executablePath } = createTempClaudeExecutable();
     const options = buildSessionOptions(
@@ -829,6 +860,7 @@ describe("bridge", () => {
       failIfUnavailable: false,
       autoAllowBashIfSandboxed: true,
       allowUnsandboxedCommands: true,
+      network: { allowLocalBinding: true },
     });
     expect(denyOptions.permissionMode).toBe("auto");
     expect(denyOptions.sandbox).toEqual({
@@ -836,6 +868,7 @@ describe("bridge", () => {
       failIfUnavailable: false,
       autoAllowBashIfSandboxed: true,
       allowUnsandboxedCommands: false,
+      network: { allowLocalBinding: true },
     });
   });
 
@@ -886,6 +919,7 @@ describe("bridge", () => {
       failIfUnavailable: false,
       autoAllowBashIfSandboxed: true,
       allowUnsandboxedCommands: false,
+      network: { allowLocalBinding: true },
       filesystem: {
         allowWrite: ["/repo/.git/worktrees/bb13", "/repo/.git/objects"],
       },

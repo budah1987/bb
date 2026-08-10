@@ -53,6 +53,8 @@ import type {
   CloseTerminalRequest,
   CommandListResponse,
   CopyProjectAttachmentsRequest,
+  ContinueAfterProviderRateLimitRequest,
+  ContinueAfterProviderRateLimitResponse,
   CreateHostJoinCodeRequest,
   CreateHostJoinCodeResponse,
   CreateTerminalRequest,
@@ -62,6 +64,7 @@ import type {
   CreateThreadSectionRequest,
   CreateThreadRequest,
   ForkThreadRequest,
+  RestartTerminalRequest,
   DeleteThreadSectionRequest,
   DeleteThreadRequest,
   EnvironmentActionApiError,
@@ -204,6 +207,7 @@ import type {
   ThreadOpenResponse,
   ThreadPaneActionRequest,
   ThreadPaneActionResponse,
+  ProviderRateLimitRecoveryStatus,
   ThreadPendingInteractionsResponse,
   ThreadQueuedMessageListResponse,
   ThreadResponse,
@@ -249,10 +253,12 @@ import {
 import {
   closeTerminalRequestSchema,
   copyProjectAttachmentsRequestSchema,
+  continueAfterProviderRateLimitRequestSchema,
   createFilePreviewRequestSchema,
   createThreadSectionRequestSchema,
   deleteThreadSectionRequestSchema,
   createTerminalRequestSchema,
+  restartTerminalRequestSchema,
   createProjectRequestSchema,
   createHostJoinCodeRequestSchema,
   createProjectSourceRequestSchema,
@@ -772,6 +778,14 @@ export const publicApiRoutes = {
       ),
       response: jsonResponse<TerminalSession>(),
     }),
+    restart: defineRoute({
+      path: "/terminals/:terminalId/restart",
+      method: "post",
+      request: jsonRequest<PathTerminal, RestartTerminalRequest>(
+        restartTerminalRequestSchema,
+      ),
+      response: jsonResponse<TerminalSession>({ status: 201 }),
+    }),
     close: defineRoute({
       path: "/terminals/:terminalId/close",
       method: "post",
@@ -1109,6 +1123,20 @@ export const publicApiRoutes = {
         sendMessageRequestSchema,
       ),
       response: jsonResponse<{ ok: true }>(),
+    }),
+    rateLimitRecovery: defineRoute({
+      path: "/threads/:id/rate-limit-recovery",
+      method: "get",
+      request: noRequest<PathId>(),
+      response: jsonResponse<ProviderRateLimitRecoveryStatus>(),
+    }),
+    continueAfterRateLimit: defineRoute({
+      path: "/threads/:id/rate-limit-recovery/continue",
+      method: "post",
+      request: jsonRequest<PathId, ContinueAfterProviderRateLimitRequest>(
+        continueAfterProviderRateLimitRequestSchema,
+      ),
+      response: jsonResponse<ContinueAfterProviderRateLimitResponse>(),
     }),
     /** @deprecated App code uses dedicated composer queries. */
     composerBootstrap: defineRoute({
@@ -1564,8 +1592,8 @@ export const publicApiRoutes = {
     onboardingAgents: defineRoute({
       path: "/system/onboarding/agents",
       method: "get",
-      request: optionalQueryRequest<EmptyInput, SystemOnboardingReposQuery>(
-        systemOnboardingReposQuerySchema,
+      request: optionalQueryRequest<EmptyInput, SystemProvidersQuery>(
+        systemProvidersQuerySchema,
       ),
       response: jsonResponse<OnboardingAgentOverview>(),
     }),

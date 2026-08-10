@@ -140,7 +140,7 @@ declare const changedMessageSchema: z$1.ZodDiscriminatedUnion<[z$1.ZodObject<{
     id: z$1.ZodOptional<z$1.ZodString>;
     metadata: z$1.ZodOptional<z$1.ZodObject<{
         backgroundActivityChanged: z$1.ZodOptional<z$1.ZodBoolean>;
-        eventTypes: z$1.ZodOptional<z$1.ZodReadonly<z$1.ZodArray<z$1.ZodString & z$1.ZodType<"thread/started" | "thread/identity" | "turn/started" | "turn/completed" | "turn/input/accepted" | "thread/name/updated" | "thread/compacted" | "thread/goal/updated" | "thread/goal/cleared" | "item/started" | "item/completed" | "item/agentMessage/delta" | "item/commandExecution/outputDelta" | "item/fileChange/outputDelta" | "item/reasoning/summaryTextDelta" | "item/reasoning/textDelta" | "item/plan/delta" | "item/mcpToolCall/progress" | "item/toolCall/progress" | "item/backgroundTask/progress" | "item/backgroundTask/completed" | "thread/tokenUsage/updated" | "thread/contextWindowUsage/updated" | "turn/plan/updated" | "turn/diff/updated" | "provider/error" | "provider/warning" | "provider/modelFallback" | "provider/unhandled" | "client/thread/start" | "client/turn/requested" | "client/turn/start" | "system/error" | "system/manager/user_message" | "system/thread/interrupted" | "system/operation" | "system/permissionGrant/lifecycle" | "system/userQuestion/lifecycle" | "system/thread-provisioning" | "system/provider-turn-watchdog", string, z$1.core.$ZodTypeInternals<"thread/started" | "thread/identity" | "turn/started" | "turn/completed" | "turn/input/accepted" | "thread/name/updated" | "thread/compacted" | "thread/goal/updated" | "thread/goal/cleared" | "item/started" | "item/completed" | "item/agentMessage/delta" | "item/commandExecution/outputDelta" | "item/fileChange/outputDelta" | "item/reasoning/summaryTextDelta" | "item/reasoning/textDelta" | "item/plan/delta" | "item/mcpToolCall/progress" | "item/toolCall/progress" | "item/backgroundTask/progress" | "item/backgroundTask/completed" | "thread/tokenUsage/updated" | "thread/contextWindowUsage/updated" | "turn/plan/updated" | "turn/diff/updated" | "provider/error" | "provider/warning" | "provider/modelFallback" | "provider/unhandled" | "client/thread/start" | "client/turn/requested" | "client/turn/start" | "system/error" | "system/manager/user_message" | "system/thread/interrupted" | "system/operation" | "system/permissionGrant/lifecycle" | "system/userQuestion/lifecycle" | "system/thread-provisioning" | "system/provider-turn-watchdog", string>>>>>;
+        eventTypes: z$1.ZodOptional<z$1.ZodReadonly<z$1.ZodArray<z$1.ZodString & z$1.ZodType<"thread/started" | "thread/identity" | "turn/started" | "turn/completed" | "turn/input/accepted" | "thread/name/updated" | "thread/compacted" | "thread/goal/updated" | "thread/goal/cleared" | "item/started" | "item/completed" | "item/agentMessage/delta" | "item/commandExecution/outputDelta" | "item/fileChange/outputDelta" | "item/reasoning/summaryTextDelta" | "item/reasoning/textDelta" | "item/plan/delta" | "item/mcpToolCall/progress" | "item/toolCall/progress" | "item/backgroundTask/progress" | "item/backgroundTask/completed" | "thread/tokenUsage/updated" | "thread/contextWindowUsage/updated" | "turn/plan/updated" | "turn/diff/updated" | "provider/error" | "provider/rateLimits/updated" | "provider/warning" | "provider/modelFallback" | "provider/unhandled" | "client/thread/start" | "client/turn/requested" | "client/turn/start" | "system/error" | "system/manager/user_message" | "system/thread/interrupted" | "system/operation" | "system/permissionGrant/lifecycle" | "system/userQuestion/lifecycle" | "system/thread-provisioning" | "system/provider-turn-watchdog", string, z$1.core.$ZodTypeInternals<"thread/started" | "thread/identity" | "turn/started" | "turn/completed" | "turn/input/accepted" | "thread/name/updated" | "thread/compacted" | "thread/goal/updated" | "thread/goal/cleared" | "item/started" | "item/completed" | "item/agentMessage/delta" | "item/commandExecution/outputDelta" | "item/fileChange/outputDelta" | "item/reasoning/summaryTextDelta" | "item/reasoning/textDelta" | "item/plan/delta" | "item/mcpToolCall/progress" | "item/toolCall/progress" | "item/backgroundTask/progress" | "item/backgroundTask/completed" | "thread/tokenUsage/updated" | "thread/contextWindowUsage/updated" | "turn/plan/updated" | "turn/diff/updated" | "provider/error" | "provider/rateLimits/updated" | "provider/warning" | "provider/modelFallback" | "provider/unhandled" | "client/thread/start" | "client/turn/requested" | "client/turn/start" | "system/error" | "system/manager/user_message" | "system/thread/interrupted" | "system/operation" | "system/permissionGrant/lifecycle" | "system/userQuestion/lifecycle" | "system/thread-provisioning" | "system/provider-turn-watchdog", string>>>>>;
         hasPendingInteraction: z$1.ZodOptional<z$1.ZodBoolean>;
         projectId: z$1.ZodOptional<z$1.ZodString>;
     }, z$1.core.$strict>>;
@@ -247,6 +247,7 @@ type Environment = z$1.infer<typeof environmentSchema>;
  */
 declare const experimentsSchema: z$1.ZodObject<{
     claudeCodeMockCliTraffic: z$1.ZodBoolean;
+    newOnboarding: z$1.ZodBoolean;
     toolsHub: z$1.ZodBoolean;
 }, z$1.core.$strip>;
 type Experiments = z$1.infer<typeof experimentsSchema>;
@@ -1461,6 +1462,44 @@ declare const threadEventSchema: z$1.ZodPipe<z$1.ZodUnknown, z$1.ZodUnion<readon
         httpStatusCode: z$1.ZodNullable<z$1.ZodNumber>;
     }, z$1.core.$strip>>;
 }, z$1.core.$strip>, z$1.ZodObject<{
+    type: z$1.ZodLiteral<"provider/rateLimits/updated">;
+    threadId: z$1.ZodString;
+    providerThreadId: z$1.ZodString;
+    rateLimits: z$1.ZodObject<{
+        providerId: z$1.ZodString;
+        status: z$1.ZodEnum<{
+            unknown: "unknown";
+            allowed: "allowed";
+            warning: "warning";
+            blocked: "blocked";
+        }>;
+        kind: z$1.ZodEnum<{
+            unknown: "unknown";
+            "subscription-window": "subscription-window";
+            credits: "credits";
+            "spend-control": "spend-control";
+        }>;
+        windows: z$1.ZodArray<z$1.ZodObject<{
+            providerKey: z$1.ZodNullable<z$1.ZodString>;
+            label: z$1.ZodNullable<z$1.ZodString>;
+            status: z$1.ZodEnum<{
+                unknown: "unknown";
+                allowed: "allowed";
+                warning: "warning";
+                blocked: "blocked";
+            }>;
+            resetsAtMs: z$1.ZodNullable<z$1.ZodNumber>;
+        }, z$1.core.$strip>>;
+        reachedReason: z$1.ZodNullable<z$1.ZodString>;
+        overageStatus: z$1.ZodNullable<z$1.ZodEnum<{
+            allowed: "allowed";
+            warning: "warning";
+            rejected: "rejected";
+            unavailable: "unavailable";
+        }>>;
+        overageReason: z$1.ZodNullable<z$1.ZodString>;
+    }, z$1.core.$strip>;
+}, z$1.core.$strip>, z$1.ZodObject<{
     type: z$1.ZodLiteral<"provider/warning">;
     threadId: z$1.ZodString;
     providerThreadId: z$1.ZodString;
@@ -1527,6 +1566,7 @@ declare const threadEventSchema: z$1.ZodPipe<z$1.ZodUnknown, z$1.ZodUnion<readon
     threadId: z$1.ZodString;
     direction: z$1.ZodLiteral<"outbound">;
     requestId: z$1.ZodString;
+    continuationOfRequestId: z$1.ZodOptional<z$1.ZodString>;
     source: z$1.ZodEnum<{
         spawn: "spawn";
         tell: "tell";
@@ -3016,8 +3056,8 @@ declare const environmentPreviewsResponseSchema: z$1.ZodObject<{
         }>;
         state: z$1.ZodEnum<{
             unknown: "unknown";
-            ready: "ready";
             failed: "failed";
+            ready: "ready";
             building: "building";
         }>;
         updatedAt: z$1.ZodNullable<z$1.ZodString>;
@@ -3217,8 +3257,8 @@ declare const pullRequestCreateActionResponseSchema: z$1.ZodObject<{
             }>>;
         }, z$1.core.$strict>;
         attention: z$1.ZodEnum<{
-            none: "none";
             blocked: "blocked";
+            none: "none";
             draft: "draft";
             merged: "merged";
             closed: "closed";
@@ -3449,8 +3489,8 @@ declare const environmentPullRequestResponseSchema: z$1.ZodDiscriminatedUnion<[z
             }>>;
         }, z$1.core.$strict>;
         attention: z$1.ZodEnum<{
-            none: "none";
             blocked: "blocked";
+            none: "none";
             draft: "draft";
             merged: "merged";
             closed: "closed";
@@ -5772,11 +5812,13 @@ declare const hostDaemonCommandRegistry: {
                 insertAfterArgs: z$1.ZodOptional<z$1.ZodNumber>;
             }, z$1.core.$strict>>;
         }, z$1.core.$strict>>;
+        cwd: z$1.ZodOptional<z$1.ZodString>;
     }, z$1.core.$strip>, z$1.ZodObject<{
         models: z$1.ZodArray<z$1.ZodObject<{
             id: z$1.ZodString;
             model: z$1.ZodString;
             displayName: z$1.ZodString;
+            routeProviderId: z$1.ZodOptional<z$1.ZodString>;
             description: z$1.ZodString;
             supportedReasoningEfforts: z$1.ZodArray<z$1.ZodObject<{
                 reasoningEffort: z$1.ZodEnum<{
@@ -5807,6 +5849,7 @@ declare const hostDaemonCommandRegistry: {
             id: z$1.ZodString;
             model: z$1.ZodString;
             displayName: z$1.ZodString;
+            routeProviderId: z$1.ZodOptional<z$1.ZodString>;
             description: z$1.ZodString;
             supportedReasoningEfforts: z$1.ZodArray<z$1.ZodObject<{
                 reasoningEffort: z$1.ZodEnum<{
@@ -7424,6 +7467,7 @@ declare const systemExecutionOptionsResponseSchema: z$1.ZodObject<{
         id: z$1.ZodString;
         model: z$1.ZodString;
         displayName: z$1.ZodString;
+        routeProviderId: z$1.ZodOptional<z$1.ZodString>;
         description: z$1.ZodString;
         supportedReasoningEfforts: z$1.ZodArray<z$1.ZodObject<{
             reasoningEffort: z$1.ZodEnum<{
@@ -7454,6 +7498,7 @@ declare const systemExecutionOptionsResponseSchema: z$1.ZodObject<{
         id: z$1.ZodString;
         model: z$1.ZodString;
         displayName: z$1.ZodString;
+        routeProviderId: z$1.ZodOptional<z$1.ZodString>;
         description: z$1.ZodString;
         supportedReasoningEfforts: z$1.ZodArray<z$1.ZodObject<{
             reasoningEffort: z$1.ZodEnum<{
@@ -7491,6 +7536,15 @@ declare const systemExecutionOptionsResponseSchema: z$1.ZodObject<{
     }, z$1.core.$strip>>;
 }, z$1.core.$strip>;
 type SystemExecutionOptionsResponse = z$1.infer<typeof systemExecutionOptionsResponseSchema>;
+/**
+ * Routes provider discovery through an environment's host or an explicit
+ * host. Omitting both preserves the primary-host fallback.
+ */
+declare const systemProvidersQuerySchema: z$1.ZodObject<{
+    hostId: z$1.ZodOptional<z$1.ZodString>;
+    environmentId: z$1.ZodOptional<z$1.ZodString>;
+}, z$1.core.$strip>;
+type SystemProvidersQuery = z$1.infer<typeof systemProvidersQuerySchema>;
 declare const systemExecutionOptionsQuerySchema: z$1.ZodObject<{
     providerId: z$1.ZodOptional<z$1.ZodString>;
     hostId: z$1.ZodOptional<z$1.ZodString>;
@@ -7850,6 +7904,7 @@ declare const systemConfigResponseSchema: z$1.ZodObject<{
     }, z$1.core.$strict>>;
     experiments: z$1.ZodObject<{
         claudeCodeMockCliTraffic: z$1.ZodBoolean;
+        newOnboarding: z$1.ZodBoolean;
         toolsHub: z$1.ZodBoolean;
     }, z$1.core.$strip>;
     appearance: z$1.ZodObject<{
@@ -7879,6 +7934,7 @@ declare const systemConfigResponseSchema: z$1.ZodObject<{
         timelineWindowEventBudget: z$1.ZodNumber;
     }, z$1.core.$strip>;
     hostDaemonPort: z$1.ZodNullable<z$1.ZodNumber>;
+    serverUrl: z$1.ZodString;
     primaryHostId: z$1.ZodNullable<z$1.ZodString>;
     primaryHostPlatform: z$1.ZodNullable<z$1.ZodEnum<{
         unknown: "unknown";
@@ -7988,9 +8044,9 @@ declare const terminalSessionSchema: z$1.ZodObject<{
     cols: z$1.ZodNumber;
     rows: z$1.ZodNumber;
     status: z$1.ZodEnum<{
+        running: "running";
         starting: "starting";
         disconnected: "disconnected";
-        running: "running";
         exited: "exited";
     }>;
     exitCode: z$1.ZodNullable<z$1.ZodNumber>;
@@ -8019,9 +8075,9 @@ declare const terminalListResponseSchema: z$1.ZodObject<{
         cols: z$1.ZodNumber;
         rows: z$1.ZodNumber;
         status: z$1.ZodEnum<{
+            running: "running";
             starting: "starting";
             disconnected: "disconnected";
-            running: "running";
             exited: "exited";
         }>;
         exitCode: z$1.ZodNullable<z$1.ZodNumber>;
@@ -9267,6 +9323,103 @@ declare const sendMessageRequestSchema: z$1.ZodObject<{
     senderThreadId: z$1.ZodOptional<z$1.ZodString>;
 }, z$1.core.$strip>;
 type SendMessageRequest = z$1.infer<typeof sendMessageRequestSchema>;
+declare const providerRateLimitRecoveryStatusSchema: z$1.ZodObject<{
+    reason: z$1.ZodEnum<{
+        eligible: "eligible";
+        "thread-not-failed": "thread-not-failed";
+        "no-failed-turn": "no-failed-turn";
+        "input-not-accepted": "input-not-accepted";
+        "no-rate-limit-state": "no-rate-limit-state";
+        "no-terminal-rate-limit-error": "no-terminal-rate-limit-error";
+        "provider-will-retry": "provider-will-retry";
+        "manual-only": "manual-only";
+        "output-or-side-effect-observed": "output-or-side-effect-observed";
+        superseded: "superseded";
+        "execution-unavailable": "execution-unavailable";
+    }>;
+    scopeKey: z$1.ZodString;
+    hostId: z$1.ZodString;
+    rateLimits: z$1.ZodNullable<z$1.ZodObject<{
+        providerId: z$1.ZodString;
+        status: z$1.ZodEnum<{
+            unknown: "unknown";
+            warning: "warning";
+            allowed: "allowed";
+            blocked: "blocked";
+        }>;
+        kind: z$1.ZodEnum<{
+            unknown: "unknown";
+            "subscription-window": "subscription-window";
+            credits: "credits";
+            "spend-control": "spend-control";
+        }>;
+        windows: z$1.ZodArray<z$1.ZodObject<{
+            providerKey: z$1.ZodNullable<z$1.ZodString>;
+            label: z$1.ZodNullable<z$1.ZodString>;
+            status: z$1.ZodEnum<{
+                unknown: "unknown";
+                warning: "warning";
+                allowed: "allowed";
+                blocked: "blocked";
+            }>;
+            resetsAtMs: z$1.ZodNullable<z$1.ZodNumber>;
+        }, z$1.core.$strip>>;
+        reachedReason: z$1.ZodNullable<z$1.ZodString>;
+        overageStatus: z$1.ZodNullable<z$1.ZodEnum<{
+            warning: "warning";
+            allowed: "allowed";
+            rejected: "rejected";
+            unavailable: "unavailable";
+        }>>;
+        overageReason: z$1.ZodNullable<z$1.ZodString>;
+    }, z$1.core.$strip>>;
+    candidate: z$1.ZodNullable<z$1.ZodObject<{
+        failedRequestId: z$1.ZodString;
+        turnId: z$1.ZodString;
+        automatic: z$1.ZodBoolean;
+        resetsAtMs: z$1.ZodNullable<z$1.ZodNumber>;
+        rateLimits: z$1.ZodObject<{
+            providerId: z$1.ZodString;
+            status: z$1.ZodEnum<{
+                unknown: "unknown";
+                warning: "warning";
+                allowed: "allowed";
+                blocked: "blocked";
+            }>;
+            kind: z$1.ZodEnum<{
+                unknown: "unknown";
+                "subscription-window": "subscription-window";
+                credits: "credits";
+                "spend-control": "spend-control";
+            }>;
+            windows: z$1.ZodArray<z$1.ZodObject<{
+                providerKey: z$1.ZodNullable<z$1.ZodString>;
+                label: z$1.ZodNullable<z$1.ZodString>;
+                status: z$1.ZodEnum<{
+                    unknown: "unknown";
+                    warning: "warning";
+                    allowed: "allowed";
+                    blocked: "blocked";
+                }>;
+                resetsAtMs: z$1.ZodNullable<z$1.ZodNumber>;
+            }, z$1.core.$strip>>;
+            reachedReason: z$1.ZodNullable<z$1.ZodString>;
+            overageStatus: z$1.ZodNullable<z$1.ZodEnum<{
+                warning: "warning";
+                allowed: "allowed";
+                rejected: "rejected";
+                unavailable: "unavailable";
+            }>>;
+            overageReason: z$1.ZodNullable<z$1.ZodString>;
+        }, z$1.core.$strip>;
+    }, z$1.core.$strip>>;
+}, z$1.core.$strip>;
+type ProviderRateLimitRecoveryStatus = z$1.infer<typeof providerRateLimitRecoveryStatusSchema>;
+declare const continueAfterProviderRateLimitResponseSchema: z$1.ZodObject<{
+    ok: z$1.ZodLiteral<true>;
+    requestId: z$1.ZodString;
+}, z$1.core.$strip>;
+type ContinueAfterProviderRateLimitResponse = z$1.infer<typeof continueAfterProviderRateLimitResponseSchema>;
 declare const createQueuedMessageRequestSchema: z$1.ZodObject<{
     input: z$1.ZodArray<z$1.ZodDiscriminatedUnion<[z$1.ZodObject<{
         visibility: z$1.ZodOptional<z$1.ZodEnum<{
@@ -10616,8 +10769,8 @@ declare const threadTimelineResponseSchema: z$1.ZodObject<{
         updatedAt: z$1.ZodNumber;
         objective: z$1.ZodString;
         status: z$1.ZodEnum<{
-            active: "active";
             paused: "paused";
+            active: "active";
             budgetLimited: "budgetLimited";
             complete: "complete";
         }>;
@@ -11052,8 +11205,9 @@ interface PluginThreadListProps {
     /** True on phone-width viewports and coarse pointers. */
     isCompactViewport: boolean;
     /**
-     * Call after the user opens a thread. Closes the mobile sidebar drawer and
-     * is a no-op on desktop, so always call it.
+     * Call after the user opens a thread. It closes the mobile sidebar drawer,
+     * and it clears the host search field on every viewport. Always call it, or
+     * the sidebar stays in search mode after the thread opens.
      */
     onNavigate: () => void;
     /**
@@ -13106,7 +13260,10 @@ type SystemUsageLimitsResult = ProviderUsageResponse;
 type SystemGithubAccountsResult = GithubAccountCatalog;
 type SystemGithubRepositoriesResult = GithubRepositoryCatalog;
 type SystemGithubPullRequestsResult = GithubPullRequestCatalog;
-interface SystemOnboardingArgs extends SystemOnboardingReposQuery {
+interface SystemOnboardingArgs extends SystemProvidersQuery {
+    signal?: AbortSignal;
+}
+interface SystemOnboardingReposArgs extends SystemOnboardingReposQuery {
     signal?: AbortSignal;
 }
 interface SystemGithubAccountsArgs extends SystemGithubAccountsQuery {
@@ -13139,7 +13296,7 @@ interface SystemArea {
     /** Live agent state for onboarding: install, auth, and plan per provider. */
     onboardingAgents(args?: SystemOnboardingArgs): Promise<SystemOnboardingAgentsResult>;
     /** Candidate projects discovered on the host, ranked for onboarding. */
-    onboardingRepos(args?: SystemOnboardingArgs): Promise<SystemOnboardingReposResult>;
+    onboardingRepos(args?: SystemOnboardingReposArgs): Promise<SystemOnboardingReposResult>;
     /** GitHub accounts authenticated on the environment's host machine. */
     githubAccounts(args?: SystemGithubAccountsArgs): Promise<SystemGithubAccountsResult>;
     /** Repositories visible to every authenticated GitHub account on a machine. */
@@ -13238,6 +13395,8 @@ interface TerminalsArea {
     rename(args: TerminalRenameArgs): Promise<TerminalRenameResult>;
     /**
      * Replace a terminal with a shell at the same scope, size, and title.
+     * The server serializes concurrent restarts and opens the replacement before
+     * closing the old session, so a failed open leaves the old terminal running.
      * The original command is not replayed because terminal sessions do not
      * persist launch commands. The replacement has a new terminal ID.
      */
@@ -13294,6 +13453,8 @@ type ThreadDeleteResult = {
 type ThreadSendResult = {
     ok: true;
 };
+type ThreadRateLimitRecoveryResult = ProviderRateLimitRecoveryStatus;
+type ThreadContinueAfterRateLimitResult = ContinueAfterProviderRateLimitResponse;
 type ThreadStopResult = {
     ok: true;
 };
@@ -13356,6 +13517,9 @@ interface ThreadSendArgs extends SendMessageRequest {
 }
 interface ThreadActionArgs {
     threadId: string;
+}
+interface ThreadContinueAfterRateLimitArgs extends ThreadActionArgs {
+    failedRequestId: string;
 }
 interface ThreadStatusArgs extends ThreadActionArgs {
     signal?: AbortSignal;
@@ -13524,6 +13688,7 @@ interface ThreadsArea {
     archive(args: ThreadActionArgs): Promise<ThreadArchiveResult>;
     archiveAll(args: ThreadActionArgs): Promise<ThreadArchiveAllResult>;
     childSummary(args: ThreadStatusArgs): Promise<ThreadChildSummaryResult>;
+    continueAfterRateLimit(args: ThreadContinueAfterRateLimitArgs): Promise<ThreadContinueAfterRateLimitResult>;
     cancelPlan(args: ThreadActionArgs): Promise<ThreadBannerActionResult>;
     clearGoal(args: ThreadActionArgs): Promise<ThreadBannerActionResult>;
     conversationOutline(args: ThreadStatusArgs): Promise<ThreadConversationOutlineResult>;
@@ -13543,6 +13708,7 @@ interface ThreadsArea {
     pin(args: ThreadActionArgs): Promise<ThreadMutationResult>;
     promptHistory(args: ThreadPromptHistoryArgs): Promise<ThreadPromptHistoryResult>;
     queuedMessages: ThreadQueuedMessagesArea;
+    rateLimitRecovery(args: ThreadStatusArgs): Promise<ThreadRateLimitRecoveryResult>;
     reorderPinned(args: ThreadPinOrderArgs): Promise<ThreadPinOrderResult>;
     search(args: ThreadSearchArgs): Promise<ThreadSearchResult>;
     send(args: ThreadSendArgs): Promise<ThreadSendResult>;

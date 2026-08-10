@@ -12,8 +12,9 @@ import type {
 import os from "node:os";
 import path from "node:path";
 import {
-  getPullRequestForBranch,
-  runPullRequestActionForBranch,
+  createPullRequestForBranch,
+  getPullRequestForCurrentBranch,
+  runPullRequestActionForCurrentBranch,
   type GitHostCommandOptions,
   type GitHostPullRequestAction,
   type GitHostPullRequestLookup,
@@ -697,7 +698,7 @@ export class Workspace {
    * Raw `gh` pull request lookup for the workspace's current branch. A
    * detached HEAD has no branch and therefore no PR ("none"); lookup failures
    * surface as "unavailable". Never throws — see
-   * {@link getPullRequestForBranch}.
+   * {@link getPullRequestForCurrentBranch}.
    */
   async getPullRequest(
     options: GitHostCommandOptions = {},
@@ -715,9 +716,8 @@ export class Workspace {
     if (!branch) {
       return { outcome: "none" };
     }
-    return getPullRequestForBranch({
+    return getPullRequestForCurrentBranch({
       cwd: this.path,
-      branch,
       ...(options.env === undefined ? {} : { env: options.env }),
     });
   }
@@ -733,11 +733,19 @@ export class Workspace {
         "Cannot update pull request from a detached workspace",
       );
     }
-    return runPullRequestActionForBranch({
+    const envOptions = options.env === undefined ? {} : { env: options.env };
+    if (action.operation === "create") {
+      return createPullRequestForBranch({
+        cwd: this.path,
+        branch,
+        ...action,
+        ...envOptions,
+      });
+    }
+    return runPullRequestActionForCurrentBranch({
       cwd: this.path,
-      branch,
       action,
-      ...(options.env === undefined ? {} : { env: options.env }),
+      ...envOptions,
     });
   }
 

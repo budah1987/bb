@@ -45,9 +45,8 @@ const GH_PR_VIEW_JSON_FIELDS = [
   "mergeable",
 ].join(",");
 
-interface GetPullRequestForBranchArgs {
+interface GetPullRequestForCurrentBranchArgs {
   cwd: string;
-  branch: string;
   env?: NodeJS.ProcessEnv;
 }
 
@@ -70,10 +69,9 @@ export interface GitHostPullRequestCreateOptions {
   title: string;
 }
 
-interface RunPullRequestActionForBranchArgs {
+interface RunPullRequestActionForCurrentBranchArgs {
   cwd: string;
-  branch: string;
-  action: GitHostPullRequestAction;
+  action: Exclude<GitHostPullRequestAction, { operation: "create" }>;
   env?: NodeJS.ProcessEnv;
 }
 
@@ -309,18 +307,15 @@ function getMergeMethodFlag(method: GitHostPullRequestMergeMethod): string {
 }
 
 function buildPullRequestActionArgs(
-  action: GitHostPullRequestAction,
-  branch: string,
+  action: Exclude<GitHostPullRequestAction, { operation: "create" }>,
 ): string[] {
   switch (action.operation) {
     case "ready":
-      return ["pr", "ready", "--", branch];
+      return ["pr", "ready"];
     case "draft":
-      return ["pr", "ready", "--undo", "--", branch];
+      return ["pr", "ready", "--undo"];
     case "merge":
-      return ["pr", "merge", getMergeMethodFlag(action.method), "--", branch];
-    case "create":
-      throw new Error("Pull request creation uses createPullRequestForBranch");
+      return ["pr", "merge", getMergeMethodFlag(action.method)];
   }
 }
 
@@ -434,24 +429,26 @@ function classifyPullRequestViewError(
 }
 
 /**
- * Detect the open/most-relevant GitHub pull request for `branch` by shelling
- * out to the host `gh` CLI in `cwd`. Never throws: a branch with no PR is
- * `outcome: "none"`, while every lookup failure (`gh` not installed, not
- * authenticated, no GitHub remote, a timeout, unparseable output) is
- * `outcome: "unavailable"` so callers can distinguish "no PR" from "could not
- * check". The inherited environment preserves `PATH`/`HOME`/token vars so
- * `gh` auth resolves the same way it would in the user's shell.
+ * Detect the open/most-relevant GitHub pull request for the branch checked out
+ * in `cwd` by shelling out to the host `gh` CLI. The command deliberately has
+ * no positional branch target: `gh` can then follow the branch's configured
+ * upstream remote, which is required when the PR head belongs to a fork.
+ *
+ * Never throws: a branch with no PR is `outcome: "none"`, while every lookup
+ * failure (`gh` not installed, not authenticated, no GitHub remote, a timeout,
+ * unparseable output) is `outcome: "unavailable"` so callers can distinguish
+ * "no PR" from "could not check". The inherited environment preserves
+ * `PATH`/`HOME`/token vars so `gh` auth resolves the same way it would in the
+ * user's shell.
  */
-export async function getPullRequestForBranch(
-  args: GetPullRequestForBranchArgs,
+export async function getPullRequestForCurrentBranch(
+  args: GetPullRequestForCurrentBranchArgs,
 ): Promise<GitHostPullRequestLookup> {
   let stdout: string;
   try {
     ({ stdout } = await execFileAsync(
       "gh",
-      // `--` ends option parsing so `branch` is always taken as the positional
-      // target, never mistaken for a flag.
-      ["pr", "view", "--json", GH_PR_VIEW_JSON_FIELDS, "--", args.branch],
+      ["pr", "view", "--json", GH_PR_VIEW_JSON_FIELDS],
       {
         cwd: args.cwd,
         encoding: "utf8",
@@ -474,21 +471,15 @@ export async function getPullRequestForBranch(
 }
 
 /**
- * Mutate the GitHub pull request for `branch`. Unlike pull-request detection,
- * mutation failures are meaningful and are surfaced to the caller.
+ * Mutate the GitHub pull request for the branch checked out in `cwd`. Omitting
+ * a positional target lets `gh` honor a fork branch's configured upstream.
+ * Unlike pull-request detection, mutation failures are meaningful and are
+ * surfaced to the caller.
  */
-export async function runPullRequestActionForBranch(
-  args: RunPullRequestActionForBranchArgs,
-): Promise<void | GitHostPullRequest> {
-  if (args.action.operation === "create") {
-    return createPullRequestForBranch({
-      cwd: args.cwd,
-      branch: args.branch,
-      ...args.action,
-      ...(args.env === undefined ? {} : { env: args.env }),
-    });
-  }
-  const ghArgs = buildPullRequestActionArgs(args.action, args.branch);
+export async function runPullRequestActionForCurrentBranch(
+  args: RunPullRequestActionForCurrentBranchArgs,
+): Promise<void> {
+  const ghArgs = buildPullRequestActionArgs(args.action);
   try {
     await execFileAsync("gh", ghArgs, {
       cwd: args.cwd,
@@ -542,9 +533,8 @@ export async function createPullRequestForBranch(
     throw createGitHostCommandFailedError(ghArgs, error);
   }
 
-  const result = await getPullRequestForBranch({
+  const result = await getPullRequestForCurrentBranch({
     cwd: args.cwd,
-    branch: args.branch,
     ...(args.env === undefined ? {} : { env: args.env }),
   });
   if (result.outcome === "found") {

@@ -62,13 +62,18 @@ import type {
   ProviderRuntimeEvent,
 } from "../runtime-json-rpc.js";
 import type { AgentRuntimeSkillRoot } from "../types.js";
-import { translateCodexEvent } from "./event-translation.js";
+import {
+  applyCodexRateLimitUpdate,
+  createCodexEventTranslationState,
+  translateCodexEvent,
+} from "./event-translation.js";
 import {
   buildCodexInteractiveResponse,
   decodeCodexInteractiveRequest,
 } from "./interactive-requests.js";
 import {
   codexBridgeEnvelopeSchema,
+  codexRateLimitReadResponseSchema,
   codexRawResponseItemCompletedParamsSchema,
   codexThreadClosedParamsSchema,
 } from "./schemas.js";
@@ -94,11 +99,6 @@ interface CodexThreadPermissionSettings {
 
 type BbThreadStartParams = ThreadStartParams & {
   experimentalRawEvents?: boolean;
-  persistExtendedHistory?: boolean;
-};
-
-type BbThreadResumeParams = ThreadResumeParams & {
-  persistExtendedHistory?: boolean;
 };
 
 type BbThreadForkParams = {
@@ -113,7 +113,6 @@ type BbThreadForkParams = {
   baseInstructions?: string | null;
   developerInstructions?: string | null;
   dynamicTools?: DynamicToolSpec[];
-  persistExtendedHistory?: boolean;
 };
 
 interface ToCodexPermissionSettingsArgs {
@@ -1093,6 +1092,7 @@ export function createCodexProviderAdapter(
     opts?.additionalWorkspaceWriteRoots ?? [];
   const providerInfo = getBuiltInAgentProviderInfo("codex");
   const capabilities = providerInfo.capabilities;
+  const eventTranslationState = createCodexEventTranslationState();
   const nativeTurnStartClientRequestIdsByProviderThreadId = new Map<
     string,
     ClientTurnRequestId[]
@@ -1858,6 +1858,25 @@ export function createCodexProviderAdapter(
       args: opts?.processArgs ?? ["app-server"],
     },
 
+    buildPostInitializeRequests() {
+      return [
+        {
+          plan: {
+            kind: "request",
+            method: "account/rateLimits/read",
+          },
+          required: false,
+          onResult(result: unknown) {
+            const response = codexRateLimitReadResponseSchema.parse(result);
+            applyCodexRateLimitUpdate(
+              eventTranslationState,
+              response.rateLimits,
+            );
+          },
+        },
+      ];
+    },
+
     buildCommandPlan(command: AdapterCommand): ProviderCommandPlan {
       switch (command.type) {
         case "initialize":
@@ -1899,10 +1918,14 @@ export function createCodexProviderAdapter(
             ...resolveCodexInstructionOverrides(command),
             model: command.options?.model ?? undefined,
             serviceTier: toCodexServiceTier(command.options?.serviceTier),
+            // bb reaps idle thread-scoped Codex processes and later resumes by
+            // provider thread id, so the rollout must exist on disk. Codex
+            // already defaults to non-ephemeral; pin the value so a future
+            // default flip cannot silently break resume.
+            ephemeral: false,
             config: preparedGitRoots.config ?? undefined,
             // Codex only exposes raw Responses items as a thread/start opt-in.
             experimentalRawEvents: true,
-            persistExtendedHistory: false,
             ...(dynamicTools && dynamicTools.length > 0
               ? { dynamicTools }
               : {}),
@@ -1916,7 +1939,7 @@ export function createCodexProviderAdapter(
         case "thread/resume": {
           const dynamicTools = toCodexDynamicTools(command.dynamicTools);
           const preparedGitRoots = prepareWorkspaceWriteGitRoots({ command });
-          const params: BbThreadResumeParams = {
+          const params: ThreadResumeParams = {
             threadId: command.providerThreadId,
             approvalPolicy: preparedGitRoots.permissionSettings.approvalPolicy,
             approvalsReviewer:
@@ -1927,7 +1950,6 @@ export function createCodexProviderAdapter(
             model: command.options?.model ?? undefined,
             serviceTier: toCodexServiceTier(command.options?.serviceTier),
             config: preparedGitRoots.config ?? undefined,
-            persistExtendedHistory: false,
             ...(dynamicTools && dynamicTools.length > 0
               ? { dynamicTools }
               : {}),
@@ -1952,7 +1974,6 @@ export function createCodexProviderAdapter(
             model: command.options?.model ?? undefined,
             serviceTier: toCodexServiceTier(command.options?.serviceTier),
             config: preparedGitRoots.config ?? undefined,
-            persistExtendedHistory: false,
             ...(dynamicTools && dynamicTools.length > 0
               ? { dynamicTools }
               : {}),
@@ -2086,9 +2107,10 @@ export function createCodexProviderAdapter(
         return applyRecoveredCommandOutput(subAgentActivityEvents);
       }
 
-      const translatedEvents = translateCodexEvent(event).flatMap(
-        attachAcceptedUserMessageCorrelation,
-      );
+      const translatedEvents = translateCodexEvent(
+        event,
+        eventTranslationState,
+      ).flatMap(attachAcceptedUserMessageCorrelation);
       const parentLinkedEvents =
         attachCodexDelegationParentLinks(translatedEvents);
       const completedSubAgentEvents =

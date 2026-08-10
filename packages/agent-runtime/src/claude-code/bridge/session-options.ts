@@ -1,4 +1,4 @@
-import { accessSync, constants } from "node:fs";
+import { accessSync, constants, statSync } from "node:fs";
 import { delimiter, join } from "node:path";
 import type { Options, Settings } from "@anthropic-ai/claude-agent-sdk";
 import type {
@@ -176,10 +176,26 @@ function buildWorkspaceWriteSandbox(
     failIfUnavailable: false,
     autoAllowBashIfSandboxed: true,
     allowUnsandboxedCommands: params.permissionEscalation === "ask",
+    // The bb CLI needs loopback to reach the local server, and
+    // escalation-denied turns have no unsandboxed-retry path around a block.
+    // macOS-only and coarse (all localhost ports, binding on all interfaces);
+    // the Linux sandbox ignores the flag.
+    network: { allowLocalBinding: true },
     ...(allowWrite.length > 0
       ? { filesystem: { allowWrite: [...allowWrite] } }
       : {}),
   };
+}
+
+// X_OK alone also passes for searchable directories, so require a regular
+// file (following symlinks) before treating a candidate as the Claude CLI.
+function isExecutableFile(candidatePath: string): boolean {
+  try {
+    accessSync(candidatePath, constants.X_OK);
+    return statSync(candidatePath).isFile();
+  } catch {
+    return false;
+  }
 }
 
 function resolveExecutableOnPath(
@@ -194,15 +210,34 @@ function resolveExecutableOnPath(
       continue;
     }
     const candidate = join(searchDir, args.executableName);
-    try {
-      accessSync(candidate, constants.X_OK);
+    if (isExecutableFile(candidate)) {
       return candidate;
-    } catch {
-      continue;
     }
   }
 
   return null;
+}
+
+// The login-shell PATH probe can miss user-level install directories (slow
+// shell startup, PATH exports the probe does not source), so common Claude
+// install locations are checked before falling back to the SDK's bundled
+// binary, which packaged bb builds do not ship.
+function wellKnownClaudeExecutablePaths(env: NodeJS.ProcessEnv): string[] {
+  // Under elevated privileges a user-writable binary must never be picked up
+  // implicitly; root operators can still set BB_CLAUDE_CODE_EXECUTABLE.
+  if (process.getuid?.() === 0) {
+    return [];
+  }
+  const candidatePaths: string[] = [];
+  const home = env.HOME?.trim();
+  if (home) {
+    candidatePaths.push(
+      join(home, ".local", "bin", "claude"),
+      join(home, ".claude", "local", "claude"),
+    );
+  }
+  candidatePaths.push("/opt/homebrew/bin/claude", "/usr/local/bin/claude");
+  return candidatePaths;
 }
 
 export function resolveClaudeCodeExecutable(
@@ -223,10 +258,21 @@ export function resolveClaudeCodeExecutable(
 
   // Bundled bridge files cannot rely on the SDK's package-relative CLI
   // resolution, so pass the host's Claude CLI path explicitly when available.
-  return resolveExecutableOnPath({
+  const executableOnPath = resolveExecutableOnPath({
     executableName: "claude",
     pathEnv: args.env.PATH,
   });
+  if (executableOnPath) {
+    return executableOnPath;
+  }
+
+  for (const candidate of wellKnownClaudeExecutablePaths(args.env)) {
+    if (isExecutableFile(candidate)) {
+      return candidate;
+    }
+  }
+
+  return null;
 }
 
 export function buildSessionOptions(
