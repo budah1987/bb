@@ -111,6 +111,8 @@ describe("ConductorSidebar", () => {
             summaries: [
               {
                 environmentId: "environment-1",
+                workspacePath: "/worktrees/sidebar",
+                gitAvailable: true,
                 aheadCount: 2,
                 behindCount: 1,
                 changedFiles: 4,
@@ -416,7 +418,7 @@ describe("ConductorSidebar", () => {
     });
   });
 
-  it("keeps conversation actions on workspace rows without worktree actions", async () => {
+  it("shows safe workspace actions on local checkouts without worktree renames", async () => {
     const rendered = renderSlot(
       sidebar,
       {
@@ -444,6 +446,18 @@ describe("ConductorSidebar", () => {
           ],
         },
         rpc: {
+          readWorkspaceGitSummaries: () => ({
+            summaries: [
+              {
+                environmentId: "environment-branch",
+                workspacePath: "/repos/ghost",
+                gitAvailable: true,
+                aheadCount: 0,
+                behindCount: 0,
+                changedFiles: 0,
+              },
+            ],
+          }),
           readReconciliation: () => ({
             legacyWorkspaces: [],
             recordedSignature: null,
@@ -459,16 +473,33 @@ describe("ConductorSidebar", () => {
       }),
     );
     expect(
+      await screen.findByRole("menuitem", { name: "Open workspace" }),
+    ).toBeDefined();
+    expect(
+      screen.getByRole("menuitem", { name: "Open in split" }),
+    ).toBeDefined();
+    expect(
+      screen.getByRole("menuitem", { name: "New conversation" }),
+    ).toBeDefined();
+    expect(screen.getByRole("menuitem", { name: "Copy path" })).toBeDefined();
+    expect(
+      screen.getByRole("menuitem", { name: "Rename sidebar label…" }),
+    ).toBeDefined();
+    expect(
+      screen.getByRole("menuitem", { name: "Archive workspace" }),
+    ).toBeDefined();
+    expect(
       screen.queryByRole("menuitem", { name: /Rename branch/u }),
     ).toBeNull();
-    fireEvent.click(
-      await screen.findByRole("menuitem", { name: "Mark as read" }),
-    );
+    expect(
+      screen.queryByRole("menuitem", { name: /Rename folder/u }),
+    ).toBeNull();
+    fireEvent.click(screen.getByRole("menuitem", { name: "Open in split" }));
 
     expect(rendered.sidebarActionCalls).toContainEqual({
-      method: "setRead",
+      method: "open",
       threadId: "Branch workspace",
-      read: true,
+      options: { split: true },
     });
   });
 

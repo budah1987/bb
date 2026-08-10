@@ -102,6 +102,8 @@ const updateWorkspaceFromMainResultSchema = z.object({
 
 const workspaceGitSummarySchema = z.object({
   environmentId: z.string().min(1),
+  workspacePath: z.string().min(1).nullable(),
+  gitAvailable: z.boolean(),
   aheadCount: z.number().int().nonnegative(),
   behindCount: z.number().int().nonnegative(),
   changedFiles: z.number().int().nonnegative(),
@@ -109,6 +111,8 @@ const workspaceGitSummarySchema = z.object({
 
 interface WorkspaceGitSummary {
   environmentId: string;
+  workspacePath: string | null;
+  gitAvailable: boolean;
   aheadCount: number;
   behindCount: number;
   changedFiles: number;
@@ -258,9 +262,20 @@ export default function plugin(bb: BbPluginApi) {
                 environmentId,
                 ...(mergeBaseBranch ? { mergeBaseBranch } : {}),
               });
-              if (status.outcome !== "available") return null;
+              if (status.outcome !== "available") {
+                return {
+                  environmentId,
+                  workspacePath: environment.path,
+                  gitAvailable: false,
+                  aheadCount: 0,
+                  behindCount: 0,
+                  changedFiles: 0,
+                };
+              }
               return {
                 environmentId,
+                workspacePath: environment.path,
+                gitAvailable: true,
                 aheadCount: status.workspace.mergeBase?.aheadCount ?? 0,
                 behindCount: status.workspace.mergeBase?.behindCount ?? 0,
                 changedFiles: status.workspace.workingTree.files.length,

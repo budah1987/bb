@@ -120,6 +120,8 @@ interface ArchiveTarget {
 
 interface WorkspaceGitSummary {
   environmentId: string;
+  workspacePath: string | null;
+  gitAvailable: boolean;
   aheadCount: number;
   behindCount: number;
   changedFiles: number;
@@ -159,7 +161,7 @@ function workspaceGitLabel(
   pullRequest: PluginSidebarPullRequest | null,
 ): string | null {
   const parts: string[] = [];
-  if (summary) {
+  if (summary?.gitAvailable) {
     const divergence = [
       summary.aheadCount > 0 ? `↑${summary.aheadCount}` : null,
       summary.behindCount > 0 ? `↓${summary.behindCount}` : null,
@@ -702,6 +704,7 @@ function WorkspaceRow({
   jumpShortcut,
   showJumpShortcut,
   onOpen,
+  onCreateConversation,
   onRequestArchive,
   onRequestRename,
   onSetRead,
@@ -717,7 +720,8 @@ function WorkspaceRow({
   shortcutEnabled: boolean;
   jumpShortcut: { ariaKeyshortcuts: string; label: string } | null;
   showJumpShortcut: boolean;
-  onOpen: (threadId: string) => void;
+  onOpen: (threadId: string, options?: { split?: boolean }) => void;
+  onCreateConversation: (workspace: ConductorWorkspace) => void;
   onRequestArchive: (workspace: ConductorWorkspace) => void;
   onRequestRename: (workspace: ConductorWorkspace, scope: RenameScope) => void;
   onSetRead: (workspace: ConductorWorkspace, read: boolean) => void;
@@ -725,7 +729,8 @@ function WorkspaceRow({
 }) {
   const target = pickWorkspaceThread(workspace, activeThreadId);
   const pullRequestState = useSidebarThreadPullRequest(target?.id ?? "");
-  const gitLabel = workspaceGitLabel(gitSummary, pullRequestState.pullRequest);
+  const pullRequest = pullRequestState.pullRequest;
+  const gitLabel = workspaceGitLabel(gitSummary, pullRequest);
   const isActive = workspace.threads.some(
     (thread) => thread.id === activeThreadId,
   );
@@ -832,6 +837,23 @@ function WorkspaceRow({
     <ContextMenu>
       <ContextMenuTrigger asChild>{sortableRow}</ContextMenuTrigger>
       <ContextMenuContent aria-label={`${workspace.title} actions`}>
+        <ContextMenuItem onSelect={() => target && onOpen(target.id)}>
+          <Icon name="ArrowRight" aria-hidden />
+          Open workspace
+        </ContextMenuItem>
+        <ContextMenuItem
+          onSelect={() => target && onOpen(target.id, { split: true })}
+        >
+          <Icon name="Columns2" aria-hidden />
+          Open in split
+        </ContextMenuItem>
+        {workspace.environmentId ? (
+          <ContextMenuItem onSelect={() => onCreateConversation(workspace)}>
+            <Icon name="MessageSquarePlus" aria-hidden />
+            New conversation
+          </ContextMenuItem>
+        ) : null}
+        <ContextMenuSeparator />
         <ContextMenuItem
           onSelect={() => onSetRead(workspace, !isExplicitlyRead)}
         >
@@ -843,27 +865,52 @@ function WorkspaceRow({
           <Icon name={focused ? "PinOff" : "Pin"} aria-hidden />
           {focused ? "Remove from Focus" : "Add to Focus"}
         </ContextMenuItem>
-        {isWorktree && workspace.environmentId ? (
+        {workspace.environmentId ? (
           <>
             <ContextMenuSeparator />
+            <ContextMenuItem
+              disabled={!gitSummary?.workspacePath}
+              onSelect={() => {
+                if (gitSummary?.workspacePath) {
+                  void navigator.clipboard.writeText(gitSummary.workspacePath);
+                }
+              }}
+            >
+              <Icon name="Copy" aria-hidden />
+              Copy path
+            </ContextMenuItem>
             <ContextMenuItem
               onSelect={() => onRequestRename(workspace, "display")}
             >
               <Icon name="Edit" aria-hidden />
               Rename sidebar label…
             </ContextMenuItem>
-            <ContextMenuItem
-              onSelect={() => onRequestRename(workspace, "branch")}
-            >
-              <Icon name="GitBranch" aria-hidden />
-              Rename branch…
-            </ContextMenuItem>
-            <ContextMenuItem
-              onSelect={() => onRequestRename(workspace, "folder")}
-            >
-              <Icon name="Folder" aria-hidden />
-              Rename folder…
-            </ContextMenuItem>
+            {isWorktree ? (
+              <>
+                <ContextMenuItem
+                  onSelect={() => onRequestRename(workspace, "branch")}
+                >
+                  <Icon name="GitBranch" aria-hidden />
+                  Rename branch…
+                </ContextMenuItem>
+                <ContextMenuItem
+                  onSelect={() => onRequestRename(workspace, "folder")}
+                >
+                  <Icon name="Folder" aria-hidden />
+                  Rename folder…
+                </ContextMenuItem>
+              </>
+            ) : null}
+            {pullRequest ? (
+              <ContextMenuItem
+                onSelect={() =>
+                  window.open(pullRequest.url, "_blank", "noopener,noreferrer")
+                }
+              >
+                <Icon name="GitPullRequest" aria-hidden />
+                Open pull request
+              </ContextMenuItem>
+            ) : null}
             <ContextMenuSeparator />
             <ContextMenuItem
               disabled={archivePending}
@@ -969,6 +1016,7 @@ function ProjectSection({
   showJumpShortcuts,
   onToggle,
   onCreate,
+  onCreateConversation,
   onOpen,
   onRequestArchive,
   onRequestRename,
@@ -999,7 +1047,8 @@ function ProjectSection({
   showJumpShortcuts: boolean;
   onToggle: () => void;
   onCreate: () => void;
-  onOpen: (threadId: string) => void;
+  onCreateConversation: (workspace: ConductorWorkspace) => void;
+  onOpen: (threadId: string, options?: { split?: boolean }) => void;
   onRequestArchive: (workspace: ConductorWorkspace) => void;
   onRequestRename: (workspace: ConductorWorkspace, scope: RenameScope) => void;
   onSetRead: (workspace: ConductorWorkspace, read: boolean) => void;
@@ -1157,6 +1206,7 @@ function ProjectSection({
                 shortcutEnabled={!collapsed}
                 jumpShortcut={jumpShortcuts.get(workspace.key) ?? null}
                 showJumpShortcut={showJumpShortcuts}
+                onCreateConversation={onCreateConversation}
                 onOpen={onOpen}
                 onRequestArchive={onRequestArchive}
                 onRequestRename={onRequestRename}
@@ -1180,6 +1230,7 @@ function FocusSection({
   jumpShortcuts,
   showJumpShortcuts,
   onToggle,
+  onCreateConversation,
   onOpen,
   onRequestArchive,
   onRequestRename,
@@ -1197,7 +1248,8 @@ function FocusSection({
   >;
   showJumpShortcuts: boolean;
   onToggle: () => void;
-  onOpen: (threadId: string) => void;
+  onCreateConversation: (workspace: ConductorWorkspace) => void;
+  onOpen: (threadId: string, options?: { split?: boolean }) => void;
   onRequestArchive: (workspace: ConductorWorkspace) => void;
   onRequestRename: (workspace: ConductorWorkspace, scope: RenameScope) => void;
   onSetRead: (workspace: ConductorWorkspace, read: boolean) => void;
@@ -1244,6 +1296,7 @@ function FocusSection({
                 shortcutEnabled={!collapsed}
                 jumpShortcut={jumpShortcuts.get(workspace.key) ?? null}
                 showJumpShortcut={showJumpShortcuts}
+                onCreateConversation={onCreateConversation}
                 onOpen={onOpen}
                 onRequestArchive={onRequestArchive}
                 onRequestRename={onRequestRename}
@@ -1603,8 +1656,22 @@ export function ConductorSidebar({
     });
   }
 
-  function openThread(threadId: string) {
-    actions.open(threadId);
+  function openThread(threadId: string, options?: { split?: boolean }) {
+    actions.open(threadId, options);
+    onNavigate();
+  }
+
+  function createWorkspaceConversation(workspace: ConductorWorkspace) {
+    if (!workspace.environmentId) return;
+    const target = pickWorkspaceThread(workspace, activeThreadId);
+    actions.openNewThread({
+      projectId: target?.projectId,
+      focusPrompt: true,
+      experimental_sameEnvironment: {
+        environmentId: workspace.environmentId,
+        locked: true,
+      },
+    });
     onNavigate();
   }
 
@@ -1877,6 +1944,7 @@ export function ConductorSidebar({
             jumpShortcuts={jumpShortcutByWorkspaceKey}
             showJumpShortcuts={showJumpShortcuts}
             onToggle={() => toggleSection("focus")}
+            onCreateConversation={createWorkspaceConversation}
             onOpen={openThread}
             onRequestArchive={(workspace) => {
               void requestArchive(workspace);
@@ -1929,6 +1997,7 @@ export function ConductorSidebar({
                     });
                     onNavigate();
                   }}
+                  onCreateConversation={createWorkspaceConversation}
                   onOpen={openThread}
                   onRequestArchive={(workspace) => {
                     void requestArchive(workspace);
