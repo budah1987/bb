@@ -60,6 +60,7 @@ import {
   disposeParcelWatcherBackend,
   type HostWatcher,
 } from "@bb/host-watcher";
+import { SimulatorManager } from "./simulator/simulator-manager.js";
 
 interface SessionState {
   value: string | null;
@@ -729,6 +730,9 @@ export async function createHostDaemonApp(
     runtimeManager,
     sendMessage: (message) => sendTerminalMessage(message),
   });
+  const simulatorManager = new SimulatorManager({
+    getShellEnv: () => runtimeManager.getShellEnv(),
+  });
 
   const router = new CommandRouter({
     dataDir: options.dataDir,
@@ -755,6 +759,7 @@ export async function createHostDaemonApp(
       interactiveRequestRegistry.resolve(request);
     },
     ensureConnectTunnelIdentity: () => connectTunnel.ensureTunnelIdentity(),
+    simulatorManager,
     caffeinateManager,
     threadStorageRootPath,
     logger: options.logger,
@@ -904,6 +909,7 @@ export async function createHostDaemonApp(
       // the daemon's event loop can drain and the child is not orphaned.
       disposeParcelWatcherBackend();
       await terminalManager.shutdownAll();
+      await simulatorManager.shutdown();
       await runtimeManager.shutdownAll();
       await eventSink.flush();
       await eventSink.dispose();

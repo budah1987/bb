@@ -59,6 +59,13 @@ export const threadTabSchema = z.discriminatedUnion("kind", [
     .strict(),
   z
     .object({
+      environmentId: z.string().min(1),
+      id: threadTabIdSchema,
+      kind: z.literal("simulator"),
+    })
+    .strict(),
+  z
+    .object({
       environmentId: z.string().min(1).nullable(),
       id: threadTabIdSchema,
       kind: z.literal("host-file-preview"),

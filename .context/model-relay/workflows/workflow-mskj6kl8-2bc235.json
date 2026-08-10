@@ -1,0 +1,264 @@
+{
+  "route": "sequence",
+  "parent_model": "sol",
+  "workflow_id": "workflow-mskj6kl8-2bc235",
+  "reason": "Full workflow depth keeps review proportional to risk and ambiguity.",
+  "workflow_depth": "full",
+  "risk_assessment": {
+    "level": "medium",
+    "score": 5,
+    "maximum_score": 12,
+    "automatic_high_reasons": [],
+    "factors": {
+      "blast_radius": "shared",
+      "reversibility": "costly",
+      "uncertainty": "investigation",
+      "verification_strength": "strong",
+      "user_impact": "user_facing",
+      "sensitive_surface": "external_integration"
+    },
+    "scores": {
+      "blast_radius": 1,
+      "reversibility": 1,
+      "uncertainty": 1,
+      "verification_strength": 0,
+      "user_impact": 1,
+      "sensitive_surface": 1
+    }
+  },
+  "plan_council": {
+    "discovery_stage_id": "strategic-discovery",
+    "review_stage_id": "plan-review",
+    "review_provider": "fable",
+    "max_review_rounds": 2,
+    "unresolved_action": "surface_to_user"
+  },
+  "convergence": {
+    "implementation_stage_id": "implementation",
+    "review_stage_id": "code-review",
+    "max_automatic_rounds": 3
+  },
+  "stages": [
+    {
+      "stage_id": "problem-frame",
+      "order": 1,
+      "actor": "parent",
+      "provider": null,
+      "model": null,
+      "provider_family": null,
+      "role": "acceptance",
+      "mode": null,
+      "session_action": "none",
+      "resume_stage_id": null,
+      "depends_on_stage_ids": [],
+      "collect_before_next": true,
+      "reason": "Sol frames the problem, constraints, assumptions, options, and open questions in a compact discovery brief."
+    },
+    {
+      "stage_id": "strategic-discovery",
+      "order": 2,
+      "actor": "parent",
+      "provider": null,
+      "model": null,
+      "provider_family": null,
+      "role": "investigation",
+      "mode": null,
+      "session_action": "none",
+      "resume_stage_id": null,
+      "depends_on_stage_ids": [
+        "problem-frame"
+      ],
+      "collect_before_next": true,
+      "reason": "Sol investigates the technical landscape and gathers the evidence needed for a concrete plan."
+    },
+    {
+      "stage_id": "draft-plan",
+      "order": 3,
+      "actor": "parent",
+      "provider": null,
+      "model": null,
+      "provider_family": null,
+      "role": "acceptance",
+      "mode": null,
+      "session_action": "none",
+      "resume_stage_id": null,
+      "depends_on_stage_ids": [
+        "strategic-discovery"
+      ],
+      "collect_before_next": true,
+      "reason": "Sol synthesizes the discovery into the proposed implementation or design plan."
+    },
+    {
+      "stage_id": "plan-review",
+      "order": 4,
+      "actor": "worker",
+      "provider": "fable",
+      "model": "fable",
+      "provider_family": "claude",
+      "role": "plan_review",
+      "mode": "read_only",
+      "session_action": "new_task",
+      "resume_stage_id": null,
+      "depends_on_stage_ids": [
+        "draft-plan"
+      ],
+      "collect_before_next": true,
+      "reason": "Fable reviews product intent, UX judgment, assumptions, scope, and strategic coherence."
+    },
+    {
+      "stage_id": "plan-acceptance",
+      "order": 5,
+      "actor": "parent",
+      "provider": null,
+      "model": null,
+      "provider_family": null,
+      "role": "acceptance",
+      "mode": null,
+      "session_action": "none",
+      "resume_stage_id": null,
+      "depends_on_stage_ids": [
+        "plan-review"
+      ],
+      "collect_before_next": true,
+      "reason": "Sol resolves the review, owns the final plan, and surfaces any material disagreement after at most two review rounds."
+    },
+    {
+      "stage_id": "design-spec",
+      "order": 6,
+      "actor": "worker",
+      "provider": "fable",
+      "model": "fable",
+      "provider_family": "claude",
+      "role": "design",
+      "mode": "read_only",
+      "session_action": "new_task",
+      "resume_stage_id": null,
+      "depends_on_stage_ids": [
+        "plan-acceptance"
+      ],
+      "collect_before_next": true,
+      "reason": "Fable turns the product frame into an implementation-ready design spec without constructing the artifact."
+    },
+    {
+      "stage_id": "design-execution",
+      "order": 7,
+      "actor": "worker",
+      "provider": "fable",
+      "model": "fable",
+      "provider_family": "claude",
+      "role": "design",
+      "mode": "read_only",
+      "session_action": "new_task",
+      "resume_stage_id": null,
+      "depends_on_stage_ids": [
+        "design-spec"
+      ],
+      "collect_before_next": true,
+      "reason": "The user explicitly selected fable for design."
+    },
+    {
+      "stage_id": "design-review",
+      "order": 8,
+      "actor": "worker",
+      "provider": "fable",
+      "model": "fable",
+      "provider_family": "claude",
+      "role": "visual_review",
+      "mode": "read_only",
+      "session_action": "new_task",
+      "resume_stage_id": null,
+      "depends_on_stage_ids": [
+        "design-execution"
+      ],
+      "collect_before_next": true,
+      "reason": "A fresh Fable session reviews the executed artifact against the accepted design spec."
+    },
+    {
+      "stage_id": "design-acceptance",
+      "order": 9,
+      "actor": "parent",
+      "provider": null,
+      "model": null,
+      "provider_family": null,
+      "role": "acceptance",
+      "mode": null,
+      "session_action": "none",
+      "resume_stage_id": null,
+      "depends_on_stage_ids": [
+        "design-review"
+      ],
+      "collect_before_next": true,
+      "reason": "The Sol parent resolves Fable’s design review and accepts the direction."
+    },
+    {
+      "stage_id": "implementation",
+      "order": 10,
+      "actor": "parent",
+      "provider": null,
+      "model": null,
+      "provider_family": null,
+      "role": "implementation",
+      "mode": null,
+      "session_action": "none",
+      "resume_stage_id": null,
+      "depends_on_stage_ids": [
+        "design-acceptance"
+      ],
+      "collect_before_next": true,
+      "reason": "The implementation is small, context-heavy, or not independently verifiable."
+    },
+    {
+      "stage_id": "visual-review",
+      "order": 11,
+      "actor": "worker",
+      "provider": "fable",
+      "model": "fable",
+      "provider_family": "claude",
+      "role": "visual_review",
+      "mode": "read_only",
+      "session_action": "resume_stage",
+      "resume_stage_id": "design-review",
+      "depends_on_stage_ids": [
+        "implementation"
+      ],
+      "collect_before_next": true,
+      "reason": "Resume the fresh Fable design-review session to verify that the implemented interface still adheres to the accepted spec."
+    },
+    {
+      "stage_id": "code-review",
+      "order": 12,
+      "actor": "worker",
+      "provider": "sonnet",
+      "model": "sonnet",
+      "provider_family": "claude",
+      "role": "code_review",
+      "mode": "read_only",
+      "session_action": "new_task",
+      "resume_stage_id": null,
+      "depends_on_stage_ids": [
+        "visual-review"
+      ],
+      "collect_before_next": true,
+      "reason": "A fresh Sonnet session independently reviews the engineering work."
+    },
+    {
+      "stage_id": "final-acceptance",
+      "order": 13,
+      "actor": "parent",
+      "provider": null,
+      "model": null,
+      "provider_family": null,
+      "role": "acceptance",
+      "mode": null,
+      "session_action": "none",
+      "resume_stage_id": null,
+      "depends_on_stage_ids": [
+        "code-review"
+      ],
+      "collect_before_next": true,
+      "reason": "The parent owns final product acceptance."
+    }
+  ],
+  "task_summary": "Add a built-in iOS Simulator surface to BB, inspired by Orca's serve-sim integration. The feature must be opened by humans from the thread secondary-panel/new-tab launcher, scoped to the thread environment and its enrolled Mac, provide device selection/start/control/live preview/error states, and be accessible to agents through BB SDK and `bb simulator` CLI commands. Plan Council should review product/UX and scope; Sol retains technical discovery, final acceptance, and implementation. Implementation must respect server/host-daemon ownership, remote-host security, protocol-version rules, tests, and documentation.",
+  "created_at": "2026-08-08T15:30:58.364Z"
+}

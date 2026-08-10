@@ -10,6 +10,7 @@ import {
   createNewTabFixedPanelTab,
   createNotesFixedPanelTab,
   createPluginPanelFixedPanelTab,
+  createSimulatorFixedPanelTab,
   createThreadStorageFilePreviewFixedPanelTab,
   createWorkspaceFilePreviewFixedPanelTab,
   type BrowserFixedPanelTab,
@@ -17,6 +18,7 @@ import {
   type HostFilePreviewFixedPanelTab,
   type NewTabFixedPanelTab,
   type PluginPanelFixedPanelTab,
+  type SimulatorFixedPanelTab,
   type ThreadStorageFilePreviewFixedPanelTab,
   type WorkspaceFilePreviewFixedPanelTab,
 } from "@/lib/fixed-panel-tabs-state";
@@ -97,6 +99,7 @@ export type OpenSecondaryPanelTabRequest =
   | { kind: "host-file-preview"; tab: HostFileTabState }
   | { kind: "thread-storage-file-preview"; tab: ThreadStorageFileTabState }
   | { kind: "browser"; url: string }
+  | { kind: "simulator" }
   | { kind: "new-tab" };
 
 interface CreateTabForOpenRequestArgs {
@@ -124,6 +127,7 @@ type SecondaryPanelTab =
   | HostFilePreviewFixedPanelTab
   | ThreadStorageFilePreviewFixedPanelTab
   | BrowserFixedPanelTab
+  | SimulatorFixedPanelTab
   | NewTabFixedPanelTab
   | PluginPanelFixedPanelTab;
 
@@ -175,6 +179,11 @@ function createTabForOpenRequest({
       return createBrowserFixedPanelTab({
         environmentId: resolvedEnvironmentId ?? null,
         url: request.url,
+      });
+    case "simulator":
+      if (!resolvedEnvironmentId) return null;
+      return createSimulatorFixedPanelTab({
+        environmentId: resolvedEnvironmentId,
       });
     case "new-tab":
       return createNewTabFixedPanelTab();
@@ -447,7 +456,7 @@ export function useThreadFileTabs({
       }
 
       updateFixedPanelTabsState((state) => {
-        if (request.kind === "browser") {
+        if (request.kind === "browser" || request.kind === "simulator") {
           return replaceNewTabWithSecondaryPanelTabInState({ state, tab });
         }
         return openSecondaryPanelTabInState({ state, tab });
@@ -607,6 +616,7 @@ export function useThreadFileTabs({
   const activeHostFileTab =
     activeTab?.kind === "host-file-preview" ? activeTab : null;
   const activeBrowserTab = activeTab?.kind === "browser" ? activeTab : null;
+  const activeSimulatorTab = activeTab?.kind === "simulator" ? activeTab : null;
   const activeNewTab = activeTab?.kind === "new-tab" ? activeTab : null;
   const activeNotesTab = activeTab?.kind === "notes" ? activeTab : null;
   const activeLocalServersTab =
@@ -634,6 +644,7 @@ export function useThreadFileTabs({
     activeWorkspaceFileSource: activeWorkspaceFileTab?.source ?? null,
     activeWorkspaceFileStatusLabel: activeWorkspaceFileTab?.statusLabel ?? null,
     activePluginPanelTab,
+    activeSimulatorTab,
     browserTabs,
     clearActiveFileTabs,
     closeTab,

@@ -1,4 +1,5 @@
 import {
+  useCallback,
   useEffect,
   useMemo,
   useState,
@@ -35,7 +36,12 @@ import {
   ContextMenu,
   ContextMenuContent,
   ContextMenuItem,
+  ContextMenuRadioGroup,
+  ContextMenuRadioItem,
   ContextMenuSeparator,
+  ContextMenuSub,
+  ContextMenuSubContent,
+  ContextMenuSubTrigger,
   ContextMenuTrigger,
 } from "@/components/ui/context-menu";
 import {
@@ -108,12 +114,236 @@ interface ArchiveTarget {
   workspaceTitle: string;
 }
 
+interface GithubAccountOption {
+  login: string;
+  active: boolean;
+}
+
+interface GithubRepositoryOption {
+  nameWithOwner: string;
+  url: string;
+  isPrivate: boolean;
+  defaultBranch: string | null;
+  accessibleBy: string[];
+  activeAccount: string | null;
+}
+
+interface GithubCatalog {
+  hostId: string;
+  accounts: GithubAccountOption[];
+  repositories: GithubRepositoryOption[];
+}
+
+function accountsForRepository(
+  catalog: GithubCatalog | null,
+  repositoryName: string | null,
+): GithubAccountOption[] {
+  if (!catalog || !repositoryName) return [];
+  const repository = repositoryName
+    ? catalog.repositories.find(
+        (candidate) =>
+          candidate.nameWithOwner.toLocaleLowerCase() ===
+          repositoryName.toLocaleLowerCase(),
+      )
+    : undefined;
+  if (!repository) return [];
+  return catalog.accounts.filter((account) =>
+    repository.accessibleBy.some(
+      (login) =>
+        login.toLocaleLowerCase() === account.login.toLocaleLowerCase(),
+    ),
+  );
+}
+
+function AddRepositoryDialog({
+  catalog,
+  open,
+  pending,
+  onClose,
+  onCreate,
+  onLoad,
+}: {
+  catalog: GithubCatalog | null;
+  open: boolean;
+  pending: boolean;
+  onClose: () => void;
+  onCreate: (
+    repository: GithubRepositoryOption,
+    accountLogin: string | null,
+  ) => Promise<void>;
+  onLoad: () => Promise<void>;
+}) {
+  const [query, setQuery] = useState("");
+  const [selectedName, setSelectedName] = useState<string | null>(null);
+  const [accountLogin, setAccountLogin] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    setQuery("");
+    setSelectedName(null);
+    setAccountLogin(null);
+    setError(null);
+    void onLoad().catch((cause) => {
+      setError(
+        cause instanceof Error ? cause.message : "Unable to load repositories.",
+      );
+    });
+  }, [onLoad, open]);
+
+  const filteredRepositories = useMemo(() => {
+    const normalizedQuery = query.trim().toLocaleLowerCase();
+    return (catalog?.repositories ?? []).filter((repository) =>
+      normalizedQuery.length === 0
+        ? true
+        : repository.nameWithOwner
+            .toLocaleLowerCase()
+            .includes(normalizedQuery),
+    );
+  }, [catalog?.repositories, query]);
+  const selectedRepository = filteredRepositories.find(
+    (repository) => repository.nameWithOwner === selectedName,
+  );
+  const availableAccounts = accountsForRepository(
+    catalog,
+    selectedRepository?.nameWithOwner ?? null,
+  );
+  const selectableAccounts = selectedRepository
+    ? availableAccounts
+    : (catalog?.accounts ?? []);
+
+  useEffect(() => {
+    if (!open) return;
+    if (selectableAccounts.some((account) => account.login === accountLogin)) {
+      return;
+    }
+    setAccountLogin(
+      selectableAccounts.find((account) => account.active)?.login ??
+        selectableAccounts[0]?.login ??
+        null,
+    );
+  }, [accountLogin, open, selectableAccounts]);
+
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!selectedRepository) return;
+    setError(null);
+    try {
+      await onCreate(selectedRepository, accountLogin);
+      onClose();
+    } catch (cause) {
+      setError(
+        cause instanceof Error ? cause.message : "Unable to add repository.",
+      );
+    }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={(nextOpen) => !nextOpen && onClose()}>
+      <DialogContent>
+        <form onSubmit={submit} className="space-y-4">
+          <DialogHeader>
+            <DialogTitle>Add repository</DialogTitle>
+            <DialogDescription>
+              Add a GitHub repository to the sidebar first. Start a workspace
+              later with the plus button beside it.
+            </DialogDescription>
+          </DialogHeader>
+          <label className="block space-y-1.5 text-xs font-medium text-foreground">
+            <span>Search repositories</span>
+            <Input
+              autoFocus
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="owner/repository"
+            />
+          </label>
+          <div className="max-h-64 space-y-1 overflow-y-auto rounded-md border p-1">
+            {!catalog ? (
+              <p className="px-3 py-5 text-xs text-muted-foreground">
+                Loading repositories…
+              </p>
+            ) : filteredRepositories.length === 0 ? (
+              <p className="px-3 py-5 text-xs text-muted-foreground">
+                No repositories are visible to any authenticated GitHub
+                account.
+              </p>
+            ) : (
+              filteredRepositories.map((repository) => (
+                <button
+                  key={repository.nameWithOwner}
+                  type="button"
+                  className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-xs hover:bg-state-hover data-[selected=true]:bg-state-active"
+                  data-selected={repository.nameWithOwner === selectedName}
+                  aria-pressed={repository.nameWithOwner === selectedName}
+                  onClick={() => setSelectedName(repository.nameWithOwner)}
+                >
+                  <Icon name="Github" className="size-4 shrink-0" aria-hidden />
+                  <span className="min-w-0 flex-1 truncate font-medium">
+                    {repository.nameWithOwner}
+                  </span>
+                  <span className="max-w-40 shrink-0 truncate text-2xs text-muted-foreground">
+                    {repository.accessibleBy
+                      .map((login) => `@${login}`)
+                      .join(" · ")}
+                  </span>
+                  <span className="shrink-0 text-2xs text-muted-foreground">
+                    {repository.isPrivate ? "Private" : "Public"}
+                  </span>
+                </button>
+              ))
+            )}
+          </div>
+          {selectableAccounts.length > 0 ? (
+            <fieldset className="space-y-2">
+              <legend className="text-xs font-medium text-foreground">
+                GitHub account for this repository
+              </legend>
+              <div className="grid grid-cols-2 gap-2">
+                {selectableAccounts.map((account) => (
+                  <label
+                    key={account.login}
+                    className="flex cursor-pointer items-center gap-2 rounded-md border px-3 py-2 text-xs hover:bg-state-hover"
+                  >
+                    <input
+                      type="radio"
+                      name="github-account"
+                      value={account.login}
+                      checked={account.login === accountLogin}
+                      onChange={() => setAccountLogin(account.login)}
+                    />
+                    <span>@{account.login}</span>
+                  </label>
+                ))}
+              </div>
+            </fieldset>
+          ) : null}
+          {error ? <p className="text-xs text-destructive">{error}</p> : null}
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={onClose}>
+              Cancel
+            </Button>
+            <Button type="submit" disabled={pending || !selectedRepository}>
+              {pending ? "Adding…" : "Add repository"}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 const WORKSPACE_DND_PREFIX = "workspace:";
 
 type DragState = {
   activeId: string;
   overId: string | null;
 };
+
+type SortableActivatorBindings = Pick<
+  ReturnType<typeof useSortable>,
+  "attributes" | "listeners" | "setActivatorNodeRef"
+>;
 
 function workspaceDndId(workspaceKey: string): string {
   return `${WORKSPACE_DND_PREFIX}${workspaceKey}`;
@@ -327,14 +557,7 @@ function SignalStatus({
   if (!label) return null;
 
   return (
-    <span
-      className={
-        signal === "unread"
-          ? "conductor-status-badge"
-          : "conductor-status-label"
-      }
-      data-signal={signal}
-    >
+    <span className="conductor-status-label" data-signal={signal}>
       {label}
     </span>
   );
@@ -342,6 +565,7 @@ function SignalStatus({
 
 function SectionHeader({
   title,
+  meta,
   icon,
   contentId,
   collapsed,
@@ -349,9 +573,10 @@ function SectionHeader({
   onToggle,
   onCreate,
   createLabel,
-  dragHandle,
+  dragBindings,
 }: {
   title: string;
+  meta?: ReactNode;
   icon?: ReactNode;
   contentId: string;
   collapsed: boolean;
@@ -359,18 +584,21 @@ function SectionHeader({
   onToggle: () => void;
   onCreate: () => void;
   createLabel: string;
-  dragHandle?: ReactNode;
+  dragBindings?: SortableActivatorBindings;
 }) {
   const statusLabel = signalLabel(signal);
 
   return (
     <div className="conductor-section-header group/section flex items-center gap-0.5 px-1 text-xs font-medium text-sidebar-foreground">
       <button
+        ref={dragBindings?.setActivatorNodeRef}
         type="button"
         className="conductor-section-toggle"
         aria-expanded={!collapsed}
         aria-controls={contentId}
         onClick={onToggle}
+        {...dragBindings?.attributes}
+        {...(dragBindings?.listeners ?? {})}
       >
         <Icon
           name="ChevronDown"
@@ -379,12 +607,14 @@ function SectionHeader({
         />
         {icon}
         <span className="min-w-0 flex-1 truncate text-left">{title}</span>
-        <PixelMatrix
-          signal={signal}
-          label={statusLabel ? `${statusLabel} in ${title}` : undefined}
-        />
+        {meta}
+        {collapsed ? (
+          <PixelMatrix
+            signal={signal}
+            label={statusLabel ? `${statusLabel} in ${title}` : undefined}
+          />
+        ) : null}
       </button>
-      {dragHandle}
       <button
         type="button"
         className="conductor-icon-button"
@@ -403,6 +633,7 @@ function WorkspaceRow({
   activeThreadId,
   archivePending,
   dragDisabled,
+  focused,
   isDropTarget,
   shortcutEnabled,
   jumpShortcut,
@@ -410,11 +641,14 @@ function WorkspaceRow({
   onOpen,
   onRequestArchive,
   onRequestRename,
+  onSetRead,
+  onSetFocused,
 }: {
   workspace: ConductorWorkspace;
   activeThreadId: string | null;
   archivePending: boolean;
   dragDisabled: boolean;
+  focused: boolean;
   isDropTarget: boolean;
   shortcutEnabled: boolean;
   jumpShortcut: { ariaKeyshortcuts: string; label: string } | null;
@@ -422,15 +656,15 @@ function WorkspaceRow({
   onOpen: (threadId: string) => void;
   onRequestArchive: (workspace: ConductorWorkspace) => void;
   onRequestRename: (workspace: ConductorWorkspace, scope: RenameScope) => void;
+  onSetRead: (workspace: ConductorWorkspace, read: boolean) => void;
+  onSetFocused: (workspace: ConductorWorkspace, focused: boolean) => void;
 }) {
   const target = pickWorkspaceThread(workspace, activeThreadId);
   const isActive = workspace.threads.some(
     (thread) => thread.id === activeThreadId,
   );
-  const unreadCount = workspace.threads.filter(
-    (thread) => thread.isUnread,
-  ).length;
   const signal = workspaceSignal(workspace.threads);
+  const isExplicitlyRead = target?.lastReadAt === target?.latestAttentionAt;
   const statusLabel = signalLabel(signal);
   const displayKind = workspace.threads[0]?.environment?.workspaceDisplayKind;
   const isWorktree =
@@ -459,31 +693,47 @@ function WorkspaceRow({
 
   const row = (
     <button
+      ref={setActivatorNodeRef}
       type="button"
       className="conductor-workspace-row"
+      data-focused={focused || undefined}
       data-sidebar-thread-shortcut-target={isShortcutTarget ? "" : undefined}
       data-sidebar-thread-id={isShortcutTarget ? target?.id : undefined}
       data-active={isActive || undefined}
       aria-current={isActive ? "page" : undefined}
       aria-keyshortcuts={jumpShortcut?.ariaKeyshortcuts}
       onClick={() => target && onOpen(target.id)}
+      {...attributes}
+      {...(listeners ?? {})}
     >
       <PixelMatrix
         signal={signal}
         label={statusLabel ? `${statusLabel} workspace` : undefined}
       />
       <span className="min-w-0 flex-1 text-left">
-        <span className="block truncate text-xs font-medium text-sidebar-foreground">
+        <span
+          className={
+            focused
+              ? "block truncate text-sm font-medium text-sidebar-foreground"
+              : "block truncate text-xs font-medium text-sidebar-foreground"
+          }
+        >
           {workspace.title}
         </span>
-        <span className="flex min-w-0 items-center gap-1 text-2xs text-muted-foreground">
+        <span
+          className={
+            focused
+              ? "flex min-w-0 items-center gap-1 text-xs text-muted-foreground"
+              : "flex min-w-0 items-center gap-1 text-2xs text-muted-foreground"
+          }
+        >
           <span className="min-w-0 flex-1 truncate">
             {workspace.branchName ??
               `${workspace.threads.length} conversation${workspace.threads.length === 1 ? "" : "s"}`}
           </span>
-          <SignalStatus signal={signal} />
         </span>
       </span>
+      <SignalStatus signal={signal} />
       {showJumpShortcut && jumpShortcut ? (
         <kbd
           aria-hidden
@@ -491,10 +741,6 @@ function WorkspaceRow({
         >
           {jumpShortcut.label}
         </kbd>
-      ) : unreadCount > 0 ? (
-        <span className="text-2xs tabular-nums text-muted-foreground">
-          {unreadCount}
-        </span>
       ) : null}
     </button>
   );
@@ -508,47 +754,56 @@ function WorkspaceRow({
       data-drop-target={isDropTarget || undefined}
     >
       {row}
-      <button
-        ref={setActivatorNodeRef}
-        type="button"
-        className="conductor-drag-handle"
-        aria-label="Reorder workspace"
-        title={`Reorder ${workspace.title}`}
-        disabled={dragDisabled}
-        {...attributes}
-        {...listeners}
-      >
-        <Icon name="DragDropVertical" className="size-3.5" aria-hidden />
-      </button>
     </div>
   );
 
-  if (!isWorktree || !workspace.environmentId) return sortableRow;
   return (
     <ContextMenu>
       <ContextMenuTrigger asChild>{sortableRow}</ContextMenuTrigger>
       <ContextMenuContent aria-label={`${workspace.title} actions`}>
-        <ContextMenuItem onSelect={() => onRequestRename(workspace, "display")}>
-          <Icon name="Edit" aria-hidden />
-          Rename sidebar label…
-        </ContextMenuItem>
-        <ContextMenuItem onSelect={() => onRequestRename(workspace, "branch")}>
-          <Icon name="GitBranch" aria-hidden />
-          Rename branch…
-        </ContextMenuItem>
-        <ContextMenuItem onSelect={() => onRequestRename(workspace, "folder")}>
-          <Icon name="Folder" aria-hidden />
-          Rename folder…
+        <ContextMenuItem
+          onSelect={() => onSetRead(workspace, !isExplicitlyRead)}
+        >
+          <Icon name={isExplicitlyRead ? "Mail" : "MailOpen"} aria-hidden />
+          {isExplicitlyRead ? "Mark as unread" : "Mark as read"}
         </ContextMenuItem>
         <ContextMenuSeparator />
-        <ContextMenuItem
-          disabled={archivePending}
-          className="text-destructive focus:bg-destructive/15 focus:text-destructive data-[last-hovered]:bg-destructive/15 data-[last-hovered]:text-destructive"
-          onSelect={() => onRequestArchive(workspace)}
-        >
-          <Icon name="Archive" aria-hidden />
-          Archive workspace
+        <ContextMenuItem onSelect={() => onSetFocused(workspace, !focused)}>
+          <Icon name={focused ? "PinOff" : "Pin"} aria-hidden />
+          {focused ? "Remove from Focus" : "Add to Focus"}
         </ContextMenuItem>
+        {isWorktree && workspace.environmentId ? (
+          <>
+            <ContextMenuSeparator />
+            <ContextMenuItem
+              onSelect={() => onRequestRename(workspace, "display")}
+            >
+              <Icon name="Edit" aria-hidden />
+              Rename sidebar label…
+            </ContextMenuItem>
+            <ContextMenuItem
+              onSelect={() => onRequestRename(workspace, "branch")}
+            >
+              <Icon name="GitBranch" aria-hidden />
+              Rename branch…
+            </ContextMenuItem>
+            <ContextMenuItem
+              onSelect={() => onRequestRename(workspace, "folder")}
+            >
+              <Icon name="Folder" aria-hidden />
+              Rename folder…
+            </ContextMenuItem>
+            <ContextMenuSeparator />
+            <ContextMenuItem
+              disabled={archivePending}
+              className="text-destructive focus:bg-destructive/15 focus:text-destructive data-[last-hovered]:bg-destructive/15 data-[last-hovered]:text-destructive"
+              onSelect={() => onRequestArchive(workspace)}
+            >
+              <Icon name="Archive" aria-hidden />
+              Archive workspace
+            </ContextMenuItem>
+          </>
+        ) : null}
       </ContextMenuContent>
     </ContextMenu>
   );
@@ -578,11 +833,6 @@ function WorkspaceDragPreview({
               `${workspace.threads.length} conversation${workspace.threads.length === 1 ? "" : "s"}`}
           </span>
         </span>
-        <Icon
-          name="DragDropVertical"
-          className="size-3.5 shrink-0 text-primary"
-          aria-hidden
-        />
       </div>
     </div>
   );
@@ -627,11 +877,6 @@ function ProjectDragPreview({
         {projectLabel}
       </span>
       <PixelMatrix signal={signal} />
-      <Icon
-        name="DragDropVertical"
-        className="size-3.5 shrink-0 text-muted-foreground"
-        aria-hidden
-      />
     </div>
   );
 }
@@ -639,6 +884,8 @@ function ProjectDragPreview({
 function ProjectSection({
   project,
   customization,
+  githubAccountLogin,
+  githubAccounts,
   activeThreadId,
   collapsed,
   archivePending,
@@ -653,11 +900,17 @@ function ProjectSection({
   onOpen,
   onRequestArchive,
   onRequestRename,
+  onSetRead,
+  onSetFocused,
   onRequestRenameProject,
   onRequestChangeIcon,
+  onRequestGithubCatalog,
+  onSetGithubAccount,
 }: {
   project: ConductorProject;
   customization: ProjectCustomization | undefined;
+  githubAccountLogin: string | null;
+  githubAccounts: readonly GithubAccountOption[];
   activeThreadId: string | null;
   collapsed: boolean;
   archivePending: boolean;
@@ -675,8 +928,12 @@ function ProjectSection({
   onOpen: (threadId: string) => void;
   onRequestArchive: (workspace: ConductorWorkspace) => void;
   onRequestRename: (workspace: ConductorWorkspace, scope: RenameScope) => void;
+  onSetRead: (workspace: ConductorWorkspace, read: boolean) => void;
+  onSetFocused: (workspace: ConductorWorkspace, focused: boolean) => void;
   onRequestRenameProject: () => void;
   onRequestChangeIcon: () => void;
+  onRequestGithubCatalog: () => void;
+  onSetGithubAccount: (accountLogin: string | null) => void;
 }) {
   const {
     attributes,
@@ -727,11 +984,18 @@ function ProjectSection({
       data-drop-target={isDropTarget || undefined}
       aria-label={projectLabel}
     >
-      <ContextMenu>
+      <ContextMenu onOpenChange={(open) => open && onRequestGithubCatalog()}>
         <ContextMenuTrigger asChild>
           <div className="min-w-0">
             <SectionHeader
               title={projectLabel}
+              meta={
+                githubAccountLogin ? (
+                  <span className="max-w-24 truncate text-2xs font-normal text-muted-foreground">
+                    @{githubAccountLogin}
+                  </span>
+                ) : null
+              }
               icon={projectIconNode}
               contentId={contentId}
               collapsed={collapsed}
@@ -739,24 +1003,7 @@ function ProjectSection({
               onToggle={onToggle}
               onCreate={onCreate}
               createLabel={`New workspace in ${projectLabel}`}
-              dragHandle={
-                <button
-                  ref={setActivatorNodeRef}
-                  type="button"
-                  className="conductor-drag-handle"
-                  aria-label={`Reorder ${projectLabel}`}
-                  title={`Reorder ${projectLabel}`}
-                  disabled={dragDisabled}
-                  {...attributes}
-                  {...listeners}
-                >
-                  <Icon
-                    name="DragDropVertical"
-                    className="size-3.5"
-                    aria-hidden
-                  />
-                </button>
-              }
+              dragBindings={{ attributes, listeners, setActivatorNodeRef }}
             />
           </div>
         </ContextMenuTrigger>
@@ -769,6 +1016,38 @@ function ProjectSection({
             <Icon name="Palette" aria-hidden />
             Change icon…
           </ContextMenuItem>
+          <ContextMenuSub>
+            <ContextMenuSubTrigger>
+              <Icon name="Github" aria-hidden />
+              GitHub Account
+            </ContextMenuSubTrigger>
+            <ContextMenuSubContent>
+              {githubAccounts.length === 0 ? (
+                <ContextMenuItem disabled>
+                  No authenticated accounts
+                </ContextMenuItem>
+              ) : (
+                <ContextMenuRadioGroup
+                  value={githubAccountLogin ?? "__none__"}
+                  onValueChange={(value) =>
+                    onSetGithubAccount(value === "__none__" ? null : value)
+                  }
+                >
+                  {githubAccounts.map((account) => (
+                    <ContextMenuRadioItem
+                      key={account.login}
+                      value={account.login}
+                    >
+                      @{account.login}
+                    </ContextMenuRadioItem>
+                  ))}
+                  <ContextMenuRadioItem value="__none__">
+                    Not set
+                  </ContextMenuRadioItem>
+                </ContextMenuRadioGroup>
+              )}
+            </ContextMenuSubContent>
+          </ContextMenuSub>
         </ContextMenuContent>
       </ContextMenu>
       <SectionContent id={contentId} collapsed={collapsed}>
@@ -788,6 +1067,7 @@ function ProjectSection({
                 dragDisabled={
                   workspaceDragDisabled || project.workspaces.length < 2
                 }
+                focused={false}
                 isDropTarget={dropTargetWorkspaceKey === workspace.key}
                 shortcutEnabled={!collapsed}
                 jumpShortcut={jumpShortcuts.get(workspace.key) ?? null}
@@ -795,6 +1075,88 @@ function ProjectSection({
                 onOpen={onOpen}
                 onRequestArchive={onRequestArchive}
                 onRequestRename={onRequestRename}
+                onSetRead={onSetRead}
+                onSetFocused={onSetFocused}
+              />
+            ))}
+          </div>
+        </SortableContext>
+      </SectionContent>
+    </section>
+  );
+}
+
+function FocusSection({
+  workspaces,
+  activeThreadId,
+  archivePending,
+  collapsed,
+  jumpShortcuts,
+  showJumpShortcuts,
+  onToggle,
+  onOpen,
+  onRequestArchive,
+  onRequestRename,
+  onSetRead,
+  onSetFocused,
+}: {
+  workspaces: readonly ConductorWorkspace[];
+  activeThreadId: string | null;
+  archivePending: boolean;
+  collapsed: boolean;
+  jumpShortcuts: ReadonlyMap<
+    string,
+    { ariaKeyshortcuts: string; label: string }
+  >;
+  showJumpShortcuts: boolean;
+  onToggle: () => void;
+  onOpen: (threadId: string) => void;
+  onRequestArchive: (workspace: ConductorWorkspace) => void;
+  onRequestRename: (workspace: ConductorWorkspace, scope: RenameScope) => void;
+  onSetRead: (workspace: ConductorWorkspace, read: boolean) => void;
+  onSetFocused: (workspace: ConductorWorkspace, focused: boolean) => void;
+}) {
+  if (workspaces.length === 0) return null;
+
+  return (
+    <section className="conductor-focus-section min-w-0" aria-label="Focus">
+      <button
+        type="button"
+        className="conductor-focus-heading"
+        aria-expanded={!collapsed}
+        aria-controls="conductor-focus-workspaces"
+        onClick={onToggle}
+      >
+        <span>Focus</span>
+        <Icon
+          name="ChevronDown"
+          className="conductor-section-caret size-3 text-muted-foreground"
+          aria-hidden
+        />
+      </button>
+      <SectionContent id="conductor-focus-workspaces" collapsed={collapsed}>
+        <SortableContext
+          items={workspaces.map((workspace) => workspaceDndId(workspace.key))}
+          strategy={verticalListSortingStrategy}
+        >
+          <div className="space-y-0.5">
+            {workspaces.map((workspace) => (
+              <WorkspaceRow
+                key={workspace.key}
+                workspace={workspace}
+                activeThreadId={activeThreadId}
+                archivePending={archivePending}
+                dragDisabled
+                focused
+                isDropTarget={false}
+                shortcutEnabled={!collapsed}
+                jumpShortcut={jumpShortcuts.get(workspace.key) ?? null}
+                showJumpShortcut={showJumpShortcuts}
+                onOpen={onOpen}
+                onRequestArchive={onRequestArchive}
+                onRequestRename={onRequestRename}
+                onSetRead={onSetRead}
+                onSetFocused={onSetFocused}
               />
             ))}
           </div>
@@ -836,6 +1198,14 @@ export function ConductorSidebar({
     useState<ProjectRenameTarget | null>(null);
   const [projectIconTarget, setProjectIconTarget] =
     useState<ProjectIconTarget | null>(null);
+  const [githubCatalog, setGithubCatalog] = useState<GithubCatalog | null>(
+    null,
+  );
+  const [addRepositoryOpen, setAddRepositoryOpen] = useState(false);
+  const [addRepositoryPending, setAddRepositoryPending] = useState(false);
+  const [projectAccountOverrides, setProjectAccountOverrides] = useState<
+    Readonly<Record<string, string | null>>
+  >({});
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
     useSensor(KeyboardSensor, {
@@ -847,6 +1217,30 @@ export function ConductorSidebar({
       buildConductorProjection(state.threads, state.projects, legacyWorkspaces),
     [legacyWorkspaces, state.projects, state.threads],
   );
+  const loadGithubCatalog = useCallback(async () => {
+    const catalog = await rpc.call("readGithubCatalog", {});
+    setGithubCatalog(catalog);
+  }, [rpc]);
+
+  async function createGithubProject(
+    repository: GithubRepositoryOption,
+    accountLogin: string | null,
+  ) {
+    if (!githubCatalog) {
+      throw new Error("GitHub repository catalog is not loaded");
+    }
+    setAddRepositoryPending(true);
+    try {
+      await rpc.call("createGithubProject", {
+        accountLogin,
+        hostId: githubCatalog.hostId,
+        name: repository.nameWithOwner,
+        remoteUrl: repository.url,
+      });
+    } finally {
+      setAddRepositoryPending(false);
+    }
+  }
 
   useEffect(() => {
     if (state.status !== "ready" || isLoading) return;
@@ -894,43 +1288,75 @@ export function ConductorSidebar({
   const projectById = new Map(
     projection.projects.map((project) => [project.id, project]),
   );
-  const projects = orderProjectIds(
+  const orderedProjects = orderProjectIds(
     projection.projects.map((project) => project.id),
     projectOrder,
   )
     .map((id) => projectById.get(id))
     .filter((project): project is ConductorProject => project !== undefined)
+    .map((project) => {
+      const projectMatches = [
+        project.name,
+        project.repositoryName ?? "",
+        customizations[project.id]?.name ?? "",
+      ].some((value) => value.toLocaleLowerCase().includes(query));
+      return {
+        ...project,
+        workspaces: orderWorkspaceKeys(
+          project.workspaces.map((workspace) => workspace.key),
+          workspaceOrders[project.id] ?? [],
+        )
+          .map((workspaceKey) =>
+            project.workspaces.find(
+              (workspace) => workspace.key === workspaceKey,
+            ),
+          )
+          .filter((workspace): workspace is ConductorWorkspace => {
+            if (!workspace) return false;
+            if (!query || projectMatches) return true;
+            return [
+              workspace.title,
+              workspace.branchName ?? "",
+              ...workspace.threads.map(threadDisplayTitle),
+            ].some((value) => value.toLocaleLowerCase().includes(query));
+          }),
+      };
+    })
+    .filter((project) => {
+      if (!query) return true;
+      return (
+        project.workspaces.length > 0 ||
+        [
+          project.name,
+          project.repositoryName ?? "",
+          customizations[project.id]?.name ?? "",
+        ].some((value) => value.toLocaleLowerCase().includes(query))
+      );
+    });
+
+  const focusedWorkspaces = orderedProjects.flatMap((project) =>
+    project.workspaces.filter((workspace) =>
+      workspace.threads.some((thread) => thread.isPinned),
+    ),
+  );
+  const projects = orderedProjects
     .map((project) => ({
       ...project,
-      workspaces: orderWorkspaceKeys(
-        project.workspaces.map((workspace) => workspace.key),
-        workspaceOrders[project.id] ?? [],
-      )
-        .map((workspaceKey) =>
-          project.workspaces.find(
-            (workspace) => workspace.key === workspaceKey,
-          ),
-        )
-        .filter((workspace): workspace is ConductorWorkspace => {
-          if (!workspace) return false;
-          if (!query) return true;
-          return [
-            project.name,
-            project.repositoryName ?? "",
-            customizations[project.id]?.name ?? "",
-            workspace.title,
-            workspace.branchName ?? "",
-            ...workspace.threads.map(threadDisplayTitle),
-          ].some((value) => value.toLocaleLowerCase().includes(query));
-        }),
+      workspaces: project.workspaces.filter(
+        (workspace) => !workspace.threads.some((thread) => thread.isPinned),
+      ),
     }))
     .filter((project) => project.workspaces.length > 0);
+  const focusCollapsed = query ? false : collapsedSections.has("focus");
 
-  const visibleWorkspaces = projects.flatMap((project) =>
-    query || !collapsedSections.has(`project:${project.id}`)
-      ? project.workspaces
-      : [],
-  );
+  const visibleWorkspaces = [
+    ...(focusCollapsed ? [] : focusedWorkspaces),
+    ...projects.flatMap((project) =>
+      query || !collapsedSections.has(`project:${project.id}`)
+        ? project.workspaces
+        : [],
+    ),
+  ];
   // Digit assignments mirror the jump handler below: 1–8 in visible order and
   // 9 for the last row. Held long enough, the chord modifier reveals them as
   // pills — the same affordance bb's own chrome uses for its shortcuts.
@@ -994,7 +1420,8 @@ export function ConductorSidebar({
     renameThread !== null ||
     archiveTarget !== null ||
     renameProjectTarget !== null ||
-    projectIconTarget !== null;
+    projectIconTarget !== null ||
+    addRepositoryOpen;
   useEffect(() => {
     if (jumpDialogOpen) return;
 
@@ -1045,6 +1472,30 @@ export function ConductorSidebar({
     onNavigate();
   }
 
+  function requestSetGithubAccount(
+    project: ConductorProject,
+    accountLogin: string | null,
+  ) {
+    const previous = projectAccountOverrides[project.id];
+    setProjectAccountOverrides((current) => ({
+      ...current,
+      [project.id]: accountLogin,
+    }));
+    void rpc
+      .call("setProjectGithubAccount", {
+        accountLogin,
+        projectId: project.id,
+      })
+      .catch(() => {
+        setProjectAccountOverrides((current) => {
+          const next = { ...current };
+          if (previous === undefined) delete next[project.id];
+          else next[project.id] = previous;
+          return next;
+        });
+      });
+  }
+
   function updateCustomization(
     projectId: string,
     patch: Partial<ProjectCustomization>,
@@ -1075,6 +1526,36 @@ export function ConductorSidebar({
         customization?.name ?? project.repositoryName ?? project.name,
       currentIcon: customization?.icon ?? null,
     });
+  }
+
+  function setWorkspaceFocused(
+    workspace: ConductorWorkspace,
+    focused: boolean,
+  ) {
+    const pinnedThreads = workspace.threads.filter((thread) => thread.isPinned);
+    if (!focused) {
+      for (const thread of pinnedThreads) {
+        void actions.setPinned(thread.id, false);
+      }
+      return;
+    }
+    const target = pickWorkspaceThread(workspace, activeThreadId);
+    if (target) void actions.setPinned(target.id, true);
+  }
+
+  function setWorkspaceRead(workspace: ConductorWorkspace, read: boolean) {
+    const target = pickWorkspaceThread(workspace, activeThreadId);
+    const threads = read
+      ? workspace.threads.filter(
+          (thread) => conversationSignal(thread) === "awaiting-reply",
+        )
+      : target
+        ? [target]
+        : [];
+    const targets = threads.length > 0 ? threads : target ? [target] : [];
+    for (const thread of targets) {
+      void actions.setRead(thread.id, read);
+    }
   }
 
   async function requestRename(
@@ -1228,6 +1709,14 @@ export function ConductorSidebar({
         data-compact={isCompactViewport || undefined}
         aria-label="BBamir workspaces"
       >
+        <button
+          type="button"
+          className="flex min-h-8 items-center gap-2 rounded-md border border-dashed px-3 text-xs font-medium text-muted-foreground hover:border-solid hover:bg-state-hover hover:text-foreground"
+          onClick={() => setAddRepositoryOpen(true)}
+        >
+          <Icon name="Plus" className="size-3.5" aria-hidden />
+          Add repository
+        </button>
         <DndContext
           sensors={sensors}
           collisionDetection={closestCenter}
@@ -1243,6 +1732,24 @@ export function ConductorSidebar({
           onDragCancel={() => setDragState(null)}
           onDragEnd={onDragEndWithFeedback}
         >
+          <FocusSection
+            workspaces={focusedWorkspaces}
+            activeThreadId={activeThreadId}
+            archivePending={archivePending}
+            collapsed={focusCollapsed}
+            jumpShortcuts={jumpShortcutByWorkspaceKey}
+            showJumpShortcuts={showJumpShortcuts}
+            onToggle={() => toggleSection("focus")}
+            onOpen={openThread}
+            onRequestArchive={(workspace) => {
+              void requestArchive(workspace);
+            }}
+            onRequestRename={(workspace, scope) => {
+              void requestRename(workspace, scope).catch(() => undefined);
+            }}
+            onSetRead={setWorkspaceRead}
+            onSetFocused={setWorkspaceFocused}
+          />
           <SortableContext
             items={projects.map((project) => project.id)}
             strategy={verticalListSortingStrategy}
@@ -1257,6 +1764,15 @@ export function ConductorSidebar({
                   key={project.id}
                   project={project}
                   customization={customizations[project.id]}
+                  githubAccountLogin={
+                    projectAccountOverrides[project.id] === undefined
+                      ? project.githubAccountLogin
+                      : projectAccountOverrides[project.id]
+                  }
+                  githubAccounts={accountsForRepository(
+                    githubCatalog,
+                    project.repositoryName,
+                  )}
                   activeThreadId={activeThreadId}
                   collapsed={collapsed}
                   archivePending={archivePending}
@@ -1282,8 +1798,16 @@ export function ConductorSidebar({
                   onRequestRename={(workspace, scope) => {
                     void requestRename(workspace, scope).catch(() => undefined);
                   }}
+                  onSetRead={setWorkspaceRead}
+                  onSetFocused={setWorkspaceFocused}
                   onRequestRenameProject={() => requestRenameProject(project)}
                   onRequestChangeIcon={() => requestChangeProjectIcon(project)}
+                  onRequestGithubCatalog={() => {
+                    void loadGithubCatalog().catch(() => undefined);
+                  }}
+                  onSetGithubAccount={(accountLogin) =>
+                    requestSetGithubAccount(project, accountLogin)
+                  }
                 />
               );
             })}
@@ -1338,6 +1862,9 @@ export function ConductorSidebar({
                     <li key={thread.id} className="list-none">
                       <ConversationActionMenu
                         thread={thread}
+                        onSetRead={(read) => {
+                          void actions.setRead(thread.id, read);
+                        }}
                         onRename={() => setRenameThread(thread)}
                         onArchive={() => actions.archive(thread.id)}
                         onDelete={() => {
@@ -1384,8 +1911,8 @@ export function ConductorSidebar({
                             <span className="block truncate text-xs font-medium text-sidebar-foreground">
                               {threadDisplayTitle(thread)}
                             </span>
-                            <SignalStatus signal={signal} />
                           </span>
+                          <SignalStatus signal={signal} />
                         </div>
                       </ConversationActionMenu>
                     </li>
@@ -1402,6 +1929,14 @@ export function ConductorSidebar({
           </p>
         ) : null}
       </nav>
+      <AddRepositoryDialog
+        catalog={githubCatalog}
+        open={addRepositoryOpen}
+        pending={addRepositoryPending}
+        onClose={() => setAddRepositoryOpen(false)}
+        onCreate={createGithubProject}
+        onLoad={loadGithubCatalog}
+      />
       <ArchiveWorkspaceDialog
         target={archiveTarget}
         error={archiveError}

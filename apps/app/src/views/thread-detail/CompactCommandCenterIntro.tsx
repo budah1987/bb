@@ -65,6 +65,7 @@ export function CompactCommandCenterIntro({
   return (
     <div
       data-testid="compact-command-center-intro"
+      tabIndex={-1}
       className="flex shrink-0 flex-col gap-2 pb-3"
     >
       <div className="flex items-baseline justify-between gap-3">

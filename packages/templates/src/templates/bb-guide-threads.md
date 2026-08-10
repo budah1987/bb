@@ -197,7 +197,7 @@ Ownership:
     --clear-section                        Remove section assignment
     --visibility <visibility>              Set visible or hidden
 
-  bb thread read [id]                      Mark read
+  bb thread read [id]                      Mark read and clear Awaiting Reply
   bb thread unread [id]                    Mark unread
   bb thread reorder-pinned <id> [--after <id>] [--before <id>]
 

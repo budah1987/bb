@@ -97,7 +97,7 @@ function repositoryPage(
 }
 
 describe("getGithubRepositoryCatalog", () => {
-  it("returns only repositories visible to every authenticated account", async () => {
+  it("returns repositories visible to any authenticated account", async () => {
     const calls: Array<{ args: readonly string[]; token: string | undefined }> =
       [];
     const run: GithubCommandRunner = async (_file, args, options) => {
@@ -175,8 +175,30 @@ describe("getGithubRepositoryCatalog", () => {
           accessibleBy: ["work-user", "personal-user"],
           activeAccount: "work-user",
         },
+        {
+          name: "private",
+          nameWithOwner: "personal/private",
+          owner: "personal",
+          url: "https://github.com/personal/private",
+          isPrivate: true,
+          defaultBranch: "main",
+          updatedAt: "2026-08-01T00:00:00.000Z",
+          accessibleBy: ["personal-user"],
+          activeAccount: null,
+        },
+        {
+          name: "private",
+          nameWithOwner: "work/private",
+          owner: "work",
+          url: "https://github.com/work/private",
+          isPrivate: true,
+          defaultBranch: "main",
+          updatedAt: "2026-08-01T00:00:00.000Z",
+          accessibleBy: ["work-user"],
+          activeAccount: "work-user",
+        },
       ],
-      scope: "intersection",
+      scope: "union",
     });
     expect(calls.filter((call) => call.args[0] === "api")).toEqual([
       expect.objectContaining({ token: "work-token" }),

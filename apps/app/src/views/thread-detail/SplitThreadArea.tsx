@@ -1106,10 +1106,11 @@ function StandaloneWorkspaceSurface({
   onReturnFromCommandCenter,
 }: StandaloneWorkspaceSurfaceProps) {
   const panes = listPanes(layout.root);
-  // The root compose page becomes the Command Center only when a validated
-  // swipe brought us here; a direct `/` stays the plain New thread page.
-  const isCommandCenter =
-    content.kind === "new-thread" && commandCenterNavigation !== null;
+  // On a standalone compact display, the root compose page is always the
+  // Command Center. A validated swipe still adds its return destination.
+  const isCommandCenter = content.kind === "new-thread";
+  const commandCenterReturnPaneId =
+    commandCenterNavigation?.returnPaneId ?? layout.focusedPaneId;
   return (
     <CompactWorkspaceSwipeHost
       contentKey={paneContentRoute(content)}
@@ -1117,9 +1118,7 @@ function StandaloneWorkspaceSurface({
       focusedPaneId={layout.focusedPaneId}
       // Already on the Command Center: offer the return, not another open.
       allowsCommandCenter={content.kind !== "new-thread"}
-      returnPaneId={
-        isCommandCenter ? commandCenterNavigation.returnPaneId : null
-      }
+      returnPaneId={commandCenterNavigation?.returnPaneId ?? null}
       onFocusPane={onFocusPane}
       onOpenCommandCenter={onOpenCommandCenter}
       onReturnFromCommandCenter={onReturnFromCommandCenter}
@@ -1128,11 +1127,14 @@ function StandaloneWorkspaceSurface({
         <div className="flex min-h-0 min-w-0 flex-1 flex-col">
           <CompactCommandCenterIntro
             panes={panes}
-            activePaneId={commandCenterNavigation.returnPaneId}
-            // The pane we came from is already focused, so focusing it again
-            // would be a dead control: that row is the return, like the swipe.
+            activePaneId={commandCenterReturnPaneId}
+            // A gesture-opened Command Center returns through the source pane.
+            // A direct root page focuses the selected workspace pane instead.
             onFocusPane={(paneId) => {
-              if (paneId === commandCenterNavigation.returnPaneId) {
+              if (
+                commandCenterNavigation !== null &&
+                paneId === commandCenterReturnPaneId
+              ) {
                 onReturnFromCommandCenter();
                 return;
               }

@@ -78,6 +78,7 @@ export function useSidebarThreads(): PluginSidebarThreadsState {
         name: project.name,
         isPersonal: project.id === PERSONAL_PROJECT_ID,
         experimental_gitRemoteUrl: project.gitRemoteUrl,
+        experimental_githubAccountLogin: project.githubAccountLogin,
       })),
     };
   }, [data, hostNamesById, query.isError]);
@@ -213,8 +214,8 @@ export function useSidebarThreadActions(): PluginSidebarThreadActions {
       },
       async setRead(threadId, read) {
         const entry = requireEntry(threadId);
-        const isRead = (entry.lastReadAt ?? 0) >= entry.latestAttentionAt;
-        if (isRead === read) return;
+        const isExplicitlyRead = entry.lastReadAt === entry.latestAttentionAt;
+        if (isExplicitlyRead === read) return;
         hostActions.toggleRead(entry);
       },
       async rename(threadId, title) {

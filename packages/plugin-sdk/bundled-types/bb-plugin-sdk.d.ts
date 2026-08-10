@@ -2235,11 +2235,17 @@ declare const createProjectSourceRequestSchema: z$1.ZodDiscriminatedUnion<[z$1.Z
 type CreateProjectSourceRequest = z$1.infer<typeof createProjectSourceRequestSchema>;
 declare const createProjectRequestSchema: z$1.ZodObject<{
     name: z$1.ZodString;
-    source: z$1.ZodObject<{
+    source: z$1.ZodDiscriminatedUnion<[z$1.ZodObject<{
         hostId: z$1.ZodString;
         type: z$1.ZodLiteral<"local_path">;
         path: z$1.ZodPipe<z$1.ZodString, z$1.ZodTransform<string, string>>;
-    }, z$1.core.$strict>;
+    }, z$1.core.$strict>, z$1.ZodObject<{
+        hostId: z$1.ZodString;
+        type: z$1.ZodLiteral<"clone">;
+        targetPath: z$1.ZodOptional<z$1.ZodPipe<z$1.ZodString, z$1.ZodTransform<string, string>>>;
+        remoteUrl: z$1.ZodOptional<z$1.ZodString>;
+    }, z$1.core.$strict>], "type">;
+    githubAccountLogin: z$1.ZodOptional<z$1.ZodNullable<z$1.ZodString>>;
 }, z$1.core.$strip>;
 type CreateProjectRequest = z$1.infer<typeof createProjectRequestSchema>;
 declare const threadSectionSchema: z$1.ZodObject<{
@@ -2467,6 +2473,7 @@ declare const promptHistoryResponseSchema: z$1.ZodArray<z$1.ZodObject<{
 type PromptHistoryResponse = z$1.infer<typeof promptHistoryResponseSchema>;
 declare const updateProjectRequestSchema: z$1.ZodObject<{
     name: z$1.ZodOptional<z$1.ZodString>;
+    githubAccountLogin: z$1.ZodOptional<z$1.ZodNullable<z$1.ZodString>>;
 }, z$1.core.$strip>;
 type UpdateProjectRequest = z$1.infer<typeof updateProjectRequestSchema>;
 declare const updateProjectSourceRequestSchema: z$1.ZodObject<{
@@ -2544,6 +2551,7 @@ declare const projectResponseSchema: z$1.ZodObject<{
     }>;
     name: z$1.ZodString;
     gitRemoteUrl: z$1.ZodNullable<z$1.ZodString>;
+    githubAccountLogin: z$1.ZodNullable<z$1.ZodString>;
     createdAt: z$1.ZodNumber;
     updatedAt: z$1.ZodNumber;
     sources: z$1.ZodArray<z$1.ZodObject<{
@@ -2566,6 +2574,7 @@ declare const projectWithThreadsResponseSchema: z$1.ZodObject<{
     }>;
     name: z$1.ZodString;
     gitRemoteUrl: z$1.ZodNullable<z$1.ZodString>;
+    githubAccountLogin: z$1.ZodNullable<z$1.ZodString>;
     createdAt: z$1.ZodNumber;
     updatedAt: z$1.ZodNumber;
     sources: z$1.ZodArray<z$1.ZodObject<{
@@ -2662,8 +2671,8 @@ declare const projectWithThreadsResponseSchema: z$1.ZodObject<{
             ultra: "ultra";
         }>;
         permissionMode: z$1.ZodEnum<{
-            auto: "auto";
             "accept-edits": "accept-edits";
+            auto: "auto";
             full: "full";
         }>;
     }, z$1.core.$strip>>;
@@ -2774,6 +2783,108 @@ declare const environmentPathsQuerySchema: z$1.ZodObject<{
     }>;
 }, z$1.core.$strip>;
 type EnvironmentPathsQuery = z$1.infer<typeof environmentPathsQuerySchema>;
+declare const simulatorControlActionSchema: z$1.ZodDiscriminatedUnion<[z$1.ZodObject<{
+    kind: z$1.ZodLiteral<"tap">;
+    x: z$1.ZodNumber;
+    y: z$1.ZodNumber;
+}, z$1.core.$strict>, z$1.ZodObject<{
+    kind: z$1.ZodLiteral<"gesture">;
+    points: z$1.ZodArray<z$1.ZodObject<{
+        type: z$1.ZodEnum<{
+            end: "end";
+            begin: "begin";
+            move: "move";
+        }>;
+        x: z$1.ZodNumber;
+        y: z$1.ZodNumber;
+    }, z$1.core.$strict>>;
+}, z$1.core.$strict>, z$1.ZodObject<{
+    kind: z$1.ZodLiteral<"type">;
+    text: z$1.ZodString;
+}, z$1.core.$strict>, z$1.ZodObject<{
+    kind: z$1.ZodLiteral<"button">;
+    button: z$1.ZodEnum<{
+        home: "home";
+        swipe_home: "swipe_home";
+        app_switcher: "app_switcher";
+        lock: "lock";
+        siri: "siri";
+        side_button: "side_button";
+    }>;
+}, z$1.core.$strict>, z$1.ZodObject<{
+    kind: z$1.ZodLiteral<"rotate">;
+    orientation: z$1.ZodEnum<{
+        portrait: "portrait";
+        portrait_upside_down: "portrait_upside_down";
+        landscape_left: "landscape_left";
+        landscape_right: "landscape_right";
+    }>;
+}, z$1.core.$strict>], "kind">;
+type SimulatorControlAction = z$1.infer<typeof simulatorControlActionSchema>;
+declare const simulatorStatusResponseSchema: z$1.ZodObject<{
+    supported: z$1.ZodBoolean;
+    message: z$1.ZodNullable<z$1.ZodString>;
+    devices: z$1.ZodArray<z$1.ZodObject<{
+        udid: z$1.ZodString;
+        name: z$1.ZodString;
+        runtime: z$1.ZodString;
+        state: z$1.ZodEnum<{
+            Booted: "Booted";
+            Shutdown: "Shutdown";
+        }>;
+    }, z$1.core.$strict>>;
+    active: z$1.ZodNullable<z$1.ZodObject<{
+        deviceUdid: z$1.ZodString;
+        deviceName: z$1.ZodString;
+        state: z$1.ZodLiteral<"running">;
+    }, z$1.core.$strict>>;
+}, z$1.core.$strict>;
+type SimulatorStatusResponse = z$1.infer<typeof simulatorStatusResponseSchema>;
+declare const simulatorAttachResponseSchema: z$1.ZodObject<{
+    session: z$1.ZodObject<{
+        deviceUdid: z$1.ZodString;
+        deviceName: z$1.ZodString;
+        state: z$1.ZodLiteral<"running">;
+    }, z$1.core.$strict>;
+    stream: z$1.ZodObject<{
+        url: z$1.ZodString;
+        token: z$1.ZodString;
+        expiresAt: z$1.ZodNumber;
+        transport: z$1.ZodEnum<{
+            loopback: "loopback";
+            tunnel: "tunnel";
+        }>;
+    }, z$1.core.$strict>;
+}, z$1.core.$strict>;
+type SimulatorAttachResponse = z$1.infer<typeof simulatorAttachResponseSchema>;
+declare const simulatorLeaseResponseSchema: z$1.ZodObject<{
+    url: z$1.ZodString;
+    token: z$1.ZodString;
+    expiresAt: z$1.ZodNumber;
+    transport: z$1.ZodEnum<{
+        loopback: "loopback";
+        tunnel: "tunnel";
+    }>;
+}, z$1.core.$strict>;
+type SimulatorLeaseResponse = z$1.infer<typeof simulatorLeaseResponseSchema>;
+declare const simulatorControlResponseSchema: z$1.ZodObject<{
+    ok: z$1.ZodLiteral<true>;
+}, z$1.core.$strict>;
+type SimulatorControlResponse = z$1.infer<typeof simulatorControlResponseSchema>;
+declare const simulatorStopResponseSchema: z$1.ZodObject<{
+    stopped: z$1.ZodBoolean;
+    deviceUdid: z$1.ZodNullable<z$1.ZodString>;
+}, z$1.core.$strict>;
+type SimulatorStopResponse = z$1.infer<typeof simulatorStopResponseSchema>;
+declare const simulatorAccessibilityResponseSchema: z$1.ZodObject<{
+    tree: z$1.ZodType<JsonValue$1, unknown, z$1.core.$ZodTypeInternals<JsonValue$1, unknown>>;
+}, z$1.core.$strict>;
+type SimulatorAccessibilityResponse = z$1.infer<typeof simulatorAccessibilityResponseSchema>;
+declare const simulatorScreenshotResponseSchema: z$1.ZodObject<{
+    dataBase64: z$1.ZodString;
+    mimeType: z$1.ZodLiteral<"image/png">;
+}, z$1.core.$strict>;
+type SimulatorScreenshotResponse = z$1.infer<typeof simulatorScreenshotResponseSchema>;
 declare const environmentDiffBranchesQuerySchema: z$1.ZodObject<{
     query: z$1.ZodOptional<z$1.ZodString>;
     limit: z$1.ZodOptional<z$1.ZodString>;
@@ -2935,32 +3046,32 @@ declare const environmentDiffFileQuerySchema: z$1.ZodDiscriminatedUnion<[z$1.Zod
     target: z$1.ZodLiteral<"uncommitted">;
     path: z$1.ZodString;
     side: z$1.ZodEnum<{
-        old: "old";
         new: "new";
+        old: "old";
     }>;
 }, z$1.core.$strip>, z$1.ZodObject<{
     target: z$1.ZodLiteral<"branch_committed">;
     mergeBaseRef: z$1.ZodString;
     path: z$1.ZodString;
     side: z$1.ZodEnum<{
-        old: "old";
         new: "new";
+        old: "old";
     }>;
 }, z$1.core.$strip>, z$1.ZodObject<{
     target: z$1.ZodLiteral<"all">;
     mergeBaseRef: z$1.ZodString;
     path: z$1.ZodString;
     side: z$1.ZodEnum<{
-        old: "old";
         new: "new";
+        old: "old";
     }>;
 }, z$1.core.$strip>, z$1.ZodObject<{
     target: z$1.ZodLiteral<"commit">;
     sha: z$1.ZodString;
     path: z$1.ZodString;
     side: z$1.ZodEnum<{
-        old: "old";
         new: "new";
+        old: "old";
     }>;
 }, z$1.core.$strip>], "target">;
 type EnvironmentDiffFileQuery = z$1.infer<typeof environmentDiffFileQuerySchema>;
@@ -2982,8 +3093,8 @@ declare const environmentArchiveThreadsResponseSchema: z$1.ZodObject<{
 type EnvironmentArchiveThreadsResponse = z$1.infer<typeof environmentArchiveThreadsResponseSchema>;
 declare const pullRequestMergeMethodSchema: z$1.ZodEnum<{
     merge: "merge";
-    squash: "squash";
     rebase: "rebase";
+    squash: "squash";
 }>;
 type PullRequestMergeMethod = z$1.infer<typeof pullRequestMergeMethodSchema>;
 declare const commitActionResponseSchema: z$1.ZodObject<{
@@ -3052,9 +3163,9 @@ declare const pullRequestCreateActionResponseSchema: z$1.ZodObject<{
                     unknown: "unknown";
                     success: "success";
                     skipped: "skipped";
+                    cancelled: "cancelled";
                     stale: "stale";
                     failure: "failure";
-                    cancelled: "cancelled";
                     neutral: "neutral";
                     timed_out: "timed_out";
                     action_required: "action_required";
@@ -3065,11 +3176,11 @@ declare const pullRequestCreateActionResponseSchema: z$1.ZodObject<{
         }, z$1.core.$strict>;
         review: z$1.ZodObject<{
             state: z$1.ZodEnum<{
+                none: "none";
                 approved: "approved";
                 changes_requested: "changes_requested";
                 review_required: "review_required";
                 review_requested: "review_requested";
-                none: "none";
             }>;
             reviewRequestCount: z$1.ZodNumber;
         }, z$1.core.$strict>;
@@ -3098,13 +3209,13 @@ declare const pullRequestCreateActionResponseSchema: z$1.ZodObject<{
             }>>;
         }, z$1.core.$strict>;
         attention: z$1.ZodEnum<{
+            none: "none";
             blocked: "blocked";
             draft: "draft";
             merged: "merged";
             closed: "closed";
             changes_requested: "changes_requested";
             review_requested: "review_requested";
-            none: "none";
             conflicts: "conflicts";
             checks_failed: "checks_failed";
             checks_pending: "checks_pending";
@@ -3124,8 +3235,8 @@ declare const pullRequestMergeActionResponseSchema: z$1.ZodObject<{
     action: z$1.ZodLiteral<"pull_request_merge">;
     method: z$1.ZodEnum<{
         merge: "merge";
-        squash: "squash";
         rebase: "rebase";
+        squash: "squash";
     }>;
     message: z$1.ZodString;
 }, z$1.core.$strip>;
@@ -3284,9 +3395,9 @@ declare const environmentPullRequestResponseSchema: z$1.ZodDiscriminatedUnion<[z
                     unknown: "unknown";
                     success: "success";
                     skipped: "skipped";
+                    cancelled: "cancelled";
                     stale: "stale";
                     failure: "failure";
-                    cancelled: "cancelled";
                     neutral: "neutral";
                     timed_out: "timed_out";
                     action_required: "action_required";
@@ -3297,11 +3408,11 @@ declare const environmentPullRequestResponseSchema: z$1.ZodDiscriminatedUnion<[z
         }, z$1.core.$strict>;
         review: z$1.ZodObject<{
             state: z$1.ZodEnum<{
+                none: "none";
                 approved: "approved";
                 changes_requested: "changes_requested";
                 review_required: "review_required";
                 review_requested: "review_requested";
-                none: "none";
             }>;
             reviewRequestCount: z$1.ZodNumber;
         }, z$1.core.$strict>;
@@ -3330,13 +3441,13 @@ declare const environmentPullRequestResponseSchema: z$1.ZodDiscriminatedUnion<[z
             }>>;
         }, z$1.core.$strict>;
         attention: z$1.ZodEnum<{
+            none: "none";
             blocked: "blocked";
             draft: "draft";
             merged: "merged";
             closed: "closed";
             changes_requested: "changes_requested";
             review_requested: "review_requested";
-            none: "none";
             conflicts: "conflicts";
             checks_failed: "checks_failed";
             checks_pending: "checks_pending";
@@ -3598,7 +3709,7 @@ declare const githubRepositoryCatalogSchema: z$1.ZodObject<{
         activeAccount: z$1.ZodNullable<z$1.ZodString>;
     }, z$1.core.$strict>>;
     scope: z$1.ZodEnum<{
-        intersection: "intersection";
+        union: "union";
         account: "account";
     }>;
 }, z$1.core.$strict>;
@@ -3778,16 +3889,16 @@ declare const hostDaemonCommandRegistry: {
             permissionScope: z$1.ZodLiteral<"workspace">;
             approvalReviewer: z$1.ZodLiteral<"user">;
             permissionEscalation: z$1.ZodEnum<{
-                deny: "deny";
                 ask: "ask";
+                deny: "deny";
             }>;
         }, z$1.core.$strip>, z$1.ZodObject<{
             permissionMode: z$1.ZodLiteral<"auto">;
             permissionScope: z$1.ZodLiteral<"workspace">;
             approvalReviewer: z$1.ZodLiteral<"automatic">;
             permissionEscalation: z$1.ZodEnum<{
-                deny: "deny";
                 ask: "ask";
+                deny: "deny";
             }>;
         }, z$1.core.$strip>, z$1.ZodObject<{
             permissionMode: z$1.ZodLiteral<"full">;
@@ -3871,9 +3982,9 @@ declare const hostDaemonCommandRegistry: {
                         skill: "skill";
                     }>;
                     origin: z$1.ZodEnum<{
-                        user: "user";
-                        project: "project";
                         builtin: "builtin";
+                        project: "project";
+                        user: "user";
                     }>;
                     label: z$1.ZodString;
                     argumentHint: z$1.ZodNullable<z$1.ZodString>;
@@ -3952,9 +4063,9 @@ declare const hostDaemonCommandRegistry: {
                         skill: "skill";
                     }>;
                     origin: z$1.ZodEnum<{
-                        user: "user";
-                        project: "project";
                         builtin: "builtin";
+                        project: "project";
+                        user: "user";
                     }>;
                     label: z$1.ZodString;
                     argumentHint: z$1.ZodNullable<z$1.ZodString>;
@@ -4045,9 +4156,9 @@ declare const hostDaemonCommandRegistry: {
                         skill: "skill";
                     }>;
                     origin: z$1.ZodEnum<{
-                        user: "user";
-                        project: "project";
                         builtin: "builtin";
+                        project: "project";
+                        user: "user";
                     }>;
                     label: z$1.ZodString;
                     argumentHint: z$1.ZodNullable<z$1.ZodString>;
@@ -4126,9 +4237,9 @@ declare const hostDaemonCommandRegistry: {
                         skill: "skill";
                     }>;
                     origin: z$1.ZodEnum<{
-                        user: "user";
-                        project: "project";
                         builtin: "builtin";
+                        project: "project";
+                        user: "user";
                     }>;
                     label: z$1.ZodString;
                     argumentHint: z$1.ZodNullable<z$1.ZodString>;
@@ -4191,16 +4302,16 @@ declare const hostDaemonCommandRegistry: {
             permissionScope: z$1.ZodLiteral<"workspace">;
             approvalReviewer: z$1.ZodLiteral<"user">;
             permissionEscalation: z$1.ZodEnum<{
-                deny: "deny";
                 ask: "ask";
+                deny: "deny";
             }>;
         }, z$1.core.$strip>, z$1.ZodObject<{
             permissionMode: z$1.ZodLiteral<"auto">;
             permissionScope: z$1.ZodLiteral<"workspace">;
             approvalReviewer: z$1.ZodLiteral<"automatic">;
             permissionEscalation: z$1.ZodEnum<{
-                deny: "deny";
                 ask: "ask";
+                deny: "deny";
             }>;
         }, z$1.core.$strip>, z$1.ZodObject<{
             permissionMode: z$1.ZodLiteral<"full">;
@@ -4309,13 +4420,12 @@ declare const hostDaemonCommandRegistry: {
                     personal: "personal";
                 }>;
             }, z$1.core.$strip>;
-            projectId: z$1.ZodString;
-            providerThreadId: z$1.ZodString;
-            providerId: z$1.ZodString;
             instructionMode: z$1.ZodEnum<{
                 append: "append";
                 replace: "replace";
             }>;
+            projectId: z$1.ZodString;
+            providerId: z$1.ZodString;
             acpLaunchSpec: z$1.ZodOptional<z$1.ZodObject<{
                 displayName: z$1.ZodString;
                 command: z$1.ZodString;
@@ -4433,6 +4543,7 @@ declare const hostDaemonCommandRegistry: {
                 skillFilePath: z$1.ZodString;
             }, z$1.core.$strict>], "kind">>;
             disallowedTools: z$1.ZodOptional<z$1.ZodArray<z$1.ZodString>>;
+            providerThreadId: z$1.ZodString;
         }, z$1.core.$strict>;
         target: z$1.ZodDiscriminatedUnion<[z$1.ZodObject<{
             mode: z$1.ZodLiteral<"start">;
@@ -4445,8 +4556,8 @@ declare const hostDaemonCommandRegistry: {
         }, z$1.core.$strip>], "mode">;
     }, z$1.core.$strict>, z$1.ZodObject<{
         appliedAs: z$1.ZodEnum<{
-            "new-turn": "new-turn";
             steer: "steer";
+            "new-turn": "new-turn";
         }>;
     }, z$1.core.$strip>, "settled", false>;
     "thread.stop": HostDaemonCommandDescriptor<"thread.stop", z$1.ZodObject<{
@@ -4487,16 +4598,16 @@ declare const hostDaemonCommandRegistry: {
             permissionScope: z$1.ZodLiteral<"workspace">;
             approvalReviewer: z$1.ZodLiteral<"user">;
             permissionEscalation: z$1.ZodEnum<{
-                deny: "deny";
                 ask: "ask";
+                deny: "deny";
             }>;
         }, z$1.core.$strip>, z$1.ZodObject<{
             permissionMode: z$1.ZodLiteral<"auto">;
             permissionScope: z$1.ZodLiteral<"workspace">;
             approvalReviewer: z$1.ZodLiteral<"automatic">;
             permissionEscalation: z$1.ZodEnum<{
-                deny: "deny";
                 ask: "ask";
+                deny: "deny";
             }>;
         }, z$1.core.$strip>, z$1.ZodObject<{
             permissionMode: z$1.ZodLiteral<"full">;
@@ -4605,13 +4716,12 @@ declare const hostDaemonCommandRegistry: {
                     personal: "personal";
                 }>;
             }, z$1.core.$strip>;
-            projectId: z$1.ZodString;
-            providerThreadId: z$1.ZodString;
-            providerId: z$1.ZodString;
             instructionMode: z$1.ZodEnum<{
                 append: "append";
                 replace: "replace";
             }>;
+            projectId: z$1.ZodString;
+            providerId: z$1.ZodString;
             acpLaunchSpec: z$1.ZodOptional<z$1.ZodObject<{
                 displayName: z$1.ZodString;
                 command: z$1.ZodString;
@@ -4729,6 +4839,7 @@ declare const hostDaemonCommandRegistry: {
                 skillFilePath: z$1.ZodString;
             }, z$1.core.$strict>], "kind">>;
             disallowedTools: z$1.ZodOptional<z$1.ZodArray<z$1.ZodString>>;
+            providerThreadId: z$1.ZodString;
         }, z$1.core.$strict>;
     }, z$1.core.$strict>, z$1.ZodObject<{
         cleared: z$1.ZodBoolean;
@@ -4893,15 +5004,16 @@ declare const hostDaemonCommandRegistry: {
             text: z$1.ZodString;
             startedAt: z$1.ZodOptional<z$1.ZodNumber>;
             status: z$1.ZodOptional<z$1.ZodEnum<{
+                started: "started";
                 completed: "completed";
                 failed: "failed";
-                started: "started";
             }>>;
             metadata: z$1.ZodOptional<z$1.ZodRecord<z$1.ZodString, z$1.ZodUnknown>>;
         }, z$1.core.$strip>>;
     }, z$1.core.$strip>, "settled", false>;
     "project.clone": HostDaemonCommandDescriptor<"project.clone", z$1.ZodObject<{
         type: z$1.ZodLiteral<"project.clone">;
+        githubAccountLogin: z$1.ZodDefault<z$1.ZodNullable<z$1.ZodString>>;
         remoteUrl: z$1.ZodString;
         projectSlug: z$1.ZodString;
         targetPath: z$1.ZodOptional<z$1.ZodString>;
@@ -5080,9 +5192,9 @@ declare const hostDaemonCommandRegistry: {
                 conclusion: z$1.ZodNullable<z$1.ZodEnum<{
                     unknown: "unknown";
                     success: "success";
-                    skipped: "skipped";
                     cancelled: "cancelled";
                     failure: "failure";
+                    skipped: "skipped";
                     neutral: "neutral";
                     timed_out: "timed_out";
                     action_required: "action_required";
@@ -5222,6 +5334,114 @@ declare const hostDaemonCommandRegistry: {
         label: z$1.ZodString;
         baseDomain: z$1.ZodString;
     }, z$1.core.$strict>, "onlineRpc", true>;
+    "simulator.status": HostDaemonCommandDescriptor<"simulator.status", z$1.ZodObject<{
+        type: z$1.ZodLiteral<"simulator.status">;
+        environmentId: z$1.ZodString;
+    }, z$1.core.$strict>, z$1.ZodObject<{
+        supported: z$1.ZodBoolean;
+        message: z$1.ZodNullable<z$1.ZodString>;
+        devices: z$1.ZodArray<z$1.ZodObject<{
+            udid: z$1.ZodString;
+            name: z$1.ZodString;
+            runtime: z$1.ZodString;
+            state: z$1.ZodEnum<{
+                Booted: "Booted";
+                Shutdown: "Shutdown";
+            }>;
+        }, z$1.core.$strict>>;
+        active: z$1.ZodNullable<z$1.ZodObject<{
+            deviceUdid: z$1.ZodString;
+            deviceName: z$1.ZodString;
+            state: z$1.ZodLiteral<"running">;
+        }, z$1.core.$strict>>;
+    }, z$1.core.$strict>, "onlineRpc", true>;
+    "simulator.attach": HostDaemonCommandDescriptor<"simulator.attach", z$1.ZodObject<{
+        type: z$1.ZodLiteral<"simulator.attach">;
+        environmentId: z$1.ZodString;
+        deviceUdid: z$1.ZodString;
+    }, z$1.core.$strict>, z$1.ZodObject<{
+        session: z$1.ZodObject<{
+            deviceUdid: z$1.ZodString;
+            deviceName: z$1.ZodString;
+            state: z$1.ZodLiteral<"running">;
+        }, z$1.core.$strict>;
+        lease: z$1.ZodObject<{
+            gatewayPort: z$1.ZodNumber;
+            token: z$1.ZodString;
+            expiresAt: z$1.ZodNumber;
+        }, z$1.core.$strict>;
+    }, z$1.core.$strict>, "onlineRpc", false>;
+    "simulator.lease": HostDaemonCommandDescriptor<"simulator.lease", z$1.ZodObject<{
+        type: z$1.ZodLiteral<"simulator.lease">;
+        environmentId: z$1.ZodString;
+    }, z$1.core.$strict>, z$1.ZodObject<{
+        gatewayPort: z$1.ZodNumber;
+        token: z$1.ZodString;
+        expiresAt: z$1.ZodNumber;
+    }, z$1.core.$strict>, "onlineRpc", false>;
+    "simulator.control": HostDaemonCommandDescriptor<"simulator.control", z$1.ZodObject<{
+        type: z$1.ZodLiteral<"simulator.control">;
+        environmentId: z$1.ZodString;
+        action: z$1.ZodDiscriminatedUnion<[z$1.ZodObject<{
+            kind: z$1.ZodLiteral<"tap">;
+            x: z$1.ZodNumber;
+            y: z$1.ZodNumber;
+        }, z$1.core.$strict>, z$1.ZodObject<{
+            kind: z$1.ZodLiteral<"gesture">;
+            points: z$1.ZodArray<z$1.ZodObject<{
+                type: z$1.ZodEnum<{
+                    end: "end";
+                    begin: "begin";
+                    move: "move";
+                }>;
+                x: z$1.ZodNumber;
+                y: z$1.ZodNumber;
+            }, z$1.core.$strict>>;
+        }, z$1.core.$strict>, z$1.ZodObject<{
+            kind: z$1.ZodLiteral<"type">;
+            text: z$1.ZodString;
+        }, z$1.core.$strict>, z$1.ZodObject<{
+            kind: z$1.ZodLiteral<"button">;
+            button: z$1.ZodEnum<{
+                home: "home";
+                swipe_home: "swipe_home";
+                app_switcher: "app_switcher";
+                lock: "lock";
+                siri: "siri";
+                side_button: "side_button";
+            }>;
+        }, z$1.core.$strict>, z$1.ZodObject<{
+            kind: z$1.ZodLiteral<"rotate">;
+            orientation: z$1.ZodEnum<{
+                portrait: "portrait";
+                portrait_upside_down: "portrait_upside_down";
+                landscape_left: "landscape_left";
+                landscape_right: "landscape_right";
+            }>;
+        }, z$1.core.$strict>], "kind">;
+    }, z$1.core.$strict>, z$1.ZodObject<{
+        ok: z$1.ZodLiteral<true>;
+    }, z$1.core.$strict>, "onlineRpc", false>;
+    "simulator.stop": HostDaemonCommandDescriptor<"simulator.stop", z$1.ZodObject<{
+        type: z$1.ZodLiteral<"simulator.stop">;
+        environmentId: z$1.ZodString;
+    }, z$1.core.$strict>, z$1.ZodObject<{
+        stopped: z$1.ZodBoolean;
+        deviceUdid: z$1.ZodNullable<z$1.ZodString>;
+    }, z$1.core.$strict>, "onlineRpc", false>;
+    "simulator.accessibility": HostDaemonCommandDescriptor<"simulator.accessibility", z$1.ZodObject<{
+        type: z$1.ZodLiteral<"simulator.accessibility">;
+        environmentId: z$1.ZodString;
+    }, z$1.core.$strict>, z$1.ZodObject<{
+        tree: z$1.ZodType<JsonValue$1, unknown, z$1.core.$ZodTypeInternals<JsonValue$1, unknown>>;
+    }, z$1.core.$strict>, "onlineRpc", true>;
+    "simulator.screenshot": HostDaemonCommandDescriptor<"simulator.screenshot", z$1.ZodObject<{
+        type: z$1.ZodLiteral<"simulator.screenshot">;
+        environmentId: z$1.ZodString;
+    }, z$1.core.$strict>, z$1.ZodObject<{
+        dataBase64: z$1.ZodString;
+        mimeType: z$1.ZodLiteral<"image/png">;
+    }, z$1.core.$strict>, "onlineRpc", true>;
     "host.list_commands": HostDaemonCommandDescriptor<"host.list_commands", z$1.ZodObject<{
         type: z$1.ZodLiteral<"host.list_commands">;
         providerId: z$1.ZodString;
@@ -5234,8 +5454,8 @@ declare const hostDaemonCommandRegistry: {
                 skill: "skill";
             }>;
             origin: z$1.ZodEnum<{
-                user: "user";
                 project: "project";
+                user: "user";
             }>;
             description: z$1.ZodNullable<z$1.ZodString>;
             argumentHint: z$1.ZodNullable<z$1.ZodString>;
@@ -5718,7 +5938,7 @@ declare const hostDaemonCommandRegistry: {
             activeAccount: z$1.ZodNullable<z$1.ZodString>;
         }, z$1.core.$strict>>;
         scope: z$1.ZodEnum<{
-            intersection: "intersection";
+            union: "union";
             account: "account";
         }>;
     }, z$1.core.$strict>, "onlineRpc", true>;
@@ -5788,8 +6008,8 @@ declare const hostDaemonCommandRegistry: {
         npmGlobalPackageVersion: z$1.ZodNullable<z$1.ZodString>;
         installAction: z$1.ZodNullable<z$1.ZodObject<{
             kind: z$1.ZodEnum<{
-                update: "update";
                 install: "install";
+                update: "update";
             }>;
             label: z$1.ZodEnum<{
                 Install: "Install";
@@ -5811,8 +6031,8 @@ declare const hostDaemonCommandRegistry: {
             cursor: "cursor";
         }>;
         actionKind: z$1.ZodEnum<{
-            update: "update";
             install: "install";
+            update: "update";
         }>;
         type: z$1.ZodLiteral<"provider_cli.install">;
     }, z$1.core.$strict>, z$1.ZodObject<{
@@ -5855,6 +6075,150 @@ declare const hostDaemonCommandRegistry: {
             }>;
             message: z$1.ZodString;
         }, z$1.core.$strip>], "type">>;
+    }, z$1.core.$strict>, "onlineRpc", false>;
+    "provider_auth.status": HostDaemonCommandDescriptor<"provider_auth.status", z$1.ZodObject<{
+        type: z$1.ZodLiteral<"provider_auth.status">;
+    }, z$1.core.$strict>, z$1.ZodObject<{
+        statuses: z$1.ZodRecord<z$1.ZodEnum<{
+            codex: "codex";
+            claudeCode: "claudeCode";
+        }>, z$1.ZodObject<{
+            provider: z$1.ZodEnum<{
+                codex: "codex";
+                claudeCode: "claudeCode";
+            }>;
+            displayName: z$1.ZodString;
+            state: z$1.ZodEnum<{
+                unknown: "unknown";
+                loggedIn: "loggedIn";
+                loggedOut: "loggedOut";
+                unavailable: "unavailable";
+            }>;
+            authMethod: z$1.ZodNullable<z$1.ZodString>;
+            accountEmail: z$1.ZodNullable<z$1.ZodString>;
+            organizationName: z$1.ZodNullable<z$1.ZodString>;
+            message: z$1.ZodNullable<z$1.ZodString>;
+        }, z$1.core.$strict>>;
+        sessions: z$1.ZodArray<z$1.ZodObject<{
+            sessionId: z$1.ZodString;
+            provider: z$1.ZodEnum<{
+                codex: "codex";
+                claudeCode: "claudeCode";
+            }>;
+            phase: z$1.ZodEnum<{
+                failed: "failed";
+                starting: "starting";
+                waitingForUser: "waitingForUser";
+                waitingForCode: "waitingForCode";
+                verifying: "verifying";
+                succeeded: "succeeded";
+                recoveryRequired: "recoveryRequired";
+            }>;
+            oauthUrl: z$1.ZodNullable<z$1.ZodString>;
+            userCode: z$1.ZodNullable<z$1.ZodString>;
+            codeInputRequired: z$1.ZodBoolean;
+            message: z$1.ZodNullable<z$1.ZodString>;
+            recoveryCommand: z$1.ZodNullable<z$1.ZodString>;
+            startedAt: z$1.ZodNumber;
+        }, z$1.core.$strict>>;
+    }, z$1.core.$strict>, "onlineRpc", true>;
+    "provider_auth.start": HostDaemonCommandDescriptor<"provider_auth.start", z$1.ZodObject<{
+        provider: z$1.ZodEnum<{
+            codex: "codex";
+            claudeCode: "claudeCode";
+        }>;
+        type: z$1.ZodLiteral<"provider_auth.start">;
+    }, z$1.core.$strict>, z$1.ZodObject<{
+        statuses: z$1.ZodRecord<z$1.ZodEnum<{
+            codex: "codex";
+            claudeCode: "claudeCode";
+        }>, z$1.ZodObject<{
+            provider: z$1.ZodEnum<{
+                codex: "codex";
+                claudeCode: "claudeCode";
+            }>;
+            displayName: z$1.ZodString;
+            state: z$1.ZodEnum<{
+                unknown: "unknown";
+                loggedIn: "loggedIn";
+                loggedOut: "loggedOut";
+                unavailable: "unavailable";
+            }>;
+            authMethod: z$1.ZodNullable<z$1.ZodString>;
+            accountEmail: z$1.ZodNullable<z$1.ZodString>;
+            organizationName: z$1.ZodNullable<z$1.ZodString>;
+            message: z$1.ZodNullable<z$1.ZodString>;
+        }, z$1.core.$strict>>;
+        sessions: z$1.ZodArray<z$1.ZodObject<{
+            sessionId: z$1.ZodString;
+            provider: z$1.ZodEnum<{
+                codex: "codex";
+                claudeCode: "claudeCode";
+            }>;
+            phase: z$1.ZodEnum<{
+                failed: "failed";
+                starting: "starting";
+                waitingForUser: "waitingForUser";
+                waitingForCode: "waitingForCode";
+                verifying: "verifying";
+                succeeded: "succeeded";
+                recoveryRequired: "recoveryRequired";
+            }>;
+            oauthUrl: z$1.ZodNullable<z$1.ZodString>;
+            userCode: z$1.ZodNullable<z$1.ZodString>;
+            codeInputRequired: z$1.ZodBoolean;
+            message: z$1.ZodNullable<z$1.ZodString>;
+            recoveryCommand: z$1.ZodNullable<z$1.ZodString>;
+            startedAt: z$1.ZodNumber;
+        }, z$1.core.$strict>>;
+    }, z$1.core.$strict>, "onlineRpc", false>;
+    "provider_auth.submit_code": HostDaemonCommandDescriptor<"provider_auth.submit_code", z$1.ZodObject<{
+        sessionId: z$1.ZodString;
+        code: z$1.ZodString;
+        type: z$1.ZodLiteral<"provider_auth.submit_code">;
+    }, z$1.core.$strict>, z$1.ZodObject<{
+        statuses: z$1.ZodRecord<z$1.ZodEnum<{
+            codex: "codex";
+            claudeCode: "claudeCode";
+        }>, z$1.ZodObject<{
+            provider: z$1.ZodEnum<{
+                codex: "codex";
+                claudeCode: "claudeCode";
+            }>;
+            displayName: z$1.ZodString;
+            state: z$1.ZodEnum<{
+                unknown: "unknown";
+                loggedIn: "loggedIn";
+                loggedOut: "loggedOut";
+                unavailable: "unavailable";
+            }>;
+            authMethod: z$1.ZodNullable<z$1.ZodString>;
+            accountEmail: z$1.ZodNullable<z$1.ZodString>;
+            organizationName: z$1.ZodNullable<z$1.ZodString>;
+            message: z$1.ZodNullable<z$1.ZodString>;
+        }, z$1.core.$strict>>;
+        sessions: z$1.ZodArray<z$1.ZodObject<{
+            sessionId: z$1.ZodString;
+            provider: z$1.ZodEnum<{
+                codex: "codex";
+                claudeCode: "claudeCode";
+            }>;
+            phase: z$1.ZodEnum<{
+                failed: "failed";
+                starting: "starting";
+                waitingForUser: "waitingForUser";
+                waitingForCode: "waitingForCode";
+                verifying: "verifying";
+                succeeded: "succeeded";
+                recoveryRequired: "recoveryRequired";
+            }>;
+            oauthUrl: z$1.ZodNullable<z$1.ZodString>;
+            userCode: z$1.ZodNullable<z$1.ZodString>;
+            codeInputRequired: z$1.ZodBoolean;
+            message: z$1.ZodNullable<z$1.ZodString>;
+            recoveryCommand: z$1.ZodNullable<z$1.ZodString>;
+            startedAt: z$1.ZodNumber;
+        }, z$1.core.$strict>>;
     }, z$1.core.$strict>, "onlineRpc", false>;
     "workspace.status": HostDaemonCommandDescriptor<"workspace.status", z$1.ZodObject<{
         environmentId: z$1.ZodString;
@@ -5952,13 +6316,13 @@ declare const hostDaemonCommandRegistry: {
         outcome: z$1.ZodLiteral<"unavailable">;
         failure: z$1.ZodObject<{
             code: z$1.ZodEnum<{
-                unknown: "unknown";
                 path_not_found: "path_not_found";
                 not_git_repo: "not_git_repo";
                 not_worktree: "not_worktree";
                 workspace_type_mismatch: "workspace_type_mismatch";
                 permission_denied: "permission_denied";
                 unknown_environment: "unknown_environment";
+                unknown: "unknown";
             }>;
             workspacePath: z$1.ZodString;
             message: z$1.ZodString;
@@ -6123,13 +6487,13 @@ declare const hostDaemonCommandRegistry: {
         outcome: z$1.ZodLiteral<"unavailable">;
         failure: z$1.ZodObject<{
             code: z$1.ZodEnum<{
-                unknown: "unknown";
                 path_not_found: "path_not_found";
                 not_git_repo: "not_git_repo";
                 not_worktree: "not_worktree";
                 workspace_type_mismatch: "workspace_type_mismatch";
                 permission_denied: "permission_denied";
                 unknown_environment: "unknown_environment";
+                unknown: "unknown";
             }>;
             workspacePath: z$1.ZodString;
             message: z$1.ZodString;
@@ -6185,13 +6549,13 @@ declare const hostDaemonCommandRegistry: {
         outcome: z$1.ZodLiteral<"unavailable">;
         failure: z$1.ZodObject<{
             code: z$1.ZodEnum<{
-                unknown: "unknown";
                 path_not_found: "path_not_found";
                 not_git_repo: "not_git_repo";
                 not_worktree: "not_worktree";
                 workspace_type_mismatch: "workspace_type_mismatch";
                 permission_denied: "permission_denied";
                 unknown_environment: "unknown_environment";
+                unknown: "unknown";
             }>;
             workspacePath: z$1.ZodString;
             message: z$1.ZodString;
@@ -6233,13 +6597,13 @@ declare const hostDaemonCommandRegistry: {
         outcome: z$1.ZodLiteral<"unavailable">;
         failure: z$1.ZodObject<{
             code: z$1.ZodEnum<{
-                unknown: "unknown";
                 path_not_found: "path_not_found";
                 not_git_repo: "not_git_repo";
                 not_worktree: "not_worktree";
                 workspace_type_mismatch: "workspace_type_mismatch";
                 permission_denied: "permission_denied";
                 unknown_environment: "unknown_environment";
+                unknown: "unknown";
             }>;
             workspacePath: z$1.ZodString;
             message: z$1.ZodString;
@@ -6283,9 +6647,9 @@ declare const hostDaemonCommandRegistry: {
                 conclusion: z$1.ZodNullable<z$1.ZodEnum<{
                     unknown: "unknown";
                     success: "success";
-                    skipped: "skipped";
                     cancelled: "cancelled";
                     failure: "failure";
+                    skipped: "skipped";
                     neutral: "neutral";
                     timed_out: "timed_out";
                     action_required: "action_required";
@@ -6369,8 +6733,8 @@ declare const providerCliStatusResponseSchema: z$1.ZodRecord<z$1.ZodEnum<{
     npmGlobalPackageVersion: z$1.ZodNullable<z$1.ZodString>;
     installAction: z$1.ZodNullable<z$1.ZodObject<{
         kind: z$1.ZodEnum<{
-            update: "update";
             install: "install";
+            update: "update";
         }>;
         label: z$1.ZodEnum<{
             Install: "Install";
@@ -6393,8 +6757,8 @@ declare const providerCliInstallRequestSchema: z$1.ZodObject<{
         cursor: "cursor";
     }>;
     actionKind: z$1.ZodEnum<{
-        update: "update";
         install: "install";
+        update: "update";
     }>;
 }, z$1.core.$strip>;
 type ProviderCliInstallRequest = z$1.infer<typeof providerCliInstallRequestSchema>;
@@ -6438,6 +6802,63 @@ declare const providerCliInstallEventSchema: z$1.ZodDiscriminatedUnion<[z$1.ZodO
     message: z$1.ZodString;
 }, z$1.core.$strip>], "type">;
 type ProviderCliInstallEvent = z$1.infer<typeof providerCliInstallEventSchema>;
+declare const providerAuthSnapshotSchema: z$1.ZodObject<{
+    statuses: z$1.ZodRecord<z$1.ZodEnum<{
+        codex: "codex";
+        claudeCode: "claudeCode";
+    }>, z$1.ZodObject<{
+        provider: z$1.ZodEnum<{
+            codex: "codex";
+            claudeCode: "claudeCode";
+        }>;
+        displayName: z$1.ZodString;
+        state: z$1.ZodEnum<{
+            unknown: "unknown";
+            loggedIn: "loggedIn";
+            loggedOut: "loggedOut";
+            unavailable: "unavailable";
+        }>;
+        authMethod: z$1.ZodNullable<z$1.ZodString>;
+        accountEmail: z$1.ZodNullable<z$1.ZodString>;
+        organizationName: z$1.ZodNullable<z$1.ZodString>;
+        message: z$1.ZodNullable<z$1.ZodString>;
+    }, z$1.core.$strict>>;
+    sessions: z$1.ZodArray<z$1.ZodObject<{
+        sessionId: z$1.ZodString;
+        provider: z$1.ZodEnum<{
+            codex: "codex";
+            claudeCode: "claudeCode";
+        }>;
+        phase: z$1.ZodEnum<{
+            failed: "failed";
+            starting: "starting";
+            waitingForUser: "waitingForUser";
+            waitingForCode: "waitingForCode";
+            verifying: "verifying";
+            succeeded: "succeeded";
+            recoveryRequired: "recoveryRequired";
+        }>;
+        oauthUrl: z$1.ZodNullable<z$1.ZodString>;
+        userCode: z$1.ZodNullable<z$1.ZodString>;
+        codeInputRequired: z$1.ZodBoolean;
+        message: z$1.ZodNullable<z$1.ZodString>;
+        recoveryCommand: z$1.ZodNullable<z$1.ZodString>;
+        startedAt: z$1.ZodNumber;
+    }, z$1.core.$strict>>;
+}, z$1.core.$strict>;
+type ProviderAuthSnapshot = z$1.infer<typeof providerAuthSnapshotSchema>;
+declare const providerAuthStartRequestSchema: z$1.ZodObject<{
+    provider: z$1.ZodEnum<{
+        codex: "codex";
+        claudeCode: "claudeCode";
+    }>;
+}, z$1.core.$strict>;
+type ProviderAuthStartRequest = z$1.infer<typeof providerAuthStartRequestSchema>;
+declare const providerAuthSubmitCodeRequestSchema: z$1.ZodObject<{
+    sessionId: z$1.ZodString;
+    code: z$1.ZodString;
+}, z$1.core.$strict>;
+type ProviderAuthSubmitCodeRequest = z$1.infer<typeof providerAuthSubmitCodeRequestSchema>;
 
 interface CreateFilePreviewResponse {
     baseUrl: string;
@@ -6507,6 +6928,9 @@ type HostPickFolderResponse = PickFolderResponse;
 type HostProviderCliStatusResponse = ProviderCliStatusResponse;
 type HostProviderCliInstallRequest = ProviderCliInstallRequest;
 type HostProviderCliInstallEvent = ProviderCliInstallEvent;
+type HostProviderAuthSnapshot = ProviderAuthSnapshot;
+type HostProviderAuthStartRequest = ProviderAuthStartRequest;
+type HostProviderAuthSubmitCodeRequest = ProviderAuthSubmitCodeRequest;
 
 declare const pluginUpdateCheckEntrySchema: z$1.ZodObject<{
     id: z$1.ZodString;
@@ -6950,8 +7374,8 @@ declare const systemExecutionOptionsResponseSchema: z$1.ZodObject<{
             supportsUserQuestion: z$1.ZodBoolean;
             supportsFork: z$1.ZodBoolean;
             supportedPermissionModes: z$1.ZodArray<z$1.ZodEnum<{
-                auto: "auto";
                 "accept-edits": "accept-edits";
+                auto: "auto";
                 full: "full";
             }>>;
         }, z$1.core.$strip>;
@@ -6982,8 +7406,8 @@ declare const systemExecutionOptionsResponseSchema: z$1.ZodObject<{
         available: z$1.ZodBoolean;
     }, z$1.core.$strip>>;
     permissionCeiling: z$1.ZodEnum<{
-        auto: "auto";
         "accept-edits": "accept-edits";
+        auto: "auto";
         full: "full";
     }>;
     models: z$1.ZodArray<z$1.ZodObject<{
@@ -8431,10 +8855,10 @@ declare const createThreadRequestSchema: z$1.ZodObject<{
         ultra: "ultra";
     }>>;
     permissionMode: z$1.ZodOptional<z$1.ZodPipe<z$1.ZodUnion<readonly [z$1.ZodEnum<{
-        auto: "auto";
         "accept-edits": "accept-edits";
+        auto: "auto";
         full: "full";
-    }>, z$1.ZodLiteral<"workspace-write">]>, z$1.ZodTransform<"auto" | "accept-edits" | "full", "auto" | "accept-edits" | "full" | "workspace-write">>>;
+    }>, z$1.ZodLiteral<"workspace-write">]>, z$1.ZodTransform<"accept-edits" | "auto" | "full", "accept-edits" | "auto" | "full" | "workspace-write">>>;
     executionInputSources: z$1.ZodOptional<z$1.ZodObject<{
         providerId: z$1.ZodOptional<z$1.ZodEnum<{
             explicit: "explicit";
@@ -8682,10 +9106,10 @@ declare const forkThreadRequestSchema: z$1.ZodObject<{
     }, z$1.core.$strip>>>>;
     title: z$1.ZodOptional<z$1.ZodString>;
     permissionMode: z$1.ZodOptional<z$1.ZodPipe<z$1.ZodUnion<readonly [z$1.ZodEnum<{
-        auto: "auto";
         "accept-edits": "accept-edits";
+        auto: "auto";
         full: "full";
-    }>, z$1.ZodLiteral<"workspace-write">]>, z$1.ZodTransform<"auto" | "accept-edits" | "full", "auto" | "accept-edits" | "full" | "workspace-write">>>;
+    }>, z$1.ZodLiteral<"workspace-write">]>, z$1.ZodTransform<"accept-edits" | "auto" | "full", "accept-edits" | "auto" | "full" | "workspace-write">>>;
     visibility: z$1.ZodDefault<z$1.ZodEnum<{
         visible: "visible";
         hidden: "hidden";
@@ -8801,10 +9225,10 @@ declare const sendMessageRequestSchema: z$1.ZodObject<{
         ultra: "ultra";
     }>>;
     permissionMode: z$1.ZodOptional<z$1.ZodPipe<z$1.ZodUnion<readonly [z$1.ZodEnum<{
-        auto: "auto";
         "accept-edits": "accept-edits";
+        auto: "auto";
         full: "full";
-    }>, z$1.ZodLiteral<"workspace-write">]>, z$1.ZodTransform<"auto" | "accept-edits" | "full", "auto" | "accept-edits" | "full" | "workspace-write">>>;
+    }>, z$1.ZodLiteral<"workspace-write">]>, z$1.ZodTransform<"accept-edits" | "auto" | "full", "accept-edits" | "auto" | "full" | "workspace-write">>>;
     executionInputSources: z$1.ZodOptional<z$1.ZodObject<{
         model: z$1.ZodOptional<z$1.ZodEnum<{
             explicit: "explicit";
@@ -8931,10 +9355,10 @@ declare const createQueuedMessageRequestSchema: z$1.ZodObject<{
         ultra: "ultra";
     }>>;
     permissionMode: z$1.ZodOptional<z$1.ZodPipe<z$1.ZodUnion<readonly [z$1.ZodEnum<{
-        auto: "auto";
         "accept-edits": "accept-edits";
+        auto: "auto";
         full: "full";
-    }>, z$1.ZodLiteral<"workspace-write">]>, z$1.ZodTransform<"auto" | "accept-edits" | "full", "auto" | "accept-edits" | "full" | "workspace-write">>>;
+    }>, z$1.ZodLiteral<"workspace-write">]>, z$1.ZodTransform<"accept-edits" | "auto" | "full", "accept-edits" | "auto" | "full" | "workspace-write">>>;
     executionInputSources: z$1.ZodOptional<z$1.ZodObject<{
         model: z$1.ZodOptional<z$1.ZodEnum<{
             explicit: "explicit";
@@ -9156,8 +9580,8 @@ declare const sendQueuedMessageResponseSchema: z$1.ZodObject<{
             ultra: "ultra";
         }>;
         permissionMode: z$1.ZodEnum<{
-            auto: "auto";
             "accept-edits": "accept-edits";
+            auto: "auto";
             full: "full";
         }>;
         serviceTier: z$1.ZodEnum<{
@@ -9557,8 +9981,8 @@ declare const threadWithIncludesResponseSchema: z$1.ZodObject<{
             connected: "connected";
         }>;
         maxPermissionMode: z$1.ZodEnum<{
-            auto: "auto";
             "accept-edits": "accept-edits";
+            auto: "auto";
             full: "full";
         }>;
         lastSeenAt: z$1.ZodNullable<z$1.ZodNumber>;
@@ -9828,8 +10252,8 @@ declare const threadQueuedMessageListResponseSchema: z$1.ZodArray<z$1.ZodObject<
         ultra: "ultra";
     }>;
     permissionMode: z$1.ZodEnum<{
-        auto: "auto";
         "accept-edits": "accept-edits";
+        auto: "auto";
         full: "full";
     }>;
     serviceTier: z$1.ZodEnum<{
@@ -10319,6 +10743,10 @@ declare const threadTabsResponseSchema: z$1.ZodObject<{
         }, z$1.core.$strict>], "kind">;
         statusLabel: z$1.ZodNullable<z$1.ZodLiteral<"deleted">>;
     }, z$1.core.$strict>, z$1.ZodObject<{
+        environmentId: z$1.ZodString;
+        id: z$1.ZodString;
+        kind: z$1.ZodLiteral<"simulator">;
+    }, z$1.core.$strict>, z$1.ZodObject<{
         environmentId: z$1.ZodNullable<z$1.ZodString>;
         id: z$1.ZodString;
         kind: z$1.ZodLiteral<"host-file-preview">;
@@ -10411,6 +10839,10 @@ declare const updateThreadTabsRequestSchema: z$1.ZodObject<{
             ref: z$1.ZodString;
         }, z$1.core.$strict>], "kind">;
         statusLabel: z$1.ZodNullable<z$1.ZodLiteral<"deleted">>;
+    }, z$1.core.$strict>, z$1.ZodObject<{
+        environmentId: z$1.ZodString;
+        id: z$1.ZodString;
+        kind: z$1.ZodLiteral<"simulator">;
     }, z$1.core.$strict>, z$1.ZodObject<{
         environmentId: z$1.ZodNullable<z$1.ZodString>;
         id: z$1.ZodString;
@@ -10964,6 +11396,8 @@ interface PluginSidebarProject {
      * is not backed by a remote repository.
      */
     experimental_gitRemoteUrl?: string | null;
+    /** Default GitHub identity for new workspaces in this repository. */
+    experimental_githubAccountLogin?: string | null;
 }
 interface PluginSidebarThreadsState {
     status: "loading" | "ready" | "error";
@@ -11874,6 +12308,12 @@ interface EnvironmentDiffBranchesArgs extends EnvironmentDiffBranchesQuery {
 interface EnvironmentCommitArgs {
     environmentId: string;
 }
+interface EnvironmentSimulatorAttachArgs extends EnvironmentActionArgs {
+    deviceUdid?: string;
+}
+interface EnvironmentSimulatorControlArgs extends EnvironmentActionArgs {
+    action: SimulatorControlAction;
+}
 interface EnvironmentSquashMergeArgs {
     environmentId: string;
     mergeBaseBranch: string;
@@ -11922,6 +12362,13 @@ type EnvironmentDockerProvenanceResult = EnvironmentDockerProvenanceResponse;
 type EnvironmentDockerActivityResult = EnvironmentDockerActivityResponse;
 type EnvironmentPreviewsResult = EnvironmentPreviewsResponse;
 type EnvironmentUpdateResult = Environment;
+type EnvironmentSimulatorStatusResult = SimulatorStatusResponse;
+type EnvironmentSimulatorAttachResult = SimulatorAttachResponse;
+type EnvironmentSimulatorLeaseResult = SimulatorLeaseResponse;
+type EnvironmentSimulatorControlResult = SimulatorControlResponse;
+type EnvironmentSimulatorStopResult = SimulatorStopResponse;
+type EnvironmentSimulatorAccessibilityResult = SimulatorAccessibilityResponse;
+type EnvironmentSimulatorScreenshotResult = SimulatorScreenshotResponse;
 interface EnvironmentsArea {
     archiveThreads(args: EnvironmentActionArgs): Promise<EnvironmentArchiveThreadsResult>;
     commit(args: EnvironmentCommitArgs): Promise<EnvironmentCommitResult>;
@@ -11944,6 +12391,13 @@ interface EnvironmentsArea {
     paths(args: EnvironmentPathsArgs): Promise<EnvironmentPathsResult>;
     squashMerge(args: EnvironmentSquashMergeArgs): Promise<EnvironmentSquashMergeResult>;
     status(args: EnvironmentStatusArgs): Promise<EnvironmentStatusResult>;
+    simulatorStatus(args: EnvironmentActionArgs): Promise<EnvironmentSimulatorStatusResult>;
+    simulatorAttach(args: EnvironmentSimulatorAttachArgs): Promise<EnvironmentSimulatorAttachResult>;
+    simulatorLease(args: EnvironmentActionArgs): Promise<EnvironmentSimulatorLeaseResult>;
+    simulatorControl(args: EnvironmentSimulatorControlArgs): Promise<EnvironmentSimulatorControlResult>;
+    simulatorStop(args: EnvironmentActionArgs): Promise<EnvironmentSimulatorStopResult>;
+    simulatorAccessibility(args: EnvironmentActionArgs): Promise<EnvironmentSimulatorAccessibilityResult>;
+    simulatorScreenshot(args: EnvironmentActionArgs): Promise<EnvironmentSimulatorScreenshotResult>;
     update(args: EnvironmentUpdateArgs): Promise<EnvironmentUpdateResult>;
 }
 
@@ -12073,6 +12527,12 @@ interface HostPickFolderArgs extends HostPickFolderRequest {
 interface HostProviderCliInstallArgs extends HostProviderCliInstallRequest {
     hostId: string;
 }
+interface HostProviderAuthStartArgs extends HostProviderAuthStartRequest {
+    hostId: string;
+}
+interface HostProviderAuthSubmitCodeArgs extends HostProviderAuthSubmitCodeRequest {
+    hostId: string;
+}
 interface HostListArgs {
     signal?: AbortSignal;
 }
@@ -12088,6 +12548,7 @@ type HostListResult = Host[];
 type HostPathsExistResult = HostPathsExistResponse;
 type HostPickFolderResult = HostPickFolderResponse;
 type HostProviderCliStatusResult = HostProviderCliStatusResponse;
+type HostProviderAuthResult = HostProviderAuthSnapshot;
 type HostRetryUpdateResult = HostRetryUpdateResponse;
 type HostUpdateResult = Host;
 interface HostsArea {
@@ -12101,6 +12562,9 @@ interface HostsArea {
     pathsExist(args: HostPathsExistArgs): Promise<HostPathsExistResult>;
     pickFolder(args: HostPickFolderArgs): Promise<HostPickFolderResult>;
     providerCliStatus(args: HostGetArgs): Promise<HostProviderCliStatusResult>;
+    providerAuthStatus(args: HostGetArgs): Promise<HostProviderAuthResult>;
+    startProviderAuth(args: HostProviderAuthStartArgs): Promise<HostProviderAuthResult>;
+    submitProviderAuthCode(args: HostProviderAuthSubmitCodeArgs): Promise<HostProviderAuthResult>;
     retryUpdate(args: HostRetryUpdateArgs): Promise<HostRetryUpdateResult>;
     update(args: HostUpdateArgs): Promise<HostUpdateResult>;
 }
@@ -13061,6 +13525,7 @@ interface ThreadsArea {
     list(args?: ThreadListArgs): Promise<ThreadListResult>;
     markRead(args: ThreadActionArgs): Promise<ThreadReadStateResult>;
     markUnread(args: ThreadActionArgs): Promise<ThreadReadStateResult>;
+    markViewed(args: ThreadActionArgs): Promise<ThreadReadStateResult>;
     open(args: ThreadOpenArgs): Promise<ThreadOpenResult>;
     paneAction(args: ThreadPaneActionArgs): Promise<ThreadPaneActionResult>;
     output(args: ThreadOutputArgs): Promise<ThreadOutputResponse>;

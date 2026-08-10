@@ -120,6 +120,13 @@ const browserFixedPanelTabSchema = z
     url: z.string().max(BB_DESKTOP_BROWSER_MAX_URL_LENGTH),
   })
   .strict();
+const simulatorFixedPanelTabSchema = z
+  .object({
+    environmentId: z.string().min(1),
+    id: z.string().min(1),
+    kind: z.literal("simulator"),
+  })
+  .strict();
 const newTabFixedPanelTabSchema = z
   .object({
     id: z.string().min(1),
@@ -173,6 +180,7 @@ const secondaryFixedPanelTabSchema = z.union([
   hostFilePreviewFixedPanelTabSchema,
   threadStorageFilePreviewFixedPanelTabSchema,
   browserFixedPanelTabSchema,
+  simulatorFixedPanelTabSchema,
   newTabFixedPanelTabSchema,
   notesFixedPanelTabSchema,
   localServersFixedPanelTabSchema,
@@ -292,6 +300,12 @@ export interface BrowserFixedPanelTab {
   url: string;
 }
 
+export interface SimulatorFixedPanelTab {
+  environmentId: string;
+  id: string;
+  kind: "simulator";
+}
+
 export interface NewTabFixedPanelTab {
   id: string;
   kind: "new-tab";
@@ -342,6 +356,7 @@ export type SecondaryFixedPanelTab =
   | HostFilePreviewFixedPanelTab
   | ThreadStorageFilePreviewFixedPanelTab
   | BrowserFixedPanelTab
+  | SimulatorFixedPanelTab
   | NewTabFixedPanelTab
   | NotesFixedPanelTab
   | LocalServersFixedPanelTab
@@ -358,6 +373,7 @@ export type SecondaryFileFixedPanelTab =
   | HostFilePreviewFixedPanelTab
   | ThreadStorageFilePreviewFixedPanelTab
   | BrowserFixedPanelTab
+  | SimulatorFixedPanelTab
   | NewTabFixedPanelTab
   | NotesFixedPanelTab
   | LocalServersFixedPanelTab
@@ -443,6 +459,10 @@ interface CreateHostFilePreviewFixedPanelTabArgs {
 interface CreateBrowserFixedPanelTabArgs {
   environmentId: string | null;
   url: string;
+}
+
+interface CreateSimulatorFixedPanelTabArgs {
+  environmentId: string;
 }
 
 interface CreateWorkspaceFilePreviewFixedPanelTabArgs {
@@ -744,6 +764,20 @@ export function createPreviewFixedPanelTab({
   };
 }
 
+export function createSimulatorFixedPanelTab({
+  environmentId,
+}: CreateSimulatorFixedPanelTabArgs): SimulatorFixedPanelTab {
+  return {
+    environmentId,
+    id: buildFixedPanelTabId({
+      environmentId,
+      kind: "simulator",
+      path: "simulator",
+    }),
+    kind: "simulator",
+  };
+}
+
 export function createTerminalFixedPanelTab({
   terminalId,
 }: CreateTerminalFixedPanelTabArgs): TerminalFixedPanelTab {
@@ -814,6 +848,14 @@ function normalizeFixedPanelTabId(tab: FixedPanelTab): FixedPanelTab {
         environmentId: tab.environmentId,
         kind: tab.kind,
         path: browserPath,
+      });
+      return tab.id === id ? tab : { ...tab, id };
+    }
+    case "simulator": {
+      const id = buildFixedPanelTabId({
+        environmentId: tab.environmentId,
+        kind: tab.kind,
+        path: "simulator",
       });
       return tab.id === id ? tab : { ...tab, id };
     }
@@ -926,6 +968,7 @@ function stripTransientFixedPanelTabForStorage(
     case "pull-request":
     case "plugin-panel":
     case "browser":
+    case "simulator":
     case "new-tab":
     case "notes":
     case "local-servers":
@@ -1111,6 +1154,8 @@ export function areFixedPanelTabsEquivalent(
     case "notes":
     case "local-servers":
       return true;
+    case "simulator":
+      return b.kind === "simulator" && a.environmentId === b.environmentId;
     case "plugin-panel":
       return (
         b.kind === "plugin-panel" &&

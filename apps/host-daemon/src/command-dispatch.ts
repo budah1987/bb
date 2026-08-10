@@ -69,6 +69,7 @@ import {
   ProviderCliInstallInProgressError,
   streamProviderCliInstall,
 } from "./provider-cli-health.js";
+import { providerAuthManager } from "./provider-auth.js";
 import {
   ensureThreadRuntime,
   startThread,
@@ -89,6 +90,10 @@ import {
 import { inspectWorkspaceDockerMounts } from "./command-handlers/docker-mounts.js";
 import { inspectWorkspaceDockerPathActivity } from "./command-handlers/docker-path-activity.js";
 import { discoverWorkspaceGithubDeployments } from "./command-handlers/github-deployments.js";
+import {
+  SimulatorManagerError,
+  type SimulatorManager,
+} from "./simulator/simulator-manager.js";
 
 const THREAD_STOP_ACTIVE_TURN_WAIT_MS = 5_000;
 const defaultCaffeinateManager = createCaffeinateManager();
@@ -131,6 +136,31 @@ function getCaffeinateManager(
   options: CommandDispatchOptions,
 ): CaffeinateManager {
   return options.caffeinateManager ?? defaultCaffeinateManager;
+}
+
+function getSimulatorManager(
+  options: CommandDispatchOptions,
+): SimulatorManager {
+  if (!options.simulatorManager) {
+    throw new ExpectedCommandDispatchError(
+      "simulator_unavailable",
+      "Simulator support is unavailable on this host.",
+    );
+  }
+  return options.simulatorManager;
+}
+
+async function runSimulatorCommand<TResult>(
+  run: () => Promise<TResult>,
+): Promise<TResult> {
+  try {
+    return await run();
+  } catch (error) {
+    if (error instanceof SimulatorManagerError) {
+      throw new ExpectedCommandDispatchError(error.code, error.message);
+    }
+    throw error;
+  }
 }
 
 function handleProviderCliInstallEventLine(
@@ -356,6 +386,7 @@ const commandHandlers: CommandHandlerMap = {
   "project.clone": (command, options) =>
     cloneProject({
       dataDir: options.dataDir,
+      githubAccountLogin: command.githubAccountLogin,
       projectSlug: command.projectSlug,
       remoteUrl: command.remoteUrl,
       ...(command.targetPath !== undefined
@@ -364,6 +395,7 @@ const commandHandlers: CommandHandlerMap = {
     }),
   "environment.provision.cancel": cancelEnvironmentProvision,
   "environment.destroy": async (command, options) => {
+    await options.simulatorManager?.stop(command.environmentId);
     const resolution = await resolveWorkspaceForCommand({
       dataDir: options.dataDir,
       environmentId: command.environmentId,
@@ -482,6 +514,49 @@ const onlineRpcHandlers: OnlineRpcHandlerMap = {
     }
     return options.ensureConnectTunnelIdentity();
   },
+  "simulator.status": async (command, options) =>
+    runSimulatorCommand(() =>
+      getSimulatorManager(options).status(command.environmentId),
+    ),
+  "simulator.attach": async (command, options) =>
+    runSimulatorCommand(() =>
+      getSimulatorManager(options).attach(
+        command.environmentId,
+        command.deviceUdid,
+      ),
+    ),
+  "simulator.lease": async (command, options) =>
+    runSimulatorCommand(() =>
+      getSimulatorManager(options).createLease(command.environmentId),
+    ),
+  "simulator.control": async (command, options) =>
+    runSimulatorCommand(async () => {
+      await getSimulatorManager(options).control(
+        command.environmentId,
+        command.action,
+      );
+      return { ok: true as const };
+    }),
+  "simulator.stop": async (command, options) =>
+    runSimulatorCommand(async () => {
+      const deviceUdid = await getSimulatorManager(options).stop(
+        command.environmentId,
+      );
+      return { stopped: deviceUdid !== null, deviceUdid };
+    }),
+  "simulator.accessibility": async (command, options) =>
+    runSimulatorCommand(async () => ({
+      tree: await getSimulatorManager(options).accessibility(
+        command.environmentId,
+      ),
+    })),
+  "simulator.screenshot": async (command, options) =>
+    runSimulatorCommand(async () => ({
+      dataBase64: (
+        await getSimulatorManager(options).screenshot(command.environmentId)
+      ).toString("base64"),
+      mimeType: "image/png" as const,
+    })),
   "host.list_files": listHostFiles,
   "host.list_paths": listHostPaths,
   "host.mkdir": mkdirHostPath,
@@ -535,6 +610,21 @@ const onlineRpcHandlers: OnlineRpcHandlerMap = {
     getProviderCliStatus({
       env: providerCliEnvFromShellEnv(options.runtimeManager.getShellEnv()),
     }),
+  "provider_auth.status": async (_command, options) =>
+    (options.providerAuthManager ?? providerAuthManager).snapshot(
+      providerCliEnvFromShellEnv(options.runtimeManager.getShellEnv()),
+    ),
+  "provider_auth.start": async (command, options) =>
+    (options.providerAuthManager ?? providerAuthManager).start(
+      command.provider,
+      providerCliEnvFromShellEnv(options.runtimeManager.getShellEnv()),
+    ),
+  "provider_auth.submit_code": async (command, options) =>
+    (options.providerAuthManager ?? providerAuthManager).submitCode(
+      command.sessionId,
+      command.code,
+      providerCliEnvFromShellEnv(options.runtimeManager.getShellEnv()),
+    ),
   "provider_cli.install": installProviderCliOnHost,
   "workspace.discover_repos": async (command, options) =>
     discoverRepos({

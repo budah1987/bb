@@ -56,6 +56,10 @@ export const ENVIRONMENT_DIFF_PATCH_QUERY_KEY = "environmentDiffPatch";
 export const ENVIRONMENT_DIFF_FILE_QUERY_KEY = "environmentDiffFile";
 export const ENVIRONMENT_FILE_PREVIEW_QUERY_KEY = "environmentFilePreview";
 export const ENVIRONMENT_PATHS_QUERY_KEY = "environmentPaths";
+export const ENVIRONMENT_WORKSPACE_FILES_QUERY_KEY =
+  "environmentWorkspaceFiles";
+export const ENVIRONMENT_SIMULATOR_STATUS_QUERY_KEY =
+  "environmentSimulatorStatus";
 export const THREAD_TIMELINE_QUERY_KEY = "threadTimeline";
 export const THREAD_CONVERSATION_OUTLINE_QUERY_KEY =
   "threadConversationOutline";
@@ -67,6 +71,7 @@ export const SYSTEM_EXECUTION_OPTIONS_QUERY_KEY = "systemExecutionOptions";
 export const SYSTEM_CLI_SKILLS_QUERY_KEY = "systemCliSkills";
 export const SYSTEM_VERSION_QUERY_KEY = "systemVersion";
 export const HOST_PROVIDER_CLI_STATUS_QUERY_KEY = "hostProviderCliStatus";
+export const HOST_PROVIDER_AUTH_QUERY_KEY = "hostProviderAuth";
 export const SYSTEM_USAGE_LIMITS_QUERY_KEY = "systemUsageLimits";
 export const SYSTEM_GITHUB_ACCOUNTS_QUERY_KEY = "systemGithubAccounts";
 export const SYSTEM_GITHUB_REPOSITORIES_QUERY_KEY = "systemGithubRepositories";
@@ -454,6 +459,15 @@ export type EnvironmentPathsQueryKeyPrefix = readonly [
   typeof ENVIRONMENT_PATHS_QUERY_KEY,
   string,
 ];
+export type EnvironmentWorkspaceFilesQueryKey = readonly [
+  typeof ENVIRONMENT_WORKSPACE_FILES_QUERY_KEY,
+  string | null | undefined,
+  string | null,
+];
+export type EnvironmentWorkspaceFilesQueryKeyPrefix = readonly [
+  typeof ENVIRONMENT_WORKSPACE_FILES_QUERY_KEY,
+  string,
+];
 export type SystemProvidersQueryKey = readonly [
   typeof SYSTEM_PROVIDERS_QUERY_KEY,
   string | null,
@@ -469,6 +483,10 @@ export type SystemCliSkillsQueryKey = readonly [
 export type SystemVersionQueryKey = readonly [typeof SYSTEM_VERSION_QUERY_KEY];
 export type HostProviderCliStatusQueryKey = readonly [
   typeof HOST_PROVIDER_CLI_STATUS_QUERY_KEY,
+  string | null,
+];
+export type HostProviderAuthQueryKey = readonly [
+  typeof HOST_PROVIDER_AUTH_QUERY_KEY,
   string | null,
 ];
 export type SystemUsageLimitsQueryKey = readonly [
@@ -610,6 +628,19 @@ export function environmentPathsQueryKeyPrefix(
   environmentId: string,
 ): EnvironmentPathsQueryKeyPrefix {
   return [ENVIRONMENT_PATHS_QUERY_KEY, environmentId];
+}
+
+export function environmentWorkspaceFilesQueryKey(
+  environmentId: string | null | undefined,
+  rootPath: string | null,
+): EnvironmentWorkspaceFilesQueryKey {
+  return [ENVIRONMENT_WORKSPACE_FILES_QUERY_KEY, environmentId, rootPath];
+}
+
+export function environmentWorkspaceFilesQueryKeyPrefix(
+  environmentId: string,
+): EnvironmentWorkspaceFilesQueryKeyPrefix {
+  return [ENVIRONMENT_WORKSPACE_FILES_QUERY_KEY, environmentId];
 }
 
 export function projectPromptHistoryQueryKey(
@@ -877,6 +908,15 @@ export function environmentQueryKey(
   return [ENVIRONMENT_QUERY_KEY, environmentId];
 }
 
+export function environmentSimulatorStatusQueryKey(
+  environmentId: string | null | undefined,
+) {
+  return [
+    ENVIRONMENT_SIMULATOR_STATUS_QUERY_KEY,
+    environmentId ?? null,
+  ] as const;
+}
+
 export function environmentWorkStatusQueryKey(
   environmentId: string | null | undefined,
   mergeBaseBranch: string | null,
@@ -1138,6 +1178,12 @@ export function hostProviderCliStatusQueryKey(
   hostId: string | null,
 ): HostProviderCliStatusQueryKey {
   return [HOST_PROVIDER_CLI_STATUS_QUERY_KEY, hostId];
+}
+
+export function hostProviderAuthQueryKey(
+  hostId: string | null,
+): HostProviderAuthQueryKey {
+  return [HOST_PROVIDER_AUTH_QUERY_KEY, hostId];
 }
 
 export function systemUsageLimitsQueryKey(

@@ -259,6 +259,13 @@ type ExpectedEnvironmentsKey =
   | "rename"
   | "squashMerge"
   | "status"
+  | "simulatorAccessibility"
+  | "simulatorAttach"
+  | "simulatorControl"
+  | "simulatorLease"
+  | "simulatorScreenshot"
+  | "simulatorStatus"
+  | "simulatorStop"
   | "update";
 
 type ExpectedFilesKey =
@@ -283,8 +290,11 @@ type ExpectedHostsKey =
   | "list"
   | "pathsExist"
   | "pickFolder"
+  | "providerAuthStatus"
   | "providerCliStatus"
   | "retryUpdate"
+  | "startProviderAuth"
+  | "submitProviderAuthCode"
   | "update";
 
 type ExpectedPluginsKey =
@@ -370,6 +380,7 @@ type ExpectedThreadsKey =
   | "list"
   | "markRead"
   | "markUnread"
+  | "markViewed"
   | "notes"
   | "open"
   | "output"

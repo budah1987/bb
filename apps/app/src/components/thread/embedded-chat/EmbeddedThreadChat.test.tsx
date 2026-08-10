@@ -257,6 +257,7 @@ vi.mock("@/hooks/mutations/thread-runtime-mutations", () => ({
 
 vi.mock("@/hooks/mutations/thread-state-mutations", () => ({
   useMarkThreadRead: () => ({ mutate: mocks.markThreadReadMutate }),
+  useMarkThreadViewed: () => ({ mutate: mocks.markThreadReadMutate }),
 }));
 
 vi.mock("@/hooks/useThreadReadTracking", () => ({

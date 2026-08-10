@@ -104,6 +104,79 @@ function createFetchQueue(
 }
 
 describe("@bb/sdk", () => {
+  it("routes typed simulator status, attach, and control requests", async () => {
+    const queue = createFetchQueue([
+      {
+        body: {
+          supported: true,
+          message: null,
+          devices: [
+            {
+              udid: "device-1",
+              name: "iPhone 17 Pro",
+              runtime: "iOS 26 0",
+              state: "Shutdown",
+            },
+          ],
+          active: null,
+        },
+      },
+      {
+        body: {
+          session: {
+            deviceUdid: "device-1",
+            deviceName: "iPhone 17 Pro",
+            state: "running",
+          },
+          stream: {
+            url: "http://127.0.0.1:41000/stream.mjpeg",
+            token: "a".repeat(32),
+            expiresAt: 2_000_000_000_000,
+            transport: "loopback",
+          },
+        },
+      },
+      { body: { ok: true } },
+    ]);
+    const sdk = createBbSdk({
+      transport: createHttpTransport({
+        baseUrl: "http://bb.test",
+        fetch: queue.fetch,
+        runtime: "node",
+      }),
+    });
+
+    await sdk.environments.simulatorStatus({ environmentId: "env_remote" });
+    await sdk.environments.simulatorAttach({
+      environmentId: "env_remote",
+      deviceUdid: "device-1",
+    });
+    await sdk.environments.simulatorControl({
+      environmentId: "env_remote",
+      action: { kind: "tap", x: 0.5, y: 0.25 },
+    });
+
+    expect(queue.requests).toEqual([
+      {
+        bodyText: undefined,
+        method: "GET",
+        url: "http://bb.test/api/v1/environments/env_remote/simulator",
+      },
+      {
+        bodyText: JSON.stringify({ deviceUdid: "device-1" }),
+        method: "POST",
+        url: "http://bb.test/api/v1/environments/env_remote/simulator/attach",
+      },
+      {
+        bodyText: JSON.stringify({
+          action: { kind: "tap", x: 0.5, y: 0.25 },
+        }),
+        method: "POST",
+        url: "http://bb.test/api/v1/environments/env_remote/simulator/control",
+      },
+    ]);
+  });
+
   it("deletes threads through the POST action supported by remote tunnels", async () => {
     const queue = createFetchQueue([{ body: { ok: true } }]);
     const sdk = createBbSdk({

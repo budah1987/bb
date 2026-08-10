@@ -1,0 +1,594 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>BBamir Command Center — Awaiting Reply</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --canvas: #111214;
+        --surface: #18191c;
+        --raised: #202226;
+        --hover: #282a2f;
+        --line: #303238;
+        --ink: #f2f2f3;
+        --muted: #999ba3;
+        --quiet: #64666e;
+        --working: #4cb7ff;
+        --ready: #64d58a;
+        --reply: #b7a2ff;
+        --waiting: #e7bd59;
+        --failed: #ef7272;
+      }
+
+      * { box-sizing: border-box; }
+
+      html {
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+      }
+
+      body {
+        min-height: 100vh;
+        margin: 0;
+        display: grid;
+        place-items: center;
+        background:
+          radial-gradient(circle at 50% 0%, #242731 0, transparent 38rem),
+          #090a0c;
+        color: var(--ink);
+        font-family: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont,
+          "SF Pro Text", "Segoe UI", sans-serif;
+      }
+
+      .stage { padding: 32px 16px; }
+
+      .phone {
+        position: relative;
+        width: min(393px, calc(100vw - 24px));
+        height: min(852px, calc(100vh - 32px));
+        overflow: hidden;
+        border: 1px solid #34363c;
+        border-radius: 44px;
+        background: var(--canvas);
+        box-shadow: 0 28px 90px #000a, inset 0 0 0 5px #0b0c0e;
+      }
+
+      .screen {
+        height: 100%;
+        overflow-y: auto;
+        scrollbar-width: none;
+        padding: 18px 18px 112px;
+      }
+      .screen::-webkit-scrollbar { display: none; }
+
+      .statusbar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        height: 42px;
+        padding: 0 8px;
+        font-size: 15px;
+        font-weight: 650;
+        letter-spacing: .01em;
+      }
+
+      .system-icons {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        color: #dedee1;
+      }
+
+      .signal-bars { display: flex; align-items: end; gap: 2px; height: 11px; }
+      .signal-bars i { width: 2px; border-radius: 2px; background: currentColor; }
+      .signal-bars i:nth-child(1) { height: 4px; }
+      .signal-bars i:nth-child(2) { height: 7px; }
+      .signal-bars i:nth-child(3) { height: 10px; }
+
+      .wifi {
+        width: 14px;
+        height: 10px;
+        border-top: 2px solid currentColor;
+        border-radius: 50% 50% 0 0;
+        position: relative;
+      }
+      .wifi::after {
+        content: "";
+        position: absolute;
+        left: 5px;
+        top: 4px;
+        width: 4px;
+        height: 4px;
+        border-radius: 50%;
+        background: currentColor;
+      }
+
+      .battery {
+        position: relative;
+        width: 20px;
+        height: 10px;
+        border: 1px solid currentColor;
+        border-radius: 3px;
+      }
+      .battery::before {
+        content: "";
+        position: absolute;
+        inset: 2px 5px 2px 2px;
+        border-radius: 1px;
+        background: currentColor;
+      }
+      .battery::after {
+        content: "";
+        position: absolute;
+        right: -3px;
+        top: 3px;
+        width: 2px;
+        height: 4px;
+        border-radius: 0 2px 2px 0;
+        background: currentColor;
+      }
+
+      .top-icons {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 18px 4px 28px;
+        color: #c5c6cb;
+      }
+
+      .top-actions {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+      }
+
+      .device-icon {
+        position: relative;
+        width: 30px;
+        height: 24px;
+        border: 2px solid currentColor;
+        border-radius: 7px;
+        opacity: .9;
+      }
+
+      .device-icon--sidebar::after {
+        content: "";
+        position: absolute;
+        inset: 0 auto 0 8px;
+        width: 2px;
+        background: currentColor;
+      }
+
+      .device-icon--mobile::after {
+        content: "";
+        position: absolute;
+        inset: auto 3px 3px;
+        height: 2px;
+        border-radius: 2px;
+        background: currentColor;
+      }
+
+      .search {
+        width: 38px;
+        height: 38px;
+        border: 0;
+        border-radius: 10px;
+        background: transparent;
+        color: #c4c5ca;
+        cursor: pointer;
+        transition-property: scale, background-color, color;
+        transition-duration: 150ms;
+        transition-timing-function: ease-out;
+      }
+      .search:hover { background: var(--hover); }
+      .search:active { scale: .96; }
+      .search svg { width: 19px; height: 19px; }
+
+      .section { margin-top: 12px; }
+      .section + .section { margin-top: 16px; }
+
+      .section-toggle {
+        width: 100%;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        min-height: 26px;
+        padding: 0 11px 6px 40px;
+        border: 0;
+        background: transparent;
+        color: #bbbcc2;
+        font: inherit;
+        font-size: 13px;
+        font-weight: 560;
+        letter-spacing: .01em;
+        text-align: left;
+        cursor: pointer;
+      }
+      .section-toggle:focus-visible { outline: 2px solid var(--working); outline-offset: 2px; border-radius: 6px; }
+
+      .section-chevron {
+        width: 14px;
+        height: 14px;
+        color: var(--quiet);
+        transition: transform 180ms cubic-bezier(0.22, 1, 0.36, 1);
+      }
+      .section-toggle[aria-expanded="false"] .section-chevron { transform: rotate(-90deg); }
+
+      .section-content {
+        display: grid;
+        grid-template-rows: 1fr;
+        opacity: 1;
+        transition-property: grid-template-rows, opacity;
+        transition-duration: 220ms, 140ms;
+        transition-timing-function: cubic-bezier(0.22, 1, 0.36, 1), ease-out;
+      }
+      .section-content-inner { min-height: 0; overflow: hidden; }
+      .section.is-collapsed .section-content { grid-template-rows: 0fr; opacity: 0; }
+
+      .rows { display: grid; gap: 3px; }
+
+      .row {
+        width: 100%;
+        display: grid;
+        grid-template-columns: 18px minmax(0, 1fr) max-content;
+        align-items: center;
+        gap: 11px;
+        border: 0;
+        border-radius: 13px;
+        background: transparent;
+        color: inherit;
+        text-align: left;
+        cursor: pointer;
+        transition-property: scale, background-color, color;
+        transition-duration: 150ms;
+        transition-timing-function: ease-out;
+      }
+      .row:hover, .row.selected { background: var(--raised); }
+      .row:active { scale: .96; }
+      .row--focus { min-height: 68px; padding: 10px 11px; }
+      .row--reply { min-height: 48px; padding: 6px 11px; }
+      .row--compact { min-height: 52px; padding: 7px 11px; }
+
+      .title {
+        display: block;
+        min-width: 0;
+        overflow: hidden;
+        color: #e7e7e9;
+        font-size: 15px;
+        font-weight: 590;
+        line-height: 1.25;
+        text-overflow: ellipsis;
+        font-variant-numeric: tabular-nums;
+        white-space: nowrap;
+      }
+      .row--focus .title { font-size: 16px; }
+
+      .meta {
+        display: block;
+        min-width: 0;
+        overflow: hidden;
+        margin-top: 3px;
+        color: var(--muted);
+        font-size: 12px;
+        line-height: 1.25;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .state {
+        justify-self: end;
+        max-width: 112px;
+        overflow: hidden;
+        padding-left: 6px;
+        font-size: 12px;
+        font-weight: 540;
+        white-space: nowrap;
+        text-overflow: ellipsis;
+      }
+      .state--working { color: var(--working); }
+      .state--ready { color: var(--ready); }
+      .state--reply { color: var(--reply); }
+      .state--waiting { color: var(--waiting); }
+      .state--failed { color: var(--failed); }
+      .state--time { color: var(--quiet); }
+
+      .pixels {
+        --pixel: 2px;
+        display: grid;
+        grid-template-columns: repeat(5, var(--pixel));
+        grid-template-rows: repeat(5, var(--pixel));
+        gap: 1px;
+        width: max-content;
+        color: var(--quiet);
+      }
+      .row--compact .pixels { --pixel: 1.5px; }
+      .row--reply .pixels { --pixel: 2px; }
+      .pixel { width: var(--pixel); height: var(--pixel); background: transparent; }
+
+      .pixels .pixel:nth-child(7), .pixels .pixel:nth-child(8), .pixels .pixel:nth-child(9),
+      .pixels .pixel:nth-child(12), .pixels .pixel:nth-child(14),
+      .pixels .pixel:nth-child(17), .pixels .pixel:nth-child(18), .pixels .pixel:nth-child(19) { background: currentColor; }
+
+      .pixels--working { color: var(--working); }
+      .pixels--working .pixel { animation: pulse 1.4s steps(2, jump-none) infinite; }
+      .pixels--working .pixel:nth-child(3n) { animation-delay: -.47s; }
+      .pixels--working .pixel:nth-child(4n) { animation-delay: -.94s; }
+
+      .pixels--ready { color: var(--ready); }
+      .pixels--reply { color: var(--reply); }
+      .pixels--waiting { color: var(--waiting); }
+      .pixels--failed { color: var(--failed); }
+      .pixels--passive { color: var(--quiet); }
+
+      @keyframes pulse { 0%, 100% { opacity: .28; } 50% { opacity: 1; } }
+      @media (prefers-reduced-motion: reduce) { .pixel { animation: none !important; } }
+
+      .t-tabs {
+        --tabs-dur: 250ms;
+        --tabs-ease: cubic-bezier(0.22, 1, 0.36, 1);
+        position: relative;
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        margin-top: 20px;
+        border-bottom: 1px solid rgba(255,255,255,.09);
+      }
+
+      .t-tab {
+        position: relative;
+        z-index: 1;
+        min-height: 44px;
+        padding: 0 8px;
+        border: 0;
+        background: transparent;
+        color: var(--muted);
+        font: inherit;
+        font-size: 14px;
+        font-weight: 520;
+        cursor: pointer;
+        transition-property: color, scale;
+        transition-duration: var(--tabs-dur), 120ms;
+        transition-timing-function: var(--tabs-ease), ease-out;
+      }
+      .t-tab strong {
+        margin-left: 4px;
+        color: var(--quiet);
+        font-variant-numeric: tabular-nums;
+        font-weight: 540;
+      }
+      .t-tab[aria-selected="true"] { color: var(--ink); }
+      .t-tab:active { scale: .96; }
+      .t-tab:focus-visible { outline: 2px solid var(--working); outline-offset: -4px; border-radius: 6px; }
+
+      .t-tabs-pill {
+        position: absolute;
+        z-index: 2;
+        bottom: -1px;
+        left: 0;
+        width: 0;
+        height: 2px;
+        border-radius: 2px 2px 0 0;
+        background: var(--ink);
+        pointer-events: none;
+        transform: translateX(0);
+        transition-property: transform, width;
+        transition-duration: var(--tabs-dur);
+        transition-timing-function: var(--tabs-ease);
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        .t-tabs-pill, .t-tab, .section-content, .section-chevron { transition-duration: 0.01ms !important; }
+      }
+
+      .filtered { margin-top: 16px; }
+      .empty { padding: 28px 12px; color: var(--quiet); text-align: center; font-size: 13px; }
+
+      .composer {
+        position: absolute;
+        inset: auto 14px 14px;
+        display: flex;
+        align-items: center;
+        min-height: 58px;
+        padding: 7px 7px 7px 17px;
+        border-radius: 19px;
+        background: color-mix(in srgb, var(--canvas) 92%, transparent);
+        box-shadow: 0 0 0 1px rgba(255,255,255,.11), 0 -18px 38px var(--canvas), 0 8px 25px #0006;
+        backdrop-filter: blur(18px);
+        color: #71737a;
+        font-size: 16px;
+      }
+      .mic {
+        margin-left: auto;
+        width: 44px;
+        height: 44px;
+        display: grid;
+        place-items: center;
+        border-radius: 14px;
+        background: #e5e5e7;
+        color: #232428;
+        font-size: 21px;
+      }
+
+    </style>
+  </head>
+  <body>
+    <main class="stage">
+      <div class="phone">
+        <div class="screen">
+          <div class="statusbar">
+            <span>9:41</span>
+            <span class="system-icons" aria-hidden="true">
+              <span class="signal-bars"><i></i><i></i><i></i></span>
+              <span class="wifi"></span>
+              <span class="battery"></span>
+            </span>
+          </div>
+          <div class="top-icons">
+            <span class="device-icon device-icon--sidebar"></span>
+            <span class="top-actions">
+              <button class="search" aria-label="Search">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" aria-hidden="true"><circle cx="10.8" cy="10.8" r="5.8"></circle><path d="m15.2 15.2 4.1 4.1"></path></svg>
+              </button>
+              <span class="device-icon device-icon--mobile"></span>
+            </span>
+          </div>
+
+          <section class="section">
+            <button class="section-toggle" type="button" aria-expanded="true" aria-controls="focusRows">
+              <span>Focus</span>
+              <svg class="section-chevron" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m4 5.5 3 3 3-3"></path></svg>
+            </button>
+            <div class="section-content" id="focusRows">
+              <div class="section-content-inner rows">
+              <button class="row row--focus selected">
+                <span class="pixels pixels--working" aria-label="Working"></span>
+                <span><span class="title">Activity visualization</span><span class="meta">BBamir · feature/activity</span></span>
+                <span class="state state--working">Working</span>
+              </button>
+              <button class="row row--focus">
+                <span class="pixels pixels--ready" aria-label="Ready"></span>
+                <span><span class="title">Remote plugin workflow</span><span class="meta">BBamir · feature/plugin-dev</span></span>
+                <span class="state state--ready">Ready</span>
+              </button>
+              </div>
+            </div>
+          </section>
+
+          <section class="section section--reply">
+            <button class="section-toggle" type="button" aria-expanded="true" aria-controls="replyRows">
+              <span>Awaiting Reply</span>
+              <svg class="section-chevron" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m4 5.5 3 3 3-3"></path></svg>
+            </button>
+            <div class="section-content" id="replyRows">
+              <div class="section-content-inner rows">
+              <button class="row row--reply">
+                <span class="pixels pixels--reply" aria-label="Awaiting reply"></span>
+                <span><span class="title">Review mobile navigation</span></span>
+                <span class="state state--time">12m</span>
+              </button>
+              <button class="row row--reply">
+                <span class="pixels pixels--reply" aria-label="Awaiting reply"></span>
+                <span><span class="title">Choose release workflow</span></span>
+                <span class="state state--time">1h</span>
+              </button>
+              </div>
+            </div>
+          </section>
+
+          <nav class="t-tabs" role="tablist" aria-label="Session filter">
+            <span class="t-tabs-pill" aria-hidden="true"></span>
+            <button class="t-tab" role="tab" aria-selected="true" aria-controls="sessionRows" tabindex="0" data-filter="active">Active <strong>3</strong></button>
+            <button class="t-tab" role="tab" aria-selected="false" aria-controls="sessionRows" tabindex="-1" data-filter="inactive">Inactive <strong>21</strong></button>
+            <button class="t-tab" role="tab" aria-selected="false" aria-controls="sessionRows" tabindex="-1" data-filter="all">All <strong>24</strong></button>
+          </nav>
+
+          <section class="filtered">
+            <div class="rows" id="sessionRows" role="tabpanel"></div>
+          </section>
+        </div>
+
+        <div class="composer">
+          <span>Ask anything…</span>
+          <span class="mic" aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="9" y="3" width="6" height="11" rx="3"></rect><path d="M6.5 11.5a5.5 5.5 0 0 0 11 0M12 17v4M9 21h6"></path></svg>
+          </span>
+        </div>
+      </div>
+    </main>
+
+    <script>
+      const sessions = {
+        active: [
+          ["Fix flaky integration tests", "Ghost · main", "Working", "working"],
+          ["Confirm deployment config", "Ecto · 18m ago", "Ready", "ready"],
+          ["Resolve auth callback", "Vault · 31m ago", "Waiting", "waiting"],
+        ],
+        inactive: [
+          ["Document generator", "Ecto · 1h ago", "1h", "passive"],
+          ["Review SKU allocation", "Ghost · 4h ago", "4h", "passive"],
+          ["Evaluate app alternatives", "BBamir · yesterday", "1d", "passive"],
+          ["Order of operations", "Ecto · yesterday", "1d", "passive"],
+        ],
+      };
+
+      document.querySelectorAll(".pixels").forEach((matrix) => {
+        for (let index = 0; index < 25; index += 1) {
+          matrix.append(document.createElement("i"));
+          matrix.lastElementChild.className = "pixel";
+        }
+      });
+
+      const rows = document.querySelector("#sessionRows");
+      const render = (filter) => {
+        const values = filter === "all" ? [...sessions.active, ...sessions.inactive] : sessions[filter];
+        rows.replaceChildren(...values.map(([title, meta, state, signal]) => {
+          const row = document.createElement("button");
+          row.className = "row row--compact";
+          row.innerHTML = `<span class="pixels pixels--${signal}">${"<i class='pixel'></i>".repeat(25)}</span><span><span class="title">${title}</span><span class="meta">${meta}</span></span><span class="state state--${signal === "passive" ? "time" : signal}">${state}</span>`;
+          row.addEventListener("click", () => {
+            document.querySelectorAll(".row.selected").forEach((item) => item.classList.remove("selected"));
+            row.classList.add("selected");
+          });
+          return row;
+        }));
+      };
+
+      const tablist = document.querySelector(".t-tabs");
+      const tabs = [...tablist.querySelectorAll(".t-tab")];
+      const indicator = tablist.querySelector(".t-tabs-pill");
+
+      const moveIndicator = (tab, animate = true) => {
+        if (!animate) indicator.style.transition = "none";
+        indicator.style.width = `${tab.offsetWidth}px`;
+        indicator.style.transform = `translateX(${tab.offsetLeft}px)`;
+        if (!animate) requestAnimationFrame(() => { indicator.style.transition = ""; });
+      };
+
+      const selectTab = (tab, focus = false) => {
+        tabs.forEach((item) => {
+          const selected = item === tab;
+          item.setAttribute("aria-selected", String(selected));
+          item.tabIndex = selected ? 0 : -1;
+        });
+        moveIndicator(tab);
+        render(tab.dataset.filter);
+        if (focus) tab.focus();
+      };
+
+      tabs.forEach((tab, index) => {
+        tab.addEventListener("click", () => selectTab(tab));
+        tab.addEventListener("keydown", (event) => {
+          let targetIndex = index;
+          if (event.key === "ArrowRight") targetIndex = (index + 1) % tabs.length;
+          else if (event.key === "ArrowLeft") targetIndex = (index - 1 + tabs.length) % tabs.length;
+          else if (event.key === "Home") targetIndex = 0;
+          else if (event.key === "End") targetIndex = tabs.length - 1;
+          else return;
+          event.preventDefault();
+          selectTab(tabs[targetIndex], true);
+        });
+      });
+
+      requestAnimationFrame(() => moveIndicator(tabs[0], false));
+      window.addEventListener("resize", () => {
+        moveIndicator(tablist.querySelector('[aria-selected="true"]'), false);
+      });
+
+      document.querySelectorAll(".row").forEach((row) => row.addEventListener("click", () => {
+        document.querySelectorAll(".row.selected").forEach((item) => item.classList.remove("selected"));
+        row.classList.add("selected");
+      }));
+
+      document.querySelectorAll(".section-toggle").forEach((toggle) => {
+        toggle.addEventListener("click", () => {
+          const expanded = toggle.getAttribute("aria-expanded") === "true";
+          toggle.setAttribute("aria-expanded", String(!expanded));
+          toggle.closest(".section").classList.toggle("is-collapsed", expanded);
+        });
+      });
+
+      render("active");
+    </script>
+  </body>
+</html>
