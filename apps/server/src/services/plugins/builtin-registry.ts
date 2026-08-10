@@ -98,6 +98,12 @@ export const BUILTIN_PLUGINS = [
     category: "Interface",
   },
   {
+    name: "md-editor",
+    pluginId: "md-editor",
+    defaultEnabled: true,
+    category: "Interface",
+  },
+  {
     name: "ingestion-desk",
     pluginId: "ingestion-desk",
     defaultEnabled: true,

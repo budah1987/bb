@@ -44,7 +44,11 @@ const FILE_OPENER_EXTENSIONS = [
   ...MARKDOWN_EXTENSIONS,
   ...TEXT_EXTENSIONS,
 ] as const;
-const GITHUB_CLI_CANDIDATES = ["gh", "/opt/homebrew/bin/gh", "/usr/local/bin/gh"];
+const GITHUB_CLI_CANDIDATES = [
+  "gh",
+  "/opt/homebrew/bin/gh",
+  "/usr/local/bin/gh",
+];
 
 const openerSourceSchema = z
   .object({
@@ -168,7 +172,11 @@ function normalizeGithubPath(filePath: string): string {
     throw new Error("The GitHub file path must be relative and contained.");
   }
   const normalized = path.posix.normalize(slashPath);
-  if (normalized === "." || normalized === ".." || normalized.startsWith("../")) {
+  if (
+    normalized === "." ||
+    normalized === ".." ||
+    normalized.startsWith("../")
+  ) {
     throw new Error("The GitHub file path must be relative and contained.");
   }
   return normalized;
@@ -208,14 +216,19 @@ async function runGithubCli(args: string[]): Promise<string> {
   throw new Error(`GitHub CLI is unavailable${detail}`);
 }
 
-function parseGithubContents(value: unknown): { content: string; path: string } {
+function parseGithubContents(value: unknown): {
+  content: string;
+  path: string;
+} {
   const parsed = githubContentsSchema.safeParse(value);
   if (!parsed.success) {
     throw new Error("GitHub returned an unexpected file response.");
   }
   const response = parsed.data;
   if (response.type !== "file" || response.encoding !== "base64") {
-    throw new Error("GitHub returned a directory or an unsupported file format.");
+    throw new Error(
+      "GitHub returned a directory or an unsupported file format.",
+    );
   }
   const bytes = Buffer.from(response.content.replaceAll(/\s/gu, ""), "base64");
   if (!isUtf8(bytes)) {
@@ -356,8 +369,9 @@ async function resolveFile(
     const project = await bb.sdk.projects.get({ projectId: source.projectId });
     github = createGithubTarget(project.gitRemoteUrl, filePath, null);
     const projectSource =
-      project.sources.find((candidate: { isDefault: boolean }) => candidate.isDefault) ??
-      project.sources[0];
+      project.sources.find(
+        (candidate: { isDefault: boolean }) => candidate.isDefault,
+      ) ?? project.sources[0];
     if (projectSource) {
       rootPath = path.resolve(projectSource.path);
       hostId = projectSource.hostId;

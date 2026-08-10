@@ -12,19 +12,20 @@ function MarkdownEditorHome() {
     <div className="space-y-2 p-6 text-sm">
       <h1 className="text-base font-medium text-foreground">Markdown Editor</h1>
       <p className="text-muted-foreground">
-        Open a Markdown or text file from the file picker or a file link. Markdown
-        files have rendered preview and raw source modes; other text files open
-        as readable source.
+        Open a Markdown or text file from the file picker or a file link.
+        Markdown files have rendered preview and raw source modes; other text
+        files open as readable source.
       </p>
     </div>
   );
 }
 
 function useIsMobile(): boolean {
-  const [isMobile, setIsMobile] = useState(() =>
-    typeof window !== "undefined" &&
-    typeof window.matchMedia === "function" &&
-    window.matchMedia("(max-width: 767px)").matches,
+  const [isMobile, setIsMobile] = useState(
+    () =>
+      typeof window !== "undefined" &&
+      typeof window.matchMedia === "function" &&
+      window.matchMedia("(max-width: 767px)").matches,
   );
 
   useEffect(() => {
@@ -208,7 +209,11 @@ function MarkdownFileOpener({ path, source }: PluginFileOpenerProps) {
         <div
           className={`min-h-0 min-w-0 flex-1 overflow-auto px-4 py-5 break-words${isMobile ? "" : " cursor-text"}`}
           onDoubleClick={isMobile ? undefined : () => setMode("raw")}
-          title={isMobile ? undefined : "Double-click to view the raw Markdown source"}
+          title={
+            isMobile
+              ? undefined
+              : "Double-click to view the raw Markdown source"
+          }
         >
           <Markdown content={draft} className="text-sm" />
         </div>

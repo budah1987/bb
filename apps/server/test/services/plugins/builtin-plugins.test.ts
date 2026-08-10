@@ -211,6 +211,7 @@ describe("builtin plugin reconciliation", () => {
       ["design-canvas", "Palette"],
       ["ingestion-desk", "Inbox"],
       ["inline-vis", "AppWindow"],
+      ["md-editor", "FileText"],
       ["provider-retry", "ArrowReloadHorizontal"],
       ["secrets", "Lock"],
       ["side-chat", "SideChat"],
