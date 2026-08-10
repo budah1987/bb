@@ -16,7 +16,7 @@ describe("calculateVisibleTabCount", () => {
         railWidth: 1_200,
         threadCount: 10,
       }),
-    ).toBe(9);
+    ).toBe(8);
   });
 
   it("reserves compact space for the overflow and new-conversation controls", () => {

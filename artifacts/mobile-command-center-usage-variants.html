@@ -1,0 +1,1069 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Command Center usage meter variants</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --canvas: oklch(0.15 0.007 255);
+        --surface: oklch(0.19 0.009 255);
+        --raised: oklch(0.225 0.011 255);
+        --ink: oklch(0.94 0.007 75);
+        --muted: oklch(0.68 0.012 255);
+        --subtle: oklch(0.53 0.012 255);
+        --line: oklch(0.94 0.007 75 / 0.1);
+        --primary: oklch(0.72 0.12 225);
+        --success: oklch(0.74 0.14 145);
+        --warning: oklch(0.79 0.13 75);
+        --reply: oklch(0.66 0.18 355);
+        --claude: oklch(0.75 0.11 45);
+        --claude-soft: oklch(0.75 0.11 45 / 0.1);
+        --codex-soft: oklch(0.72 0.12 225 / 0.1);
+        --panel-open-dur: 400ms;
+        --panel-close-dur: 350ms;
+        --panel-translate-y: 100px;
+        --panel-blur: 2px;
+        --panel-ease: cubic-bezier(0.22, 1, 0.36, 1);
+        --resize-dur: 300ms;
+        --resize-ease: cubic-bezier(0.22, 1, 0.36, 1);
+        font-family:
+          ui-sans-serif,
+          -apple-system,
+          BlinkMacSystemFont,
+          "Segoe UI",
+          sans-serif;
+        -webkit-font-smoothing: antialiased;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        min-width: 320px;
+        min-height: 100vh;
+        margin: 0;
+        background: var(--canvas);
+        color: var(--ink);
+      }
+      button {
+        color: inherit;
+        font: inherit;
+      }
+      button:focus-visible {
+        outline: 2px solid var(--primary);
+        outline-offset: 2px;
+      }
+
+      .page {
+        width: min(1240px, calc(100% - 28px));
+        margin-inline: auto;
+        padding-block: 36px 52px;
+      }
+      .intro {
+        display: flex;
+        align-items: end;
+        justify-content: space-between;
+        gap: 28px;
+        margin-block-end: 24px;
+      }
+      .eyebrow {
+        margin: 0 0 8px;
+        color: var(--primary);
+        font-size: 12px;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+      h1 {
+        max-width: 700px;
+        margin: 0;
+        font-size: clamp(28px, 4vw, 44px);
+        font-weight: 680;
+        line-height: 1.08;
+        letter-spacing: -0.035em;
+        text-wrap: balance;
+      }
+      .intro-copy {
+        max-width: 390px;
+        margin: 0;
+        color: var(--muted);
+        font-size: 14px;
+        line-height: 1.55;
+        text-wrap: pretty;
+      }
+
+      .variants {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 18px;
+      }
+      .variant {
+        min-width: 0;
+        padding: 10px;
+        border: 1px solid var(--line);
+        border-radius: 24px;
+        background: oklch(0.94 0.007 75 / 0.025);
+      }
+      .variant-meta {
+        display: flex;
+        min-height: 60px;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 3px 5px 10px 7px;
+      }
+      .variant-name {
+        display: block;
+        font-size: 14px;
+        font-weight: 660;
+        line-height: 1.25;
+      }
+      .variant-note {
+        display: block;
+        margin-block-start: 3px;
+        color: var(--subtle);
+        font-size: 11px;
+        line-height: 1.3;
+      }
+      .state-toggle {
+        min-width: 82px;
+        min-height: 40px;
+        padding-inline: 13px;
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        background: var(--raised);
+        cursor: pointer;
+        font-size: 12px;
+        font-weight: 650;
+        transition-property: background-color, transform;
+        transition-duration: 150ms;
+      }
+      .state-toggle:hover {
+        background: oklch(0.26 0.012 255);
+      }
+      .state-toggle:active {
+        transform: scale(0.96);
+      }
+
+      .phone {
+        position: relative;
+        height: 720px;
+        overflow: hidden;
+        border: 1px solid oklch(0.94 0.007 75 / 0.12);
+        border-radius: 18px;
+        background: var(--canvas);
+        box-shadow: 0 28px 70px oklch(0.04 0.01 255 / 0.42);
+        isolation: isolate;
+      }
+      .status-bar {
+        display: flex;
+        height: 28px;
+        align-items: center;
+        justify-content: space-between;
+        padding-inline: 18px;
+        color: var(--muted);
+        font-size: 10px;
+        font-variant-numeric: tabular-nums;
+      }
+      .command-center {
+        position: absolute;
+        inset: 28px 0 0;
+        overflow: hidden;
+        padding: 8px 16px 160px;
+        transition-property: filter, opacity;
+        transition-duration: var(--panel-close-dur);
+        transition-timing-function: var(--panel-ease);
+      }
+
+      .search-row {
+        display: flex;
+        min-height: 40px;
+        align-items: center;
+        justify-content: flex-end;
+      }
+      .search-button {
+        width: 40px;
+        height: 40px;
+        border: 0;
+        border-radius: 10px;
+        background: transparent;
+        color: var(--muted);
+        cursor: pointer;
+        font-size: 19px;
+      }
+      .section {
+        margin-block-start: 12px;
+      }
+      .section-toggle {
+        display: flex;
+        width: 100%;
+        min-height: 32px;
+        align-items: center;
+        justify-content: space-between;
+        padding-inline: 12px;
+        border: 0;
+        border-radius: 6px;
+        background: transparent;
+        color: var(--muted);
+        font-size: 12px;
+        font-weight: 560;
+        text-align: start;
+      }
+      .chevron {
+        color: var(--subtle);
+        font-size: 13px;
+      }
+
+      .session-row {
+        display: grid;
+        min-height: 56px;
+        grid-template-columns: auto minmax(0, 1fr) auto;
+        align-items: center;
+        gap: 10px;
+        padding: 8px 12px;
+        border-radius: 8px;
+      }
+      .session-row.priority {
+        min-height: 64px;
+        gap: 12px;
+        padding-block: 10px;
+      }
+      .activity {
+        display: grid;
+        width: 16px;
+        height: 16px;
+        grid-template-columns: repeat(5, 2px);
+        grid-template-rows: repeat(5, 2px);
+        place-content: center;
+        gap: 1px;
+        color: var(--primary);
+      }
+      .activity span {
+        width: 2px;
+        height: 2px;
+        background: currentColor;
+        opacity: 0;
+      }
+      .activity span:nth-child(7),
+      .activity span:nth-child(8),
+      .activity span:nth-child(9),
+      .activity span:nth-child(12),
+      .activity span:nth-child(14),
+      .activity span:nth-child(17),
+      .activity span:nth-child(18),
+      .activity span:nth-child(19) {
+        opacity: 0.9;
+      }
+      .activity.reply {
+        color: var(--reply);
+      }
+      .activity.ready {
+        color: var(--success);
+      }
+      .session-copy {
+        min-width: 0;
+      }
+      .session-title,
+      .session-meta {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .session-title {
+        font-size: 14px;
+        font-weight: 590;
+      }
+      .priority .session-title {
+        font-size: 15px;
+      }
+      .session-meta {
+        margin-block-start: 3px;
+        color: var(--muted);
+        font-size: 11px;
+      }
+      .session-status {
+        color: var(--primary);
+        font-size: 11px;
+        font-weight: 600;
+        white-space: nowrap;
+      }
+      .session-status.reply {
+        color: var(--reply);
+      }
+      .session-status.ready {
+        color: var(--success);
+      }
+
+      .tabs {
+        position: relative;
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        margin-block-start: 15px;
+        border-block-end: 1px solid var(--line);
+      }
+      .tab-pill {
+        position: absolute;
+        inset: auto auto -1px 0;
+        width: calc(100% / 3);
+        height: 2px;
+        background: var(--ink);
+      }
+      .tab {
+        position: relative;
+        z-index: 1;
+        min-height: 44px;
+        border: 0;
+        background: transparent;
+        color: var(--muted);
+        font-size: 12px;
+        font-weight: 580;
+      }
+      .tab[aria-selected="true"] {
+        color: var(--ink);
+      }
+
+      .composer {
+        position: absolute;
+        z-index: 2;
+        inset: auto 0 0;
+        padding: 10px 12px max(12px, env(safe-area-inset-bottom));
+        background: linear-gradient(to top, var(--canvas) 82%, transparent);
+      }
+      .prompt {
+        min-height: 78px;
+        padding: 12px;
+        border: 1px solid var(--line);
+        border-radius: 16px;
+        background: var(--surface);
+        box-shadow: 0 10px 32px oklch(0.04 0.01 255 / 0.24);
+      }
+      .prompt-placeholder {
+        color: var(--subtle);
+        font-size: 14px;
+      }
+      .prompt-tools {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-block-start: 14px;
+        color: var(--muted);
+        font-size: 12px;
+      }
+      .send {
+        width: 32px;
+        height: 32px;
+        border: 0;
+        border-radius: 10px;
+        background: var(--ink);
+        color: var(--canvas);
+        font-weight: 800;
+      }
+
+      .usage-slot {
+        z-index: 2;
+      }
+      .usage-dock-shell {
+        width: 100%;
+      }
+      .usage-dock {
+        display: flex;
+        width: 100%;
+        min-height: 58px;
+        align-items: center;
+        padding: 9px 12px;
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        background: oklch(0.205 0.01 255 / 0.97);
+        box-shadow: 0 12px 34px oklch(0.04 0.01 255 / 0.28);
+        cursor: pointer;
+        text-align: start;
+      }
+      .dock-provider {
+        min-width: 0;
+        flex: 1;
+      }
+      .dock-provider + .dock-provider {
+        margin-inline-start: 16px;
+        padding-inline-start: 16px;
+        border-inline-start: 1px solid var(--line);
+      }
+      .dock-top {
+        display: flex;
+        justify-content: space-between;
+        gap: 8px;
+        font-size: 11px;
+      }
+      .dock-name {
+        color: var(--muted);
+        font-weight: 640;
+      }
+      .dock-value {
+        font-weight: 720;
+        font-variant-numeric: tabular-nums;
+      }
+      .bar {
+        display: block;
+        height: 4px;
+        margin-block-start: 8px;
+        overflow: hidden;
+        border-radius: 99px;
+        background: oklch(0.94 0.007 75 / 0.09);
+      }
+      .fill {
+        display: block;
+        height: 100%;
+        border-radius: inherit;
+        background: var(--primary);
+      }
+      .fill.claude {
+        background: var(--claude);
+      }
+      .scrim {
+        position: absolute;
+        z-index: 3;
+        inset: 0;
+        border: 0;
+        background: oklch(0.06 0.008 255 / 0.4);
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity var(--panel-close-dur) var(--panel-ease);
+      }
+      .phone[data-open="true"] .scrim {
+        opacity: 1;
+        pointer-events: auto;
+        transition-duration: var(--panel-open-dur);
+        backdrop-filter: blur(2px);
+      }
+      .panel-wrap {
+        position: absolute;
+        z-index: 4;
+        inset: auto 8px 8px;
+        height: 430px;
+        overflow: hidden;
+        border-radius: 22px;
+        pointer-events: none;
+      }
+
+      .t-panel-slide {
+        transform: translateY(var(--panel-translate-y));
+        opacity: 0;
+        filter: blur(var(--panel-blur));
+        pointer-events: none;
+        transition:
+          transform var(--panel-close-dur) var(--panel-ease),
+          opacity var(--panel-close-dur) var(--panel-ease),
+          filter var(--panel-close-dur) var(--panel-ease);
+        will-change: transform, opacity, filter;
+      }
+      .t-panel-slide[data-open="true"] {
+        transform: translateY(0);
+        opacity: 1;
+        filter: blur(0);
+        pointer-events: auto;
+        transition:
+          transform var(--panel-open-dur) var(--panel-ease),
+          opacity var(--panel-open-dur) var(--panel-ease),
+          filter var(--panel-open-dur) var(--panel-ease);
+      }
+
+      .usage-panel {
+        height: 100%;
+        padding: 10px 14px max(14px, env(safe-area-inset-bottom));
+        border: 1px solid var(--line);
+        border-radius: 22px;
+        background: oklch(0.19 0.01 255 / 0.985);
+        box-shadow: 0 -22px 54px oklch(0.04 0.01 255 / 0.48);
+      }
+      .grabber {
+        width: 34px;
+        height: 4px;
+        margin: 0 auto 10px;
+        border-radius: 99px;
+        background: oklch(0.94 0.007 75 / 0.18);
+      }
+      .panel-head {
+        display: flex;
+        min-height: 44px;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+      }
+      .panel-title {
+        font-size: 15px;
+        font-weight: 680;
+        letter-spacing: -0.015em;
+      }
+      .panel-copy {
+        margin-block-start: 2px;
+        color: var(--subtle);
+        font-size: 11px;
+      }
+      .close-panel {
+        width: 44px;
+        height: 44px;
+        border: 0;
+        border-radius: 12px;
+        background: var(--raised);
+        color: var(--muted);
+        cursor: pointer;
+        font-size: 18px;
+      }
+      .provider-card {
+        margin-block-start: 12px;
+        padding: 13px;
+        border: 1px solid var(--line);
+        border-radius: 15px;
+      }
+      .provider-card.claude {
+        background: var(--claude-soft);
+      }
+      .provider-card.codex {
+        background: var(--codex-soft);
+      }
+      .provider-head {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: 12px;
+      }
+      .provider-name {
+        font-size: 13px;
+        font-weight: 680;
+      }
+      .provider-summary {
+        color: var(--muted);
+        font-size: 11px;
+        font-weight: 590;
+        font-variant-numeric: tabular-nums;
+      }
+      .metrics {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 14px;
+        margin-block-start: 12px;
+      }
+      .metric-top {
+        display: flex;
+        justify-content: space-between;
+        gap: 8px;
+        color: var(--muted);
+        font-size: 11px;
+      }
+      .metric-value {
+        color: var(--ink);
+        font-weight: 680;
+        font-variant-numeric: tabular-nums;
+      }
+      .metric-value.hot {
+        color: var(--claude);
+      }
+      .reset {
+        margin-block-start: 5px;
+        color: var(--subtle);
+        font-size: 10px;
+        white-space: nowrap;
+      }
+
+      /* Correct Command Center, three placement choices. */
+      .v1 .usage-slot {
+        position: relative;
+        z-index: 4;
+        margin-block-end: 8px;
+      }
+      .v1 .usage-dock-shell {
+        height: 44px;
+        overflow: hidden;
+        border: 1px solid oklch(0.94 0.007 75 / 0.065);
+        border-radius: 12px;
+        background: oklch(0.19 0.009 255 / 0.72);
+        box-shadow: 0 5px 18px oklch(0.04 0.01 255 / 0.12);
+      }
+      .v1[data-open="true"] .usage-dock-shell {
+        height: 282px;
+        border-color: var(--line);
+        background: oklch(0.19 0.009 255 / 0.96);
+        box-shadow: 0 14px 38px oklch(0.04 0.01 255 / 0.26);
+      }
+      .v1 .usage-dock {
+        min-height: 42px;
+        padding: 7px 10px;
+        border: 0;
+        border-radius: 11px;
+        background: transparent;
+        box-shadow: none;
+      }
+      .v1 .dock-provider + .dock-provider {
+        margin-inline-start: 12px;
+        padding-inline-start: 12px;
+      }
+      .v1 .dock-top {
+        font-size: 10px;
+      }
+      .v1 .bar {
+        height: 3px;
+        margin-block-start: 6px;
+        opacity: 0.72;
+      }
+      .v1 .inline-details {
+        padding: 0 10px 10px;
+        cursor: pointer;
+      }
+      .v1 .dock-name,
+      .v1 .dock-value {
+        opacity: 0.82;
+      }
+      .v1 .inline-details .grabber {
+        display: none;
+      }
+      .v1 .inline-details .panel-head {
+        display: none;
+      }
+      .v1 .inline-details .provider-card {
+        margin-block-start: 8px;
+        padding: 11px;
+        border-radius: 12px;
+      }
+      .v1 .inline-details .metrics {
+        gap: 12px;
+        margin-block-start: 10px;
+      }
+      .v1 .panel-wrap {
+        display: none;
+      }
+      .v1 .command-center {
+        overflow-y: auto;
+        scrollbar-width: none;
+      }
+
+      /* Final 1:1 presentation: one 390 × 844 PWA command center. */
+      .page {
+        width: 390px;
+        padding: 0;
+      }
+      .intro,
+      .variant:not(:first-child),
+      .variant:first-child .variant-meta {
+        display: none;
+      }
+      .variants {
+        display: block;
+      }
+      .variant:first-child {
+        padding: 0;
+        border: 0;
+        border-radius: 0;
+        background: transparent;
+      }
+      .phone {
+        width: 390px;
+        height: 844px;
+        border: 0;
+        border-radius: 0;
+        box-shadow: none;
+      }
+      .v2 .usage-slot {
+        margin-block: 10px 2px 0;
+      }
+      .v3 .usage-slot {
+        position: absolute;
+        inset: auto 12px 100px;
+      }
+      .v3 .command-center {
+        padding-block-end: 174px;
+      }
+
+      .t-resize {
+        transition:
+          width var(--resize-dur) var(--resize-ease),
+          height var(--resize-dur) var(--resize-ease);
+        will-change: width, height;
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        .t-resize {
+          transition: none !important;
+        }
+        .t-panel-slide {
+          transition: none !important;
+        }
+        .scrim,
+        .state-toggle {
+          transition-duration: 0.01ms !important;
+        }
+      }
+
+      @media (max-width: 1040px) {
+        .variants {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+      }
+      @media (max-width: 720px) {
+        .page {
+          width: 390px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="page">
+      <header class="intro">
+        <div>
+          <p class="eyebrow">Current PWA command center</p>
+          <h1>The selected meter, placed in the real mobile surface.</h1>
+        </div>
+        <p class="intro-copy">
+          These variants use the redesigned Focus and Awaiting Reply hierarchy,
+          underline tabs, activity matrices, and sticky composer.
+        </p>
+      </header>
+
+      <section class="variants" aria-label="Command Center usage variants">
+        <article class="variant">
+          <div class="variant-meta">
+            <div>
+              <span class="variant-name">01 · Top utility dock</span
+              ><span class="variant-note"
+                >Closest to the current usage rail</span
+              >
+            </div>
+            <button class="state-toggle" type="button" aria-pressed="false">
+              Expand
+            </button>
+          </div>
+          <div
+            class="phone v1"
+            data-open="false"
+            data-name="Top utility dock"
+          ></div>
+        </article>
+        <article class="variant">
+          <div class="variant-meta">
+            <div>
+              <span class="variant-name">02 · After Focus</span
+              ><span class="variant-note"
+                >Separates usage from global controls</span
+              >
+            </div>
+            <button class="state-toggle" type="button" aria-pressed="false">
+              Expand
+            </button>
+          </div>
+          <div class="phone v2" data-open="false" data-name="After Focus"></div>
+        </article>
+        <article class="variant">
+          <div class="variant-meta">
+            <div>
+              <span class="variant-name">03 · Composer dock</span
+              ><span class="variant-note"
+                >Best reach, strongest persistent presence</span
+              >
+            </div>
+            <button class="state-toggle" type="button" aria-pressed="false">
+              Expand
+            </button>
+          </div>
+          <div
+            class="phone v3"
+            data-open="false"
+            data-name="Composer dock"
+          ></div>
+        </article>
+      </section>
+    </main>
+
+    <template id="phone-template">
+      <div class="status-bar">
+        <span>9:41</span><span>5G&nbsp;&nbsp;●●●</span>
+      </div>
+      <div class="command-center">
+        <div class="top-slot"></div>
+        <div class="search-row">
+          <button
+            class="search-button"
+            type="button"
+            aria-label="Search sessions"
+          >
+            ⌕
+          </button>
+        </div>
+        <section class="section focus-section">
+          <button class="section-toggle" type="button" aria-expanded="true">
+            <span>Focus</span><span class="chevron">⌄</span>
+          </button>
+          <div class="session-row priority">
+            <span class="activity ready"></span>
+            <div class="session-copy">
+              <div class="session-title">Usage limit Meter</div>
+              <div class="session-meta">bb · usage-limit-ui-refinement</div>
+            </div>
+            <span class="session-status ready">Ready</span>
+          </div>
+          <div class="session-row priority">
+            <span class="activity"></span>
+            <div class="session-copy">
+              <div class="session-title">Activity Visualization</div>
+              <div class="session-meta">BBamir · improve-activity</div>
+            </div>
+            <span class="session-status">Working</span>
+          </div>
+        </section>
+        <div class="middle-slot"></div>
+        <section class="section">
+          <button class="section-toggle" type="button" aria-expanded="true">
+            <span>Awaiting Reply</span><span class="chevron">⌄</span>
+          </button>
+          <div class="session-row">
+            <span class="activity reply"></span>
+            <div class="session-copy">
+              <div class="session-title">Feature 2</div>
+            </div>
+            <span class="session-status reply">2m</span>
+          </div>
+          <div class="session-row">
+            <span class="activity reply"></span>
+            <div class="session-copy">
+              <div class="session-title">
+                Choose plugins for Ecto deployment
+              </div>
+            </div>
+            <span class="session-status reply">8m</span>
+          </div>
+        </section>
+        <div class="tabs" role="tablist" aria-label="Session filter">
+          <span class="tab-pill" aria-hidden="true"></span
+          ><button class="tab" type="button" role="tab" aria-selected="true">
+            Active 5</button
+          ><button class="tab" type="button" role="tab" aria-selected="false">
+            Inactive 7</button
+          ><button class="tab" type="button" role="tab" aria-selected="false">
+            All 12
+          </button>
+        </div>
+        <div class="session-row">
+          <span class="activity"></span>
+          <div class="session-copy">
+            <div class="session-title">GitHub Refinement</div>
+            <div class="session-meta">BBamir · chore/github-refinement</div>
+          </div>
+          <span class="session-status">Working</span>
+        </div>
+      </div>
+      <div class="composer">
+        <div class="prompt">
+          <div class="prompt-placeholder">What do you want to build?</div>
+          <div class="prompt-tools">
+            <span>＋ &nbsp; Auto</span
+            ><button class="send" type="button" aria-label="Send prompt">
+              ↑
+            </button>
+          </div>
+        </div>
+      </div>
+      <div class="bottom-slot"></div>
+      <button
+        class="scrim"
+        type="button"
+        aria-label="Close usage limits"
+      ></button>
+      <div class="panel-wrap">
+        <section
+          class="usage-panel t-panel-slide"
+          data-open="false"
+          aria-label="Usage limits"
+        ></section>
+      </div>
+    </template>
+
+    <template id="dock-template">
+      <div class="usage-dock-shell t-resize">
+        <button class="usage-dock" type="button">
+          <span class="dock-provider"
+            ><span class="dock-top"
+              ><span class="dock-name">Claude · 5hr</span
+              ><span class="dock-value" style="color: var(--claude)"
+                >92%</span
+              ></span
+            ><span class="bar"
+              ><span class="fill claude" style="width: 92%"></span></span></span
+          ><span class="dock-provider"
+            ><span class="dock-top"
+              ><span class="dock-name">Codex · week</span
+              ><span class="dock-value" style="color: var(--primary)"
+                >26%</span
+              ></span
+            ><span class="bar"
+              ><span class="fill" style="width: 26%"></span></span
+          ></span>
+        </button>
+      </div>
+    </template>
+
+    <template id="panel-template">
+      <div class="grabber" aria-hidden="true"></div>
+      <div class="panel-head">
+        <div>
+          <div class="panel-title">Usage limits</div>
+          <div class="panel-copy">Current provider windows</div>
+        </div>
+        <button
+          class="close-panel"
+          type="button"
+          aria-label="Close usage limits"
+        >
+          ⌄
+        </button>
+      </div>
+      <section class="provider-card claude" aria-label="Claude usage">
+        <div class="provider-head">
+          <span class="provider-name">Claude</span
+          ><span class="provider-summary">Peak 92%</span>
+        </div>
+        <div class="metrics">
+          <div>
+            <div class="metric-top">
+              <span>5 hour</span><span class="metric-value hot">92%</span>
+            </div>
+            <span class="bar"
+              ><span class="fill claude" style="width: 92%"></span
+            ></span>
+            <div class="reset">Resets in 1 hr 42 min</div>
+          </div>
+          <div>
+            <div class="metric-top">
+              <span>Weekly</span><span class="metric-value">49%</span>
+            </div>
+            <span class="bar"
+              ><span class="fill" style="width: 49%"></span
+            ></span>
+            <div class="reset">Fri 5:00 PM</div>
+          </div>
+        </div>
+        <div style="margin-block-start: 12px">
+          <div class="metric-top">
+            <span>Fable weekly</span><span class="metric-value">58%</span>
+          </div>
+          <span class="bar"><span class="fill" style="width: 58%"></span></span>
+          <div class="reset">Resets Fri 5:00 PM</div>
+        </div>
+      </section>
+      <section class="provider-card codex" aria-label="Codex usage">
+        <div class="provider-head">
+          <span class="provider-name">Codex</span
+          ><span class="provider-summary">Weekly 26%</span>
+        </div>
+        <div class="metrics">
+          <div>
+            <div class="metric-top">
+              <span>5 hour</span
+              ><span class="metric-value" style="color: var(--subtle)">—</span>
+            </div>
+            <span class="bar"></span>
+            <div class="reset">No active window</div>
+          </div>
+          <div>
+            <div class="metric-top">
+              <span>Weekly</span><span class="metric-value">26%</span>
+            </div>
+            <span class="bar"
+              ><span class="fill" style="width: 26%"></span
+            ></span>
+            <div class="reset">Sat 2:58 PM</div>
+          </div>
+        </div>
+      </section>
+    </template>
+
+    <script>
+      const phoneTemplate = document.querySelector("#phone-template");
+      const dockTemplate = document.querySelector("#dock-template");
+      const panelTemplate = document.querySelector("#panel-template");
+
+      function populateActivity(phone) {
+        phone.querySelectorAll(".activity").forEach((matrix) => {
+          for (let index = 0; index < 25; index += 1)
+            matrix.append(document.createElement("span"));
+        });
+      }
+
+      function setOpen(phone, open, restoreFocus = false) {
+        const variant = phone.closest(".variant");
+        const dock = phone.querySelector(".usage-dock");
+        const panel = phone.querySelector(".t-panel-slide");
+        const inlineDetails = phone.querySelector(".inline-details");
+        const toggle = variant.querySelector(".state-toggle");
+        phone.dataset.open = String(open);
+        if (panel !== null) panel.dataset.open = String(open);
+        if (inlineDetails !== null) {
+          inlineDetails.setAttribute("aria-hidden", String(!open));
+          inlineDetails.inert = !open;
+        }
+        dock.setAttribute("aria-expanded", String(open));
+        dock.setAttribute(
+          "aria-label",
+          `${open ? "Close" : "Open"} ${phone.dataset.name} usage limits`,
+        );
+        toggle.setAttribute("aria-pressed", String(open));
+        toggle.textContent = open ? "Collapse" : "Expand";
+        if (!open && restoreFocus) dock.focus();
+      }
+
+      document.querySelectorAll(".phone").forEach((phone, index) => {
+        phone.append(phoneTemplate.content.cloneNode(true));
+        const slot = phone.classList.contains("v1")
+          ? phone.querySelector(".top-slot")
+          : phone.classList.contains("v2")
+            ? phone.querySelector(".middle-slot")
+            : phone.querySelector(".bottom-slot");
+        slot.classList.add("usage-slot");
+        slot.append(dockTemplate.content.cloneNode(true));
+        const usesInlineDetails = phone.classList.contains("v1");
+        const details = usesInlineDetails
+          ? document.createElement("div")
+          : phone.querySelector(".usage-panel");
+        if (usesInlineDetails) {
+          details.className = "inline-details";
+          details.setAttribute("aria-hidden", "true");
+          details.inert = true;
+          phone.querySelector(".usage-dock-shell").append(details);
+        }
+        details.append(panelTemplate.content.cloneNode(true));
+        populateActivity(phone);
+        const dock = phone.querySelector(".usage-dock");
+        details.id = `usage-panel-${index + 1}`;
+        dock.setAttribute(
+          "aria-label",
+          `Open ${phone.dataset.name} usage limits`,
+        );
+        dock.setAttribute("aria-controls", details.id);
+        dock.setAttribute("aria-expanded", "false");
+        dock.addEventListener("click", () =>
+          setOpen(phone, phone.dataset.open !== "true"),
+        );
+        if (usesInlineDetails) {
+          details.addEventListener("click", () => setOpen(phone, false, true));
+        }
+        phone
+          .querySelector(".close-panel")
+          .addEventListener("click", () => setOpen(phone, false, true));
+        phone
+          .querySelector(".scrim")
+          .addEventListener("click", () => setOpen(phone, false, true));
+        phone
+          .closest(".variant")
+          .querySelector(".state-toggle")
+          .addEventListener("click", () =>
+            setOpen(phone, phone.dataset.open !== "true"),
+          );
+      });
+
+      document.addEventListener("keydown", (event) => {
+        if (event.key !== "Escape") return;
+        document
+          .querySelectorAll('.phone[data-open="true"]')
+          .forEach((phone) => setOpen(phone, false, true));
+      });
+    </script>
+  </body>
+</html>

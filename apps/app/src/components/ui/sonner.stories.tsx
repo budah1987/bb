@@ -8,7 +8,6 @@ import {
   AppToastCommandDescription,
   AppToastCommitDescription,
 } from "./app-toast-descriptions";
-import { ArchivedThreadToastTitle } from "../thread/ArchivedThreadToastTitle";
 import { Button } from "@bb/shared-ui/button";
 import { StoryCard, StoryRow } from "../../../.ladle/story-card";
 import type { ReactNode } from "react";
@@ -216,16 +215,12 @@ const TOAST_EXAMPLES: readonly ToastExample[] = [
     group: "Thread actions",
     label: "archive success",
     source: "ThreadActionsProvider",
-    usage: ["Thread archive succeeds", "Title opens the archived thread"],
+    usage: ["Thread archive succeeds", "Undo restores the conversation"],
     current: {
       tone: "success",
-      title: (
-        <ArchivedThreadToastTitle
-          archivedThreadCount={1}
-          threadTitle="Audit recurring permission failures"
-          onOpenThread={() => undefined}
-        />
-      ),
+      title: "Conversation archived",
+      primaryActionLabel: "Undo",
+      secondaryActionLabel: "Close",
     },
   },
   {
@@ -233,19 +228,12 @@ const TOAST_EXAMPLES: readonly ToastExample[] = [
     group: "Thread actions",
     label: "archive with children",
     source: "ThreadActionsProvider",
-    usage: [
-      "Archive includes child threads",
-      "Long titles truncate to one line",
-    ],
+    usage: ["Archive includes child threads", "Undo restores every thread"],
     current: {
       tone: "success",
-      title: (
-        <ArchivedThreadToastTitle
-          archivedThreadCount={3}
-          threadTitle="Investigate intermittent provider CLI health check timeouts on managed environments"
-          onOpenThread={() => undefined}
-        />
-      ),
+      title: "Conversation archived",
+      primaryActionLabel: "Undo",
+      secondaryActionLabel: "Close",
     },
   },
   {
@@ -316,7 +304,8 @@ const TOAST_EXAMPLES: readonly ToastExample[] = [
     current: {
       tone: "message",
       title: "Opening in editor",
-      description: "apps/app/src/components/settings/UpdatesSettingsSection.tsx",
+      description:
+        "apps/app/src/components/settings/UpdatesSettingsSection.tsx",
     },
   },
   {
@@ -335,7 +324,10 @@ const TOAST_EXAMPLES: readonly ToastExample[] = [
     group: "Clipboard",
     label: "copy error",
     source: "copyToClipboardWithToast",
-    usage: ["Clipboard unavailable or write fails", "Default unless overridden"],
+    usage: [
+      "Clipboard unavailable or write fails",
+      "Default unless overridden",
+    ],
     current: {
       tone: "error",
       title: "Failed to copy",

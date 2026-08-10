@@ -6,7 +6,6 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ProviderUsageResponse } from "@bb/host-daemon-contract";
 import {
   buildCompactUsageLimitsModel,
-  CompactUsageSummary,
   CommandCenterUsageRailContent,
   SidebarUsageLimitsContent,
   type CompactUsageLimitsModel,
@@ -31,7 +30,6 @@ function usageFixture(): ProviderUsageResponse {
         },
         { label: "Weekly limit", usedPercent: 42.2, resetsAt: null },
         { label: "Fable", usedPercent: 81.3, resetsAt: null },
-        { label: "Sonnet", usedPercent: 10, resetsAt: null },
       ],
     },
     codex: {
@@ -54,19 +52,16 @@ function requiredModel(): CompactUsageLimitsModel {
 }
 
 describe("buildCompactUsageLimitsModel", () => {
-  it("keeps weekly values in detail while the summary shows the requested one-line metrics", () => {
+  it("keeps all detail metrics and uses the first available summary metric", () => {
     expect(requiredModel()).toEqual({
       providers: [
         {
           name: "Claude",
-          summaryMetrics: [
-            {
-              label: "5hr",
-              usedPercent: 68,
-              resetsAt: "2026-08-08T22:00:00.000Z",
-            },
-            { label: "Fable", usedPercent: 81, resetsAt: null },
-          ],
+          summaryMetric: {
+            label: "5hr",
+            usedPercent: 68,
+            resetsAt: "2026-08-08T22:00:00.000Z",
+          },
           detailMetrics: [
             {
               label: "5hr",
@@ -79,7 +74,11 @@ describe("buildCompactUsageLimitsModel", () => {
         },
         {
           name: "Codex",
-          summaryMetrics: [{ label: "5hr", usedPercent: 36, resetsAt: null }],
+          summaryMetric: {
+            label: "5hr",
+            usedPercent: 36,
+            resetsAt: null,
+          },
           detailMetrics: [
             { label: "5hr", usedPercent: 36, resetsAt: null },
             { label: "Weekly", usedPercent: 57, resetsAt: null },
@@ -89,114 +88,57 @@ describe("buildCompactUsageLimitsModel", () => {
     });
   });
 
-  it("omits providers that do not report a current-session summary", () => {
-    const usage = usageFixture();
-    usage.claudeCode = { status: "unauthenticated" };
-
-    expect(buildCompactUsageLimitsModel(usage)).toEqual({
-      providers: [
-        {
-          name: "Codex",
-          summaryMetrics: [{ label: "5hr", usedPercent: 36, resetsAt: null }],
-          detailMetrics: [
-            { label: "5hr", usedPercent: 36, resetsAt: null },
-            { label: "Weekly", usedPercent: 57, resetsAt: null },
-          ],
-        },
-      ],
-    });
-  });
-
-  it("keeps Codex visible when only its weekly window is available", () => {
+  it("uses a weekly summary when a provider has no session window", () => {
     const usage = usageFixture();
     usage.codex = {
       status: "ok",
-      accountEmail: "codex@example.com",
-      planLabel: "Pro",
-      windows: [
-        {
-          label: "Weekly limit",
-          usedPercent: 6,
-          resetsAt: "2026-08-15T21:58:24.000Z",
-        },
-      ],
+      accountEmail: null,
+      planLabel: "Plus",
+      windows: [{ label: "Weekly limit", usedPercent: 26, resetsAt: null }],
     };
 
-    const model = buildCompactUsageLimitsModel(usage);
-    expect(model?.providers[1]).toEqual({
+    expect(buildCompactUsageLimitsModel(usage)?.providers[1]).toEqual({
       name: "Codex",
-      summaryMetrics: [
-        {
-          label: "Weekly",
-          usedPercent: 6,
-          resetsAt: "2026-08-15T21:58:24.000Z",
-        },
-      ],
+      summaryMetric: {
+        label: "Weekly",
+        usedPercent: 26,
+        resetsAt: null,
+      },
       detailMetrics: [
         { label: "5hr", usedPercent: null, resetsAt: null },
-        {
-          label: "Weekly",
-          usedPercent: 6,
-          resetsAt: "2026-08-15T21:58:24.000Z",
-        },
+        { label: "Weekly", usedPercent: 26, resetsAt: null },
       ],
     });
-
-    if (model === null) throw new Error("Expected weekly-only Codex model");
-    render(<CompactUsageSummary model={model} />);
-    expect(screen.getByText("Weekly")).not.toBeNull();
-    expect(screen.getByText("6%")).not.toBeNull();
-  });
-});
-
-describe("CompactUsageSummary", () => {
-  it("renders percentage used in a single non-wrapping line without weekly values", () => {
-    render(<CompactUsageSummary model={requiredModel()} />);
-
-    expect(screen.getByText("Claude")).not.toBeNull();
-    expect(screen.getByText("Fable")).not.toBeNull();
-    expect(screen.getByText("Codex")).not.toBeNull();
-    expect(screen.getByText("68%")).not.toBeNull();
-    expect(screen.getByText("81%")).not.toBeNull();
-    expect(screen.getByText("36%")).not.toBeNull();
-    expect(screen.queryByText("Weekly")).toBeNull();
-    expect(
-      screen.getByLabelText(
-        /Claude: 5hr, 68 percent used, Fable, 81 percent used\. Codex: 5hr, 36 percent used/u,
-      ),
-    ).not.toBeNull();
   });
 });
 
 describe("CommandCenterUsageRailContent", () => {
-  function Harness() {
-    const [open, setOpen] = useState(false);
-    return (
-      <CommandCenterUsageRailContent
-        model={requiredModel()}
-        open={open}
-        onOpenChange={setOpen}
-      />
-    );
-  }
-
-  it("expands mobile details from a 16px summary rail", () => {
-    render(<Harness />);
+  it("expands inside the dock without a caret and closes from its content", () => {
+    render(<CommandCenterUsageRailContent model={requiredModel()} />);
 
     const rail = screen.getByTestId("command-center-usage-rail");
-    expect(rail.className).toContain("max-md:block");
+    const dock = rail.querySelector<HTMLElement>(".compact-usage-dock");
     const trigger = screen.getByRole("button", { name: /Expand details/u });
-    expect(trigger.className).toContain("h-4");
-    expect(screen.queryByText("Weekly")).toBeNull();
+    expect(dock?.style.getPropertyValue("--usage-collapsed-height")).toBe(
+      "44px",
+    );
+    expect(dock?.dataset.open).toBe("false");
+    expect(rail.querySelector("svg")).toBeNull();
 
     fireEvent.click(trigger);
 
+    expect(dock?.dataset.open).toBe("true");
     expect(
-      screen
-        .getByRole("button", { name: /Collapse details/u })
-        .getAttribute("aria-expanded"),
-    ).toBe("true");
-    expect(screen.getAllByText("Weekly")).toHaveLength(2);
+      screen.getByRole("button", { name: "Close provider usage" }).className,
+    ).toContain("backdrop-blur-[2px]");
+
+    const details = document.getElementById(
+      trigger.getAttribute("aria-controls") ?? "",
+    );
+    expect(details?.getAttribute("aria-hidden")).toBe("false");
+    if (details === null) throw new Error("Expected usage details");
+    fireEvent.click(details);
+    expect(dock?.dataset.open).toBe("false");
   });
 });
 
@@ -212,28 +154,28 @@ describe("SidebarUsageLimitsContent", () => {
     );
   }
 
-  it("reveals both weekly values only after the compact row expands", () => {
+  it("expands into provider cards and closes from the blurred background", () => {
     vi.useFakeTimers();
     vi.setSystemTime("2026-08-08T20:00:00.000Z");
     render(<Harness />);
 
-    const container = screen.getByTestId("sidebar-usage-limits");
-    expect(container.className).toContain("max-md:hidden");
-    expect(container.className).not.toContain("pointer-coarse:hidden");
-    const trigger = screen.getByRole("button", {
-      name: /Expand details/u,
-    });
-    expect(trigger.getAttribute("aria-expanded")).toBe("false");
-    expect(screen.queryByText("Weekly")).toBeNull();
-
+    const trigger = screen.getByRole("button", { name: /Expand details/u });
+    expect(trigger.querySelector("svg")).not.toBeNull();
     fireEvent.click(trigger);
 
+    expect(screen.getByLabelText("Claude usage")).not.toBeNull();
+    expect(screen.getByLabelText("Codex usage")).not.toBeNull();
+    expect(screen.getByText("Resets in 2 hr")).not.toBeNull();
+
+    const scrim = screen.getByRole("button", {
+      name: "Close provider usage",
+    });
+    expect(scrim.className).toContain("backdrop-blur-[2px]");
+    fireEvent.click(scrim);
     expect(
       screen
-        .getByRole("button", { name: /Collapse details/u })
+        .getByRole("button", { name: /Expand details/u })
         .getAttribute("aria-expanded"),
-    ).toBe("true");
-    expect(screen.getAllByText("Weekly")).toHaveLength(2);
-    expect(screen.getByText("Resets in 2 hr")).not.toBeNull();
+    ).toBe("false");
   });
 });
