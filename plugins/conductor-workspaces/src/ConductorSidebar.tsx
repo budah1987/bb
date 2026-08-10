@@ -26,9 +26,11 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import {
   experimental_useSidebarThreadActions as useSidebarThreadActions,
+  experimental_useSidebarThreadPullRequest as useSidebarThreadPullRequest,
   experimental_useSidebarThreads as useSidebarThreads,
   useBbNavigate,
   useRpc,
+  type PluginSidebarPullRequest,
   type PluginSidebarThread,
   type PluginThreadListProps,
 } from "@bb/plugin-sdk/app";
@@ -114,6 +116,65 @@ interface RenameTarget {
 interface ArchiveTarget {
   environmentId: string;
   workspaceTitle: string;
+}
+
+interface WorkspaceGitSummary {
+  environmentId: string;
+  aheadCount: number;
+  behindCount: number;
+  changedFiles: number;
+}
+
+function pullRequestLabel(pullRequest: PluginSidebarPullRequest): string {
+  const detail = (() => {
+    switch (pullRequest.attention) {
+      case "ready_to_merge":
+      case "merged":
+        return "✓";
+      case "checks_failed":
+        return "Checks failed";
+      case "checks_pending":
+        return "Checks pending";
+      case "changes_requested":
+        return "Changes requested";
+      case "review_requested":
+        return "Review requested";
+      case "conflicts":
+        return "Conflicts";
+      case "blocked":
+        return "Blocked";
+      case "draft":
+        return "Draft";
+      case "closed":
+        return "Closed";
+      case "none":
+        return null;
+    }
+  })();
+  return [`PR #${pullRequest.number}`, detail].filter(Boolean).join(" ");
+}
+
+function workspaceGitLabel(
+  summary: WorkspaceGitSummary | null,
+  pullRequest: PluginSidebarPullRequest | null,
+): string | null {
+  const parts: string[] = [];
+  if (summary) {
+    const divergence = [
+      summary.aheadCount > 0 ? `↑${summary.aheadCount}` : null,
+      summary.behindCount > 0 ? `↓${summary.behindCount}` : null,
+    ]
+      .filter(Boolean)
+      .join(" ");
+    if (divergence) parts.push(divergence);
+    parts.push(
+      summary.changedFiles === 0
+        ? "Clean"
+        : `${summary.changedFiles} change${summary.changedFiles === 1 ? "" : "s"}`,
+    );
+  }
+  if (pullRequest) parts.push(pullRequestLabel(pullRequest));
+  return parts.length > 0 ? parts.join(" · ") : null;
 }
 
 interface GithubAccountOption {
@@ -631,6 +692,7 @@ function SectionHeader({
 
 function WorkspaceRow({
   workspace,
+  gitSummary,
   activeThreadId,
   archivePending,
   dragDisabled,
@@ -646,6 +708,7 @@ function WorkspaceRow({
   onSetFocused,
 }: {
   workspace: ConductorWorkspace;
+  gitSummary: WorkspaceGitSummary | null;
   activeThreadId: string | null;
   archivePending: boolean;
   dragDisabled: boolean;
@@ -661,6 +724,8 @@ function WorkspaceRow({
   onSetFocused: (workspace: ConductorWorkspace, focused: boolean) => void;
 }) {
   const target = pickWorkspaceThread(workspace, activeThreadId);
+  const pullRequestState = useSidebarThreadPullRequest(target?.id ?? "");
+  const gitLabel = workspaceGitLabel(gitSummary, pullRequestState.pullRequest);
   const isActive = workspace.threads.some(
     (thread) => thread.id === activeThreadId,
   );
@@ -729,8 +794,13 @@ function WorkspaceRow({
           }
         >
           <span className="min-w-0 flex-1 truncate">
-            {workspace.branchName ??
-              `${workspace.threads.length} conversation${workspace.threads.length === 1 ? "" : "s"}`}
+            {[
+              workspace.branchName ??
+                `${workspace.threads.length} conversation${workspace.threads.length === 1 ? "" : "s"}`,
+              gitLabel,
+            ]
+              .filter(Boolean)
+              .join(" · ")}
           </span>
         </span>
       </span>
@@ -884,6 +954,7 @@ function ProjectDragPreview({
 
 function ProjectSection({
   project,
+  gitSummaries,
   customization,
   githubAccountLogin,
   githubAccounts,
@@ -910,6 +981,7 @@ function ProjectSection({
   onSetGithubAccount,
 }: {
   project: ConductorProject;
+  gitSummaries: ReadonlyMap<string, WorkspaceGitSummary>;
   customization: ProjectCustomization | undefined;
   githubAccountLogin: string | null;
   githubAccounts: readonly GithubAccountOption[];
@@ -1070,6 +1142,11 @@ function ProjectSection({
               <WorkspaceRow
                 key={workspace.key}
                 workspace={workspace}
+                gitSummary={
+                  workspace.environmentId
+                    ? (gitSummaries.get(workspace.environmentId) ?? null)
+                    : null
+                }
                 activeThreadId={activeThreadId}
                 archivePending={archivePending}
                 dragDisabled={
@@ -1096,6 +1173,7 @@ function ProjectSection({
 
 function FocusSection({
   workspaces,
+  gitSummaries,
   activeThreadId,
   archivePending,
   collapsed,
@@ -1109,6 +1187,7 @@ function FocusSection({
   onSetFocused,
 }: {
   workspaces: readonly ConductorWorkspace[];
+  gitSummaries: ReadonlyMap<string, WorkspaceGitSummary>;
   activeThreadId: string | null;
   archivePending: boolean;
   collapsed: boolean;
@@ -1152,6 +1231,11 @@ function FocusSection({
               <WorkspaceRow
                 key={workspace.key}
                 workspace={workspace}
+                gitSummary={
+                  workspace.environmentId
+                    ? (gitSummaries.get(workspace.environmentId) ?? null)
+                    : null
+                }
                 activeThreadId={activeThreadId}
                 archivePending={archivePending}
                 dragDisabled
@@ -1215,6 +1299,9 @@ export function ConductorSidebar({
   const [projectAccountOverrides, setProjectAccountOverrides] = useState<
     Readonly<Record<string, string | null>>
   >({});
+  const [gitSummaries, setGitSummaries] = useState<
+    ReadonlyMap<string, WorkspaceGitSummary>
+  >(() => new Map());
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
     useSensor(KeyboardSensor, {
@@ -1366,6 +1453,46 @@ export function ConductorSidebar({
         : [],
     ),
   ];
+  const visibleEnvironmentSignature = [
+    ...new Set(
+      visibleWorkspaces.flatMap((workspace) =>
+        workspace.environmentId ? [workspace.environmentId] : [],
+      ),
+    ),
+  ]
+    .sort()
+    .slice(0, 50)
+    .join("\u0000");
+
+  useEffect(() => {
+    if (!visibleEnvironmentSignature) {
+      setGitSummaries(new Map());
+      return;
+    }
+    let cancelled = false;
+    const environmentIds = visibleEnvironmentSignature.split("\u0000");
+    const refresh = async () => {
+      const result = await rpc.call("readWorkspaceGitSummaries", {
+        environmentIds,
+      });
+      if (cancelled) return;
+      setGitSummaries(
+        new Map(
+          result.summaries.map((summary) => [summary.environmentId, summary]),
+        ),
+      );
+    };
+    void refresh().catch(() => undefined);
+    const interval = window.setInterval(() => {
+      if (document.visibilityState === "visible") {
+        void refresh().catch(() => undefined);
+      }
+    }, 30_000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+    };
+  }, [rpc, visibleEnvironmentSignature]);
   // Digit assignments mirror the jump handler below: 1–8 in visible order and
   // 9 for the last row. Held long enough, the chord modifier reveals them as
   // pills — the same affordance bb's own chrome uses for its shortcuts.
@@ -1743,6 +1870,7 @@ export function ConductorSidebar({
         >
           <FocusSection
             workspaces={focusedWorkspaces}
+            gitSummaries={gitSummaries}
             activeThreadId={activeThreadId}
             archivePending={archivePending}
             collapsed={focusCollapsed}
@@ -1772,6 +1900,7 @@ export function ConductorSidebar({
                 <ProjectSection
                   key={project.id}
                   project={project}
+                  gitSummaries={gitSummaries}
                   customization={customizations[project.id]}
                   githubAccountLogin={
                     projectAccountOverrides[project.id] === undefined

@@ -100,7 +100,27 @@ const updateWorkspaceFromMainResultSchema = z.object({
   outcome: z.enum(["updated", "already_current"]),
 });
 
+const workspaceGitSummarySchema = z.object({
+  environmentId: z.string().min(1),
+  aheadCount: z.number().int().nonnegative(),
+  behindCount: z.number().int().nonnegative(),
+  changedFiles: z.number().int().nonnegative(),
+});
+
+interface WorkspaceGitSummary {
+  environmentId: string;
+  aheadCount: number;
+  behindCount: number;
+  changedFiles: number;
+}
+
 export const conductorRpcContract = defineRpcContract({
+  readWorkspaceGitSummaries: {
+    input: z.object({
+      environmentIds: z.array(z.string().min(1)).max(50),
+    }),
+    output: z.object({ summaries: z.array(workspaceGitSummarySchema) }),
+  },
   readWorkspaceRenameDetails: {
     input: z.object({ environmentId: z.string().min(1) }),
     output: z.object({
@@ -222,6 +242,41 @@ export default function plugin(bb: BbPluginApi) {
   bb.storage.migrate(db, migrations);
 
   bb.rpc.register(conductorRpcContract, {
+    async readWorkspaceGitSummaries({ environmentIds }) {
+      const summaries = await Promise.all(
+        [...new Set(environmentIds)].map(
+          async (environmentId): Promise<WorkspaceGitSummary | null> => {
+            try {
+              const environment = await bb.sdk.environments.get({
+                environmentId,
+              });
+              const mergeBaseBranch =
+                environment.mergeBaseBranch ??
+                environment.baseBranch ??
+                environment.defaultBranch;
+              const status = await bb.sdk.environments.status({
+                environmentId,
+                ...(mergeBaseBranch ? { mergeBaseBranch } : {}),
+              });
+              if (status.outcome !== "available") return null;
+              return {
+                environmentId,
+                aheadCount: status.workspace.mergeBase?.aheadCount ?? 0,
+                behindCount: status.workspace.mergeBase?.behindCount ?? 0,
+                changedFiles: status.workspace.workingTree.files.length,
+              };
+            } catch {
+              return null;
+            }
+          },
+        ),
+      );
+      return {
+        summaries: summaries.filter(
+          (summary): summary is WorkspaceGitSummary => summary !== null,
+        ),
+      };
+    },
     async readWorkspaceRenameDetails({ environmentId }) {
       const environment = await bb.sdk.environments.get({ environmentId });
       return {
