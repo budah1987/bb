@@ -244,7 +244,7 @@ describe("useOnboardingAgents", () => {
 });
 
 describe("useSystemUsageLimits", () => {
-  it("refreshes stale usage data on focus and reconnect", async () => {
+  it("polls every 30 seconds and refreshes on focus and reconnect", async () => {
     vi.mocked(sdk.system.usageLimits).mockResolvedValue(
       PROVIDER_USAGE_RESPONSE,
     );
@@ -267,6 +267,7 @@ describe("useSystemUsageLimits", () => {
 
     expect(query?.options).toEqual(
       expect.objectContaining({
+        refetchInterval: 30_000,
         refetchOnReconnect: true,
         refetchOnWindowFocus: true,
         staleTime: 30_000,
