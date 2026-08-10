@@ -43,6 +43,7 @@ import {
   type PluginSidebarThreadSplit,
   type PluginSidebarThreadsState,
   type PluginThreadHeaderActionRegistration,
+  type PluginThreadRailSectionRegistration,
   type PluginThreadListRegistration,
   type PluginThreadPanelActionRegistration,
   type PluginRpcContract,
@@ -521,6 +522,7 @@ export interface CapturedPluginApp {
   sidebarFooterActions: PluginSidebarFooterActionRegistration[];
   threadLists: PluginThreadListRegistration[];
   threadHeaderActions: PluginThreadHeaderActionRegistration[];
+  threadRailSections: PluginThreadRailSectionRegistration[];
   fileOpeners: PluginFileOpenerRegistration[];
   messageDirectives: PluginMessageDirectiveRegistration[];
   messageActions: PluginMessageActionRegistration[];
@@ -551,6 +553,7 @@ function collectRegistrations(
     sidebarFooterActions: [],
     threadLists: [],
     threadHeaderActions: [],
+    threadRailSections: [],
     fileOpeners: [],
     messageDirectives: [],
     messageActions: [],
@@ -566,6 +569,7 @@ function collectRegistrations(
     sidebarFooterAction: new Set<string>(),
     threadList: new Set<string>(),
     threadHeaderAction: new Set<string>(),
+    threadRailSection: new Set<string>(),
     fileOpener: new Set<string>(),
     messageDirective: new Set<string>(),
     messageAction: new Set<string>(),
@@ -720,6 +724,16 @@ function collectRegistrations(
         const id = requireSlotId(kind, registration?.id);
         requireUniqueId(kind, seenIds.threadHeaderAction, id);
         captured.threadHeaderActions.push({
+          id,
+          title: requireNonEmptyString(kind, "title", registration.title),
+          component: requireComponent(kind, registration.component),
+        });
+      },
+      experimental_threadRailSection(registration) {
+        const kind = "slots.experimental_threadRailSection";
+        const id = requireSlotId(kind, registration?.id);
+        requireUniqueId(kind, seenIds.threadRailSection, id);
+        captured.threadRailSections.push({
           id,
           title: requireNonEmptyString(kind, "title", registration.title),
           component: requireComponent(kind, registration.component),

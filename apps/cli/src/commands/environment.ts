@@ -31,6 +31,18 @@ interface EnvironmentStatusCommandOptions {
   mergeBaseBranch?: string;
 }
 
+interface EnvironmentDockerProvenanceCommandOptions {
+  json?: boolean;
+}
+
+interface EnvironmentDockerActivityCommandOptions {
+  json?: boolean;
+}
+
+interface EnvironmentPreviewsCommandOptions {
+  json?: boolean;
+}
+
 interface EnvironmentBranchesCommandOptions {
   json?: boolean;
   limit?: string;
@@ -408,6 +420,109 @@ export function registerEnvironmentCommands(
           console.log(`Merge base: ${status.mergeBase.mergeBaseBranch}`);
           console.log(`Ahead: ${status.mergeBase.aheadCount}`);
           console.log(`Behind: ${status.mergeBase.behindCount}`);
+        }
+      }),
+    );
+
+  environment
+    .command("docker-provenance <id>")
+    .description("Show Docker containers using this repository")
+    .option("--json", "Print machine-readable JSON output")
+    .action(
+      action(
+        async (id: string, opts: EnvironmentDockerProvenanceCommandOptions) => {
+          const result = await createCliBbSdk(
+            getUrl(),
+          ).environments.dockerProvenance({ environmentId: id });
+          if (outputJson(opts, result)) return;
+          if (result.outcome === "unavailable") {
+            console.log(`Docker provenance unavailable: ${result.message}`);
+            return;
+          }
+          if (result.services.length === 0) {
+            console.log("No Docker containers use this repository.");
+            return;
+          }
+          console.log(`Environment checkout: ${result.environmentPath}`);
+          for (const service of result.services) {
+            const ports =
+              service.publishedPorts.length > 0
+                ? ` ports ${service.publishedPorts.join(", ")}`
+                : "";
+            console.log(
+              `${service.name}\t${service.kind}\t${service.state}\t${service.checkoutStatus}${ports}`,
+            );
+            if (service.ownerCheckoutRoot !== null) {
+              console.log(
+                `  owner ${service.ownerBranch ?? "(detached)"} at ${service.ownerCheckoutRoot}`,
+              );
+            }
+            for (const mount of service.mounts) {
+              console.log(`  ${mount.source} -> ${mount.destination}`);
+            }
+          }
+        },
+      ),
+    );
+
+  environment
+    .command("docker-activity <id>")
+    .description("Show Docker source and build freshness")
+    .option("--json", "Print machine-readable JSON output")
+    .action(
+      action(
+        async (id: string, opts: EnvironmentDockerActivityCommandOptions) => {
+          const result = await createCliBbSdk(
+            getUrl(),
+          ).environments.dockerActivity({
+            environmentId: id,
+          });
+          if (outputJson(opts, result)) return;
+          if (result.outcome === "unavailable") {
+            console.log(`Docker activity unavailable: ${result.message}`);
+            return;
+          }
+          if (result.activities.length === 0) {
+            console.log("No mounted Docker builds were found.");
+            return;
+          }
+          for (const activity of result.activities) {
+            console.log(`${activity.serviceId}\t${activity.freshness}`);
+            if (activity.source !== null) {
+              console.log(
+                `  source ${activity.source.newestFilePath ?? "(none)"} ${activity.source.newestFileMtimeMs ?? "(none)"}`,
+              );
+            }
+            if (activity.build !== null) {
+              console.log(
+                `  build ${activity.build.newestFilePath ?? "(none)"} ${activity.build.newestFileMtimeMs ?? "(none)"}`,
+              );
+            }
+          }
+        },
+      ),
+    );
+
+  environment
+    .command("previews <id>")
+    .description("Show local and deployment previews")
+    .option("--json", "Print machine-readable JSON output")
+    .action(
+      action(async (id: string, opts: EnvironmentPreviewsCommandOptions) => {
+        const result = await createCliBbSdk(getUrl()).environments.previews({
+          environmentId: id,
+        });
+        if (outputJson(opts, result)) return;
+        if (result.providers.length === 0) {
+          console.log("No previews were found.");
+        }
+        for (const provider of result.providers) {
+          console.log(
+            `${provider.label}\t${provider.kind}\t${provider.state}\t${provider.url ?? "(no URL)"}`,
+          );
+        }
+        for (const issue of result.issues) {
+          console.log(`${issue.source}: ${issue.message}`);
         }
       }),
     );

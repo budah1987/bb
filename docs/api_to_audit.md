@@ -317,3 +317,23 @@ other pane's copy (or release its owned state). The thread-list slot omits it
 deliberately: it mounts once, and a crash there should disable it everywhere.
 Confirm that split before stabilizing, and decide whether other multi-mount
 slots need the same treatment.
+
+## `app.slots.experimental_threadRailSection` (`@bb/plugin-sdk/app`)
+
+**What it does.** Renders a plugin component below BB's core environment rows
+in the active thread's right rail. The component receives `threadId`,
+`projectId`, and nullable `environmentId`. Each mount has an isolated plugin
+context and crash boundary.
+
+**Audit before stabilizing.**
+
+1. **Ordering.** Confirm plugin-id order is sufficient, or add explicit
+   ordering without letting plugins move above core provenance rows.
+2. **Layout ownership.** Confirm plugins should own their complete section
+   markup while the host supplies only a labelled region.
+3. **Space budget.** Decide whether the rail needs contribution limits or an
+   overflow policy when several plugins register sections.
+4. **Visibility lifecycle.** The rail remains mounted while it animates closed.
+   Confirm plugin work should continue while the section is inert and hidden.
+5. **Context.** Confirm nullable `environmentId` covers personal and future
+   thread types without requiring host or workspace identifiers.

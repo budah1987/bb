@@ -85,15 +85,13 @@ export function canPopToInAppHistoryEntry(history: {
 }
 
 /**
- * Whether a committed route must leave the split layout exactly as it was
- * instead of reconciling the route's content into the focused pane.
+ * Whether a root route must leave the split layout exactly as it was instead
+ * of reconciling the route's content into the focused pane.
  *
- * The standalone-compact Command Center is a full-page surface reached by a
- * workspace gesture, not a pane. Folding `/` into the focused pane would
- * overwrite the very content the gesture started from, so this one commit
- * preserves the arrangement. A direct `/` (launch, reload, sidebar New thread)
- * carries no validated intent, and no other display mode can produce one, so
- * every other navigation keeps the existing reconciliation policy.
+ * The standalone-compact root page is the persistent Command Center. Folding
+ * `/` into the focused pane would overwrite the workspace that its session
+ * list and return controls describe. Other display modes keep the existing
+ * reconciliation policy.
  */
 export function shouldPreserveLayoutForCommandCenter({
   content,
@@ -104,9 +102,5 @@ export function shouldPreserveLayoutForCommandCenter({
   isStandaloneCompactPwa: boolean;
   navigation: CommandCenterNavigation | null;
 }): boolean {
-  return (
-    isStandaloneCompactPwa &&
-    navigation !== null &&
-    content.kind === "new-thread"
-  );
+  return isStandaloneCompactPwa && content.kind === "new-thread";
 }

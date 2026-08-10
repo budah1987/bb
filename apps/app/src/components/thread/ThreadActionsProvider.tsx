@@ -399,7 +399,7 @@ export function ThreadActionsProvider({
         });
         return;
       }
-      markReadMutate(thread.id, {
+      markReadMutate(thread, {
         onError: (error) => {
           appToast.error(
             getMutationErrorMessage({

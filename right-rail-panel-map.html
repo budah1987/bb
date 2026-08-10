@@ -1,0 +1,441 @@
+<style>
+  #bb-rail-map {
+    --bbm-canvas: light-dark(#ffffff, #181818);
+    --bbm-ink: light-dark(#161616, #f2f2f2);
+    --bbm-sidebar: light-dark(#f7f7f6, #202020);
+    --bbm-panel: light-dark(#fbfbfa, #1c1c1c);
+    --bbm-popover: light-dark(#ffffff, #222222);
+    --bbm-raised: light-dark(#f1f1ef, #2b2b2b);
+    --bbm-hover: light-dark(#ebebe8, #303030);
+    --bbm-muted: light-dark(#6f6f6a, #a7a7a2);
+    --bbm-subtle: light-dark(#969690, #7f7f7a);
+    --bbm-border: light-dark(#deded9, #3b3b3b);
+    --bbm-hairline: light-dark(#e9e9e5, #303030);
+    --bbm-blue: light-dark(#356cc8, #7ca7ee);
+    --bbm-green: light-dark(#208048, #55b87b);
+    --bbm-amber: light-dark(#ad6700, #dea44c);
+    --bbm-red: light-dark(#bd3434, #e06b6b);
+    color-scheme: light dark;
+    width: 100%;
+    min-height: 710px;
+    overflow: hidden;
+    border: 1px solid var(--bbm-border);
+    border-radius: 12px;
+    background: var(--bbm-canvas);
+    color: var(--bbm-ink);
+    font-family: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    font-size: 13px;
+  }
+
+  #bb-rail-map * { box-sizing: border-box; }
+  #bb-rail-map button { font: inherit; color: inherit; }
+
+  #bb-rail-map .bbm-shell {
+    display: grid;
+    grid-template-columns: 214px minmax(410px, 1fr) minmax(370px, 42%);
+    min-width: 1000px;
+    height: 710px;
+    background: var(--bbm-canvas);
+  }
+
+  #bb-rail-map .bbm-sidebar {
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+    border-inline-end: 1px solid var(--bbm-border);
+    background: var(--bbm-sidebar);
+  }
+
+  #bb-rail-map .bbm-sidebar-top,
+  #bb-rail-map .bbm-thread-top,
+  #bb-rail-map .bbm-panel-top {
+    height: 48px;
+    flex: 0 0 48px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    border-block-end: 1px solid var(--bbm-hairline);
+  }
+
+  #bb-rail-map .bbm-sidebar-top { padding: 0 12px; }
+  #bb-rail-map .bbm-brand { font-weight: 650; letter-spacing: -0.02em; }
+  #bb-rail-map .bbm-icon-button {
+    width: 28px;
+    height: 28px;
+    border: 0;
+    border-radius: 7px;
+    background: transparent;
+    display: grid;
+    place-items: center;
+    cursor: pointer;
+  }
+  #bb-rail-map .bbm-icon-button:hover { background: var(--bbm-hover); }
+  #bb-rail-map .bbm-spacer { flex: 1; }
+
+  #bb-rail-map .bbm-sidebar-body { padding: 10px 8px; }
+  #bb-rail-map .bbm-sidebar-label {
+    padding: 7px 8px 5px;
+    color: var(--bbm-subtle);
+    font-size: 11px;
+    font-weight: 650;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+  }
+  #bb-rail-map .bbm-project-row,
+  #bb-rail-map .bbm-thread-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 31px;
+    padding: 5px 8px;
+    border-radius: 7px;
+  }
+  #bb-rail-map .bbm-thread-row { padding-inline-start: 26px; color: var(--bbm-muted); }
+  #bb-rail-map .bbm-thread-row.is-current { background: var(--bbm-raised); color: var(--bbm-ink); }
+  #bb-rail-map .bbm-sidebar-foot {
+    margin-top: auto;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 10px;
+    border-block-start: 1px solid var(--bbm-hairline);
+    color: var(--bbm-muted);
+  }
+
+  #bb-rail-map .bbm-thread {
+    position: relative;
+    min-width: 0;
+    overflow: hidden;
+    background: var(--bbm-canvas);
+  }
+  #bb-rail-map .bbm-thread-top { padding: 0 16px; }
+  #bb-rail-map .bbm-thread-title { min-width: 0; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #bb-rail-map .bbm-branch { color: var(--bbm-muted); font-size: 12px; }
+  #bb-rail-map .bbm-transcript {
+    height: calc(100% - 48px);
+    overflow: hidden;
+    padding: 30px 24px 100px;
+  }
+  #bb-rail-map .bbm-message { max-width: 620px; margin: 0 auto 24px; line-height: 1.55; }
+  #bb-rail-map .bbm-message-meta { margin-bottom: 7px; color: var(--bbm-muted); font-size: 11px; font-weight: 600; }
+  #bb-rail-map .bbm-user-message {
+    width: fit-content;
+    max-width: 82%;
+    margin-inline-start: auto;
+    padding: 10px 13px;
+    border-radius: 14px 14px 4px 14px;
+    background: var(--bbm-raised);
+  }
+  #bb-rail-map .bbm-code-line {
+    margin-top: 9px;
+    padding: 10px 12px;
+    border: 1px solid var(--bbm-hairline);
+    border-radius: 8px;
+    background: var(--bbm-panel);
+    color: var(--bbm-muted);
+    font: 11px/1.45 ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+  #bb-rail-map .bbm-composer {
+    position: absolute;
+    inset-inline: 24px 24px;
+    bottom: 16px;
+    height: 72px;
+    border: 1px solid var(--bbm-border);
+    border-radius: 14px;
+    background: var(--bbm-popover);
+    box-shadow: 0 6px 18px light-dark(rgb(0 0 0 / .08), rgb(0 0 0 / .22));
+    padding: 12px;
+    color: var(--bbm-subtle);
+  }
+
+  #bb-rail-map .bbm-rail-wrap {
+    position: absolute;
+    z-index: 10;
+    inset-block: 48px 0;
+    inset-inline-end: 0;
+    width: 312px;
+    padding: 12px;
+    pointer-events: none;
+  }
+  #bb-rail-map .bbm-rail {
+    max-height: 100%;
+    overflow: auto;
+    border: 1px solid var(--bbm-border);
+    border-radius: 12px;
+    background: var(--bbm-popover);
+    box-shadow: 0 8px 18px light-dark(rgb(0 0 0 / .10), rgb(0 0 0 / .26));
+    padding: 6px;
+    pointer-events: auto;
+  }
+  #bb-rail-map .bbm-rail-heading {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 2px 1px 4px 8px;
+  }
+  #bb-rail-map .bbm-rail-title {
+    flex: 1;
+    color: var(--bbm-subtle);
+    font-size: 12px;
+    font-weight: 450;
+  }
+  #bb-rail-map .bbm-rail-settings { color: var(--bbm-subtle); opacity: .72; }
+  #bb-rail-map .bbm-core-row {
+    width: 100%;
+    min-height: 28px;
+    border: 0;
+    border-radius: 8px;
+    background: transparent;
+    display: grid;
+    grid-template-columns: 16px minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 8px;
+    text-align: start;
+    cursor: pointer;
+    font-size: 12px;
+  }
+  #bb-rail-map .bbm-core-row:hover { background: var(--bbm-hover); }
+  #bb-rail-map .bbm-core-icon { width: 16px; color: var(--bbm-muted); text-align: center; opacity: .9; }
+  #bb-rail-map .bbm-core-value { max-width: 118px; overflow: hidden; color: var(--bbm-subtle); font-size: 11px; font-variant-numeric: tabular-nums; text-overflow: ellipsis; white-space: nowrap; }
+  #bb-rail-map .bbm-diff-add { color: var(--bbm-green); }
+  #bb-rail-map .bbm-diff-remove { color: var(--bbm-red); margin-inline-start: 4px; }
+  #bb-rail-map .bbm-group-label {
+    padding: 7px 8px 3px;
+    color: color-mix(in oklab, var(--bbm-subtle) 72%, transparent);
+    font-size: 11px;
+    font-weight: 450;
+  }
+  #bb-rail-map .bbm-section { border-block-start: 1px solid var(--bbm-hairline); padding-top: 4px; margin-top: 4px; }
+  #bb-rail-map .bbm-section:first-of-type { border-block-start: 0; margin-top: 0; }
+  #bb-rail-map .bbm-section-head,
+  #bb-rail-map .bbm-rail-row {
+    width: 100%;
+    min-height: 28px;
+    border: 0;
+    border-radius: 8px;
+    background: transparent;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 8px;
+    text-align: start;
+    cursor: pointer;
+  }
+  #bb-rail-map .bbm-section-head:hover,
+  #bb-rail-map .bbm-rail-row:hover { background: var(--bbm-hover); }
+  #bb-rail-map [data-open-view].is-selected {
+    background: color-mix(in oklab, var(--bbm-blue) 11%, transparent);
+    color: var(--bbm-blue);
+  }
+  #bb-rail-map [data-open-view].is-selected .bbm-row-main,
+  #bb-rail-map [data-open-view].is-selected .bbm-core-icon,
+  #bb-rail-map [data-open-view].is-selected .bbm-row-detail { color: var(--bbm-blue); }
+  #bb-rail-map .bbm-section-name { flex: 1; color: var(--bbm-subtle); font-size: 11px; font-weight: 450; }
+  #bb-rail-map .bbm-section-summary { color: var(--bbm-subtle); font-size: 11px; }
+  #bb-rail-map .bbm-section-icon { width: 16px; height: 16px; flex: 0 0 16px; color: var(--bbm-muted); }
+  #bb-rail-map .bbm-chevron { color: var(--bbm-subtle); transition: transform 150ms ease; }
+  #bb-rail-map .bbm-section[data-open="true"] .bbm-chevron { transform: rotate(90deg); }
+  #bb-rail-map .bbm-section-body { display: none; padding: 2px 0 4px 16px; }
+  #bb-rail-map .bbm-section[data-open="true"] .bbm-section-body { display: block; }
+  #bb-rail-map .bbm-rail-row { cursor: default; color: var(--bbm-muted); font-size: 12px; }
+  #bb-rail-map button.bbm-rail-row { cursor: pointer; }
+  #bb-rail-map .bbm-row-main { min-width: 0; flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #bb-rail-map .bbm-row-detail { color: var(--bbm-subtle); font-size: 11px; }
+  #bb-rail-map .bbm-row-detail.is-ready { color: var(--bbm-green); }
+  #bb-rail-map .bbm-row-detail.is-issue { color: var(--bbm-red); }
+  #bb-rail-map .bbm-row-detail.is-warning { color: var(--bbm-amber); }
+  #bb-rail-map .bbm-fix {
+    border: 0;
+    padding: 2px 5px;
+    border-radius: 5px;
+    background: transparent;
+    color: var(--bbm-red);
+    font-size: 11px;
+    font-weight: 650;
+    cursor: pointer;
+  }
+  #bb-rail-map .bbm-fix:hover { background: color-mix(in oklab, var(--bbm-red) 12%, transparent); }
+  #bb-rail-map .bbm-issue-note { display: flex; align-items: center; gap: 6px; padding: 0 8px 4px 22px; color: var(--bbm-subtle); font-size: 11px; }
+  #bb-rail-map .bbm-recap { padding: 2px 8px 7px; color: var(--bbm-muted); font-size: 12px; line-height: 1.5; }
+  #bb-rail-map .bbm-recap-meta { display: flex; gap: 6px; padding: 1px 8px 7px; color: var(--bbm-subtle); font-size: 11px; }
+  #bb-rail-map .bbm-recap-link { border: 0; padding: 0; background: transparent; color: var(--bbm-blue); cursor: pointer; }
+
+  #bb-rail-map .bbm-panel {
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+    border-inline-start: 1px solid var(--bbm-border);
+    background: var(--bbm-panel);
+  }
+  #bb-rail-map .bbm-panel-top { padding: 0 12px; background: var(--bbm-sidebar); }
+  #bb-rail-map .bbm-panel-tab {
+    height: 28px;
+    border: 0;
+    border-radius: 7px;
+    padding: 0 9px;
+    background: transparent;
+    color: var(--bbm-muted);
+    cursor: pointer;
+  }
+  #bb-rail-map .bbm-panel-tab.is-active { background: var(--bbm-raised); color: var(--bbm-ink); }
+  #bb-rail-map .bbm-panel-body { min-height: 0; flex: 1; overflow: auto; background: var(--bbm-canvas); }
+  #bb-rail-map .bbm-panel-view { display: none; height: 100%; }
+  #bb-rail-map .bbm-panel-view.is-active { display: flex; flex-direction: column; }
+  #bb-rail-map .bbm-panel-heading { padding: 20px 20px 14px; border-block-end: 1px solid var(--bbm-hairline); }
+  #bb-rail-map .bbm-panel-heading h3 { margin: 0 0 4px; font-size: 15px; font-weight: 650; }
+  #bb-rail-map .bbm-panel-heading p { margin: 0; color: var(--bbm-muted); font-size: 12px; }
+  #bb-rail-map .bbm-inspector { padding: 14px 20px; }
+  #bb-rail-map .bbm-inspector-row { display: grid; grid-template-columns: 105px 1fr; gap: 12px; padding: 9px 0; border-block-end: 1px solid var(--bbm-hairline); }
+  #bb-rail-map .bbm-inspector-key { color: var(--bbm-subtle); font-size: 11px; }
+  #bb-rail-map .bbm-inspector-value { min-width: 0; font-size: 12px; overflow-wrap: anywhere; }
+  #bb-rail-map .bbm-mismatch { color: var(--bbm-red); font-weight: 600; }
+  #bb-rail-map .bbm-actions { display: flex; gap: 8px; padding: 14px 20px; }
+  #bb-rail-map .bbm-action {
+    border: 1px solid var(--bbm-border);
+    border-radius: 7px;
+    background: var(--bbm-popover);
+    padding: 6px 10px;
+    cursor: pointer;
+    font-size: 12px;
+  }
+  #bb-rail-map .bbm-action.is-primary { border-color: var(--bbm-blue); background: var(--bbm-blue); color: light-dark(#fff, #101820); }
+  #bb-rail-map .bbm-preview-toolbar { height: 40px; display: flex; align-items: center; gap: 8px; padding: 6px 10px; border-block-end: 1px solid var(--bbm-hairline); background: var(--bbm-panel); }
+  #bb-rail-map .bbm-address { min-width: 0; flex: 1; padding: 5px 9px; border: 1px solid var(--bbm-border); border-radius: 7px; background: var(--bbm-popover); color: var(--bbm-muted); font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #bb-rail-map .bbm-preview-canvas { position: relative; flex: 1; display: grid; place-items: center; overflow: hidden; background: light-dark(#f3f4f6, #111); }
+  #bb-rail-map .bbm-demo-site { width: 86%; height: 82%; border: 1px solid var(--bbm-border); border-radius: 10px; background: var(--bbm-popover); box-shadow: 0 10px 20px rgb(0 0 0 / .11); overflow: hidden; }
+  #bb-rail-map .bbm-demo-site-nav { height: 44px; display: flex; align-items: center; gap: 16px; padding: 0 16px; border-block-end: 1px solid var(--bbm-hairline); font-size: 11px; }
+  #bb-rail-map .bbm-demo-site-hero { padding: 32px 28px; }
+  #bb-rail-map .bbm-demo-site-hero h3 { margin: 0 0 8px; font-size: 24px; letter-spacing: -.04em; }
+  #bb-rail-map .bbm-demo-site-hero p { margin: 0; color: var(--bbm-muted); line-height: 1.5; }
+
+  @media (max-width: 760px) {
+    #bb-rail-map { overflow-x: auto; }
+  }
+</style>
+
+<div id="bb-rail-map">
+  <div class="bbm-shell">
+    <aside class="bbm-sidebar" aria-label="bb sidebar">
+      <div class="bbm-sidebar-top"><button class="bbm-icon-button" aria-label="Toggle sidebar">☰</button><span class="bbm-brand">bb</span><span class="bbm-spacer"></span><button class="bbm-icon-button" aria-label="New thread">＋</button></div>
+      <div class="bbm-sidebar-body">
+        <div class="bbm-sidebar-label">Projects</div>
+        <div class="bbm-project-row"><span>⌄</span><strong>bb</strong></div>
+        <div class="bbm-thread-row">Plugin rail API</div>
+        <div class="bbm-thread-row is-current"><span>Right rail and preview</span></div>
+        <div class="bbm-thread-row">Fix terminal resize</div>
+        <div class="bbm-sidebar-label" style="margin-top:12px">Recent</div>
+        <div class="bbm-project-row"><span>◇</span><span>Design review</span></div>
+      </div>
+      <div class="bbm-sidebar-foot"><button class="bbm-icon-button" aria-label="Settings">⚙</button><span>Settings</span></div>
+    </aside>
+
+    <main class="bbm-thread">
+      <div class="bbm-thread-top"><span class="bbm-thread-title">Right rail and preview</span><span class="bbm-branch">feature/right-rail</span><span class="bbm-spacer"></span><button class="bbm-icon-button" aria-label="Toggle rail">▤</button><button class="bbm-icon-button" aria-label="More">•••</button></div>
+      <div class="bbm-transcript">
+        <div class="bbm-message"><div class="bbm-user-message">Let’s create an HTML and the right rail, so I can visualize what is where.</div></div>
+        <div class="bbm-message">
+          <div class="bbm-message-meta">Codex</div>
+          The rail keeps important state visible while you work. Selecting a row opens the detailed surface in the right panel.
+          <div class="bbm-code-line">Rail = status at a glance<br>Panel = preview, logs, diagnostics, and actions</div>
+        </div>
+        <div class="bbm-message">
+          <div class="bbm-message-meta">Codex</div>
+          The red API state is intentionally visible without opening anything: its container is mounted from a different checkout.
+        </div>
+      </div>
+      <div class="bbm-composer">Message Codex…</div>
+
+      <div class="bbm-rail-wrap">
+        <aside class="bbm-rail" aria-label="Thread rail">
+          <div class="bbm-rail-heading"><div class="bbm-rail-title">Environment</div><button class="bbm-icon-button bbm-rail-settings" type="button" aria-label="Choose rail sections">⚙</button></div>
+
+          <section class="bbm-section" data-open="true">
+            <button class="bbm-section-head" type="button"><svg class="bbm-section-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M3.5 12h17M12 3.5c2.5 2.5 3.7 5.3 3.7 8.5S14.5 18 12 20.5C9.5 18 8.3 15.2 8.3 12S9.5 6 12 3.5Z"/></svg><span class="bbm-section-name">Local Servers</span><span class="bbm-section-summary bbm-row-detail is-issue">1 issue</span><span class="bbm-chevron">›</span></button>
+            <div class="bbm-section-body">
+              <button class="bbm-rail-row" type="button" data-open-view="servers"><span class="bbm-row-main">Admin</span><span class="bbm-row-detail is-ready">Ready · :5173</span></button>
+              <button class="bbm-rail-row" type="button" data-open-view="servers"><span class="bbm-row-main">API</span><span class="bbm-row-detail is-issue">Wrong checkout</span></button>
+              <div class="bbm-rail-row"><span class="bbm-row-main">Search worker</span><span class="bbm-row-detail is-warning">Shared</span></div>
+              <div class="bbm-issue-note"><span>Main owns this worker</span><button class="bbm-fix" type="button" data-open-view="servers">Fix</button></div>
+            </div>
+          </section>
+
+          <section class="bbm-section" data-open="true">
+            <button class="bbm-section-head" type="button"><svg class="bbm-section-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><rect x="3" y="4.5" width="18" height="15" rx="2.5"/><path d="M3 8.5h18M6.5 6.5h.01M9 6.5h.01"/></svg><span class="bbm-section-name">Preview</span><span class="bbm-section-summary bbm-row-detail is-ready">2 ready</span><span class="bbm-chevron">›</span></button>
+            <div class="bbm-section-body">
+              <button class="bbm-rail-row is-selected" type="button" data-open-view="local"><span class="bbm-row-main">Local</span><span class="bbm-row-detail is-ready">Ready · :5173</span></button>
+              <button class="bbm-rail-row" type="button" data-open-view="vercel"><span class="bbm-row-main">Vercel</span><span class="bbm-row-detail is-ready">Ready · 8m</span></button>
+            </div>
+          </section>
+
+          <div class="bbm-group-label">Notes</div>
+          <section class="bbm-section" data-open="true">
+            <button class="bbm-section-head" type="button"><span class="bbm-section-name">Recap</span><span class="bbm-section-summary">2m ago</span><span class="bbm-chevron">›</span></button>
+            <div class="bbm-section-body"><div class="bbm-recap">Designing persistent environment status for the thread rail, with detailed inspection in the right panel.</div><div class="bbm-recap-meta"><span>Updated 2m ago</span><span>·</span><button class="bbm-recap-link" type="button">View turn</button></div></div>
+          </section>
+
+          <section class="bbm-section" data-open="true">
+            <button class="bbm-section-head" type="button"><span class="bbm-section-name">Scratchpad</span><span class="bbm-section-summary">1 note</span><span class="bbm-chevron">›</span></button>
+            <div class="bbm-section-body"><div class="bbm-recap">Keep the local and deployed preview providers independent.</div></div>
+          </section>
+        </aside>
+      </div>
+    </main>
+
+    <aside class="bbm-panel" aria-label="Right panel">
+      <div class="bbm-panel-top" role="toolbar" aria-label="Right panel views">
+        <button class="bbm-panel-tab" type="button" data-tab-view="info">ⓘ</button>
+        <button class="bbm-panel-tab" type="button" data-tab-view="diff">Diff</button>
+        <button class="bbm-panel-tab is-active" type="button" data-tab-view="local">Local preview</button>
+        <button class="bbm-panel-tab" type="button" data-tab-view="vercel">Vercel</button>
+        <button class="bbm-panel-tab" type="button" data-tab-view="servers">Servers</button>
+        <button class="bbm-icon-button" aria-label="Open new panel tab">＋</button><span class="bbm-spacer"></span><button class="bbm-icon-button" aria-label="Expand panel">↗</button><button class="bbm-icon-button" aria-label="Close panel">×</button>
+      </div>
+      <div class="bbm-panel-body">
+        <div class="bbm-panel-view is-active" data-panel-view="local">
+          <div class="bbm-preview-toolbar"><span>↻</span><div class="bbm-address">https://bb--5173.getbb.app</div><span>↗</span></div>
+          <div class="bbm-preview-canvas"><div class="bbm-demo-site"><div class="bbm-demo-site-nav"><strong>Ghost Admin</strong><span class="bbm-spacer"></span><span>Dashboard</span><span>Posts</span><span>Settings</span></div><div class="bbm-demo-site-hero"><h3>Welcome back</h3><p>This iframe is the full preview surface. The rail only tells you whether it is safe and ready to open.</p></div></div></div>
+        </div>
+        <div class="bbm-panel-view" data-panel-view="vercel">
+          <div class="bbm-preview-toolbar"><span>↻</span><div class="bbm-address">https://bb-right-rail-git-feature.vercel.app</div><span>↗</span></div>
+          <div class="bbm-preview-canvas"><div class="bbm-demo-site"><div class="bbm-demo-site-nav"><strong>Preview deployment</strong><span class="bbm-spacer"></span><span>Commit a83df7c</span></div><div class="bbm-demo-site-hero"><h3>Deployment preview</h3><p>The deployment opens as a sibling tab, so it can coexist with the local preview.</p></div></div></div>
+        </div>
+        <div class="bbm-panel-view" data-panel-view="servers">
+          <div class="bbm-panel-heading"><h3>Local Servers</h3><p>Full provenance and recovery controls for this thread’s environment.</p></div>
+          <div class="bbm-inspector">
+            <div class="bbm-inspector-row"><div class="bbm-inspector-key">Server</div><div class="bbm-inspector-value">API · localhost:3001</div></div>
+            <div class="bbm-inspector-row"><div class="bbm-inspector-key">Health</div><div class="bbm-inspector-value" style="color:var(--bbm-green)">Responding</div></div>
+            <div class="bbm-inspector-row"><div class="bbm-inspector-key">Thread checkout</div><div class="bbm-inspector-value">/Users/amir/bb-worktrees/right-rail</div></div>
+            <div class="bbm-inspector-row"><div class="bbm-inspector-key">Mounted output</div><div class="bbm-inspector-value bbm-mismatch">/Users/amir/bb/apps/api/dist</div></div>
+            <div class="bbm-inspector-row"><div class="bbm-inspector-key">Diagnosis</div><div class="bbm-inspector-value bbm-mismatch">Backend is running code from a different checkout.</div></div>
+            <div class="bbm-inspector-row"><div class="bbm-inspector-key">Search worker</div><div class="bbm-inspector-value">Owned by main · schema may differ from this branch</div></div>
+          </div>
+          <div class="bbm-actions"><button class="bbm-action is-primary" type="button">Restart from this checkout</button><button class="bbm-action" type="button">View logs</button></div>
+        </div>
+        <div class="bbm-panel-view" data-panel-view="info"><div class="bbm-panel-heading"><h3>Thread info</h3><p>Branch, environment, model, and thread metadata.</p></div></div>
+        <div class="bbm-panel-view" data-panel-view="diff"><div class="bbm-panel-heading"><h3>Diff</h3><p>Changed files and patch review remain a native panel view.</p></div></div>
+      </div>
+    </aside>
+  </div>
+</div>
+
+<script>
+  (() => {
+    const root = document.getElementById('bb-rail-map');
+    const showView = (view, source) => {
+      root.querySelectorAll('[data-panel-view]').forEach((node) => node.classList.toggle('is-active', node.dataset.panelView === view));
+      root.querySelectorAll('[data-tab-view]').forEach((node) => node.classList.toggle('is-active', node.dataset.tabView === view));
+      root.querySelectorAll('[data-open-view]').forEach((node) => node.classList.remove('is-selected'));
+      const railSelection = source || root.querySelector(`[data-open-view="${view}"]`);
+      if (railSelection) railSelection.classList.add('is-selected');
+    };
+    root.querySelectorAll('.bbm-section-head').forEach((button) => {
+      button.addEventListener('click', () => {
+        const section = button.closest('.bbm-section');
+        section.dataset.open = section.dataset.open === 'true' ? 'false' : 'true';
+      });
+    });
+    root.querySelectorAll('[data-open-view]').forEach((button) => button.addEventListener('click', () => showView(button.dataset.openView, button)));
+    root.querySelectorAll('[data-tab-view]').forEach((button) => button.addEventListener('click', () => showView(button.dataset.tabView)));
+  })();
+</script>

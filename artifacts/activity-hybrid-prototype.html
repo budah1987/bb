@@ -1,0 +1,620 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>BB hybrid activity prototype</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --canvas: oklch(0.17 0.012 255);
+      --panel: oklch(0.205 0.012 255);
+      --panel-2: oklch(0.235 0.014 255);
+      --hover: color-mix(in oklch, white 7%, var(--panel));
+      --selected: color-mix(in oklch, oklch(0.68 0.12 250) 16%, var(--panel));
+      --ink: oklch(0.93 0.008 255);
+      --muted: color-mix(in oklch, var(--ink) 57%, var(--canvas));
+      --subtle: color-mix(in oklch, var(--ink) 36%, var(--canvas));
+      --line: color-mix(in oklch, var(--ink) 12%, var(--canvas));
+      --working: oklch(0.73 0.13 244);
+      --ready: oklch(0.76 0.15 151);
+      --waiting: oklch(0.79 0.14 83);
+      --failed: oklch(0.68 0.19 27);
+      --radius: 8px;
+      font-family: "Inter Variable", Inter, ui-sans-serif, sans-serif;
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: var(--canvas);
+      color: var(--ink);
+      font-size: 13px;
+      overflow: hidden;
+    }
+    button, select { font: inherit; }
+    button { color: inherit; }
+    button:focus-visible, select:focus-visible {
+      outline: 2px solid color-mix(in oklch, var(--working) 75%, white);
+      outline-offset: 2px;
+    }
+
+    .app {
+      height: 100vh;
+      display: grid;
+      grid-template-columns: 304px minmax(420px, 1fr);
+    }
+
+    .sidebar {
+      position: relative;
+      display: flex;
+      min-width: 0;
+      flex-direction: column;
+      border-right: 1px solid var(--line);
+      background: var(--panel);
+    }
+    .sidebar-header {
+      height: 50px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 0 12px;
+      border-bottom: 1px solid var(--line);
+    }
+    .mark {
+      display: grid;
+      grid-template-columns: repeat(2, 5px);
+      gap: 2px;
+      margin-right: 2px;
+    }
+    .mark i { width: 5px; height: 5px; background: var(--ink); }
+    .brand { font-weight: 650; letter-spacing: -0.02em; }
+    .spacer { flex: 1; }
+    .icon-button {
+      width: 30px;
+      height: 30px;
+      border: 0;
+      border-radius: 6px;
+      background: transparent;
+      color: var(--muted);
+      cursor: pointer;
+    }
+    .icon-button:hover { background: var(--hover); color: var(--ink); }
+
+    .sidebar-scroll {
+      overflow: auto;
+      padding: 10px 8px 24px;
+      scrollbar-width: thin;
+    }
+    .section { margin-bottom: 18px; }
+    .section-head {
+      height: 25px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 0 7px;
+      color: var(--subtle);
+      font-size: 11px;
+      font-weight: 650;
+      letter-spacing: .015em;
+    }
+    .section-count { margin-left: auto; font-variant-numeric: tabular-nums; }
+
+    .repo { margin-bottom: 3px; }
+    .repo-row, .workspace-row, .thread-row {
+      position: relative;
+      width: 100%;
+      min-width: 0;
+      border: 0;
+      border-radius: 6px;
+      background: transparent;
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      text-align: left;
+      cursor: pointer;
+    }
+    .repo-row { height: 30px; padding: 0 7px; font-weight: 560; }
+    .workspace-row { height: 38px; padding: 0 7px 0 19px; }
+    .thread-row { height: 29px; padding: 0 7px 0 43px; color: var(--muted); }
+    .repo-row:hover, .workspace-row:hover, .thread-row:hover { background: var(--hover); }
+    .workspace-row.selected, .thread-row.selected { background: var(--selected); color: var(--ink); }
+    .label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .repo-row .label { flex: 1; }
+    .workspace-copy { min-width: 0; flex: 1; }
+    .workspace-name { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .workspace-meta { display: block; margin-top: 1px; font-size: 11px; color: var(--subtle); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .status-text {
+      flex: 0 0 auto;
+      color: var(--subtle);
+      font-size: 11px;
+      font-weight: 520;
+      white-space: nowrap;
+    }
+    .status-text.working { color: var(--working); }
+    .status-text.ready { color: var(--ready); }
+    .status-text.waiting { color: var(--waiting); }
+    .status-text.failed { color: var(--failed); }
+    .status-text.passive { color: var(--subtle); font-variant-numeric: tabular-nums; }
+    .chevron { width: 12px; flex: 0 0 12px; color: var(--subtle); transition: transform 160ms ease-out; }
+    .collapsed > .repo-row .chevron, .workspace.collapsed > .workspace-row .chevron { transform: rotate(-90deg); }
+    .folder { width: 13px; color: var(--subtle); }
+    .children { display: block; }
+    .collapsed > .children { display: none; }
+
+    .activity {
+      width: 15px;
+      height: 15px;
+      flex: 0 0 15px;
+      display: grid;
+      grid-template-columns: repeat(3, 3px);
+      grid-template-rows: repeat(3, 3px);
+      gap: 1px;
+      align-content: center;
+      justify-content: center;
+      color: var(--subtle);
+    }
+    .activity i { width: 3px; height: 3px; background: currentColor; opacity: .18; }
+    .activity.ready { color: var(--ready); }
+    .activity.waiting { color: var(--waiting); }
+    .activity.failed { color: var(--failed); }
+    .activity.working { color: var(--working); }
+    .activity.passive i { opacity: .1; }
+    .activity.passive i:nth-child(5) { opacity: .45; }
+    .activity.ready i:nth-child(-n+6),
+    .activity.waiting i:nth-child(odd),
+    .activity.failed i:nth-child(1), .activity.failed i:nth-child(3),
+    .activity.failed i:nth-child(5), .activity.failed i:nth-child(7),
+    .activity.failed i:nth-child(9) { opacity: 1; }
+    .activity.working i { animation: pixel-cycle 1.15s steps(1, end) infinite; }
+    .activity.working i:nth-child(2) { animation-delay: -.15s; }
+    .activity.working i:nth-child(3) { animation-delay: -.3s; }
+    .activity.working i:nth-child(4) { animation-delay: -.45s; }
+    .activity.working i:nth-child(5) { animation-delay: -.6s; }
+    .activity.working i:nth-child(6) { animation-delay: -.75s; }
+    .activity.working i:nth-child(7) { animation-delay: -.9s; }
+    .activity.working i:nth-child(8) { animation-delay: -1.05s; }
+    @keyframes pixel-cycle { 0%, 18% { opacity: 1; } 19%, 100% { opacity: .13; } }
+
+    .focus-action {
+      opacity: 0;
+      width: 24px;
+      height: 24px;
+      border: 0;
+      border-radius: 5px;
+      background: transparent;
+      color: var(--subtle);
+      cursor: pointer;
+    }
+    .workspace-row:hover .focus-action, .focus-action:focus-visible { opacity: 1; }
+    .focus-action:hover { background: var(--hover); color: var(--ink); }
+
+    .legend {
+      margin-top: auto;
+      padding: 10px 12px 13px;
+      border-top: 1px solid var(--line);
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px 10px;
+      color: var(--muted);
+      font-size: 11px;
+    }
+    .legend-item { display: flex; align-items: center; gap: 5px; }
+    .legend .activity { transform: scale(.8); transform-origin: left center; margin-right: -2px; }
+
+    .main {
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      background: var(--canvas);
+    }
+    .toolbar {
+      min-height: 50px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 16px;
+      border-bottom: 1px solid var(--line);
+      background: color-mix(in oklch, var(--panel) 62%, var(--canvas));
+    }
+    .view-tabs { display: flex; gap: 3px; padding: 3px; border-radius: 7px; background: var(--panel); }
+    .view-tab {
+      border: 0;
+      border-radius: 5px;
+      padding: 5px 9px;
+      background: transparent;
+      color: var(--muted);
+      cursor: pointer;
+    }
+    .view-tab.active { background: var(--panel-2); color: var(--ink); }
+    .control-label { color: var(--subtle); margin-left: auto; }
+    select {
+      height: 30px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      padding: 0 27px 0 9px;
+      background: var(--panel);
+      color: var(--ink);
+    }
+    .primary-action {
+      height: 30px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      padding: 0 10px;
+      background: var(--panel);
+      cursor: pointer;
+    }
+    .primary-action:hover { background: var(--hover); }
+
+    .content { min-height: 0; flex: 1; overflow: auto; padding: 34px clamp(24px, 5vw, 70px); }
+    .eyebrow { color: var(--subtle); font-size: 11px; margin-bottom: 8px; }
+    h1 { margin: 0; font-size: 24px; line-height: 1.2; letter-spacing: -.035em; font-weight: 630; }
+    .lede { max-width: 620px; margin: 9px 0 26px; color: var(--muted); font-size: 14px; line-height: 1.55; }
+    .summary {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(100px, 1fr));
+      gap: 1px;
+      max-width: 720px;
+      background: var(--line);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      overflow: hidden;
+    }
+    .summary-item { min-height: 76px; padding: 13px; background: var(--panel); }
+    .summary-label { display: flex; align-items: center; gap: 5px; color: var(--muted); font-size: 11px; }
+    .summary-value { margin-top: 7px; font-size: 20px; font-weight: 620; font-variant-numeric: tabular-nums; }
+
+    .work-area { margin-top: 30px; max-width: 720px; }
+    .work-area-head { display: flex; align-items: baseline; margin-bottom: 10px; }
+    h2 { margin: 0; font-size: 14px; font-weight: 620; }
+    .quiet { margin-left: auto; color: var(--subtle); font-size: 11px; }
+    .workspace-sheet { border-top: 1px solid var(--line); }
+    .sheet-row {
+      display: grid;
+      grid-template-columns: 20px minmax(0, 1fr) minmax(115px, .6fr) 52px;
+      align-items: center;
+      gap: 10px;
+      min-height: 48px;
+      border-bottom: 1px solid var(--line);
+      cursor: pointer;
+    }
+    .sheet-row:hover { background: color-mix(in oklch, var(--hover) 45%, transparent); }
+    .sheet-title { font-weight: 540; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .sheet-repo, .sheet-time { color: var(--subtle); font-size: 11px; }
+    .sheet-time { text-align: right; font-variant-numeric: tabular-nums; }
+
+    .explanation {
+      max-width: 720px;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 22px;
+      margin-top: 34px;
+      color: var(--muted);
+      line-height: 1.5;
+    }
+    .explanation strong { color: var(--ink); font-weight: 580; }
+    .explanation p { margin: 5px 0 0; }
+
+    .conversation { max-width: 720px; }
+    .conversation-top { display: flex; align-items: center; gap: 9px; }
+    .branch { color: var(--subtle); font-size: 11px; margin-top: 5px; }
+    .message {
+      margin-top: 32px;
+      max-width: 590px;
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.6;
+    }
+    .message b { color: var(--ink); font-weight: 580; }
+
+    .mobile-shell { display: none; }
+    .app.compact { grid-template-columns: minmax(320px, 430px); justify-content: center; background: var(--canvas); }
+    .app.compact .sidebar, .app.compact .main { display: none; }
+    .app.compact .mobile-shell {
+      display: flex;
+      min-height: 100vh;
+      flex-direction: column;
+      background: var(--panel);
+      border-inline: 1px solid var(--line);
+    }
+    .mobile-top { min-height: 54px; display: flex; align-items: center; padding: 8px 14px; border-bottom: 1px solid var(--line); }
+    .mobile-body { padding: 18px 12px 32px; overflow: auto; }
+    .mobile-title { font-size: 18px; font-weight: 620; letter-spacing: -.025em; }
+    .mobile-subtitle { margin-top: 4px; color: var(--muted); }
+    .mobile-group { margin-top: 24px; }
+    .mobile-group-head { display: flex; padding: 0 6px 8px; color: var(--subtle); font-size: 11px; }
+    .mobile-group-head span:last-child { margin-left: auto; }
+    .mobile-row { min-height: 58px; width: 100%; border: 0; border-radius: 8px; background: transparent; display: flex; align-items: center; gap: 10px; padding: 8px; text-align: left; cursor: pointer; }
+    .mobile-row:hover { background: var(--hover); }
+    .mobile-row-copy { min-width: 0; flex: 1; }
+    .mobile-row-title { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .mobile-row-meta { display: block; margin-top: 3px; color: var(--subtle); font-size: 11px; }
+    .mobile-row .status-text { margin-left: 4px; }
+    .desktop-return { margin-left: auto; }
+
+    @media (max-width: 760px) {
+      .app:not(.compact) { grid-template-columns: 255px minmax(330px, 1fr); }
+      .summary { grid-template-columns: 1fr 1fr; }
+      .explanation { grid-template-columns: 1fr; }
+      .toolbar .control-label { display: none; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { animation-duration: 1ms !important; animation-iteration-count: 1 !important; transition-duration: 1ms !important; }
+      .activity.working i:nth-child(1), .activity.working i:nth-child(5), .activity.working i:nth-child(9) { opacity: 1; }
+    }
+  </style>
+</head>
+<body>
+  <div class="app" id="app">
+    <aside class="sidebar" aria-label="Hybrid workspace sidebar">
+      <header class="sidebar-header">
+        <span class="mark" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
+        <span class="brand">bb</span>
+        <span class="spacer"></span>
+        <button class="icon-button" id="openCenter" title="Open Command Center" aria-label="Open Command Center">⌘</button>
+        <button class="icon-button" id="showCompact" title="Show compact view" aria-label="Show compact view">▯</button>
+      </header>
+      <div class="sidebar-scroll">
+        <section class="section" id="focusSection">
+          <div class="section-head"><span>Focus</span><span class="section-count" id="focusCount">0</span></div>
+          <div id="focusList"></div>
+        </section>
+        <section class="section">
+          <div class="section-head"><span>Repositories</span></div>
+          <div id="repoList"></div>
+        </section>
+      </div>
+      <div class="legend" aria-label="Activity status legend">
+        <span class="legend-item"><span class="activity working" aria-hidden="true"></span>Working</span>
+        <span class="legend-item"><span class="activity ready" aria-hidden="true"></span>Ready</span>
+        <span class="legend-item"><span class="activity waiting" aria-hidden="true"></span>Waiting</span>
+        <span class="legend-item"><span class="activity failed" aria-hidden="true"></span>Failed</span>
+      </div>
+    </aside>
+
+    <main class="main">
+      <div class="toolbar">
+        <div class="view-tabs" role="tablist" aria-label="Prototype surface">
+          <button class="view-tab active" data-view="workspace" role="tab">Workspace</button>
+          <button class="view-tab" data-view="center" role="tab">Command Center</button>
+        </div>
+        <span class="control-label">Selected workspace</span>
+        <select id="statusSelect" aria-label="Change selected workspace status">
+          <option value="working">Working</option>
+          <option value="ready">Ready</option>
+          <option value="waiting">Waiting</option>
+          <option value="failed">Failed</option>
+          <option value="passive">Clear active status</option>
+        </select>
+        <button class="primary-action" id="focusToggle">Add to Focus</button>
+      </div>
+      <div class="content" id="mainContent"></div>
+    </main>
+
+    <section class="mobile-shell" aria-label="Compact Command Center">
+      <div class="mobile-top">
+        <span class="mark" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
+        <span class="brand">Command Center</span>
+        <button class="icon-button desktop-return" id="showDesktop" aria-label="Return to desktop view">▣</button>
+      </div>
+      <div class="mobile-body">
+        <div class="mobile-title">Current work</div>
+        <div class="mobile-subtitle" id="mobileSummary"></div>
+        <div id="mobileGroups"></div>
+      </div>
+    </section>
+  </div>
+
+  <script>
+    const stateLabels = { working: 'Working', ready: 'Ready for review', waiting: 'Waiting for you', failed: 'Failed', passive: 'No active status' };
+    const repos = [
+      {
+        id: 'bb', name: 'bbamir', expanded: true,
+        workspaces: [
+          { id: 'activity', name: 'Activity redesign', branch: 'amir/activity-model', state: 'working', focused: true, expanded: true, updated: 'now', threads: [
+            { id: 'primary', name: 'Primary conversation', unread: false, updated: '1m' },
+            { id: 'research', name: 'Research competitor patterns', unread: true, updated: 'now' },
+            { id: 'mobile', name: 'Mobile and Command Center', unread: false, updated: '12m' }
+          ]},
+          { id: 'plugin', name: 'Plugin marketplace', branch: 'amir/plugin-marketplace', state: 'ready', focused: false, expanded: false, updated: '8m', threads: [
+            { id: 'plugin-main', name: 'Implementation', unread: true, updated: '8m' },
+            { id: 'plugin-review', name: 'Review pass', unread: false, updated: '19m' }
+          ]},
+          { id: 'sync', name: 'Daemon protocol cleanup', branch: 'amir/protocol', state: 'passive', focused: false, expanded: false, updated: '2h', threads: [
+            { id: 'sync-main', name: 'Protocol audit', unread: false, updated: '2h' }
+          ]}
+        ]
+      },
+      {
+        id: 'api', name: 'ghost-api', expanded: true,
+        workspaces: [
+          { id: 'auth', name: 'Authentication cleanup', branch: 'amir/auth-cleanup', state: 'waiting', focused: true, expanded: false, updated: '3m', threads: [
+            { id: 'auth-main', name: 'Primary conversation', unread: true, updated: '3m' }
+          ]},
+          { id: 'billing', name: 'Billing webhooks', branch: 'amir/webhooks', state: 'failed', focused: false, expanded: false, updated: '1h', threads: [
+            { id: 'billing-main', name: 'Fix flaky integration tests', unread: true, updated: '1h' }
+          ]}
+        ]
+      }
+    ];
+
+    let selectedId = 'activity';
+    let activeView = 'workspace';
+
+    function allWorkspaces() { return repos.flatMap(repo => repo.workspaces.map(ws => ({ ...ws, repo }))); }
+    function selectedWorkspace() { return allWorkspaces().find(({ id }) => id === selectedId); }
+    function activityMarkup(status, label) {
+      return `<span class="activity ${status}" role="img" aria-label="${label || stateLabels[status]}" title="${label || stateLabels[status]}">${'<i></i>'.repeat(9)}</span>`;
+    }
+    function statusTextMarkup(status, override) {
+      const shortLabels = { working: 'Working', ready: 'Ready', waiting: 'Waiting', failed: 'Failed' };
+      if (status === 'passive') return `<span class="status-text passive">${override || ''}</span>`;
+      return `<span class="status-text ${status}">${override || shortLabels[status]}</span>`;
+    }
+    function rollupState(workspaces) {
+      const order = ['failed', 'waiting', 'working', 'ready'];
+      return order.find(value => workspaces.some(ws => ws.state === value)) || 'passive';
+    }
+
+    function workspaceMarkup(ws, repoName, inFocus) {
+      const selected = ws.id === selectedId ? ' selected' : '';
+      const collapsed = ws.expanded ? '' : ' collapsed';
+      const threads = ws.threads.map(thread => `
+        <button class="thread-row${thread.id === selectedId ? ' selected' : ''}" data-thread="${thread.id}" data-workspace="${ws.id}">
+          ${thread.unread ? activityMarkup('ready', 'Unread conversation update') : activityMarkup('passive', 'No unread activity')}
+          <span class="label">${thread.name}</span>
+          ${thread.unread ? statusTextMarkup('ready', 'New') : statusTextMarkup('passive', thread.updated)}
+        </button>`).join('');
+      return `<div class="workspace${collapsed}" data-workspace-wrap="${ws.id}">
+        <button class="workspace-row${selected}" data-workspace="${ws.id}" aria-label="${ws.name}, ${stateLabels[ws.state]}">
+          ${activityMarkup(ws.state)}
+          <span class="workspace-copy">
+            <span class="workspace-name">${ws.name}</span>
+            ${inFocus ? `<span class="workspace-meta">${repoName} · ${ws.branch}</span>` : `<span class="workspace-meta">${ws.branch}</span>`}
+          </span>
+          <span class="chevron" aria-hidden="true">⌄</span>
+          ${statusTextMarkup(ws.state, ws.state === 'passive' ? ws.updated : undefined)}
+          <span class="focus-action" role="button" tabindex="0" data-focus="${ws.id}" aria-label="${ws.focused ? 'Remove workspace from Focus' : 'Add workspace to Focus'}" title="${ws.focused ? 'Remove workspace from Focus' : 'Add workspace to Focus'}">${ws.focused ? '−' : '+'}</span>
+        </button>
+        <div class="children">${threads}</div>
+      </div>`;
+    }
+
+    function renderSidebar() {
+      const focused = allWorkspaces().filter(ws => ws.focused);
+      document.getElementById('focusCount').textContent = focused.length;
+      document.getElementById('focusSection').style.display = focused.length ? '' : 'none';
+      document.getElementById('focusList').innerHTML = focused.map(ws => workspaceMarkup(ws, ws.repo.name, true)).join('');
+
+      document.getElementById('repoList').innerHTML = repos.map(repo => {
+        const visible = repo.workspaces.filter(ws => !ws.focused);
+        const collapsed = repo.expanded ? '' : ' collapsed';
+        const repoIndicator = repo.expanded ? '' : activityMarkup(rollupState(repo.workspaces), `${repo.name} has hidden activity`);
+        const children = visible.length
+          ? visible.map(ws => workspaceMarkup(ws, repo.name, false)).join('')
+          : `<div class="thread-row" style="cursor:default;color:var(--subtle)">All workspaces are in Focus</div>`;
+        return `<div class="repo${collapsed}" data-repo-wrap="${repo.id}">
+          <button class="repo-row" data-repo="${repo.id}">
+            <span class="chevron" aria-hidden="true">⌄</span><span class="folder" aria-hidden="true">□</span><span class="label">${repo.name}</span>${repoIndicator}
+          </button>
+          <div class="children">${children}</div>
+        </div>`;
+      }).join('');
+      bindRows();
+    }
+
+    function bindRows() {
+      document.querySelectorAll('[data-repo]').forEach(button => button.onclick = () => {
+        const repo = repos.find(item => item.id === button.dataset.repo);
+        repo.expanded = !repo.expanded;
+        renderSidebar();
+      });
+      document.querySelectorAll('[data-workspace]').forEach(button => button.onclick = event => {
+        if (event.target.closest('[data-focus]')) return;
+        const ws = allWorkspaces().find(item => item.id === button.dataset.workspace);
+        selectedId = ws.id;
+        ws.repo.workspaces.find(item => item.id === ws.id).expanded = !ws.expanded;
+        activeView = 'workspace';
+        renderAll();
+      });
+      document.querySelectorAll('[data-thread]').forEach(button => button.onclick = event => {
+        event.stopPropagation();
+        const ws = allWorkspaces().find(item => item.id === button.dataset.workspace);
+        selectedId = ws.id;
+        ws.repo.workspaces.find(item => item.id === ws.id).threads.find(item => item.id === button.dataset.thread).unread = false;
+        renderAll();
+      });
+      document.querySelectorAll('[data-focus]').forEach(action => {
+        const run = event => {
+          event.preventDefault(); event.stopPropagation();
+          const ws = allWorkspaces().find(item => item.id === action.dataset.focus);
+          ws.repo.workspaces.find(item => item.id === ws.id).focused = !ws.focused;
+          renderAll();
+        };
+        action.onclick = run;
+        action.onkeydown = event => { if (event.key === 'Enter' || event.key === ' ') run(event); };
+      });
+    }
+
+    function renderWorkspace() {
+      const ws = selectedWorkspace();
+      return `<div class="conversation">
+        <div class="eyebrow">${ws.repo.name} / workspace</div>
+        <div class="conversation-top">${activityMarkup(ws.state)}<h1>${ws.name}</h1></div>
+        <div class="branch">${ws.branch} · ${ws.threads.length} conversations</div>
+        <div class="message">
+          <b>The workspace is the delivery boundary.</b> It owns the branch, diff, preview, and review state. Threads remain the T3Code-style conversation graph inside it, so research and delegated work stay visible without becoming separate top-level workspaces.
+          <br><br>
+          Use the status control above to watch the same pixel indicator move from animated work to a static ready, waiting, or failed state.
+        </div>
+      </div>`;
+    }
+
+    function renderCenter() {
+      const workspaces = allWorkspaces();
+      const counts = ['working', 'ready', 'waiting', 'failed'].map(status => workspaces.filter(ws => ws.state === status).length);
+      const focused = workspaces.filter(ws => ws.focused);
+      return `<div>
+        <div class="eyebrow">Cross-repository supervision</div>
+        <h1>Command Center</h1>
+        <p class="lede">Focus is intentional; activity is automatic. The Command Center combines them without turning every unread result into a “needs attention” badge.</p>
+        <div class="summary">
+          ${['working','ready','waiting','failed'].map((status, index) => `<div class="summary-item"><div class="summary-label">${activityMarkup(status)}${stateLabels[status]}</div><div class="summary-value">${counts[index]}</div></div>`).join('')}
+        </div>
+        <section class="work-area">
+          <div class="work-area-head"><h2>Focus</h2><span class="quiet">Manual, ordered workset</span></div>
+          <div class="workspace-sheet">
+            ${focused.map(ws => `<div class="sheet-row" data-center-workspace="${ws.id}">${activityMarkup(ws.state)}<span class="sheet-title">${ws.name}</span><span class="sheet-repo">${ws.repo.name}</span><span class="sheet-time">${ws.updated}</span></div>`).join('')}
+          </div>
+        </section>
+        <div class="explanation">
+          <div><strong>Conductor structure</strong><p>Workspaces are durable workstreams with a lifecycle and review outcome.</p></div>
+          <div><strong>T3Code depth</strong><p>Each workspace still contains a rich conversation and delegation tree.</p></div>
+        </div>
+      </div>`;
+    }
+
+    function renderMain() {
+      document.getElementById('mainContent').innerHTML = activeView === 'center' ? renderCenter() : renderWorkspace();
+      document.querySelectorAll('.view-tab').forEach(tab => tab.classList.toggle('active', tab.dataset.view === activeView));
+      document.querySelectorAll('[data-center-workspace]').forEach(row => row.onclick = () => {
+        selectedId = row.dataset.centerWorkspace; activeView = 'workspace'; renderAll();
+      });
+      const ws = selectedWorkspace();
+      document.getElementById('statusSelect').value = ws.state;
+      document.getElementById('focusToggle').textContent = ws.focused ? 'Remove from Focus' : 'Add to Focus';
+    }
+
+    function renderMobile() {
+      const workspaces = allWorkspaces();
+      const working = workspaces.filter(ws => ws.state === 'working');
+      const ready = workspaces.filter(ws => ws.state === 'ready' || ws.state === 'waiting' || ws.state === 'failed');
+      const earlier = workspaces.filter(ws => ws.state === 'passive');
+      document.getElementById('mobileSummary').textContent = `${working.length} working · ${ready.length} updated`;
+      const group = (title, items) => items.length ? `<section class="mobile-group"><div class="mobile-group-head"><span>${title}</span><span>${items.length}</span></div>${items.map(ws => `<button class="mobile-row" data-mobile-workspace="${ws.id}">${activityMarkup(ws.state)}<span class="mobile-row-copy"><span class="mobile-row-title">${ws.name}</span><span class="mobile-row-meta">${ws.repo.name} · ${ws.branch}</span></span>${statusTextMarkup(ws.state, ws.state === 'passive' ? ws.updated : undefined)}</button>`).join('')}</section>` : '';
+      document.getElementById('mobileGroups').innerHTML = group('Focus', workspaces.filter(ws => ws.focused)) + group('Working', working.filter(ws => !ws.focused)) + group('Ready and waiting', ready.filter(ws => !ws.focused)) + group('Earlier', earlier.filter(ws => !ws.focused));
+      document.querySelectorAll('[data-mobile-workspace]').forEach(row => row.onclick = () => { selectedId = row.dataset.mobileWorkspace; document.getElementById('app').classList.remove('compact'); activeView = 'workspace'; renderAll(); });
+    }
+
+    function renderAll() { renderSidebar(); renderMain(); renderMobile(); }
+
+    document.querySelectorAll('.view-tab').forEach(tab => tab.onclick = () => { activeView = tab.dataset.view; renderMain(); });
+    document.getElementById('openCenter').onclick = () => { activeView = 'center'; renderMain(); };
+    document.getElementById('statusSelect').onchange = event => {
+      const ws = selectedWorkspace();
+      ws.repo.workspaces.find(item => item.id === ws.id).state = event.target.value;
+      renderAll();
+    };
+    document.getElementById('focusToggle').onclick = () => {
+      const ws = selectedWorkspace();
+      ws.repo.workspaces.find(item => item.id === ws.id).focused = !ws.focused;
+      renderAll();
+    };
+    document.getElementById('showCompact').onclick = () => { document.getElementById('app').classList.add('compact'); renderMobile(); };
+    document.getElementById('showDesktop').onclick = () => document.getElementById('app').classList.remove('compact');
+
+    renderAll();
+  </script>
+</body>
+</html>

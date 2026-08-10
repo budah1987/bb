@@ -246,16 +246,26 @@ type ExpectedEnvironmentsKey =
   | "diffFile"
   | "diffFiles"
   | "diffPatch"
+  | "dockerActivity"
+  | "dockerProvenance"
   | "generatePullRequestMetadata"
   | "get"
   | "markPullRequestDraft"
   | "markPullRequestReady"
   | "mergePullRequest"
   | "paths"
+  | "previews"
   | "pullRequest"
   | "rename"
   | "squashMerge"
   | "status"
+  | "simulatorAccessibility"
+  | "simulatorAttach"
+  | "simulatorControl"
+  | "simulatorLease"
+  | "simulatorScreenshot"
+  | "simulatorStatus"
+  | "simulatorStop"
   | "update";
 
 type ExpectedFilesKey =
@@ -280,8 +290,11 @@ type ExpectedHostsKey =
   | "list"
   | "pathsExist"
   | "pickFolder"
+  | "providerAuthStatus"
   | "providerCliStatus"
   | "retryUpdate"
+  | "startProviderAuth"
+  | "submitProviderAuthCode"
   | "update";
 
 type ExpectedPluginsKey =
@@ -367,6 +380,8 @@ type ExpectedThreadsKey =
   | "list"
   | "markRead"
   | "markUnread"
+  | "markViewed"
+  | "notes"
   | "open"
   | "output"
   | "paneAction"
@@ -404,6 +419,7 @@ type ExpectedThreadQueuedMessagesKey =
   | "setGroupBoundary"
   | "update";
 type ExpectedThreadTabsKey = "get" | "update";
+type ExpectedThreadNotesKey = "generateRecap" | "get" | "setScratchpad";
 type ExpectedTerminalsKey =
   | "close"
   | "create"
@@ -535,5 +551,8 @@ describe("SDK public type entrypoints", () => {
     expectTypeOf<
       keyof RootBbSdk["threads"]["tabs"]
     >().toEqualTypeOf<ExpectedThreadTabsKey>();
+    expectTypeOf<
+      keyof RootBbSdk["threads"]["notes"]
+    >().toEqualTypeOf<ExpectedThreadNotesKey>();
   });
 });

@@ -1,11 +1,21 @@
 import { Command } from "commander";
-import type { Host } from "@bb/domain";
-import type { HostProviderCliStatusResponse } from "@bb/server-contract";
+import {
+  BBAMIR_UPSTREAM_UPDATE_TITLE,
+  buildBbamirUpstreamUpdatePrompt,
+  isLocalPathProjectSource,
+  type Host,
+  type Thread,
+} from "@bb/domain";
+import type {
+  HostProviderCliStatusResponse,
+  ProjectResponse,
+} from "@bb/server-contract";
 import { action } from "../action.js";
 import { createCliBbSdk } from "../client.js";
+import { resolveExplicitIdFlag } from "../context-env.js";
 import { renderBorderlessTable } from "../table.js";
-import { outputJson } from "./helpers.js";
-import { resolveMachineId } from "./machine.js";
+import { outputJson, prependErrorContext } from "./helpers.js";
+import { resolveMachineHostId, resolveMachineId } from "./machine.js";
 
 const MANAGED_PROVIDERS = ["codex", "claudeCode"] as const;
 
@@ -16,6 +26,12 @@ type ProviderCliStatusResponse = HostProviderCliStatusResponse;
 interface UpdatesCommandOptions {
   json?: boolean;
   machine?: string;
+}
+
+interface BbamirUpdateCommandOptions {
+  json?: boolean;
+  machine?: string;
+  project: string;
 }
 
 interface ProviderUpdateTarget {
@@ -139,6 +155,113 @@ function printUpdatesTable(args: {
   console.log("");
 }
 
+function selectBbamirSource(args: {
+  hosts: readonly Host[];
+  project: ProjectResponse;
+  selectedHostId: string | null;
+}): { hostId: string; path: string } {
+  if (
+    args.project.kind !== "standard" ||
+    args.project.name.trim().toLocaleLowerCase() !== "bbamir"
+  ) {
+    throw new Error(
+      `Project ${args.project.id} is not the BBamir project; refusing to update it.`,
+    );
+  }
+
+  const connectedHostIds = new Set(
+    args.hosts
+      .filter((host) => host.status === "connected")
+      .map((host) => host.id),
+  );
+  const sources = args.project.sources.filter(
+    (source) =>
+      isLocalPathProjectSource(source) &&
+      connectedHostIds.has(source.hostId) &&
+      (args.selectedHostId === null || source.hostId === args.selectedHostId),
+  );
+  const defaultSources = sources.filter((source) => source.isDefault);
+  const candidates = defaultSources.length > 0 ? defaultSources : sources;
+  if (candidates.length !== 1) {
+    throw new Error(
+      candidates.length === 0
+        ? "BBamir has no connected local checkout. Connect its machine first."
+        : "BBamir has more than one eligible checkout; pass --machine to choose one.",
+    );
+  }
+  const source = candidates[0];
+  if (!isLocalPathProjectSource(source)) {
+    throw new Error("BBamir requires a local checkout for an upstream update.");
+  }
+  return { hostId: source.hostId, path: source.path };
+}
+
+async function startBbamirUpdate(
+  options: BbamirUpdateCommandOptions,
+  serverUrl: string,
+): Promise<void> {
+  const projectId = resolveExplicitIdFlag({
+    flagName: "--project flag",
+    value: options.project,
+  });
+  if (!projectId) {
+    throw new Error("Missing required option --project <id>.");
+  }
+
+  const sdk = createCliBbSdk(serverUrl);
+  const [project, hosts] = await Promise.all([
+    sdk.projects.get({ projectId }),
+    sdk.hosts.list(),
+  ]);
+  const selectedHostId =
+    options.machine === undefined
+      ? null
+      : await resolveMachineHostId({
+          serverUrl,
+          target: options.machine,
+        });
+  const source = selectBbamirSource({
+    hosts,
+    project,
+    selectedHostId,
+  });
+
+  let thread: Thread;
+  try {
+    thread = await sdk.threads.spawn({
+      origin: "cli",
+      projectId,
+      title: BBAMIR_UPSTREAM_UPDATE_TITLE,
+      input: [
+        {
+          type: "text",
+          text: buildBbamirUpstreamUpdatePrompt({ sourcePath: source.path }),
+          mentions: [],
+        },
+      ],
+      environment: {
+        type: "host",
+        hostId: source.hostId,
+        workspace: {
+          type: "managed-worktree",
+          baseBranch: { kind: "default" },
+        },
+      },
+      startedOnBehalfOf: null,
+      originKind: null,
+      childOrigin: null,
+    });
+  } catch (error: unknown) {
+    throw prependErrorContext(
+      "Failed to create BBamir update workspace",
+      error,
+    );
+  }
+
+  if (outputJson(options, thread)) return;
+  console.log(`BBamir update workspace created: ${thread.id}`);
+}
+
 export function registerUpdatesCommands(
   program: Command,
   getUrl: () => string,
@@ -197,6 +320,23 @@ export function registerUpdatesCommands(
     );
 
   updates
+    .command("from-bb")
+    .description(
+      "Start a protected BBamir upstream-update workspace with conflict planning",
+    )
+    .requiredOption("--project <id>", "BBamir project ID")
+    .option(
+      "--machine <id-or-name>",
+      "Limit the update to one connected machine",
+    )
+    .option("--json", "Print the created thread as JSON")
+    .action(
+      action(async (opts: BbamirUpdateCommandOptions) => {
+        await startBbamirUpdate(opts, getUrl());
+      }),
+    );
+
+  updates
     .command("apply")
     .description("Run every available provider CLI install/update")
     .option("--machine <id-or-name>", "Limit to one machine")
@@ -250,8 +390,7 @@ export function registerUpdatesCommands(
               hostName: target.host.name,
               provider: target.provider,
               success,
-              message:
-                errorEvent?.type === "error" ? errorEvent.message : null,
+              message: errorEvent?.type === "error" ? errorEvent.message : null,
             });
             if (!opts.json) {
               console.log(

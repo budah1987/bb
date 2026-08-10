@@ -2,6 +2,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { runGit, WorkspaceError } from "@bb/host-workspace";
 import { ExpectedCommandDispatchError } from "../command-dispatch-support.js";
+import { getGithubAccountEnvironment } from "../github-repositories.js";
 
 const PROJECT_CLONE_TIMEOUT_MS = 20 * 60 * 1000;
 
@@ -61,6 +62,7 @@ export async function inspectProjectPath(projectPath: string): Promise<{
 
 export async function cloneProject(args: {
   dataDir: string;
+  githubAccountLogin?: string | null;
   projectSlug: string;
   remoteUrl: string;
   targetPath?: string;
@@ -72,8 +74,13 @@ export async function cloneProject(args: {
   await requireEmptyOrMissingTarget(targetPath);
   await fs.mkdir(path.dirname(targetPath), { recursive: true });
   try {
+    const githubAccountEnvironment = await getGithubAccountEnvironment({
+      env: process.env,
+      login: args.githubAccountLogin ?? null,
+    });
     await runGit(["clone", args.remoteUrl, targetPath], {
       cwd: path.dirname(targetPath),
+      ...(githubAccountEnvironment ? { env: githubAccountEnvironment } : {}),
       timeoutMs: PROJECT_CLONE_TIMEOUT_MS,
     });
   } catch (error) {

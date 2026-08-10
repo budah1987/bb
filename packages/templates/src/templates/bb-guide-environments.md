@@ -65,6 +65,13 @@ Making your repo work with bb:
   bb environment status <id>              Show workspace status
     --merge-base-branch <branch>          Include merge-base status
 
+  bb environment docker-provenance <id>   Show Docker containers using this repository
+                                           and verify their checkout bind mounts
+
+  bb environment docker-activity <id>     Compare mounted source and build timestamps
+
+  bb environment previews <id>            Show local and deployment preview providers
+
   bb environment branches <id>            List local and remote branches
     --query <query>                       Filter branch names
     --limit <count>                       Limit local and remote results

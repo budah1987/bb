@@ -224,6 +224,23 @@ const app = await loadPluginApp(
 );
 
 describe("loadPluginApp", () => {
+  it("captures an experimental thread rail section", async () => {
+    const Component = () => <div>Checks</div>;
+    const captured = await loadPluginApp(
+      definePluginApp((builder) => {
+        builder.slots.experimental_threadRailSection({
+          id: "checks",
+          title: "Checks",
+          component: Component,
+        });
+      }),
+    );
+
+    expect(captured.threadRailSections).toEqual([
+      { id: "checks", title: "Checks", component: Component },
+    ]);
+  });
+
   it("captures, mounts, and exactly-once disposes content scripts in lifecycle order", async () => {
     const events: string[] = [];
     const captured = await loadPluginApp(

@@ -33,7 +33,10 @@ import {
   requireReadyEnvironment,
 } from "../services/lib/entity-lookup.js";
 import { runLiveCommandAndWait } from "../services/hosts/live-command-wait.js";
-import { callHostRetryableOnlineRpc } from "../services/hosts/online-rpc.js";
+import {
+  callHostOnlineRpc,
+  callHostRetryableOnlineRpc,
+} from "../services/hosts/online-rpc.js";
 import { generateCommitMessage } from "../services/ai/commit-message.js";
 import { generatePullRequestMetadata } from "../services/ai/pull-request-metadata.js";
 import { archiveEnvironmentThreads } from "../services/threads/thread-archive.js";
@@ -47,6 +50,11 @@ import { parsePathKindInclusion } from "./path-list-inclusion.js";
 const PULL_REQUEST_CREATE_TIMEOUT_MS = 3 * 60_000;
 import { requireWorkspaceCommandTarget } from "../services/environments/workspace-command-target.js";
 import { callEnvironmentWorkspaceStatus } from "../services/environments/workspace-status.js";
+import {
+  getEnvironmentDockerActivity,
+  getEnvironmentDockerProvenance,
+} from "../services/environments/docker-provenance.js";
+import { getEnvironmentPreviews } from "../services/environments/previews.js";
 import { assembleThreadPullRequest } from "../services/environments/pull-request.js";
 import { getGithubAccounts } from "../services/system/github-repositories.js";
 import {
@@ -60,6 +68,7 @@ import {
 
 const COMMIT_FALLBACK_MESSAGE = "bb: automated commit";
 const SQUASH_MERGE_FALLBACK_MESSAGE = "bb: squash merge";
+const SIMULATOR_RPC_TIMEOUT_MS = 2 * 60_000;
 
 /** Caps for diffs sent to the inference model for commit message generation. */
 const AI_MAX_DIFF_BYTES = 32_000;
@@ -296,6 +305,54 @@ function resolveGitDiffWorkspaceTarget(deps: AppDeps, environmentId: string) {
   return requireWorkspaceCommandTarget(environment);
 }
 
+function simulatorSharedPortOwner(environmentId: string): string {
+  return `core:simulator:${environmentId}`;
+}
+
+async function simulatorStreamConnection(
+  deps: AppDeps,
+  args: {
+    environmentId: string;
+    hostId: string;
+    gatewayPort: number;
+    token: string;
+    expiresAt: number;
+  },
+) {
+  try {
+    deps.sharedPorts.declareSharedPorts({
+      ownerId: simulatorSharedPortOwner(args.environmentId),
+      hostId: args.hostId,
+      ports: [args.gatewayPort],
+    });
+    const identity = await deps.sharedPorts.ensureTunnelIdentity(
+      args.hostId,
+      () =>
+        callHostRetryableOnlineRpc(deps, {
+          command: { type: "connect-tunnel.ensure-identity" },
+          hostId: args.hostId,
+          timeoutMs: 30_000,
+        }),
+    );
+    return {
+      url: `https://${identity.label}--${args.gatewayPort}.${identity.baseDomain}/stream.mjpeg`,
+      token: args.token,
+      expiresAt: args.expiresAt,
+      transport: "tunnel" as const,
+    };
+  } catch {
+    deps.sharedPorts.clearDeclarationsForOwner(
+      simulatorSharedPortOwner(args.environmentId),
+    );
+    return {
+      url: `http://127.0.0.1:${args.gatewayPort}/stream.mjpeg`,
+      token: args.token,
+      expiresAt: args.expiresAt,
+      transport: "loopback" as const,
+    };
+  }
+}
+
 export function registerEnvironmentRoutes(app: Hono, deps: AppDeps): void {
   const { get, patch, post } = typedRoutes<PublicApiSchema>(app, {
     onValidationError: (msg) => new ApiError(400, "invalid_request", msg),
@@ -305,6 +362,154 @@ export function registerEnvironmentRoutes(app: Hono, deps: AppDeps): void {
   get(routes.get, (context) =>
     context.json(requireEnvironment(deps.db, context.req.param("id"))),
   );
+
+  get(routes.simulatorStatus, async (context) => {
+    const environment = requireReadyEnvironment(
+      deps.db,
+      context.req.param("id"),
+    );
+    return context.json(
+      await callHostRetryableOnlineRpc(deps, {
+        hostId: environment.hostId,
+        timeoutMs: SIMULATOR_RPC_TIMEOUT_MS,
+        command: {
+          type: "simulator.status",
+          environmentId: environment.id,
+        },
+      }),
+    );
+  });
+
+  post(routes.simulatorAttach, async (context, payload) => {
+    const environment = requireReadyEnvironment(
+      deps.db,
+      context.req.param("id"),
+    );
+    const status = await callHostRetryableOnlineRpc(deps, {
+      hostId: environment.hostId,
+      timeoutMs: SIMULATOR_RPC_TIMEOUT_MS,
+      command: { type: "simulator.status", environmentId: environment.id },
+    });
+    if (!status.supported) {
+      throw new ApiError(
+        409,
+        "simulator_unsupported",
+        status.message ?? "iOS Simulator is unavailable on this host.",
+      );
+    }
+    const deviceUdid = payload.deviceUdid ?? status.devices[0]?.udid;
+    if (!deviceUdid) {
+      throw new ApiError(
+        409,
+        "simulator_device_not_found",
+        status.message ?? "No iOS Simulator runtimes are installed.",
+      );
+    }
+    const result = await callHostOnlineRpc(deps, {
+      hostId: environment.hostId,
+      timeoutMs: SIMULATOR_RPC_TIMEOUT_MS,
+      command: {
+        type: "simulator.attach",
+        environmentId: environment.id,
+        deviceUdid,
+      },
+    });
+    return context.json({
+      session: result.session,
+      stream: await simulatorStreamConnection(deps, {
+        environmentId: environment.id,
+        hostId: environment.hostId,
+        ...result.lease,
+      }),
+    });
+  });
+
+  post(routes.simulatorLease, async (context) => {
+    const environment = requireReadyEnvironment(
+      deps.db,
+      context.req.param("id"),
+    );
+    const lease = await callHostOnlineRpc(deps, {
+      hostId: environment.hostId,
+      timeoutMs: SIMULATOR_RPC_TIMEOUT_MS,
+      command: { type: "simulator.lease", environmentId: environment.id },
+    });
+    return context.json(
+      await simulatorStreamConnection(deps, {
+        environmentId: environment.id,
+        hostId: environment.hostId,
+        ...lease,
+      }),
+    );
+  });
+
+  post(routes.simulatorControl, async (context, payload) => {
+    const environment = requireReadyEnvironment(
+      deps.db,
+      context.req.param("id"),
+    );
+    return context.json(
+      await callHostOnlineRpc(deps, {
+        hostId: environment.hostId,
+        timeoutMs: SIMULATOR_RPC_TIMEOUT_MS,
+        command: {
+          type: "simulator.control",
+          environmentId: environment.id,
+          action: payload.action,
+        },
+      }),
+    );
+  });
+
+  post(routes.simulatorStop, async (context) => {
+    const environment = requireReadyEnvironment(
+      deps.db,
+      context.req.param("id"),
+    );
+    const result = await callHostOnlineRpc(deps, {
+      hostId: environment.hostId,
+      timeoutMs: SIMULATOR_RPC_TIMEOUT_MS,
+      command: { type: "simulator.stop", environmentId: environment.id },
+    });
+    deps.sharedPorts.clearDeclarationsForOwner(
+      simulatorSharedPortOwner(environment.id),
+    );
+    return context.json(result);
+  });
+
+  get(routes.simulatorAccessibility, async (context) => {
+    const environment = requireReadyEnvironment(
+      deps.db,
+      context.req.param("id"),
+    );
+    return context.json(
+      await callHostRetryableOnlineRpc(deps, {
+        hostId: environment.hostId,
+        timeoutMs: SIMULATOR_RPC_TIMEOUT_MS,
+        command: {
+          type: "simulator.accessibility",
+          environmentId: environment.id,
+        },
+      }),
+    );
+  });
+
+  get(routes.simulatorScreenshot, async (context) => {
+    const environment = requireReadyEnvironment(
+      deps.db,
+      context.req.param("id"),
+    );
+    return context.json(
+      await callHostRetryableOnlineRpc(deps, {
+        hostId: environment.hostId,
+        timeoutMs: SIMULATOR_RPC_TIMEOUT_MS,
+        command: {
+          type: "simulator.screenshot",
+          environmentId: environment.id,
+        },
+      }),
+    );
+  });
 
   patch(routes.update, async (context, payload) => {
     const environment = requireEnvironment(deps.db, context.req.param("id"));
@@ -440,6 +645,33 @@ export function registerEnvironmentRoutes(app: Hono, deps: AppDeps): void {
       outcome: "available",
       workspace: result.workspaceStatus,
     });
+  });
+
+  get(routes.dockerProvenance, async (context) => {
+    const environment = requireReadyEnvironment(
+      deps.db,
+      context.req.param("id"),
+    );
+    const target = requireWorkspaceCommandTarget(environment);
+    return context.json(await getEnvironmentDockerProvenance(deps, { target }));
+  });
+
+  get(routes.dockerActivity, async (context) => {
+    const environment = requireReadyEnvironment(
+      deps.db,
+      context.req.param("id"),
+    );
+    const target = requireWorkspaceCommandTarget(environment);
+    return context.json(await getEnvironmentDockerActivity(deps, { target }));
+  });
+
+  get(routes.previews, async (context) => {
+    const environment = requireReadyEnvironment(
+      deps.db,
+      context.req.param("id"),
+    );
+    const target = requireWorkspaceCommandTarget(environment);
+    return context.json(await getEnvironmentPreviews(deps, { target }));
   });
 
   get(routes.pullRequest, async (context) => {
