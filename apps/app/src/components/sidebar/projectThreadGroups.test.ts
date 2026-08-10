@@ -297,6 +297,29 @@ describe("buildProjectThreadGroups", () => {
     ]);
   });
 
+  it("groups conversations that share a direct local workspace", () => {
+    const rootItems = buildProjectThreadGroups([
+      createThread({
+        id: "local-a",
+        environmentId: "env_local",
+        environmentName: "Local workspace",
+        environmentWorkspaceDisplayKind: "other",
+        createdAt: 10,
+      }),
+      createThread({
+        id: "local-b",
+        environmentId: "env_local",
+        environmentName: "Local workspace",
+        environmentWorkspaceDisplayKind: "other",
+        createdAt: 20,
+      }),
+    ]);
+
+    expect(summarizeItems(rootItems)).toEqual([
+      { env: "env_local", threads: ["local-b", "local-a"] },
+    ]);
+  });
+
   it("sorts siblings with active rows first, then inactive attention recency", () => {
     const rootItems = buildProjectThreadGroups([
       createThread({

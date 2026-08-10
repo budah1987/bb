@@ -35,6 +35,7 @@ import { isThreadForkable } from "@/lib/fork-thread-request";
 import {
   useArchiveEnvironmentThreads,
   useRequestEnvironmentAction,
+  useUpdateEnvironment,
 } from "../../hooks/mutations/environment-mutations";
 import {
   useMarkThreadViewed,
@@ -44,7 +45,6 @@ import {
   useCreateThreadQueuedMessage,
   useSendThreadMessage,
 } from "../../hooks/mutations/thread-runtime-mutations";
-import { useUpdateEnvironment } from "../../hooks/mutations/environment-mutations";
 import {
   useEnvironment,
   getEnvironmentPullRequestFromResponse,
@@ -208,6 +208,7 @@ import type { PromptMentionLinkResolver } from "@/components/promptbox/editor/pr
 import type { SecondaryPanelFileTab } from "@/components/secondary-panel/ThreadSecondaryPanel";
 import { useEnvironmentMergeBase } from "@/components/secondary-panel/git-diff/useEnvironmentMergeBase";
 import { useThreadGitActions } from "./useThreadGitActions";
+import { usePullRequestArchiveAction } from "./usePullRequestArchiveAction";
 import { useThreadReadTracking } from "@/hooks/useThreadReadTracking";
 import { useThreadUnreadDividerState } from "./useThreadUnreadDividerState";
 import {
@@ -826,6 +827,10 @@ function ThreadDetailViewInternal(props: ThreadDetailViewInternalProps) {
   const createQueuedMessage = useCreateThreadQueuedMessage();
   const requestEnvironmentAction = useRequestEnvironmentAction();
   const archiveEnvironmentThreads = useArchiveEnvironmentThreads();
+  const pullRequestArchive = usePullRequestArchiveAction({
+    environmentId: thread?.environmentId,
+    projectId,
+  });
   const [pullRequestMergeMethod, setPullRequestMergeMethod] = useAtom(
     pullRequestMergeMethodAtom,
   );
@@ -1938,28 +1943,6 @@ function ThreadDetailViewInternal(props: ThreadDetailViewInternalProps) {
     },
     [archiveEnvironmentThreads, thread?.environmentId],
   );
-  const handlePullRequestArchive = useCallback(async () => {
-    const environmentId = thread?.environmentId;
-    if (!environmentId) return;
-    const toastId = appToast.loading("Archiving workspace");
-    try {
-      const response = await archiveEnvironmentThreads.mutateAsync({
-        id: environmentId,
-      });
-      appToast.success(
-        `Archived ${response.archivedThreadIds.length} thread${response.archivedThreadIds.length === 1 ? "" : "s"}`,
-        { id: toastId },
-      );
-    } catch (error) {
-      appToast.error("Failed to archive workspace", {
-        id: toastId,
-        description: getMutationErrorMessage({
-          error,
-          fallbackMessage: "Workspace was not archived",
-        }),
-      });
-    }
-  }, [archiveEnvironmentThreads, thread?.environmentId]);
   const handleAskAgentToFixPullRequestCheck = useCallback(
     async (check: GitHostPullRequestCheck) => {
       if (!thread || sendMessage.isPending) return;
@@ -2938,6 +2921,7 @@ function ThreadDetailViewInternal(props: ThreadDetailViewInternalProps) {
   ) : undefined;
   const pullRequestPanelContent = (
     <PullRequestPanel
+      archiveErrorMessage={pullRequestArchive.errorMessage}
       baseBranchOptions={[
         ...new Set([
           workspaceStatus?.branch.defaultBranch ?? "main",
@@ -2948,12 +2932,12 @@ function ThreadDetailViewInternal(props: ThreadDetailViewInternalProps) {
       githubAccounts={githubAccounts}
       isActionPending={
         requestEnvironmentAction.isPending ||
-        archiveEnvironmentThreads.isPending ||
+        pullRequestArchive.isPending ||
         updateEnvironment.isPending
       }
       isGithubAccountLoading={githubAccountsQuery.isLoading}
       isLoading={pullRequestQuery.isLoading}
-      onArchive={() => void handlePullRequestArchive()}
+      onArchive={() => void pullRequestArchive.archive()}
       onAskAgentToFix={(check) =>
         void handleAskAgentToFixPullRequestCheck(check)
       }

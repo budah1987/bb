@@ -1,7 +1,4 @@
-import type {
-  EnvironmentWorkspaceDisplayKind,
-  ThreadListEntry,
-} from "@bb/domain";
+import type { ThreadListEntry } from "@bb/domain";
 import { compareCodepoint } from "@/lib/codepoint-compare";
 import {
   getCollapsedChildActivity,
@@ -75,7 +72,6 @@ export type ThreadComparator = ((
   compareItems?: ThreadItemComparator;
 };
 
-type WorktreeDisplayKind = "managed-worktree" | "unmanaged-worktree";
 type SidebarProjectThreadShape = Pick<
   ThreadListEntry,
   "originKind" | "childOrigin" | "visibility"
@@ -92,15 +88,9 @@ interface BuildThreadNodeArgs {
   visitedThreadIds: Set<string>;
 }
 
-interface BucketWorktreeEnvironmentGroupsResult {
+interface BucketEnvironmentGroupsResult {
   environmentThreadGroups: EnvironmentThreadGroup[];
   looseNodes: ProjectThreadNode[];
-}
-
-function isWorktreeDisplayKind(
-  kind: EnvironmentWorkspaceDisplayKind,
-): kind is WorktreeDisplayKind {
-  return kind === "managed-worktree" || kind === "unmanaged-worktree";
 }
 
 export function compareByCreatedAtDescending(
@@ -240,7 +230,7 @@ function buildSortedItems(
   }
 
   const { environmentThreadGroups, looseNodes } =
-    bucketWorktreeEnvironmentGroups(nodes, compareThreads, draftThreadIds);
+    bucketEnvironmentGroups(nodes, compareThreads, draftThreadIds);
   const items = [
     ...looseNodes.map(buildThreadItem),
     ...environmentThreadGroups.map(buildEnvironmentItem),
@@ -434,20 +424,17 @@ export function isSidebarProjectThread(
   return thread.visibility !== "hidden";
 }
 
-// Bucket nodes by shared worktree environmentId. A bucket only becomes a group
+// Bucket nodes by shared environmentId. A bucket only becomes a group
 // when >=2 sibling nodes share the environment; solo threads stay loose so we
 // don't render degenerate 1-thread groups.
-function bucketWorktreeEnvironmentGroups(
+function bucketEnvironmentGroups(
   nodes: ProjectThreadNode[],
   compareThreads: ThreadComparator,
   draftThreadIds: ReadonlySet<string>,
-): BucketWorktreeEnvironmentGroupsResult {
+): BucketEnvironmentGroupsResult {
   const nodesByEnvironmentId = new Map<string, ProjectThreadNode[]>();
   for (const node of nodes) {
     if (node.thread.environmentId === null) continue;
-    if (!isWorktreeDisplayKind(node.thread.environmentWorkspaceDisplayKind)) {
-      continue;
-    }
     const bucket = nodesByEnvironmentId.get(node.thread.environmentId);
     if (bucket) {
       bucket.push(node);

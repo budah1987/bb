@@ -600,14 +600,6 @@ export function registerEnvironmentRoutes(app: Hono, deps: AppDeps): void {
 
   post(routes.archiveThreads, (context) => {
     const environment = requireEnvironment(deps.db, context.req.param("id"));
-    if (!isWorktreeEnvironment(environment)) {
-      throw new ApiError(
-        409,
-        "invalid_request",
-        "Only worktree environments can be archived as a group",
-      );
-    }
-
     const archivedThreadIds = archiveEnvironmentThreads(deps, { environment });
     return context.json({
       ok: true,
