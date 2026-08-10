@@ -61,6 +61,12 @@ export const BUILTIN_PLUGINS = [
     category: "Host access",
   },
   {
+    name: "conductor-workspaces",
+    pluginId: "conductor-workspaces",
+    defaultEnabled: true,
+    category: "Interface",
+  },
+  {
     name: "custom-instructions",
     pluginId: "custom-instructions",
     defaultEnabled: true,
