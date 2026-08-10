@@ -21,6 +21,12 @@ message agents, or inspect projects, providers, and environments.
 
 ## Environment Setup Script
 
+- Use `bb environment docker-provenance <id> --json` to verify that running
+  Docker bind mounts come from the selected checkout.
+- Use `bb environment docker-activity <id> --json` to inspect source and build
+  freshness for mounted Docker builds.
+- Use `bb environment previews <id> --json` to inspect local and deployment
+  preview providers.
 - To make a repo work with bb worktrees, run `bb guide environments`. It
   documents the repo-level `.bb-env-setup.sh` setup hook and the
   `.worktreeinclude` file.
@@ -28,6 +34,19 @@ message agents, or inspect projects, providers, and environments.
   file at the repo root to list untracked files, such as `.env`, that bb must
   copy from the source checkout. It uses gitignore pattern syntax. bb copies
   the matches before it runs `.bb-env-setup.sh`.
+
+## iOS Simulator
+
+- In the app, open the thread's right panel, choose New Tab, then select
+  **Open simulator**. The tab is singleton per environment; closing it leaves
+  the managed session running, while Stop ends the session.
+- Use `bb simulator list`, `attach [device-udid]`, `tap <x> <y>`,
+  `swipe <x1> <y1> <x2> <y2>`, `type <text>`, `button <name>`,
+  `rotate <orientation>`, `ax`, `screenshot --out <path>`, and `stop` for agent
+  control. Commands default to `BB_ENVIRONMENT_ID`; use `--environment <id>`
+  outside a thread.
+- Coordinates are normalized from 0 to 1. Run `bb guide simulators` for the
+  accepted button and orientation values.
 
 ## Remote Client
 
@@ -132,6 +151,8 @@ message agents, or inspect projects, providers, and environments.
   context variables. Omitted execution flags use remembered project defaults;
   without a remembered model, bb uses the explicitly requested provider or
   Codex and resolves its provider-reported default model on the target machine.
+- Use `bb thread read <id>` to acknowledge a viewed response and clear its
+  Awaiting Reply state. Use `bb thread unread <id>` to restore unread state.
 - Use `--branch-name <name> --base-branch <base>` to create a named branch in
   the current checkout, or add `--new-environment worktree` for an isolated
   worktree. Use `--pull-request <number>` to fetch a GitHub PR head; combine it
@@ -209,11 +230,21 @@ status|install` to inspect or install provider CLIs on a selected machine.
   CLI update state across every machine — the CLI counterpart of Settings →
   Updates. `bb updates apply [--machine <id-or-name>]` runs every available
   provider CLI install/update sequentially; update bb-app itself with the
-  printed upgrade command or the desktop relaunch.
+  printed upgrade command or the desktop relaunch. `bb updates from-bb
+--project <id> [--machine <id-or-name>]` starts the protected BBamir
+  upstream-update workspace used by Settings → Updates; it refuses a project
+  that is not named `BBamir`, requires one connected local checkout, pauses for
+  explicit conflict choices, and keeps the candidate isolated until checks
+  pass.
 - Use `bb project create --name <name> --root <path> --machine <id-or-name>`
-  to bind a new project's local path to a connected enrolled machine. Use
-  `--host` as an alias. Omitting both selectors preserves the existing local
-  CLI machine fallback (normally the primary machine).
+  to bind a new project's local path to a connected enrolled machine, or use
+  `--remote-url <url>` to clone a repository first. Use `--host` as an alias.
+  `--github-account <login>` sets the default identity inherited by new
+  workspaces. Omitting both selectors preserves the existing local CLI machine
+  fallback (normally the primary machine).
+- Use `bb project update <project-id> --github-account <login>` to change the
+  repository default, or `--clear-github-account` to remove it. An explicit
+  workspace account still takes precedence.
 - `bb project list` preserves the ordinary-project-only default. Pass
   `--include-personal` when the singleton personal project must be discoverable.
 - Use `bb project github-repositories [--machine <id-or-name>]` to list only
@@ -276,6 +307,12 @@ environment pull-request show <id>`. Diff commands require an explicit target
   (alias `--host`) or `--environment <id>` to inspect the machine where work
   will run; the selectors cannot be combined. With neither selector they
   intentionally inspect the primary machine.
+- Check subscription login with `bb provider auth status --json`. Start login
+  with `bb provider auth login <claude|codex>`. Claude asks for its one-time
+  code and forwards it unchanged. Codex shows its ChatGPT device code and
+  waits for completion. Both commands accept the same machine selectors.
+  Never request a provider password, Mac password, keychain password, or API
+  key. Use `--no-wait` when another agent will poll the status.
 - Known ACP agents can appear automatically when their CLI is installed on the
   host; for example `opencode`, `omp`, Grok Build's `grok` CLI, or Hermes'
   `hermes` CLI on PATH appears as provider `acp-opencode`, `acp-omp`,
@@ -327,6 +364,16 @@ or artifacts, validation performed, and blockers.
 - Use `bb thread log <thread-id>` to inspect the conversation.
 - Use `bb thread output <thread-id>` to read the latest final output, or
   `bb thread output --self` for the current thread.
+- Use `bb thread notes show <thread-id>` to read the thread's scratchpad and
+  recap, and `bb thread notes set <text> <thread-id>` to replace the scratchpad.
+  The scratchpad is one free-form field capped at 350 characters and is the same
+  field the user edits in the app's Notes panel, so treat it as shared space:
+  read it before overwriting, and pass an empty string only to deliberately
+  clear it.
+- Use `bb thread notes recap <thread-id>` to generate the recap: a short
+  paragraph describing where the thread stands, ending in the next step. It
+  costs an inference call, so a recap that already covers every event in the
+  thread is returned unchanged unless you pass `--force`.
 
 For review or fix pipelines, get the environment ID from
 `bb thread show <thread-id> --json`, then spawn the follow-up with

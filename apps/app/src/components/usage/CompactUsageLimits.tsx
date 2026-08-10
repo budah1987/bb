@@ -37,7 +37,7 @@ const sidebarUsageExpandedAtom = atomWithStorage<boolean>(
 
 export interface CompactUsageMetric {
   label: "5hr" | "Weekly" | "Fable";
-  usedPercent: number;
+  usedPercent: number | null;
   resetsAt: string | null;
 }
 
@@ -80,6 +80,12 @@ function toMetric(
   };
 }
 
+function unavailableMetric(
+  label: CompactUsageMetric["label"],
+): CompactUsageMetric {
+  return { label, usedPercent: null, resetsAt: null };
+}
+
 function isPresent<T>(value: T | null): value is T {
   return value !== null;
 }
@@ -111,52 +117,66 @@ function fableWindow(usage: ProviderUsage): ProviderUsageWindow | undefined {
   return findWindow(usage, (label) => label.includes("fable"));
 }
 
-function providerModel(
-  name: CompactProviderUsage["name"],
-  metrics: readonly (CompactUsageMetric | null)[],
-): CompactProviderUsage | null {
-  const detailMetrics = metrics.filter(isPresent);
-  const summaryMetric = detailMetrics[0];
-  if (summaryMetric === undefined) return null;
-  return { name, summaryMetric, detailMetrics };
-}
-
 export function buildCompactUsageLimitsModel(
   usage: Pick<ProviderUsageResponse, "claudeCode" | "codex"> | null | undefined,
 ): CompactUsageLimitsModel | null {
   if (usage == null) return null;
 
+  const claudeSession = toMetric("5hr", currentSessionWindow(usage.claudeCode));
+  const claudeWeekly = toMetric("Weekly", weeklyWindow(usage.claudeCode));
+  const claudeFable = toMetric("Fable", fableWindow(usage.claudeCode));
+  const codexSession = toMetric("5hr", currentSessionWindow(usage.codex));
+  const codexWeekly = toMetric("Weekly", weeklyWindow(usage.codex));
+
+  const claudeSummary =
+    claudeSession ??
+    (usage.claudeCode.status === "ok" ? unavailableMetric("5hr") : null);
+  const codexDetailSession =
+    codexSession ??
+    (usage.codex.status === "ok" ? unavailableMetric("5hr") : null);
+  const codexSummary = codexSession ?? codexWeekly ?? codexDetailSession;
+
   const providers = [
-    providerModel("Claude", [
-      toMetric("5hr", currentSessionWindow(usage.claudeCode)),
-      toMetric("Weekly", weeklyWindow(usage.claudeCode)),
-      toMetric("Fable", fableWindow(usage.claudeCode)),
-    ]),
-    providerModel("Codex", [
-      toMetric("5hr", currentSessionWindow(usage.codex)),
-      toMetric("Weekly", weeklyWindow(usage.codex)),
-    ]),
+    claudeSummary === null
+      ? null
+      : {
+          name: "Claude" as const,
+          summaryMetric: claudeSummary,
+          detailMetrics: [claudeSummary, claudeWeekly, claudeFable].filter(
+            isPresent,
+          ),
+        },
+    codexSummary === null
+      ? null
+      : {
+          name: "Codex" as const,
+          summaryMetric: codexSummary,
+          detailMetrics: [codexDetailSession, codexWeekly].filter(isPresent),
+        },
   ].filter(isPresent);
 
   return providers.length > 0 ? { providers } : null;
 }
 
-function usageValueToneClass(usedPercent: number): string {
+function usageValueToneClass(usedPercent: number | null): string {
+  if (usedPercent === null) return "text-muted-foreground";
   if (usedPercent >= 95) return "text-destructive-text";
   if (usedPercent >= 80) return "text-warning-text";
   return "text-foreground";
 }
 
-function usageBarToneClass(usedPercent: number): string {
+function usageBarToneClass(usedPercent: number | null): string {
+  if (usedPercent === null) return "bg-muted-foreground";
   if (usedPercent >= 95) return "bg-destructive";
   if (usedPercent >= 80) return "bg-warning";
   return "bg-primary";
 }
 
 function compactUsageAriaLabel(model: CompactUsageLimitsModel): string {
-  const providers = model.providers.map(
-    (provider) =>
-      `${provider.name}: ${provider.summaryMetric.label}, ${provider.summaryMetric.usedPercent} percent used`,
+  const providers = model.providers.map((provider) =>
+    provider.summaryMetric.usedPercent === null
+      ? `${provider.name}: ${provider.summaryMetric.label}, unavailable`
+      : `${provider.name}: ${provider.summaryMetric.label}, ${provider.summaryMetric.usedPercent} percent used`,
   );
   return `Provider usage. ${providers.join(". ")}.`;
 }
@@ -201,7 +221,7 @@ function UsageProviderSummary({
             usageValueToneClass(metric.usedPercent),
           )}
         >
-          {metric.usedPercent}%
+          {metric.usedPercent === null ? "—" : `${metric.usedPercent}%`}
         </span>
       </span>
       <span className="h-0.5 overflow-hidden rounded-full bg-muted/70">
@@ -210,7 +230,12 @@ function UsageProviderSummary({
             "block h-full rounded-full opacity-80",
             usageBarToneClass(metric.usedPercent),
           )}
-          style={{ width: `${Math.max(metric.usedPercent, 2)}%` }}
+          style={{
+            width:
+              metric.usedPercent === null
+                ? "0%"
+                : `${Math.max(metric.usedPercent, 2)}%`,
+          }}
         />
       </span>
     </span>
@@ -240,12 +265,14 @@ function UsageSummary({ model }: { model: CompactUsageLimitsModel }) {
 
 function UsageMetricRow({ metric }: { metric: CompactUsageMetric }) {
   const reset = formatProviderUsageReset(metric.resetsAt);
+  const usageLabel =
+    metric.usedPercent === null
+      ? `${metric.label}, unavailable`
+      : `${metric.label}, ${metric.usedPercent} percent used`;
   return (
     <div
       className="space-y-1"
-      aria-label={`${metric.label}, ${metric.usedPercent} percent used${
-        reset ? `, ${reset}` : ""
-      }`}
+      aria-label={`${usageLabel}${reset ? `, ${reset}` : ""}`}
     >
       <div className="flex items-baseline justify-between gap-2 text-xs">
         <span className="text-muted-foreground">{metric.label}</span>
@@ -255,7 +282,7 @@ function UsageMetricRow({ metric }: { metric: CompactUsageMetric }) {
             usageValueToneClass(metric.usedPercent),
           )}
         >
-          {metric.usedPercent}%
+          {metric.usedPercent === null ? "—" : `${metric.usedPercent}%`}
         </span>
       </div>
       <div className="h-1 overflow-hidden rounded-full bg-muted">
@@ -264,7 +291,12 @@ function UsageMetricRow({ metric }: { metric: CompactUsageMetric }) {
             "h-full rounded-full",
             usageBarToneClass(metric.usedPercent),
           )}
-          style={{ width: `${Math.max(metric.usedPercent, 2)}%` }}
+          style={{
+            width:
+              metric.usedPercent === null
+                ? "0%"
+                : `${Math.max(metric.usedPercent, 2)}%`,
+          }}
         />
       </div>
       {reset ? (
@@ -274,34 +306,40 @@ function UsageMetricRow({ metric }: { metric: CompactUsageMetric }) {
   );
 }
 
+function providerPeak(provider: CompactProviderUsage): number | null {
+  const availableMetrics = provider.detailMetrics.flatMap((metric) =>
+    metric.usedPercent === null ? [] : [metric.usedPercent],
+  );
+  return availableMetrics.length === 0 ? null : Math.max(...availableMetrics);
+}
+
 function UsageDetails({ model }: { model: CompactUsageLimitsModel }) {
   return (
     <div className="grid gap-2 px-2 pb-2">
-      {model.providers.map((provider) => (
-        <section
-          key={provider.name}
-          aria-label={`${provider.name} usage`}
-          className="rounded-xl border border-border-hairline bg-surface-raised/70 p-3"
-        >
-          <div className="mb-2 flex items-baseline justify-between gap-3">
-            <h3 className="text-xs font-semibold text-foreground">
-              {provider.name}
-            </h3>
-            <span className="text-2xs tabular-nums text-muted-foreground">
-              Peak{" "}
-              {Math.max(
-                ...provider.detailMetrics.map((metric) => metric.usedPercent),
-              )}
-              %
-            </span>
-          </div>
-          <div className="grid grid-cols-2 gap-x-3 gap-y-2">
-            {provider.detailMetrics.map((metric) => (
-              <UsageMetricRow key={metric.label} metric={metric} />
-            ))}
-          </div>
-        </section>
-      ))}
+      {model.providers.map((provider) => {
+        const peak = providerPeak(provider);
+        return (
+          <section
+            key={provider.name}
+            aria-label={`${provider.name} usage`}
+            className="rounded-xl border border-border-hairline bg-surface-raised/70 p-3"
+          >
+            <div className="mb-2 flex items-baseline justify-between gap-3">
+              <h3 className="text-xs font-semibold text-foreground">
+                {provider.name}
+              </h3>
+              <span className="text-2xs tabular-nums text-muted-foreground">
+                Peak {peak === null ? "—" : `${peak}%`}
+              </span>
+            </div>
+            <div className="grid grid-cols-2 gap-x-3 gap-y-2">
+              {provider.detailMetrics.map((metric) => (
+                <UsageMetricRow key={metric.label} metric={metric} />
+              ))}
+            </div>
+          </section>
+        );
+      })}
     </div>
   );
 }

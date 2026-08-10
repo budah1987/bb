@@ -84,6 +84,7 @@ function makeProject(): ProjectResponse {
     kind: "standard",
     name: "Test project",
     gitRemoteUrl: null,
+    githubAccountLogin: null,
     sources: [],
     createdAt: 0,
     updatedAt: 0,

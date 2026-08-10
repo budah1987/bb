@@ -1,0 +1,38 @@
+{
+  "task_id": "relay-mskj8ydk-497005",
+  "provider": "fable",
+  "provider_family": "claude",
+  "model": "fable",
+  "executable": "/Users/amir/.local/share/claude/versions/2.1.226",
+  "role": "plan_review",
+  "objective": "Review and revise this Sol-authored implementation plan for a built-in iOS Simulator in BB.\n\nProduct frame: A user working in a thread opens the secondary panel's New Tab page and chooses an Action row labeled “Open simulator” with a Smartphone icon. This replaces the transient New Tab with one persistent, closable Simulator tab tied to the thread's environment. If no session exists, the tab shows a device picker and primary “Start simulator” button. Starting boots the chosen real Apple CoreSimulator through the enrolled environment Mac and then shows a live interactive phone surface. Reopening focuses the existing simulator tab. A later discoverability enhancement may add a thread-header phone icon, but the draft MVP avoids another permanent header control.\n\nTechnical architecture: Add a core `simulator` fixed-panel tab kind and `SimulatorTabContent`. Add typed environment simulator APIs and SDK area methods for availability, device list, attach/status, tap, gesture, type, hardware button, rotate, accessibility tree, screenshot, and stop. Add `bb simulator ...` commands which default to the current BB environment and accept `--environment` and `--device`. The server resolves the environment's host and dispatches typed online RPC commands. The host daemon owns a `SimulatorManager`, macOS/Xcode capability checks, environment-to-UDID session registry, packaged serve-sim executable resolution, helper health/reuse, and cleanup. Increment HOST_DAEMON_PROTOCOL_VERSION.\n\nStreaming/security: Do not expose serve-sim's full preview server because it contains host-exec routes and permissive CORS. The daemon should expose only allowlisted stream/config/input endpoints behind an unguessable short-lived lease. Same-host standalone can use a same-origin server proxy or loopback lease; enrolled remote Macs use BB's existing shared-port tunnel. Tokens must not be logged or persisted. Hidden tabs stop consuming frames but do not automatically shut down the device. Closing the tab releases its viewer lease; an explicit Stop action shuts down BB's managed helper/device. The MVP may initially support the primary/server-local Mac if secure remote transport materially expands scope, but contracts must preserve the environment host boundary.\n\nProposed tab states: (1) checking support; (2) unsupported host, with “iOS Simulator requires a Mac with Xcode” and no dead controls; (3) Xcode present but no runtimes/devices, with an Xcode recovery instruction; (4) ready/not running, device select + Start simulator; (5) starting, with stage text such as Booting/Connecting and cancel only if technically reliable; (6) live, with device name/state, Home, Rotate, Stop, interactive screen, and reconnect indicator; (7) recoverable error, preserving selection and showing Retry; (8) disconnected host, showing reconnect guidance without discarding the tab.\n\nScope proposal: MVP includes discovery, device selection, start/reuse, live MJPEG surface, pointer tap/drag/wheel gestures, keyboard/paste, Home, Rotate, Stop, screenshot, AX tree for agents, CLI/SDK parity, lifecycle cleanup, tests, and documentation/skill updates. Defer camera injection, permissions UI, multiple simultaneous devices per environment, Android, log streaming, WebKit inspector, and header shortcut. Prefer MJPEG first with frame dropping/backpressure and stream parking; leave AVCC/H.264 optimization for follow-up.\n\nPlease challenge the scope and user mental model, then return a revised comprehensive plan. Do not edit files or implement UI. This is the single resumable Fable Plan Council session; Sol retains final acceptance and implementation.",
+  "workspace": "/Users/amir/.bb/worktrees/env_ad9nxwzkkn/bb",
+  "mode": "read_only",
+  "context_files": [
+    "apps/app/src/components/secondary-panel/NewTabPage.tsx",
+    "apps/app/src/components/secondary-panel/NewTabFileSearch.tsx",
+    "apps/app/src/lib/fixed-panel-tabs-state.ts",
+    "apps/app/src/components/secondary-panel/ThreadSecondaryPanel.tsx",
+    "packages/host-daemon-contract/src/commands.ts",
+    "apps/host-daemon/src/command-dispatch.ts",
+    "apps/host-daemon/src/connect-tunnel/index.ts",
+    "apps/server/src/ws/host-shared-ports.ts",
+    "packages/plugin-sdk/src/app-contract.ts",
+    "docs/cli-guide-and-skill.md"
+  ],
+  "acceptance_checks": [
+    "Identify any product or UX flaw that would make the simulator hard to discover, start, recover, or understand.",
+    "Decide whether the primary human entry point should be the New Tab Actions list, a persistent thread-header icon, or both, and explain the staged recommendation.",
+    "Evaluate the proposed environment-scoped ownership and tab/session lifecycle from a user's mental model.",
+    "Separate the smallest genuinely useful MVP from follow-up capabilities without omitting agent CLI/SDK parity.",
+    "Return an implementation-ready revised plan with explicit UI states, labels, controls, error recovery, accessibility expectations, and acceptance criteria."
+  ],
+  "external_write_targets": [],
+  "workflow_id": "workflow-mskj6kl8-2bc235",
+  "stage_id": "plan-review",
+  "depends_on_task_ids": [],
+  "parent_model": "sol",
+  "route_reason": "Model Relay selected a bounded Plan Council; Fable is reviewing product intent and UX while Sol owns technical discovery and implementation.",
+  "auth_mode": "claude.ai",
+  "created_at": "2026-08-08T15:32:49.544Z"
+}

@@ -59,10 +59,19 @@ CLI counterpart of Settings → Updates and the sidebar Updates badge.
                                           install/update, one at a time
     --machine <id-or-name>                Limit to one machine
     --json                                Print per-target results as JSON
+  bb updates from-bb --project <id>       Start a protected BBamir upstream
+                                          update workspace with conflict planning
+    --machine <id-or-name>                Choose a connected BBamir checkout
+    --json                                Print the created thread as JSON
 
 `bb updates apply` covers provider CLIs only. Update bb-app itself with the
 printed upgrade command (`npx bb-app@latest`) or the desktop app's relaunch;
 connected daemons then follow the server version automatically.
+
+`bb updates from-bb` only accepts a project named `BBamir`. It creates a normal
+managed-worktree thread, records a recovery point before editing, pauses for
+explicit conflict choices, and runs the candidate checks before asking for any
+final apply action. The Settings → Updates action starts the same workflow.
 
 Machine selectors accept either an exact machine ID or an unambiguous machine
 name. `--host` is an alias for `--machine`.

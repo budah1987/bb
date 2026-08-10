@@ -65,7 +65,7 @@ import {
   useSendThreadMessage,
   useStopThread,
 } from "@/hooks/mutations/thread-runtime-mutations";
-import { useMarkThreadRead } from "@/hooks/mutations/thread-state-mutations";
+import { useMarkThreadViewed } from "@/hooks/mutations/thread-state-mutations";
 import { useThreadReadTracking } from "@/hooks/useThreadReadTracking";
 import { useComposerTextEffects } from "@/lib/composer-text-effects";
 import { getMutationErrorMessage } from "@/lib/mutation-errors";
@@ -322,7 +322,7 @@ function EmbeddedThreadChatWithComposer({
     systemConfigQuery.data?.generalSettings.steerActiveThreadOnEnter ??
     defaultAppSettings.steerActiveThreadOnEnter;
   const surfaceKey = threadId ?? surfaceFallbackKey ?? "embedded-thread-chat";
-  const markThreadRead = useMarkThreadRead();
+  const markThreadRead = useMarkThreadViewed();
   const stopThread = useStopThread();
   const sendThreadMessage = useSendThreadMessage();
   const createQueuedMessage = useCreateThreadQueuedMessage();

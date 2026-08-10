@@ -13,6 +13,9 @@ import type {
   HostProviderCliInstallEvent,
   HostProviderCliInstallRequest,
   HostProviderCliStatusResponse,
+  HostProviderAuthSnapshot,
+  HostProviderAuthStartRequest,
+  HostProviderAuthSubmitCodeRequest,
   HostRetryUpdateResponse,
   UpdateHostRequest,
 } from "@bb/server-contract";
@@ -59,6 +62,14 @@ export interface HostProviderCliInstallArgs extends HostProviderCliInstallReques
   hostId: string;
 }
 
+export interface HostProviderAuthStartArgs extends HostProviderAuthStartRequest {
+  hostId: string;
+}
+
+export interface HostProviderAuthSubmitCodeArgs extends HostProviderAuthSubmitCodeRequest {
+  hostId: string;
+}
+
 export interface HostListArgs {
   signal?: AbortSignal;
 }
@@ -73,6 +84,7 @@ export type HostListResult = Host[];
 export type HostPathsExistResult = HostPathsExistResponse;
 export type HostPickFolderResult = HostPickFolderResponse;
 export type HostProviderCliStatusResult = HostProviderCliStatusResponse;
+export type HostProviderAuthResult = HostProviderAuthSnapshot;
 export type HostRetryUpdateResult = HostRetryUpdateResponse;
 export type HostUpdateResult = Host;
 
@@ -91,6 +103,13 @@ export interface HostsArea {
   pathsExist(args: HostPathsExistArgs): Promise<HostPathsExistResult>;
   pickFolder(args: HostPickFolderArgs): Promise<HostPickFolderResult>;
   providerCliStatus(args: HostGetArgs): Promise<HostProviderCliStatusResult>;
+  providerAuthStatus(args: HostGetArgs): Promise<HostProviderAuthResult>;
+  startProviderAuth(
+    args: HostProviderAuthStartArgs,
+  ): Promise<HostProviderAuthResult>;
+  submitProviderAuthCode(
+    args: HostProviderAuthSubmitCodeArgs,
+  ): Promise<HostProviderAuthResult>;
   retryUpdate(args: HostRetryUpdateArgs): Promise<HostRetryUpdateResult>;
   update(args: HostUpdateArgs): Promise<HostUpdateResult>;
 }
@@ -196,6 +215,30 @@ export function createHostsArea(args: CreateSdkAreaArgs): HostsArea {
           },
           ...signalRequestArgs(input.signal),
         ),
+      );
+    },
+    async providerAuthStatus(input) {
+      return transport.readJson(
+        transport.api.v1.hosts[":id"]["provider-auth"].$get(
+          { param: { id: input.hostId } },
+          ...signalRequestArgs(input.signal),
+        ),
+      );
+    },
+    async startProviderAuth(input) {
+      return transport.readJson(
+        transport.api.v1.hosts[":id"]["provider-auth"].start.$post({
+          param: { id: input.hostId },
+          json: { provider: input.provider },
+        }),
+      );
+    },
+    async submitProviderAuthCode(input) {
+      return transport.readJson(
+        transport.api.v1.hosts[":id"]["provider-auth"]["submit-code"].$post({
+          param: { id: input.hostId },
+          json: { sessionId: input.sessionId, code: input.code },
+        }),
       );
     },
     async retryUpdate(input) {

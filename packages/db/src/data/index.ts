@@ -64,12 +64,12 @@ export type {
 
 export {
   createProjectSource,
+  getDefaultProjectSource,
   countProjectSources,
   getProjectSourceForProject,
   listProjectSources,
   listProjectSourcesByProjectIds,
   getProjectSourceByHost,
-  getDefaultProjectSource,
   toProjectSource,
   updateProjectSource,
   deleteProjectSource,
@@ -169,6 +169,18 @@ export type {
   ReplaceThreadTabsResult,
   StoredThreadTabs,
 } from "./thread-tabs.js";
+export {
+  countThreadRecapTriggers,
+  emptyThreadNotes,
+  enableThreadRecap,
+  getThreadNotes,
+  setThreadRecap,
+  setThreadScratchpad,
+} from "./thread-notes.js";
+export type {
+  StoredThreadNotes,
+  ThreadRecapTriggerCounts,
+} from "./thread-notes.js";
 export { getExperiments, setExperiments } from "./experiments.js";
 export {
   deleteInstalledPlugin,

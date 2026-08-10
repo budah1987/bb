@@ -97,9 +97,18 @@ describe("buildCompactUsageLimitsModel", () => {
       windows: [{ label: "Weekly limit", usedPercent: 26, resetsAt: null }],
     };
 
-    expect(
-      buildCompactUsageLimitsModel(usage)?.providers[1]?.summaryMetric,
-    ).toEqual({ label: "Weekly", usedPercent: 26, resetsAt: null });
+    expect(buildCompactUsageLimitsModel(usage)?.providers[1]).toEqual({
+      name: "Codex",
+      summaryMetric: {
+        label: "Weekly",
+        usedPercent: 26,
+        resetsAt: null,
+      },
+      detailMetrics: [
+        { label: "5hr", usedPercent: null, resetsAt: null },
+        { label: "Weekly", usedPercent: 26, resetsAt: null },
+      ],
+    });
   });
 });
 

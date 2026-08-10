@@ -646,9 +646,23 @@ export function registerThreadActionRoutes(app: Hono, deps: AppDeps): void {
   });
 
   post(routes.read, (context) => {
-    requirePublicThread(deps.db, context.req.param("id"));
+    const existing = requirePublicThread(deps.db, context.req.param("id"));
     const thread = updateThread(deps.db, deps.hub, context.req.param("id"), {
-      lastReadAt: Date.now(),
+      // Equality records an explicit acknowledgement. Automatic viewing uses
+      // the later timestamp below so the UI can distinguish "seen" from
+      // "handled" without another persisted flag.
+      lastReadAt: existing.latestAttentionAt,
+    });
+    if (!thread) {
+      throw new ApiError(404, "thread_not_found", "Thread not found");
+    }
+    return context.json(toThreadResponseFromThread(deps, { thread }));
+  });
+
+  post(routes.viewed, (context) => {
+    const existing = requirePublicThread(deps.db, context.req.param("id"));
+    const thread = updateThread(deps.db, deps.hub, context.req.param("id"), {
+      lastReadAt: Math.max(Date.now(), existing.latestAttentionAt + 1),
     });
     if (!thread) {
       throw new ApiError(404, "thread_not_found", "Thread not found");

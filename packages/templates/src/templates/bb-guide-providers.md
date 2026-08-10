@@ -13,11 +13,22 @@ Providers are agent backends (e.g., codex, claude-code). Each supports different
                                           List available providers
   bb provider models [providerId] [--machine <id-or-name> | --environment <id>]
                                           List models for a provider
+  bb provider auth status [--machine <id-or-name> | --environment <id>] [--json]
+                                          Show Claude Code and Codex login state
+  bb provider auth login <claude|codex> [--machine <id-or-name> | --environment <id>]
+                                          Start subscription OAuth login
 
 Use these before spawning threads if you are unsure which provider or model to use.
 `--host` is an alias for `--machine`. Machine and environment selectors are
 mutually exclusive because an environment already selects its machine. When no
 selector is supplied, both commands intentionally inspect the primary machine.
+The provider auth commands use the same machine selection. They never request
+a provider password, a Mac password, or an API key. Claude login prints its
+OAuth link, waits for the one-time code, and forwards that code unchanged.
+Codex login prints its ChatGPT device link and code, then waits for completion.
+Use `--no-wait` to return after the link and code appear. If Claude reports a
+macOS Keychain problem, run the displayed unlock command on that Mac. Never
+send the keychain password through bb.
 When provider and model are omitted from bb thread spawn, the project's
 remembered defaults apply. If the project has no remembered choice, bb uses
 the explicitly requested provider or Codex, then resolves the model marked

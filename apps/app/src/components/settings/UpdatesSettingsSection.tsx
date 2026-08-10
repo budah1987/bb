@@ -1,11 +1,17 @@
 import {
   useEffect,
   useId,
+  useMemo,
   useState,
   useSyncExternalStore,
   type ReactNode,
 } from "react";
+import { useNavigate } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
+import {
+  BBAMIR_UPSTREAM_UPDATE_TITLE,
+  buildBbamirUpstreamUpdatePrompt,
+} from "@bb/domain";
 import type { BbDesktopInfo } from "@bb/desktop-contract";
 import type { SystemVersionResponse } from "@bb/server-contract";
 import { Button, type ButtonProps } from "@bb/shared-ui/button";
@@ -29,6 +35,10 @@ import { appToast } from "@/components/ui/app-toast";
 import { invalidateHostProviderCliStatus } from "@/hooks/cache-owners/provider-cli-status-cache-owner";
 import { hydrateSystemVersionCache } from "@/hooks/cache-owners/system-version-cache-owner";
 import { useRetryHostUpdate } from "@/hooks/mutations/host-mutations";
+import { useCreateThread } from "@/hooks/mutations/thread-runtime-mutations";
+import { useHosts } from "@/hooks/queries/host-queries";
+import { useSidebarNavigation } from "@/hooks/queries/sidebar-navigation-query";
+import { useSystemConfig } from "@/hooks/queries/system-queries";
 import {
   useUpdateInventory,
   type UpdateInventoryMachine,
@@ -36,8 +46,10 @@ import {
 import { useDesktopUpdateInfo } from "@/hooks/useDesktopUpdateInfo";
 import { formatHostUpdateStatus } from "@/lib/host-update-status";
 import { formatRelativeTime } from "@/lib/relative-time";
+import { getThreadRoutePath } from "@/lib/route-paths";
 import { openUrlInExternalBrowser } from "@/lib/url-open-routing";
 import { sdk } from "@/lib/sdk";
+import { findBbamirUpdateTarget } from "./bbamir-upstream-update";
 
 const CHANGELOG_URL = "https://github.com/get-bb/bb/blob/main/CHANGELOG.md";
 
@@ -375,6 +387,118 @@ export function BbAppUpdateRows({
   }
 
   return <UpdatesRow>{name}</UpdatesRow>;
+}
+
+function BbamirSourceUpdateRow() {
+  const navigate = useNavigate();
+  const createThread = useCreateThread();
+  const hostsQuery = useHosts();
+  const sidebarNavigationQuery = useSidebarNavigation();
+  const systemConfigQuery = useSystemConfig();
+  const targetState = useMemo(
+    () =>
+      findBbamirUpdateTarget({
+        hosts: hostsQuery.data,
+        navigation: sidebarNavigationQuery.data,
+        primaryHostId: systemConfigQuery.data?.primaryHostId ?? null,
+      }),
+    [
+      hostsQuery.data,
+      sidebarNavigationQuery.data,
+      systemConfigQuery.data?.primaryHostId,
+    ],
+  );
+
+  async function startUpdate(): Promise<void> {
+    if (targetState.status !== "ready" || createThread.isPending) return;
+    try {
+      const thread = await createThread.mutateAsync({
+        title: BBAMIR_UPSTREAM_UPDATE_TITLE,
+        projectId: targetState.target.projectId,
+        input: [
+          {
+            type: "text",
+            text: buildBbamirUpstreamUpdatePrompt({
+              sourcePath: targetState.target.sourcePath,
+            }),
+            mentions: [],
+          },
+        ],
+        environment: {
+          type: "host",
+          hostId: targetState.target.hostId,
+          workspace: {
+            type: "managed-worktree",
+            baseBranch: { kind: "default" },
+          },
+        },
+      });
+      appToast.success("Update workspace created");
+      navigate(
+        getThreadRoutePath({
+          projectId: thread.projectId,
+          threadId: thread.id,
+        }),
+      );
+    } catch {
+      // The mutation's shared error handling already explains the failure.
+    }
+  }
+
+  if (targetState.status === "loading") {
+    return (
+      <UpdatesRow>
+        <span className="flex min-w-40 flex-1 items-baseline gap-2">
+          <span className="truncate font-medium text-foreground">
+            BBamir source
+          </span>
+        </span>
+        <RowActions>
+          <RowStatus live>Finding the protected checkout…</RowStatus>
+        </RowActions>
+      </UpdatesRow>
+    );
+  }
+
+  if (targetState.status !== "ready") {
+    return (
+      <UpdatesRow tone="attention">
+        <span className="flex min-w-40 flex-1 flex-col gap-0.5">
+          <span className="font-medium text-foreground">BBamir source</span>
+          <span className="text-xs text-subtle-foreground">
+            {targetState.message}
+          </span>
+        </span>
+      </UpdatesRow>
+    );
+  }
+
+  return (
+    <UpdatesRow tone={createThread.isPending ? "attention" : "default"}>
+      <span className="flex min-w-40 flex-1 flex-col gap-0.5">
+        <span className="font-medium text-foreground">BBamir source</span>
+        <span className="text-xs text-subtle-foreground">
+          Review upstream changes in a protected worktree
+        </span>
+      </span>
+      <RowActions>
+        {createThread.isPending ? (
+          <RowStatus live tone="attention">
+            Starting update workspace…
+          </RowStatus>
+        ) : null}
+        <RowButton
+          aria-busy={createThread.isPending}
+          disabled={createThread.isPending}
+          onClick={() => {
+            void startUpdate();
+          }}
+        >
+          Update from bb
+        </RowButton>
+      </RowActions>
+    </UpdatesRow>
+  );
 }
 
 export interface MachineUpdatesRowsProps {
@@ -799,6 +923,7 @@ export function UpdatesSettingsSection() {
                   }
             }
           />
+          <BbamirSourceUpdateRow />
         </UpdatesRowList>
       </UpdatesSection>
 

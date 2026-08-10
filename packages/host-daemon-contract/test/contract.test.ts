@@ -166,10 +166,74 @@ const WORKSPACE_DIFF_AVAILABLE_RESULT: JsonObject = {
   },
 };
 
+const PROVIDER_AUTH_SNAPSHOT_RESULT = {
+  statuses: {
+    claudeCode: {
+      provider: "claudeCode",
+      displayName: "Claude Code",
+      state: "loggedOut",
+      authMethod: null,
+      accountEmail: null,
+      organizationName: null,
+      message: null,
+    },
+    codex: {
+      provider: "codex",
+      displayName: "Codex",
+      state: "loggedIn",
+      authMethod: "chatgpt",
+      accountEmail: "person@example.com",
+      organizationName: null,
+      message: null,
+    },
+  },
+  sessions: [],
+} satisfies JsonObject;
+
 const ONLINE_RPC_RESPONSE_RESULT_FIXTURES: OnlineRpcResponseResultFixtures = {
   "connect-tunnel.ensure-identity": {
     label: "sawyer-air",
     baseDomain: "getbb.app",
+  },
+  "provider_auth.status": PROVIDER_AUTH_SNAPSHOT_RESULT,
+  "provider_auth.start": PROVIDER_AUTH_SNAPSHOT_RESULT,
+  "provider_auth.submit_code": PROVIDER_AUTH_SNAPSHOT_RESULT,
+  "simulator.status": {
+    supported: true,
+    message: null,
+    devices: [
+      {
+        udid: "SIM-1",
+        name: "iPhone 17 Pro",
+        runtime: "iOS 26 0",
+        state: "Shutdown",
+      },
+    ],
+    active: null,
+  },
+  "simulator.attach": {
+    session: {
+      deviceUdid: "SIM-1",
+      deviceName: "iPhone 17 Pro",
+      state: "running",
+    },
+    lease: {
+      gatewayPort: 3210,
+      token: "abcdefghijklmnopqrstuvwxyz0123456789",
+      expiresAt: 1_800_000_000_000,
+    },
+  },
+  "simulator.lease": {
+    gatewayPort: 3210,
+    token: "abcdefghijklmnopqrstuvwxyz0123456789",
+    expiresAt: 1_800_000_000_000,
+  },
+  "simulator.control": { ok: true },
+  "simulator.stop": { stopped: true, deviceUdid: "SIM-1" },
+  "simulator.accessibility": { tree: { role: "application" } },
+  "simulator.screenshot": {
+    dataBase64: "iVBORw0KGgo=",
+    mimeType: "image/png",
   },
   "host.list_files": {
     files: [
@@ -485,6 +549,64 @@ const ONLINE_RPC_RESPONSE_RESULT_FIXTURES: OnlineRpcResponseResultFixtures = {
     truncated: false,
   },
   "workspace.status": WORKSPACE_UNAVAILABLE_RESULT,
+  "workspace.docker_mounts": {
+    outcome: "available",
+    workspaceGit: {
+      branch: "feature/right-rail",
+      commonDir: "/home/user/project/.git",
+      root: "/home/user/project",
+    },
+    containers: [
+      {
+        composeWorkingDirGit: {
+          branch: "feature/right-rail",
+          commonDir: "/home/user/project/.git",
+          root: "/home/user/project",
+        },
+        id: "container-1",
+        image: "example/api:latest",
+        labels: {
+          composeProject: "project",
+          composeService: "api",
+          composeWorkingDir: "/home/user/project",
+          getbbRole: null,
+        },
+        mounts: [
+          {
+            destination: "/app/apps/api/dist",
+            readOnly: false,
+            source: "/home/user/project/apps/api/dist",
+            sourceGit: {
+              branch: "feature/right-rail",
+              commonDir: "/home/user/project/.git",
+              root: "/home/user/project",
+            },
+          },
+        ],
+        name: "api",
+        publishedPorts: [3000],
+        state: "running",
+      },
+    ],
+  },
+  "workspace.docker_path_activity": {
+    outcome: "available",
+    paths: [
+      {
+        limited: false,
+        newestFileMtimeMs: 1_700_000_000_000,
+        newestFilePath: "/home/user/project/apps/api/src/index.ts",
+        path: "apps/api/src",
+        scannedFiles: 42,
+      },
+    ],
+  },
+  "workspace.github_deployments": {
+    outcome: "available",
+    repository: "acme/project",
+    ref: "feature/right-rail",
+    deployments: [],
+  },
   "workspace.diff": WORKSPACE_UNAVAILABLE_RESULT,
   "workspace.diffFiles": WORKSPACE_UNAVAILABLE_RESULT,
   "workspace.diffPatch": WORKSPACE_UNAVAILABLE_RESULT,
@@ -1096,11 +1218,10 @@ describe("host-daemon local schemas", () => {
 });
 
 describe("host-daemon command schemas", () => {
-  // Version 80 includes live workspace metadata refresh and scopes GitHub PR
-  // commands to an authenticated account. Older daemons do not support the
-  // added messages and fields, so the bump forces an update.
-  it("uses protocol version 80 for account-scoped GitHub workflows", () => {
-    expect(HOST_DAEMON_PROTOCOL_VERSION).toBe(80);
+  // Version 83 adds environment preview facts to the version 82 provider
+  // authentication and simulator contract. Older daemons cannot parse them.
+  it("uses protocol version 83 for environment preview facts", () => {
+    expect(HOST_DAEMON_PROTOCOL_VERSION).toBe(83);
   });
 
   it("binds Plan cancellation to a required turn id and typed result", () => {

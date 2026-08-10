@@ -171,6 +171,16 @@ export interface PluginThreadHeaderActionProps {
 }
 
 /**
+ * Props passed to an `experimental_threadRailSection` component, rendered
+ * below BB's core environment sections in the active thread's right rail.
+ */
+export interface PluginThreadRailSectionProps {
+  threadId: string;
+  projectId: string;
+  environmentId: string | null;
+}
+
+/**
  * Where a file being opened by a `fileOpener` lives. `path` semantics follow
  * the source: workspace paths are relative to the environment's worktree,
  * thread-storage paths are relative to the thread's storage root, host paths
@@ -499,6 +509,8 @@ export interface PluginSidebarProject {
    * is not backed by a remote repository.
    */
   experimental_gitRemoteUrl?: string | null;
+  /** Default GitHub identity for new workspaces in this repository. */
+  experimental_githubAccountLogin?: string | null;
 }
 
 export interface PluginSidebarThreadsState {
@@ -584,6 +596,15 @@ export interface PluginThreadHeaderActionRegistration {
    */
   title: string;
   component: ComponentType<PluginThreadHeaderActionProps>;
+}
+
+/** Render one plugin-owned section in the active thread's right rail. */
+export interface PluginThreadRailSectionRegistration {
+  /** Unique within the plugin; letters, digits, `-`, `_`. */
+  id: string;
+  /** Names the labelled region that wraps the plugin component. */
+  title: string;
+  component: ComponentType<PluginThreadRailSectionProps>;
 }
 
 /** One pane's place in the split layout, as fractions of the split area. */
@@ -781,6 +802,14 @@ export interface PluginAppSlots {
    */
   experimental_threadHeaderAction(
     registration: PluginThreadHeaderActionRegistration,
+  ): void;
+  /**
+   * Render a section below BB's core right-rail environment sections (see
+   * {@link PluginThreadRailSectionRegistration}). Experimental: see
+   * docs/api_to_audit.md.
+   */
+  experimental_threadRailSection(
+    registration: PluginThreadRailSectionRegistration,
   ): void;
   fileOpener(registration: PluginFileOpenerRegistration): void;
   messageDirective(registration: PluginMessageDirectiveRegistration): void;

@@ -91,6 +91,39 @@ describe("collectPluginAppRegistrations — experimental_threadHeaderAction", ()
   });
 });
 
+describe("collectPluginAppRegistrations — experimental_threadRailSection", () => {
+  it("collects a rail section", () => {
+    const definition = definePluginApp((app) => {
+      app.slots.experimental_threadRailSection({
+        id: "checks",
+        title: "Checks",
+        component: Component,
+      });
+    });
+
+    expect(
+      collectPluginAppRegistrations(definition).threadRailSections,
+    ).toEqual([{ id: "checks", title: "Checks", component: Component }]);
+  });
+
+  it("rejects two rail sections with the same id", () => {
+    const definition = definePluginApp((app) => {
+      app.slots.experimental_threadRailSection({
+        id: "checks",
+        title: "One",
+        component: Component,
+      });
+      app.slots.experimental_threadRailSection({
+        id: "checks",
+        title: "Two",
+        component: Component,
+      });
+    });
+
+    expect(() => collectPluginAppRegistrations(definition)).toThrow(/checks/);
+  });
+});
+
 describe("collectPluginAppRegistrations — experimental_threadList", () => {
   it("collects the selected-style context bars", () => {
     const definition = definePluginApp((app) => {

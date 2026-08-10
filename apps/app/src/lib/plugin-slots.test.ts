@@ -3,6 +3,7 @@ import type {
   PluginHomepageSectionProps,
   PluginMessageDirectiveProps,
   PluginNavPanelProps,
+  PluginThreadRailSectionProps,
 } from "@bb/plugin-sdk";
 import {
   getPluginSlotSnapshot,
@@ -20,6 +21,9 @@ function PanelComponent(_props: PluginNavPanelProps) {
   return null;
 }
 function DirectiveComponent(_props: PluginMessageDirectiveProps) {
+  return null;
+}
+function RailComponent(_props: PluginThreadRailSectionProps) {
   return null;
 }
 
@@ -74,6 +78,27 @@ describe("plugin slot store", () => {
     ).toEqual(["alpha", "zeta"]);
     expect(snapshot.composerCustomizations).toHaveLength(1);
     expect(snapshot.composerCustomizations[0]?.pluginId).toBe("alpha");
+  });
+
+  it("flattens rail sections with plugin ownership and generation", () => {
+    setPluginSlotRegistrations(
+      "demo",
+      registrationSet({
+        threadRailSections: [
+          { id: "checks", title: "Checks", component: RailComponent },
+        ],
+      }),
+    );
+
+    expect(getPluginSlotSnapshot().threadRailSections).toEqual([
+      {
+        id: "checks",
+        title: "Checks",
+        component: RailComponent,
+        pluginId: "demo",
+        generation: 1,
+      },
+    ]);
   });
 
   it("replaces a plugin's registrations wholesale (never appends)", () => {

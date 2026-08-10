@@ -72,6 +72,7 @@ import {
   environmentDiffFilesQueryKeyPrefix,
   environmentFilePreviewQueryKeyPrefix,
   environmentPullRequestQueryKey,
+  environmentWorkspaceFilesQueryKeyPrefix,
   environmentWorkStatusQueryKeyPrefix,
   hostsQueryKey,
   sidebarNavigationQueryKey,
@@ -79,6 +80,7 @@ import {
   allSystemProvidersQueryKeyPrefix,
   threadDefaultExecutionOptionsQueryKey,
   threadQueryKey,
+  threadNotesQueryKey,
   threadTabsQueryKey,
   threadSearchQueryKeyPrefix,
   terminalsQueryKey,
@@ -350,6 +352,12 @@ export const REALTIME_THREAD_CHANGE_REGISTRY = {
     dirty: [
       dirtyThreadTerminalQueries, // Terminal panel lists sessions by thread.
     ],
+  },
+  "notes-changed": {
+    // Immediate like tabs: the scratchpad is edited directly in one window and
+    // a second window showing the same thread should not hold stale text.
+    flush: "immediate",
+    dirty: [dirtyThreadNotesQueries],
   },
 } satisfies ThreadChangeRegistry;
 
@@ -657,6 +665,12 @@ function dirtyThreadTabsQueries({
   return threadId ? [threadTabsQueryKey(threadId)] : [];
 }
 
+function dirtyThreadNotesQueries({
+  threadId,
+}: ThreadRealtimeDirtyContext): QueryKey[] {
+  return threadId ? [threadNotesQueryKey(threadId)] : [];
+}
+
 function dirtyThreadSearchQueries(): QueryKey[] {
   return [threadSearchQueryKeyPrefix()];
 }
@@ -837,6 +851,9 @@ function dirtyEnvironmentLiveWorkspaceStateQueries({
   });
   queryClient.invalidateQueries({
     queryKey: environmentFilePreviewQueryKeyPrefix(environmentId),
+  });
+  queryClient.invalidateQueries({
+    queryKey: environmentWorkspaceFilesQueryKeyPrefix(environmentId),
   });
   queryClient.invalidateQueries({
     queryKey: environmentDiffFilesQueryKeyPrefix(environmentId),

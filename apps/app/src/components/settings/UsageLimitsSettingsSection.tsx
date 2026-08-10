@@ -29,6 +29,7 @@ import {
   getProviderIconInfo,
 } from "@/lib/provider-icon";
 import { cn } from "@bb/shared-ui/lib/utils";
+import { formatProviderUsageReset } from "@/lib/provider-usage-format";
 
 interface ProviderConfig {
   key: "codex" | "claudeCode" | "cursor";
@@ -74,43 +75,6 @@ function barColorClass(usedPercent: number): string {
   return "bg-primary";
 }
 
-function formatReset(resetsAt: string | null): string | null {
-  if (!resetsAt) {
-    return null;
-  }
-  const reset = new Date(resetsAt);
-  if (Number.isNaN(reset.getTime())) {
-    return null;
-  }
-  const diffMs = reset.getTime() - Date.now();
-  if (diffMs <= 0) {
-    return "Resetting now";
-  }
-
-  const diffMinutes = Math.round(diffMs / 60_000);
-  if (diffMinutes < 60) {
-    return `Resets in ${diffMinutes} min`;
-  }
-
-  const diffHours = Math.floor(diffMinutes / 60);
-  if (diffHours < 24) {
-    const minutes = diffMinutes % 60;
-    return minutes > 0
-      ? `Resets in ${diffHours} hr ${minutes} min`
-      : `Resets in ${diffHours} hr`;
-  }
-
-  const withinWeek = diffMs < 7 * 24 * 60 * 60_000;
-  const formatted = reset.toLocaleString(undefined, {
-    weekday: withinWeek ? "short" : undefined,
-    month: withinWeek ? undefined : "short",
-    day: withinWeek ? undefined : "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  });
-  return `Resets ${formatted}`;
-}
-
 function formatUsdCents(cents: number, alwaysShowCents: boolean): string {
   const hasFractionalDollar = cents % 100 !== 0;
   return new Intl.NumberFormat(undefined, {
@@ -129,7 +93,7 @@ function usageWindowValue(window: ProviderUsageWindow): string {
 }
 
 function UsageWindowRow({ window }: { window: ProviderUsageWindow }) {
-  const reset = formatReset(window.resetsAt);
+  const reset = formatProviderUsageReset(window.resetsAt);
   return (
     <div className="space-y-1">
       <div className="flex items-baseline justify-between gap-2">

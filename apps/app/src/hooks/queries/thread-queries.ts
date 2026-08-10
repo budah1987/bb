@@ -11,6 +11,7 @@ import type {
   PromptHistoryResponse,
   ThreadQueuedMessageListResponse,
   ThreadListResponse,
+  ThreadNotesResponse,
   ThreadPendingInteractionsResponse,
   ThreadResponse,
   ThreadSearchResponse,
@@ -62,6 +63,7 @@ import {
   threadDetailBootstrapQueryKey,
   threadQueuedMessagesQueryKey,
   threadListQueryKey,
+  threadNotesQueryKey,
   threadPendingInteractionsQueryKey,
   threadPromptHistoryQueryKey,
   threadQueryKey,
@@ -872,6 +874,32 @@ export function useThreadConversationOutline(
     ...(options?.staleTime === undefined
       ? {}
       : { staleTime: options.staleTime }),
+  });
+}
+
+interface ThreadNotesQueryOptions {
+  enabled?: boolean;
+}
+
+/**
+ * The thread's Notes row (scratchpad + generated recap). Subscribes to the
+ * thread's realtime channel so a `notes-changed` signal — another window's
+ * scratchpad edit, or a recap generated server-side — refreshes this cache
+ * rather than leaving stale text on screen.
+ */
+export function useThreadNotes(id: string, options?: ThreadNotesQueryOptions) {
+  const enabled = (options?.enabled ?? true) && id.length > 0;
+  useThreadDetailRealtimeSubscription(id, { enabled });
+
+  return useQuery<ThreadNotesResponse>({
+    queryKey: threadNotesQueryKey(id),
+    queryFn: ({ signal }) =>
+      sdk.threads.notes.get({
+        threadId: requireThreadId(id, "useThreadNotes"),
+        signal,
+      }),
+    enabled,
+    ...RESUME_REFETCH_QUERY_POLICY,
   });
 }
 

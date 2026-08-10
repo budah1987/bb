@@ -849,6 +849,24 @@ A common pairing with a replaced sidebar: hide child threads from the list and
 surface them here instead, filtering `experimental_useSidebarThreads()` by
 `parentThreadId === threadId`.
 
+### A section in the thread rail
+
+`app.slots.experimental_threadRailSection` renders one plugin-owned section
+below bb's core environment rows. It receives `threadId`, `projectId`, and a
+nullable `environmentId`.
+
+```tsx
+app.slots.experimental_threadRailSection({
+  id: "checks",
+  title: "Checks",
+  component: ({ threadId, projectId, environmentId }) => { ... },
+});
+```
+
+Keep the section compact. Use one-line rows for state and short detail lines
+for expanded content. The host supplies an accessible region label and crash
+isolation. The plugin owns the visible section layout.
+
 ### Replacing the sidebar thread list
 
 `app.slots.experimental_threadList` is the one **exclusive** slot: only one
@@ -1048,6 +1066,10 @@ Slot props contracts (versioned, additive-only):
   document-like content; `"flush"` gives it the full tab area (no padding,
   definite height, no host scrolling) — right for app-like content that
   owns its layout, such as `ThreadChat`.
+- `experimental_threadRailSection` → one plugin-owned section below bb's core
+  environment rows. Registration: `{ id, title, component }`. The component
+  receives `{ threadId, projectId, environmentId }`. Keep rows compact because
+  the rail has a fixed 288px width.
 - Removed pre-1.0: `composerAccessory` was the legacy composer footer. Migrate
   controls to `app.composer.customize({ actions })` or `plusMenu`, larger
   content to `banners`, and legacy `{ projectId, threadId }` prop reads to

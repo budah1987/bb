@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { createStore, Provider } from "jotai";
 import type { ReactNode, Ref } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ThreadDetailHeader } from "./ThreadDetailHeader";
@@ -51,6 +52,7 @@ afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
   isCompactViewport = false;
+  window.localStorage.clear();
 });
 
 describe("ThreadDetailHeader", () => {
@@ -243,6 +245,73 @@ describe("ThreadDetailHeader", () => {
     expect(screen.getByText("Responsive menu actions")).not.toBeNull();
     expect(screen.queryByText("Open workspace")).toBeNull();
     expect(screen.queryByText("Commit")).toBeNull();
+  });
+
+  it("toggles the rail, reflects its visibility, and pairs with the panel toggle", () => {
+    // Start hidden explicitly so the assertions below describe the toggle's
+    // transition rather than the atom's current default.
+    window.localStorage.setItem("bb.thread.railVisible", "false");
+    // Own store: the visibility atom is module-level, so the default store
+    // would carry this test's toggle into every later render.
+    render(
+      <Provider store={createStore()}>
+        <PaneContext.Provider value={PANE_CONTEXT}>
+          <ThreadDetailHeader
+            actionsMenu={null}
+            childPillLabel={null}
+            isSecondaryPanelOpen={false}
+            onOpenThreadGitAction={vi.fn()}
+            onToggleSecondaryPanel={vi.fn()}
+            threadHeaderGitActions={[]}
+            threadTitle="Rail toggle"
+          />
+        </PaneContext.Provider>
+      </Provider>,
+    );
+
+    const railToggle = screen.getByRole("button", { name: /^Show rail/ });
+    expect(railToggle.getAttribute("aria-pressed")).toBe("false");
+
+    // Immediately before the panel toggle, with 6px added to the row's 2px gap.
+    const panelToggle = screen.getByRole("button", {
+      name: /^Show right panel/,
+    });
+    expect(
+      railToggle.compareDocumentPosition(panelToggle) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(railToggle.parentElement?.classList).toContain("mr-1.5");
+
+    fireEvent.click(railToggle);
+
+    expect(
+      screen
+        .getByRole("button", { name: /^Hide rail/ })
+        .getAttribute("aria-pressed"),
+    ).toBe("true");
+    expect(window.localStorage.getItem("bb.thread.railVisible")).toBe("true");
+  });
+
+  it("keeps the rail toggle out of the compact drawer layout", () => {
+    isCompactViewport = true;
+
+    render(
+      <Provider store={createStore()}>
+        <PaneContext.Provider value={PANE_CONTEXT}>
+          <ThreadDetailHeader
+            actionsMenu={null}
+            childPillLabel={null}
+            isSecondaryPanelOpen={false}
+            onOpenThreadGitAction={vi.fn()}
+            onToggleSecondaryPanel={vi.fn()}
+            threadHeaderGitActions={[]}
+            threadTitle="Compact rail toggle"
+          />
+        </PaneContext.Provider>
+      </Provider>,
+    );
+
+    expect(screen.queryByRole("button", { name: /rail/i })).toBeNull();
   });
 
   it("renders serialized mentions in the thread title as pills", () => {

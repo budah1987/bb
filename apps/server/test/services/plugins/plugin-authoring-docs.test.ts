@@ -21,6 +21,7 @@ import {
   type PluginSettingsSectionProps,
   type PluginSidebarFooterActionProps,
   type PluginThreadHeaderActionProps,
+  type PluginThreadRailSectionProps,
   type PluginThreadListProps,
   type PluginSidebarFooterActionRegistration,
   type PluginThreadEventPayloads,
@@ -158,6 +159,7 @@ type SlotPropsByName = {
   sidebarFooterAction: PluginSidebarFooterActionProps;
   experimental_threadList: PluginThreadListProps;
   experimental_threadHeaderAction: PluginThreadHeaderActionProps;
+  experimental_threadRailSection: PluginThreadRailSectionProps;
   fileOpener: PluginFileOpenerProps;
   messageDirective: PluginMessageDirectiveProps;
   messageAction: PluginMessageActionContext;
@@ -231,19 +233,10 @@ const FRONTEND_SLOT_PROP_FIELDS = {
     "projectId",
     "isCompactViewport",
   ],
+  experimental_threadRailSection: ["threadId", "projectId", "environmentId"],
   fileOpener: ["path", "source"],
-  messageDirective: [
-    "attributes",
-    "source",
-    "message",
-    "openWorkspaceFile",
-  ],
-  messageAction: [
-    "threadId",
-    "message",
-    "selectedText",
-    "openPanel",
-  ],
+  messageDirective: ["attributes", "source", "message", "openWorkspaceFile"],
+  messageAction: ["threadId", "message", "selectedText", "openPanel"],
 } as const satisfies {
   [S in keyof SlotPropsByName]: readonly (keyof SlotPropsByName[S])[];
 };

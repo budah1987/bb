@@ -1,0 +1,2012 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Conductor file viewer prototype</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --canvas: oklch(0.195 0 0);
+        --sidebar: color-mix(in oklch, var(--ink) 2.2%, var(--canvas));
+        --panel: var(--canvas);
+        --panel-raised: color-mix(in oklab, var(--ink) 2.5%, transparent);
+        --panel-recessed: color-mix(in oklab, var(--ink) 6%, transparent);
+        --ink: oklch(0.81 0 0);
+        --ink-soft: oklch(0.715 0 0);
+        --muted: oklch(0.68 0 0);
+        --faint: oklch(0.52 0 0);
+        --line: color-mix(in oklch, var(--ink) 11%, var(--canvas));
+        --line-strong: color-mix(in oklch, var(--ink) 19.4%, var(--canvas));
+        --blue: oklch(0.72 0.09 250);
+        --blue-strong: oklch(0.82 0 0);
+        --blue-wash: color-mix(in oklab, var(--ink) 13.8%, transparent);
+        --folder-hover: color-mix(in oklab, var(--ink) 13.8%, transparent);
+        --folder-selected: color-mix(in oklab, var(--ink) 6%, transparent);
+        --green: oklch(0.74 0.15 155);
+        --green-wash: color-mix(in oklab, var(--green) 13%, transparent);
+        --yellow: oklch(0.8 0.15 80);
+        --red: oklch(0.72 0.19 22);
+        --red-wash: color-mix(in oklab, var(--red) 12%, transparent);
+        --sans:
+          Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI",
+          sans-serif;
+        --mono:
+          "SFMono-Regular", "Cascadia Code", "Roboto Mono", Menlo, monospace;
+        --radius-lg: 10px;
+        --radius-md: 8px;
+        --shadow: 0 14px 34px
+          color-mix(in oklab, var(--canvas) 45%, transparent);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html,
+      body {
+        margin: 0;
+        min-height: 100%;
+      }
+
+      body {
+        background: var(--canvas);
+        color: var(--ink);
+        font-family: var(--sans);
+        -webkit-font-smoothing: antialiased;
+      }
+
+      button,
+      input,
+      textarea {
+        font: inherit;
+      }
+
+      button {
+        border: 0;
+        color: inherit;
+        cursor: pointer;
+      }
+
+      button:focus-visible,
+      input:focus-visible,
+      textarea:focus-visible {
+        outline: 2px solid var(--blue);
+        outline-offset: 2px;
+      }
+
+      .prototype {
+        max-width: 1400px;
+        margin: 0 auto;
+        padding: 28px 28px 36px;
+      }
+
+      .prototype-toolbar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 20px;
+        margin: 0 auto 16px;
+        max-width: 1240px;
+      }
+
+      .eyebrow {
+        color: var(--muted);
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.11em;
+        text-transform: uppercase;
+      }
+
+      .toolbar-actions {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+
+      .segmented {
+        display: inline-flex;
+        gap: 2px;
+        padding: 3px;
+        border: 1px solid var(--line);
+        border-radius: 9px;
+        background: var(--panel-raised);
+      }
+
+      .segmented button,
+      .theme-button {
+        min-height: 28px;
+        padding: 0 10px;
+        border-radius: 6px;
+        background: transparent;
+        color: var(--muted);
+        font-size: 12px;
+        transition:
+          background-color 140ms ease,
+          color 140ms ease,
+          transform 140ms ease;
+      }
+
+      .segmented button:hover,
+      .theme-button:hover {
+        color: var(--ink);
+      }
+
+      .segmented button.active,
+      .theme-button:hover {
+        background: var(--panel-raised);
+        color: var(--ink);
+      }
+
+      .segmented button:active,
+      .theme-button:active {
+        transform: scale(0.96);
+      }
+
+      .theme-button {
+        display: grid;
+        width: 31px;
+        padding: 0;
+        place-items: center;
+        border: 1px solid var(--line);
+      }
+
+      .icon {
+        width: 15px;
+        height: 15px;
+        fill: none;
+        stroke: currentColor;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+        stroke-width: 1.7;
+      }
+      .icon.fill {
+        fill: currentColor;
+        stroke: none;
+      }
+
+      .app-frame {
+        display: grid;
+        grid-template-columns: 214px minmax(0, 1fr) 420px;
+        height: 790px;
+        max-width: 1240px;
+        margin: 0 auto;
+        overflow: hidden;
+        border: 1px solid var(--line-strong);
+        border-radius: var(--radius-lg);
+        background: var(--panel);
+        box-shadow: var(--shadow);
+      }
+
+      .sidebar {
+        display: flex;
+        flex-direction: column;
+        min-width: 0;
+        border-right: 1px solid var(--line);
+        background: var(--sidebar);
+      }
+
+      .brand-row,
+      .workspace-row,
+      .section-title,
+      .thread-item,
+      .sidebar-footer {
+        padding-inline: 14px;
+      }
+
+      .brand-row {
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        min-height: 53px;
+        border-bottom: 1px solid var(--line);
+      }
+
+      .brand-mark {
+        display: grid;
+        width: 22px;
+        height: 22px;
+        place-items: center;
+        border-radius: 5px;
+        background: var(--ink);
+        color: var(--canvas);
+        font-size: 12px;
+        font-weight: 800;
+        box-shadow: none;
+      }
+
+      .brand-name {
+        font-size: 13px;
+        font-weight: 700;
+        letter-spacing: -0.01em;
+      }
+      .brand-caption {
+        color: var(--muted);
+        font-size: 10px;
+      }
+
+      .workspace-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        margin: 12px 0 5px;
+        color: var(--ink-soft);
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+      }
+
+      .workspace-row .icon {
+        color: var(--muted);
+        width: 13px;
+        height: 13px;
+      }
+
+      .nav-row {
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        min-height: 31px;
+        margin: 0 7px;
+        padding: 0 8px;
+        border-radius: 7px;
+        color: var(--muted);
+        font-size: 12px;
+      }
+
+      .nav-row.active {
+        background: var(--blue-wash);
+        color: var(--ink);
+      }
+      .nav-row .icon {
+        width: 14px;
+        height: 14px;
+      }
+
+      .section-title {
+        margin-top: 23px;
+        color: var(--faint);
+        font-size: 10px;
+        font-weight: 750;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+      }
+
+      .thread-list {
+        display: grid;
+        gap: 3px;
+        margin-top: 7px;
+      }
+
+      .thread-item {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        min-height: 39px;
+        margin: 0 7px;
+        padding-inline: 8px;
+        border-radius: 7px;
+        color: var(--muted);
+        font-size: 11px;
+      }
+
+      .thread-item.active {
+        background: rgba(255, 255, 255, 0.06);
+        color: var(--ink-soft);
+      }
+      .thread-item .status {
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: var(--green);
+        box-shadow: 0 0 0 3px var(--green-wash);
+      }
+      .thread-item .status.idle {
+        background: var(--faint);
+        box-shadow: none;
+      }
+      .thread-item span:last-child {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .sidebar-footer {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-top: auto;
+        min-height: 48px;
+        border-top: 1px solid var(--line);
+        color: var(--muted);
+        font-size: 11px;
+      }
+
+      .avatar {
+        display: grid;
+        width: 22px;
+        height: 22px;
+        place-items: center;
+        border-radius: 50%;
+        background: var(--panel-raised);
+        color: var(--ink-soft);
+        font-size: 10px;
+        font-weight: 700;
+      }
+
+      .workspace {
+        display: flex;
+        min-width: 0;
+        flex-direction: column;
+        background: var(--canvas);
+      }
+
+      .topbar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        min-height: 53px;
+        padding: 0 20px;
+        border-bottom: 1px solid var(--line);
+        background: var(--panel);
+      }
+
+      .crumbs {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        min-width: 0;
+        color: var(--muted);
+        font-size: 11px;
+      }
+      .crumbs strong {
+        color: var(--ink-soft);
+        font-weight: 600;
+      }
+      .crumbs .icon {
+        width: 12px;
+        height: 12px;
+        color: var(--faint);
+      }
+
+      .topbar-actions {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        color: var(--muted);
+      }
+      .topbar-actions .icon-button {
+        width: 27px;
+        height: 27px;
+      }
+
+      .icon-button {
+        display: grid;
+        place-items: center;
+        border-radius: 7px;
+        background: transparent;
+        color: var(--muted);
+        transition:
+          background-color 140ms ease,
+          color 140ms ease,
+          transform 140ms ease;
+      }
+
+      .icon-button:hover {
+        background: var(--panel-raised);
+        color: var(--ink);
+      }
+      .icon-button:active {
+        transform: scale(0.96);
+      }
+
+      .thread-content {
+        display: flex;
+        min-height: 0;
+        flex: 1;
+        flex-direction: column;
+        padding: 34px 34px 20px;
+      }
+
+      .thread-heading {
+        max-width: 560px;
+      }
+      .thread-heading .kicker {
+        color: var(--blue);
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.09em;
+        text-transform: uppercase;
+      }
+      .thread-heading h1 {
+        margin: 10px 0 8px;
+        font-size: 25px;
+        line-height: 1.14;
+        letter-spacing: -0.035em;
+      }
+      .thread-heading p {
+        max-width: 48ch;
+        margin: 0;
+        color: var(--muted);
+        font-size: 13px;
+        line-height: 1.55;
+      }
+
+      .activity-card {
+        max-width: 580px;
+        margin-top: 38px;
+        padding: 16px 17px;
+        border: 1px solid var(--line);
+        border-radius: 11px;
+        background: var(--panel);
+      }
+
+      .activity-top {
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        color: var(--ink-soft);
+        font-size: 12px;
+        font-weight: 650;
+      }
+      .activity-top .pulse {
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        background: var(--green);
+        box-shadow: 0 0 0 4px var(--green-wash);
+      }
+      .activity-card p {
+        margin: 12px 0 0;
+        color: var(--muted);
+        font-size: 12px;
+        line-height: 1.55;
+      }
+      .activity-card code {
+        color: var(--ink-soft);
+        font-family: var(--mono);
+        font-size: 11px;
+      }
+
+      .composer {
+        margin-top: auto;
+        padding: 12px 14px;
+        border: 1px solid var(--line-strong);
+        border-radius: 12px;
+        background: var(--panel);
+        box-shadow: var(--shadow);
+      }
+
+      .composer-placeholder {
+        color: var(--faint);
+        font-size: 12px;
+      }
+      .composer-bottom {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-top: 17px;
+        color: var(--faint);
+      }
+      .composer-hint {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 10px;
+      }
+      kbd {
+        padding: 2px 5px;
+        border: 1px solid var(--line-strong);
+        border-radius: 4px;
+        background: rgba(255, 255, 255, 0.04);
+        font-family: var(--mono);
+        font-size: 9px;
+      }
+      .send-button {
+        display: grid;
+        width: 28px;
+        height: 28px;
+        place-items: center;
+        border-radius: 8px;
+        background: var(--ink);
+        color: var(--canvas);
+      }
+
+      .right-panel {
+        display: flex;
+        min-width: 0;
+        flex-direction: column;
+        border-left: 1px solid var(--line);
+        background: var(--panel);
+      }
+
+      .panel-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        min-height: 53px;
+        padding: 0 15px 0 18px;
+        border-bottom: 1px solid var(--line);
+      }
+
+      .panel-title {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 12px;
+        font-weight: 700;
+      }
+      .panel-title .icon {
+        color: var(--blue);
+        width: 14px;
+        height: 14px;
+      }
+
+      .panel-tabs {
+        display: flex;
+        align-items: center;
+        gap: 3px;
+        min-width: 0;
+        min-height: 42px;
+        padding: 0 10px;
+        border-bottom: 1px solid var(--line);
+      }
+      .panel-tab {
+        position: relative;
+        display: inline-flex;
+        min-width: 0;
+        min-height: 31px;
+        align-items: center;
+        gap: 6px;
+        padding: 0 8px;
+        background: transparent;
+        color: var(--muted);
+        font-size: 11px;
+        font-weight: 650;
+      }
+      .panel-tab::after {
+        position: absolute;
+        right: 7px;
+        bottom: -1px;
+        left: 7px;
+        height: 2px;
+        border-radius: 2px;
+        background: transparent;
+        content: "";
+      }
+      .panel-tab.active {
+        color: var(--ink);
+      }
+      .panel-tab.active::after {
+        background: var(--ink);
+      }
+      .panel-tab > .icon {
+        width: 12px;
+        height: 12px;
+        color: var(--blue);
+      }
+      .file-tab-trigger {
+        flex: 0 0 auto;
+        max-width: 180px;
+        color: var(--ink-soft);
+      }
+      .file-tab-trigger > span:not(.tab-close) {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .tab-close {
+        color: var(--faint);
+        font-size: 14px;
+        font-weight: 400;
+        line-height: 1;
+      }
+      .tab-separator {
+        width: 1px;
+        height: 17px;
+        margin-inline: 3px;
+        background: var(--line);
+      }
+      .tab-spacer {
+        min-width: 0;
+        flex: 1;
+      }
+      .open-file-tabs {
+        display: flex;
+        min-width: 0;
+        max-width: 52%;
+        gap: 3px;
+        overflow-x: auto;
+      }
+      .open-file-tabs::-webkit-scrollbar {
+        display: none;
+      }
+      .new-tab {
+        flex: none;
+        width: 27px;
+        height: 27px;
+      }
+      .badge {
+        margin-left: 4px;
+        padding: 1px 5px;
+        border-radius: 10px;
+        background: var(--red-wash);
+        color: var(--red);
+        font-size: 9px;
+      }
+
+      .panel-body {
+        display: flex;
+        min-height: 0;
+        flex: 1;
+        flex-direction: column;
+      }
+      .panel-view {
+        display: none;
+        min-height: 0;
+        flex: 1;
+        flex-direction: column;
+      }
+      .panel-view.active {
+        display: flex;
+      }
+      #info-view:not(.file-active) .preview-view {
+        display: none;
+      }
+      #info-view.file-active .explorer {
+        display: none;
+      }
+      #info-view.file-active .preview-view {
+        display: flex;
+      }
+
+      .explorer {
+        display: flex;
+        min-height: 0;
+        flex: 1;
+        flex-direction: column;
+        padding: 14px 13px 12px;
+        border-bottom: 1px solid var(--line);
+      }
+
+      .explorer-heading {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin: 0 3px 10px;
+      }
+      .explorer-heading span {
+        color: var(--faint);
+        font-size: 10px;
+        font-weight: 750;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+      }
+      .explorer-actions {
+        display: flex;
+        gap: 2px;
+      }
+      .explorer-actions .icon-button {
+        width: 23px;
+        height: 23px;
+      }
+
+      .search-box {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        margin-bottom: 9px;
+        padding: 6px 8px;
+        border: 1px solid var(--line);
+        border-radius: 7px;
+        background: var(--panel-recessed);
+        color: var(--faint);
+      }
+      .search-box .icon {
+        width: 13px;
+        height: 13px;
+      }
+      .search-box span {
+        color: var(--faint);
+        font-size: 11px;
+      }
+      .search-box b {
+        margin-left: auto;
+        padding: 1px 4px;
+        border: 1px solid var(--line-strong);
+        border-radius: 4px;
+        color: var(--faint);
+        font-family: var(--mono);
+        font-size: 9px;
+        font-weight: 400;
+      }
+
+      .tree {
+        display: grid;
+        min-height: 0;
+        flex: 1;
+        align-content: start;
+        gap: 1px;
+        overflow: auto;
+        padding-right: 2px;
+      }
+      .tree::-webkit-scrollbar,
+      .code::-webkit-scrollbar,
+      .diff-pane::-webkit-scrollbar {
+        width: 7px;
+        height: 7px;
+      }
+      .tree::-webkit-scrollbar-thumb,
+      .code::-webkit-scrollbar-thumb,
+      .diff-pane::-webkit-scrollbar-thumb {
+        border-radius: 99px;
+        background: rgba(160, 175, 199, 0.15);
+      }
+      .tree-row {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        min-height: 24px;
+        padding: 0 5px;
+        border-radius: 5px;
+        color: var(--ink-soft);
+        font-size: 11px;
+        text-align: start;
+      }
+      .tree-row:hover {
+        background: var(--folder-hover);
+      }
+      .tree-row.selected {
+        background: var(--folder-selected);
+        color: var(--ink);
+      }
+      .tree-row .icon {
+        width: 13px;
+        height: 13px;
+        color: var(--muted);
+        flex: none;
+      }
+      .tree-row.file .icon {
+        color: var(--blue);
+      }
+      .tree-row.folder .icon {
+        color: var(--muted);
+      }
+      .tree-row span {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .indent-1 {
+        padding-left: 18px;
+      }
+      .indent-2 {
+        padding-left: 31px;
+      }
+      .indent-3 {
+        padding-left: 44px;
+      }
+      .tree-count {
+        margin-left: auto;
+        color: var(--faint);
+        font-family: var(--mono);
+        font-size: 9px;
+      }
+
+      .preview-view {
+        display: flex;
+        min-height: 0;
+        flex: 1;
+        flex-direction: column;
+      }
+      .file-toolbar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        min-height: 48px;
+        padding: 0 14px 0 17px;
+        border-bottom: 1px solid var(--line);
+      }
+      .file-name {
+        display: flex;
+        min-width: 0;
+        align-items: center;
+        gap: 8px;
+      }
+      .file-name .icon {
+        width: 14px;
+        height: 14px;
+        color: var(--blue);
+        flex: none;
+      }
+      .file-name-text {
+        min-width: 0;
+      }
+      .file-name strong {
+        display: block;
+        overflow: hidden;
+        color: var(--ink-soft);
+        font-size: 11px;
+        font-weight: 650;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .file-name small {
+        display: block;
+        margin-top: 2px;
+        overflow: hidden;
+        color: var(--faint);
+        font-size: 9px;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .file-actions {
+        display: flex;
+        align-items: center;
+        gap: 2px;
+      }
+      .file-actions .icon-button {
+        width: 25px;
+        height: 25px;
+      }
+      .file-actions .edit-action {
+        color: var(--blue);
+      }
+      .file-actions .save-action {
+        display: none;
+        width: auto;
+        padding: 0 8px;
+        color: #0e1d17;
+        background: var(--green);
+        font-size: 10px;
+        font-weight: 700;
+      }
+      .file-actions .cancel-action {
+        display: none;
+        width: auto;
+        padding: 0 7px;
+        font-size: 10px;
+      }
+
+      .file-tabs {
+        display: flex;
+        align-items: center;
+        gap: 0;
+        min-height: 30px;
+        padding: 0 14px;
+        border-bottom: 1px solid var(--line);
+        background: var(--panel-recessed);
+      }
+      .file-tab {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        height: 30px;
+        padding: 0 9px;
+        border-right: 1px solid var(--line);
+        color: var(--ink-soft);
+        font-size: 10px;
+      }
+      .file-tab .icon {
+        width: 11px;
+        height: 11px;
+        color: var(--blue);
+      }
+      .file-tab .close {
+        color: var(--faint);
+        font-size: 13px;
+      }
+
+      .code-wrap {
+        display: flex;
+        min-height: 0;
+        flex: 1;
+        overflow: hidden;
+        background: var(--panel-recessed);
+      }
+      .code {
+        min-width: 0;
+        flex: 1;
+        overflow: auto;
+        padding: 15px 0 20px;
+        font-family: var(--mono);
+        font-size: 10px;
+        line-height: 1.7;
+      }
+      .code-line {
+        display: flex;
+        min-width: max-content;
+        padding-right: 18px;
+      }
+      .line-number {
+        width: 40px;
+        padding-right: 12px;
+        color: #4d5765;
+        text-align: right;
+        user-select: none;
+      }
+      .line-content {
+        padding-left: 10px;
+        color: #c9d2df;
+        white-space: pre;
+      }
+      .kw {
+        color: #b49bff;
+      }
+      .type {
+        color: #72d2db;
+      }
+      .fn {
+        color: #9db9ff;
+      }
+      .str {
+        color: #e5c27b;
+      }
+      .tag {
+        color: #72d2db;
+      }
+      .attr {
+        color: #a9c8ff;
+      }
+      .comment {
+        color: #687585;
+      }
+      .punct {
+        color: #7f8b9b;
+      }
+      .code-line.highlight {
+        background: rgba(119, 151, 255, 0.08);
+      }
+
+      .editor-wrap {
+        display: none;
+        min-height: 0;
+        flex: 1;
+        flex-direction: column;
+        background: var(--panel-recessed);
+      }
+      .editor-wrap.active {
+        display: flex;
+      }
+      .editor-notice {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        min-height: 29px;
+        padding: 0 14px;
+        border-bottom: 1px solid var(--line);
+        background: rgba(239, 201, 120, 0.07);
+        color: var(--yellow);
+        font-size: 10px;
+      }
+      .editor-notice .icon {
+        width: 12px;
+        height: 12px;
+      }
+      textarea.editor {
+        min-height: 0;
+        flex: 1;
+        resize: none;
+        padding: 15px 17px 24px 48px;
+        border: 0;
+        border-radius: 0;
+        outline: 0;
+        background: transparent;
+        color: #c9d2df;
+        font-family: var(--mono);
+        font-size: 10px;
+        line-height: 1.7;
+        tab-size: 2;
+      }
+
+      .diff-view {
+        display: none;
+        min-height: 0;
+        flex: 1;
+        flex-direction: column;
+      }
+      .diff-view.active {
+        display: flex;
+      }
+      .diff-summary {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        min-height: 48px;
+        padding: 0 16px;
+        border-bottom: 1px solid var(--line);
+      }
+      .diff-summary strong {
+        font-size: 11px;
+        font-weight: 650;
+      }
+      .diff-summary small {
+        color: var(--muted);
+        font-size: 10px;
+      }
+      .diff-nav {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        color: var(--muted);
+        font-size: 10px;
+      }
+      .diff-nav .icon-button {
+        width: 23px;
+        height: 23px;
+      }
+      .diff-file {
+        margin: 12px 14px 0;
+        border: 1px solid var(--line);
+        border-radius: 9px;
+        overflow: hidden;
+      }
+      .diff-file-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        min-height: 31px;
+        padding: 0 9px;
+        background: var(--panel-raised);
+        color: var(--ink-soft);
+        font-size: 10px;
+      }
+      .diff-file-head .status {
+        color: var(--green);
+        font-family: var(--mono);
+        font-size: 9px;
+      }
+      .diff-file-head .icon {
+        width: 12px;
+        height: 12px;
+        color: var(--blue);
+        vertical-align: -2px;
+      }
+      .diff-pane {
+        overflow: auto;
+        padding: 7px 0 14px;
+        background: var(--panel-recessed);
+        font-family: var(--mono);
+        font-size: 9px;
+        line-height: 1.75;
+      }
+      .diff-line {
+        display: flex;
+        min-width: max-content;
+      }
+      .diff-gutter {
+        width: 30px;
+        color: #4d5765;
+        text-align: right;
+        user-select: none;
+      }
+      .diff-code {
+        width: 100%;
+        padding: 0 12px;
+        white-space: pre;
+      }
+      .diff-line.add {
+        background: var(--green-wash);
+        color: color-mix(in oklch, var(--green) 65%, var(--ink));
+      }
+      .diff-line.del {
+        background: var(--red-wash);
+        color: color-mix(in oklch, var(--red) 65%, var(--ink));
+      }
+      .diff-line.context {
+        color: var(--muted);
+      }
+      .diff-marker {
+        display: inline-block;
+        width: 15px;
+        color: var(--faint);
+      }
+      .diff-line.add .diff-marker {
+        color: var(--green);
+      }
+      .diff-line.del .diff-marker {
+        color: var(--red);
+      }
+      .review-bar {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        margin: 12px 14px;
+        padding: 9px 10px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: var(--panel);
+      }
+      .review-bar span {
+        flex: 1;
+        color: var(--muted);
+        font-size: 10px;
+      }
+      .review-bar button {
+        padding: 5px 8px;
+        border-radius: 6px;
+        background: transparent;
+        color: var(--muted);
+        font-size: 10px;
+      }
+      .review-bar button:hover {
+        background: var(--panel-raised);
+        color: var(--ink);
+      }
+      .review-bar .accept {
+        background: var(--green-wash);
+        color: var(--green);
+      }
+
+      .light {
+        color-scheme: light;
+        --canvas: oklch(1 0 0);
+        --sidebar: color-mix(in oklch, var(--ink) 2.2%, var(--canvas));
+        --panel: var(--canvas);
+        --panel-raised: color-mix(in oklab, var(--ink) 2.5%, transparent);
+        --panel-recessed: color-mix(in oklab, var(--ink) 6%, transparent);
+        --ink: oklch(0.3211 0 0);
+        --ink-soft: oklch(0.47 0 0);
+        --muted: oklch(0.5 0 0);
+        --faint: oklch(0.66 0 0);
+        --line: color-mix(in oklch, var(--ink) 9.5%, var(--canvas));
+        --line-strong: color-mix(in oklch, var(--ink) 14%, var(--canvas));
+        --blue: oklch(0.55 0.1 250);
+        --blue-strong: oklch(0.27 0 0);
+        --blue-wash: color-mix(in oklab, var(--ink) 5.9%, transparent);
+        --folder-hover: color-mix(in oklab, var(--ink) 5.9%, transparent);
+        --folder-selected: color-mix(in oklab, var(--ink) 4.2%, transparent);
+        --green: oklch(0.7 0.15 155);
+        --green-wash: color-mix(in oklab, var(--green) 11%, transparent);
+        --yellow: oklch(0.74 0.15 80);
+        --red: oklch(0.45 0.19 25.8625);
+        --red-wash: color-mix(in oklab, var(--red) 10%, transparent);
+        --shadow: 0 10px 26px color-mix(in oklab, var(--ink) 8%, transparent);
+      }
+
+      body.light {
+        background: var(--canvas);
+      }
+      .light .topbar {
+        background: var(--panel);
+      }
+      .light .brand-mark {
+        color: var(--canvas);
+      }
+      .light .line-content,
+      .light textarea.editor {
+        color: #354052;
+      }
+      .light .kw {
+        color: #7a4fd0;
+      }
+      .light .type,
+      .light .tag {
+        color: #087b85;
+      }
+      .light .fn {
+        color: #365bb9;
+      }
+      .light .str {
+        color: #976100;
+      }
+      .light .comment {
+        color: #8a96a5;
+      }
+      .light .diff-line.add {
+        color: #17673f;
+      }
+      .light .diff-line.del {
+        color: #98343f;
+      }
+
+      .mobile-mode {
+        grid-template-columns: 1fr;
+        width: 390px;
+        height: 780px;
+        margin-inline: auto;
+      }
+
+      .mobile-mode .sidebar,
+      .mobile-mode .workspace {
+        display: none;
+      }
+      .mobile-mode .right-panel {
+        border-left: 0;
+      }
+      .mobile-mode .panel-header {
+        min-height: 58px;
+        padding-inline: 18px;
+      }
+      .mobile-mode .explorer {
+        padding: 16px 16px 12px;
+      }
+      .mobile-mode .file-toolbar {
+        min-height: 54px;
+        padding-inline: 18px;
+      }
+      .mobile-mode .code {
+        font-size: 11px;
+      }
+      .mobile-mode .line-number {
+        width: 44px;
+      }
+      .mobile-mode .line-content {
+        padding-left: 12px;
+      }
+      .mobile-mode .file-actions .icon-button {
+        width: 32px;
+        height: 32px;
+      }
+      .mobile-mode .file-tabs {
+        min-height: 34px;
+      }
+      .mobile-mode .file-tab {
+        height: 34px;
+        font-size: 11px;
+      }
+
+      .prototype-note {
+        max-width: 1240px;
+        margin: 13px auto 0;
+        color: var(--faint);
+        font-size: 11px;
+        line-height: 1.5;
+      }
+      .prototype-note strong {
+        color: var(--muted);
+        font-weight: 650;
+      }
+
+      @media (max-width: 800px) {
+        .prototype {
+          padding: 16px 12px 24px;
+        }
+        .prototype-toolbar {
+          align-items: flex-start;
+          flex-direction: column;
+          gap: 10px;
+        }
+        .app-frame:not(.mobile-mode) {
+          grid-template-columns: 1fr 360px;
+        }
+        .app-frame:not(.mobile-mode) .sidebar {
+          display: none;
+        }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        *,
+        *::before,
+        *::after {
+          scroll-behavior: auto !important;
+          transition-duration: 0.01ms !important;
+          animation-duration: 0.01ms !important;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="prototype" id="prototype">
+      <div class="prototype-toolbar">
+        <div class="eyebrow">Conductor · right-side file viewer</div>
+        <div class="toolbar-actions">
+          <div class="segmented" aria-label="Prototype viewport">
+            <button class="active" data-mode="desktop" aria-pressed="true">
+              Desktop
+            </button>
+            <button data-mode="mobile" aria-pressed="false">Mobile</button>
+          </div>
+          <button
+            class="theme-button"
+            id="theme-toggle"
+            aria-label="Toggle light theme"
+            title="Toggle light theme"
+          >
+            <svg class="icon"><use href="#sun" /></svg>
+          </button>
+        </div>
+      </div>
+
+      <main
+        class="app-frame"
+        id="app-frame"
+        aria-label="Conductor file viewer prototype"
+      >
+        <aside class="sidebar" aria-label="Conductor navigation">
+          <div class="brand-row">
+            <div class="brand-mark">C</div>
+            <div>
+              <div class="brand-name">Conductor</div>
+              <div class="brand-caption">agent workspace</div>
+            </div>
+          </div>
+          <div class="workspace-row">
+            <span>BB</span><svg class="icon"><use href="#chevron-down" /></svg>
+          </div>
+          <div class="nav-row active">
+            <svg class="icon"><use href="#message" /></svg><span>Threads</span>
+          </div>
+          <div class="nav-row">
+            <svg class="icon"><use href="#folder" /></svg
+            ><span>Workspaces</span>
+          </div>
+          <div class="nav-row">
+            <svg class="icon"><use href="#settings" /></svg
+            ><span>Settings</span>
+          </div>
+          <div class="section-title">Recent threads</div>
+          <div class="thread-list">
+            <div class="thread-item active">
+              <span class="status"></span><span>File viewer exploration</span>
+            </div>
+            <div class="thread-item">
+              <span class="status idle"></span
+              ><span>Polish secondary panel</span>
+            </div>
+            <div class="thread-item">
+              <span class="status idle"></span><span>Review mobile layout</span>
+            </div>
+            <div class="thread-item">
+              <span class="status idle"></span
+              ><span>Update onboarding copy</span>
+            </div>
+          </div>
+          <div class="sidebar-footer">
+            <div class="avatar">AM</div>
+            <span>Amir</span
+            ><svg
+              class="icon"
+              style="margin-left: auto; width: 13px; height: 13px"
+            >
+              <use href="#more" />
+            </svg>
+          </div>
+        </aside>
+
+        <section class="workspace" aria-label="Thread workspace">
+          <header class="topbar">
+            <div class="crumbs">
+              <strong>File viewer exploration</strong
+              ><svg class="icon"><use href="#chevron-right" /></svg
+              ><span>main</span>
+            </div>
+            <div class="topbar-actions">
+              <span style="font-size: 10px; color: var(--green)"
+                >● Connected</span
+              ><button class="icon-button" aria-label="More thread actions">
+                <svg class="icon"><use href="#more" /></svg>
+              </button>
+            </div>
+          </header>
+          <div class="thread-content">
+            <div class="thread-heading">
+              <div class="kicker">Thread</div>
+              <h1>File viewer exploration</h1>
+              <p>
+                Workspace context and review stay one click away in the right
+                panel.
+              </p>
+            </div>
+            <div class="activity-card">
+              <div class="activity-top">
+                <span class="pulse"></span><span>Review ready</span
+                ><span
+                  style="
+                    margin-left: auto;
+                    color: var(--faint);
+                    font-size: 10px;
+                  "
+                  >just now</span
+                >
+              </div>
+              <p>
+                <code>FilePreview.tsx</code> is open in the right panel. Three
+                changed files are available from Diff.
+              </p>
+            </div>
+            <div class="composer">
+              <div class="composer-placeholder">
+                Ask the agent to inspect another file…
+              </div>
+              <div class="composer-bottom">
+                <span class="composer-hint"
+                  ><kbd>⌘</kbd><kbd>↵</kbd> to send</span
+                ><button class="send-button" aria-label="Send message">
+                  <svg class="icon"><use href="#arrow-up" /></svg>
+                </button>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <aside class="right-panel" aria-label="Right-side file panel">
+          <div class="panel-tabs" role="toolbar" aria-label="Right panel views">
+            <button class="panel-tab" data-panel="info" aria-pressed="false">
+              Files
+            </button>
+            <button class="panel-tab" data-panel="diffs" aria-pressed="false">
+              Diff <span class="badge">3</span>
+            </button>
+            <span class="tab-separator" aria-hidden="true"></span>
+            <div
+              class="open-file-tabs"
+              id="open-file-tabs"
+              aria-label="Open file tabs"
+            ></div>
+            <span class="tab-spacer"></span>
+            <button class="icon-button new-tab" aria-label="Open new tab">
+              <svg class="icon"><use href="#plus" /></svg>
+            </button>
+            <button class="icon-button" aria-label="Close right panel">
+              <svg class="icon"><use href="#x" /></svg>
+            </button>
+          </div>
+
+          <div class="panel-body">
+            <div
+              class="panel-view active file-active"
+              id="info-view"
+              data-view="info"
+            >
+              <section class="explorer" aria-label="Workspace explorer">
+                <div class="explorer-heading">
+                  <span>Workspace</span>
+                  <div class="explorer-actions">
+                    <button class="icon-button" aria-label="Search files">
+                      <svg class="icon"><use href="#search" /></svg></button
+                    ><button class="icon-button" aria-label="Refresh files">
+                      <svg class="icon"><use href="#refresh" /></svg>
+                    </button>
+                  </div>
+                </div>
+                <div class="search-box">
+                  <svg class="icon"><use href="#search" /></svg
+                  ><span>Filter files…</span><b>⌘ P</b>
+                </div>
+                <div class="tree" role="tree" aria-label="Workspace file tree">
+                  <button class="tree-row folder" role="treeitem">
+                    <svg class="icon"><use href="#chevron-down" /></svg
+                    ><span>apps</span>
+                  </button>
+                  <button class="tree-row folder indent-1" role="treeitem">
+                    <svg class="icon"><use href="#chevron-down" /></svg
+                    ><span>app</span>
+                  </button>
+                  <button class="tree-row folder indent-2" role="treeitem">
+                    <svg class="icon"><use href="#chevron-down" /></svg
+                    ><span>src</span>
+                  </button>
+                  <button class="tree-row folder indent-3" role="treeitem">
+                    <svg class="icon"><use href="#chevron-down" /></svg
+                    ><span>components</span>
+                  </button>
+                  <button class="tree-row folder indent-3" role="treeitem">
+                    <svg class="icon"><use href="#chevron-down" /></svg
+                    ><span>secondary-panel</span>
+                  </button>
+                  <button
+                    class="tree-row file selected indent-3"
+                    data-file="FilePreview.tsx"
+                    role="treeitem"
+                    aria-selected="true"
+                  >
+                    <svg class="icon"><use href="#file-code" /></svg
+                    ><span>FilePreview.tsx</span>
+                  </button>
+                  <button
+                    class="tree-row file indent-3"
+                    data-file="TextFileEditor.tsx"
+                    role="treeitem"
+                  >
+                    <svg class="icon"><use href="#file-code" /></svg
+                    ><span>TextFileEditor.tsx</span>
+                  </button>
+                  <button
+                    class="tree-row file indent-3"
+                    data-file="ThreadMetadataContent.tsx"
+                    role="treeitem"
+                  >
+                    <svg class="icon"><use href="#file-code" /></svg
+                    ><span>ThreadMetadataContent.tsx</span>
+                  </button>
+                  <button class="tree-row folder indent-2" role="treeitem">
+                    <svg class="icon"><use href="#chevron-right" /></svg
+                    ><span>hooks</span>
+                  </button>
+                  <button class="tree-row folder indent-2" role="treeitem">
+                    <svg class="icon"><use href="#chevron-right" /></svg
+                    ><span>views</span>
+                  </button>
+                </div>
+              </section>
+
+              <section class="preview-view" aria-label="File preview">
+                <div class="file-toolbar">
+                  <div class="file-name">
+                    <svg class="icon"><use href="#file-code" /></svg>
+                    <div class="file-name-text">
+                      <strong id="file-title">FilePreview.tsx</strong
+                      ><small id="file-path"
+                        >apps/app/src/components/secondary-panel</small
+                      >
+                    </div>
+                  </div>
+                  <div class="file-actions">
+                    <button
+                      class="icon-button"
+                      aria-label="Copy file path"
+                      title="Copy path"
+                    >
+                      <svg class="icon"><use href="#copy" /></svg></button
+                    ><button
+                      class="icon-button edit-action"
+                      id="edit-button"
+                      aria-label="Edit file"
+                      title="Edit file"
+                    >
+                      <svg class="icon"><use href="#edit" /></svg></button
+                    ><button
+                      class="icon-button cancel-action"
+                      id="cancel-button"
+                    >
+                      Cancel</button
+                    ><button class="icon-button save-action" id="save-button">
+                      Save
+                    </button>
+                  </div>
+                </div>
+                <div class="code-wrap" id="code-wrap">
+                  <div
+                    class="code"
+                    id="code-content"
+                    tabindex="0"
+                    aria-label="Source code"
+                  ></div>
+                </div>
+                <div class="editor-wrap" id="editor-wrap">
+                  <div class="editor-notice">
+                    <svg class="icon"><use href="#lock" /></svg
+                    ><span>Working tree edit · saves are conflict-safe</span>
+                  </div>
+                  <textarea
+                    class="editor"
+                    id="editor"
+                    spellcheck="false"
+                    aria-label="Edit file contents"
+                  ></textarea>
+                </div>
+              </section>
+            </div>
+
+            <div class="panel-view" id="diffs-view" data-view="diffs">
+              <section class="explorer" aria-label="Changed files">
+                <div class="explorer-heading">
+                  <span>Changed files</span>
+                  <div class="explorer-actions">
+                    <button class="icon-button" aria-label="Refresh diffs">
+                      <svg class="icon"><use href="#refresh" /></svg>
+                    </button>
+                  </div>
+                </div>
+                <div class="tree" role="tree" aria-label="Changed files tree">
+                  <button class="tree-row file selected" role="treeitem">
+                    <svg class="icon"><use href="#file-code" /></svg
+                    ><span>FilePreview.tsx</span
+                    ><span class="tree-count" style="color: var(--green)"
+                      >+18 −4</span
+                    >
+                  </button>
+                  <button class="tree-row file" role="treeitem">
+                    <svg class="icon"><use href="#file-code" /></svg
+                    ><span>TextFileEditor.tsx</span
+                    ><span class="tree-count" style="color: var(--green)"
+                      >+112</span
+                    >
+                  </button>
+                  <button class="tree-row file" role="treeitem">
+                    <svg class="icon"><use href="#file-code" /></svg
+                    ><span>ThreadDetailView.tsx</span
+                    ><span class="tree-count" style="color: var(--green)"
+                      >+28 −1</span
+                    >
+                  </button>
+                </div>
+              </section>
+              <section class="diff-view active" aria-label="Diff review">
+                <div class="diff-summary">
+                  <div>
+                    <strong>Review changes</strong
+                    ><small style="display: block; margin-top: 3px"
+                      >3 files · 46 additions · 5 deletions</small
+                    >
+                  </div>
+                  <div class="diff-nav">
+                    <button class="icon-button" aria-label="Previous change">
+                      <svg class="icon"><use href="#chevron-up" /></svg></button
+                    ><button class="icon-button" aria-label="Next change">
+                      <svg class="icon"><use href="#chevron-down" /></svg>
+                    </button>
+                  </div>
+                </div>
+                <div class="diff-file">
+                  <div class="diff-file-head">
+                    <span
+                      ><svg class="icon"><use href="#file-code" /></svg>
+                      FilePreview.tsx</span
+                    ><span class="status">M · 1 of 3</span>
+                  </div>
+                  <div class="diff-pane">
+                    <div class="diff-line context">
+                      <span class="diff-gutter">42</span
+                      ><span class="diff-code"
+                        ><span class="diff-marker"> </span>const toolbar =
+                        createToolbar({</span
+                      >
+                    </div>
+                    <div class="diff-line del">
+                      <span class="diff-gutter">43</span
+                      ><span class="diff-code"
+                        ><span class="diff-marker">−</span> showPath:
+                        true,</span
+                      >
+                    </div>
+                    <div class="diff-line add">
+                      <span class="diff-gutter">43</span
+                      ><span class="diff-code"
+                        ><span class="diff-marker">+</span> showPath: true,
+                        onEdit,</span
+                      >
+                    </div>
+                    <div class="diff-line add">
+                      <span class="diff-gutter">44</span
+                      ><span class="diff-code"
+                        ><span class="diff-marker">+</span> compactActions:
+                        true,</span
+                      >
+                    </div>
+                    <div class="diff-line context">
+                      <span class="diff-gutter">45</span
+                      ><span class="diff-code"
+                        ><span class="diff-marker"> </span>});</span
+                      >
+                    </div>
+                    <div class="diff-line context">
+                      <span class="diff-gutter">46</span
+                      ><span class="diff-code"
+                        ><span class="diff-marker"> </span
+                      ></span>
+                    </div>
+                    <div class="diff-line add">
+                      <span class="diff-gutter">47</span
+                      ><span class="diff-code"
+                        ><span class="diff-marker">+</span>const editLabel =
+                        "Edit file";</span
+                      >
+                    </div>
+                  </div>
+                </div>
+                <div class="review-bar">
+                  <span>Review this file</span><button>Skip</button
+                  ><button class="accept">Accept</button>
+                </div>
+              </section>
+            </div>
+          </div>
+        </aside>
+      </main>
+      <div class="prototype-note">
+        <strong>Prototype:</strong> Files holds the tree; selecting a file opens
+        a persistent tab beside Files and Diff. Try several files, Edit file, or
+        toggle Mobile.
+      </div>
+    </div>
+
+    <svg
+      aria-hidden="true"
+      style="position: absolute; width: 0; height: 0; overflow: hidden"
+    >
+      <defs>
+        <symbol id="arrow-up" viewBox="0 0 24 24">
+          <path d="M12 19V5M6.5 10.5 12 5l5.5 5.5" />
+        </symbol>
+        <symbol id="chevron-down" viewBox="0 0 24 24">
+          <path d="m6 9 6 6 6-6" />
+        </symbol>
+        <symbol id="chevron-right" viewBox="0 0 24 24">
+          <path d="m9 6 6 6-6 6" />
+        </symbol>
+        <symbol id="chevron-up" viewBox="0 0 24 24">
+          <path d="m18 15-6-6-6 6" />
+        </symbol>
+        <symbol id="copy" viewBox="0 0 24 24">
+          <rect x="8" y="8" width="11" height="11" rx="2" />
+          <path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2" />
+        </symbol>
+        <symbol id="edit" viewBox="0 0 24 24">
+          <path
+            d="m14 6 4 4M4 20l3.5-.8L18.8 8a2.1 2.1 0 0 0-3-3L4.5 16.2 4 20Z"
+          />
+        </symbol>
+        <symbol id="file-code" viewBox="0 0 24 24">
+          <path
+            d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9Z"
+          />
+          <path d="M14 3v6h6M10 13l-2 2 2 2M14 13l2 2-2 2" />
+        </symbol>
+        <symbol id="folder" viewBox="0 0 24 24">
+          <path
+            d="M3.5 6.5A2.5 2.5 0 0 1 6 4h4l2 2h6.5A2.5 2.5 0 0 1 21 8.5v8A2.5 2.5 0 0 1 18.5 19h-13A2.5 2.5 0 0 1 3 16.5Z"
+          />
+        </symbol>
+        <symbol id="lock" viewBox="0 0 24 24">
+          <rect x="5" y="10" width="14" height="10" rx="2" />
+          <path d="M8 10V7a4 4 0 0 1 8 0v3" />
+        </symbol>
+        <symbol id="message" viewBox="0 0 24 24">
+          <path
+            d="M5 5h14a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H9l-4 3v-3a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2Z"
+          />
+          <path d="M8 10h8M8 13h5" />
+        </symbol>
+        <symbol id="plus" viewBox="0 0 24 24">
+          <path d="M12 5v14M5 12h14" />
+        </symbol>
+        <symbol id="more" viewBox="0 0 24 24">
+          <circle cx="5" cy="12" r="1" fill="currentColor" stroke="none" />
+          <circle cx="12" cy="12" r="1" fill="currentColor" stroke="none" />
+          <circle cx="19" cy="12" r="1" fill="currentColor" stroke="none" />
+        </symbol>
+        <symbol id="panel" viewBox="0 0 24 24">
+          <rect x="4" y="4" width="16" height="16" rx="2" />
+          <path d="M15 4v16" />
+        </symbol>
+        <symbol id="refresh" viewBox="0 0 24 24">
+          <path
+            d="M20 11a8 8 0 0 0-14-4L4 9M4 5v4h4M4 13a8 8 0 0 0 14 4l2-2M20 19v-4h-4"
+          />
+        </symbol>
+        <symbol id="search" viewBox="0 0 24 24">
+          <circle cx="10.8" cy="10.8" r="6.8" />
+          <path d="m16 16 4 4" />
+        </symbol>
+        <symbol id="settings" viewBox="0 0 24 24">
+          <path d="M12 8.5a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7Z" />
+          <path
+            d="m19 13.5 1.2 1-.1 1.5-1.7 1-.2 1.5-1.3.8-1.5-.5-1.1 1.1.1 1.6-1.4.5-1.3-1-1.5.3-.9 1.2-1.4-.6-.1-1.6-1.2-1-1.4.4-.9-1.3.6-1.4-.7-1.3-1.5-.3-.8-1.4 1-1.2-.2-1.5-1.1-1.1.5-1.4-.7-1.4 1.3-.7 1.3.2 1.1-1.1-.1-1.5 1.4-.5 1.3 1 1.5-.3.9-1.2 1.4.6.1 1.6 1.2 1 1.4-.4.9 1.3-.6 1.4.7 1.3 1.5.3.8 1.4-1 1.2.2 1.5Z"
+          />
+        </symbol>
+        <symbol id="sun" viewBox="0 0 24 24">
+          <circle cx="12" cy="12" r="3.5" />
+          <path
+            d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"
+          />
+        </symbol>
+        <symbol id="x" viewBox="0 0 24 24">
+          <path d="m6 6 12 12M18 6 6 18" />
+        </symbol>
+      </defs>
+    </svg>
+
+    <script>
+      const files = {
+        "FilePreview.tsx": {
+          path: "apps/app/src/components/secondary-panel",
+          code: [
+            '<span class="kw">import</span> { <span class="type">useMemo</span> } <span class="kw">from</span> <span class="str">"react"</span>;',
+            '<span class="kw">import</span> { <span class="type">Button</span> } <span class="kw">from</span> <span class="str">"@bb/shared-ui/button"</span>;',
+            "",
+            '<span class="kw">interface</span> <span class="type">FilePreviewProps</span> {',
+            '  activePath: <span class="type">string</span>;',
+            '  onRefresh?: () =&gt; <span class="type">void</span>;',
+            '  onEdit?: () =&gt; <span class="type">void</span>;',
+            "}",
+            "",
+            '<span class="kw">export function</span> <span class="fn">FilePreview</span>({',
+            "  activePath,",
+            "  onEdit,",
+            "  onRefresh,",
+            '}: <span class="type">FilePreviewProps</span>) {',
+            '  <span class="kw">const</span> preview = <span class="fn">useMemo</span>(() =&gt;',
+            '    <span class="fn">buildPreview</span>(activePath), [activePath]);',
+            "",
+            '  <span class="kw">return</span> (',
+            '    &lt;<span class="tag">section</span> <span class="attr">className</span>=<span class="str">"file-preview"</span>&gt;',
+            '      &lt;<span class="tag">FilePreviewHeader</span>',
+            '        <span class="attr">path</span>={activePath}',
+            '        <span class="attr">onEdit</span>={onEdit}',
+            '        <span class="attr">onRefresh</span>={onRefresh}',
+            "      /&gt;",
+            "      {preview}",
+            '    &lt;/<span class="tag">section</span>&gt;',
+            "  );",
+            "}",
+          ],
+        },
+        "TextFileEditor.tsx": {
+          path: "apps/app/src/components/secondary-panel",
+          code: [
+            '<span class="kw">import</span> { <span class="type">useState</span> } <span class="kw">from</span> <span class="str">"react"</span>;',
+            "",
+            '<span class="kw">export function</span> <span class="fn">TextFileEditor</span>({',
+            "  path, contents, onSave, onCancel,",
+            '}: <span class="type">TextFileEditorProps</span>) {',
+            '  <span class="kw">const</span> [draft, setDraft] = <span class="fn">useState</span>(contents);',
+            "",
+            '  <span class="kw">return</span> (',
+            '    &lt;<span class="tag">div</span> <span class="attr">className</span>=<span class="str">"editor"</span>&gt;',
+            '      &lt;<span class="tag">EditorToolbar</span> <span class="attr">path</span>={path} /&gt;',
+            '      &lt;<span class="tag">Textarea</span>',
+            '        <span class="attr">value</span>={draft}',
+            '        <span class="attr">onChange</span>={(event) =&gt; setDraft(event.target.value)}',
+            "      /&gt;",
+            '      &lt;<span class="tag">Button</span> <span class="attr">onClick</span>={() =&gt; onSave(draft)}&gt;',
+            "        Save",
+            '      &lt;/<span class="tag">Button</span>&gt;',
+            '    &lt;/<span class="tag">div</span>&gt;',
+            "  );",
+            "}",
+          ],
+        },
+        "ThreadMetadataContent.tsx": {
+          path: "apps/app/src/components/secondary-panel",
+          code: [
+            '<span class="kw">import</span> { <span class="type">ThreadStorageBrowser</span> } <span class="kw">from</span> <span class="str">"./ThreadStorageBrowser"</span>;',
+            "",
+            '<span class="kw">export function</span> <span class="fn">WorkspaceFilesRow</span>({',
+            "  controller, filesError, isFilesLoading,",
+            "  onRefresh,",
+            '}: <span class="type">WorkspaceFilesRowProps</span>) {',
+            '  <span class="kw">return</span> (',
+            '    &lt;<span class="tag">DetailRow</span> <span class="attr">label</span>=<span class="str">"Workspace files"</span>&gt;',
+            '      &lt;<span class="tag">ThreadStorageBrowser</span>',
+            '        <span class="attr">controller</span>={controller}',
+            '        <span class="attr">filesError</span>={filesError}',
+            '        <span class="attr">isFilesLoading</span>={isFilesLoading}',
+            "      /&gt;",
+            '      &lt;<span class="tag">RefreshButton</span> <span class="attr">onClick</span>={onRefresh} /&gt;',
+            '    &lt;/<span class="tag">DetailRow</span>&gt;',
+            "  );",
+            "}",
+          ],
+        },
+      };
+
+      const frame = document.getElementById("app-frame");
+      const code = document.getElementById("code-content");
+      const editor = document.getElementById("editor");
+      const editorWrap = document.getElementById("editor-wrap");
+      const codeWrap = document.getElementById("code-wrap");
+      const editButton = document.getElementById("edit-button");
+      const cancelButton = document.getElementById("cancel-button");
+      const saveButton = document.getElementById("save-button");
+      const fileTitle = document.getElementById("file-title");
+      const filePath = document.getElementById("file-path");
+      const openFileTabs = document.getElementById("open-file-tabs");
+
+      let currentFile = "FilePreview.tsx";
+      let isEditing = false;
+      const openFiles = new Set([currentFile]);
+
+      function renderCode(file) {
+        code.innerHTML = file.code
+          .map(
+            (line, index) =>
+              `<div class="code-line ${index === 6 ? "highlight" : ""}"><span class="line-number">${index + 1}</span><span class="line-content">${line || " "}</span></div>`,
+          )
+          .join("");
+      }
+
+      function selectFile(name) {
+        currentFile = name;
+        const file = files[name];
+        fileTitle.textContent = name;
+        filePath.textContent = file.path;
+        renderCode(file);
+        document.querySelectorAll(".tree-row[data-file]").forEach((row) => {
+          const selected = row.dataset.file === name;
+          row.classList.toggle("selected", selected);
+          row.setAttribute("aria-selected", String(selected));
+        });
+        if (isEditing) setEditing(false);
+        openFiles.add(name);
+        renderFileTabs();
+        setPanel("file");
+      }
+
+      function renderFileTabs() {
+        openFileTabs.innerHTML = Array.from(openFiles)
+          .map(
+            (name) =>
+              `<button class="panel-tab file-tab-trigger" data-panel="file" data-file-tab="${name}" aria-pressed="${name === currentFile}" title="${name}"><svg class="icon"><use href="#file-code" /></svg><span>${name}</span><span class="tab-close" aria-hidden="true">×</span></button>`,
+          )
+          .join("");
+        openFileTabs
+          .querySelectorAll("[data-file-tab]")
+          .forEach((tab) =>
+            tab.addEventListener("click", () =>
+              selectFile(tab.dataset.fileTab),
+            ),
+          );
+      }
+
+      function setPanel(panel) {
+        const infoView = document.getElementById("info-view");
+        const activeView = panel === "file" ? "info" : panel;
+        document.querySelectorAll(".panel-tab").forEach((item) => {
+          const active =
+            item.dataset.panel === panel &&
+            (panel !== "file" || item.dataset.fileTab === currentFile);
+          item.classList.toggle("active", active);
+          item.setAttribute("aria-pressed", String(active));
+        });
+        document
+          .querySelectorAll(".panel-view")
+          .forEach((view) =>
+            view.classList.toggle("active", view.dataset.view === activeView),
+          );
+        infoView.classList.toggle("file-active", panel === "file");
+      }
+
+      function setEditing(next) {
+        isEditing = next;
+        editorWrap.classList.toggle("active", next);
+        codeWrap.style.display = next ? "none" : "flex";
+        editButton.style.display = next ? "none" : "grid";
+        cancelButton.style.display = next ? "block" : "none";
+        saveButton.style.display = next ? "block" : "none";
+        if (next) {
+          editor.value = files[currentFile].code
+            .map((line) => line.replace(/<[^>]+>/g, "").replace(/&gt;/g, ">"))
+            .join("\n");
+          editor.focus();
+        }
+      }
+
+      document
+        .querySelectorAll(".tree-row[data-file]")
+        .forEach((row) =>
+          row.addEventListener("click", () => selectFile(row.dataset.file)),
+        );
+      editButton.addEventListener("click", () => setEditing(true));
+      cancelButton.addEventListener("click", () => setEditing(false));
+      saveButton.addEventListener("click", () => {
+        saveButton.textContent = "Saved";
+        saveButton.style.background = "var(--blue)";
+        window.setTimeout(() => {
+          saveButton.textContent = "Save";
+          saveButton.style.background = "var(--green)";
+          setEditing(false);
+        }, 650);
+      });
+
+      document
+        .querySelectorAll(".panel-tab")
+        .forEach((tab) =>
+          tab.addEventListener("click", () => setPanel(tab.dataset.panel)),
+        );
+
+      document.querySelectorAll("[data-mode]").forEach((button) =>
+        button.addEventListener("click", () => {
+          const mobile = button.dataset.mode === "mobile";
+          frame.classList.toggle("mobile-mode", mobile);
+          document.querySelectorAll("[data-mode]").forEach((item) => {
+            const active = item === button;
+            item.classList.toggle("active", active);
+            item.setAttribute("aria-pressed", String(active));
+          });
+        }),
+      );
+
+      document.getElementById("theme-toggle").addEventListener("click", () => {
+        document.body.classList.toggle("light");
+      });
+
+      renderFileTabs();
+      selectFile(currentFile);
+    </script>
+  </body>
+</html>

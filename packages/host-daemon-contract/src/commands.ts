@@ -21,6 +21,7 @@ import {
   clientTurnRequestIdSchema,
   gitBranchNameSchema,
   jsonObjectSchema,
+  jsonValueSchema,
   BRANCH_LIST_LIMIT_MAX,
   BRANCH_LIST_QUERY_MAX_LENGTH,
   FILE_LIST_LIMIT_MAX,
@@ -31,12 +32,15 @@ import {
   pathsExistRequestSchema,
   pathsExistResponseSchema,
   pickFolderResponseSchema,
+  providerAuthSnapshotSchema,
+  providerAuthStartRequestSchema,
+  providerAuthSubmitCodeRequestSchema,
   providerCliInstallEventSchema,
   providerCliInstallRequestSchema,
   providerCliStatusResponseSchema,
 } from "./local.js";
 
-export const HOST_DAEMON_PROTOCOL_VERSION = 80 as const;
+export const HOST_DAEMON_PROTOCOL_VERSION = 83 as const;
 export const githubAccountLoginSchema = z.string().trim().min(1).max(255);
 
 export {
@@ -611,6 +615,7 @@ const projectCloneDefaultPathCommandSchema = z
 const projectCloneCommandSchema = z
   .object({
     type: z.literal("project.clone"),
+    githubAccountLogin: githubAccountLoginSchema.nullable().default(null),
     remoteUrl: z.string().min(1),
     projectSlug: z.string().min(1),
     targetPath: z.string().min(1).optional(),
@@ -633,6 +638,174 @@ const hostCaffeinateCommandSchema = z
 const connectTunnelEnsureIdentityCommandSchema = z
   .object({
     type: z.literal("connect-tunnel.ensure-identity"),
+  })
+  .strict();
+
+export const simulatorDeviceSchema = z
+  .object({
+    udid: z.string().min(1),
+    name: z.string().min(1),
+    runtime: z.string().min(1),
+    state: z.enum(["Booted", "Shutdown"]),
+  })
+  .strict();
+export type SimulatorDevice = z.infer<typeof simulatorDeviceSchema>;
+
+export const simulatorActiveSessionSchema = z
+  .object({
+    deviceUdid: z.string().min(1),
+    deviceName: z.string().min(1),
+    state: z.literal("running"),
+  })
+  .strict();
+export type SimulatorActiveSession = z.infer<
+  typeof simulatorActiveSessionSchema
+>;
+
+export const simulatorStatusResultSchema = z
+  .object({
+    supported: z.boolean(),
+    message: z.string().nullable(),
+    devices: z.array(simulatorDeviceSchema),
+    active: simulatorActiveSessionSchema.nullable(),
+  })
+  .strict();
+export type SimulatorStatusResult = z.infer<typeof simulatorStatusResultSchema>;
+
+export const simulatorStreamLeaseSchema = z
+  .object({
+    gatewayPort: z.number().int().min(1).max(65535),
+    token: z.string().min(32),
+    expiresAt: z.number().int().positive(),
+  })
+  .strict();
+export type SimulatorStreamLease = z.infer<typeof simulatorStreamLeaseSchema>;
+
+export const simulatorAttachResultSchema = z
+  .object({
+    session: simulatorActiveSessionSchema,
+    lease: simulatorStreamLeaseSchema,
+  })
+  .strict();
+export type SimulatorAttachResult = z.infer<typeof simulatorAttachResultSchema>;
+
+export const simulatorControlActionSchema = z.discriminatedUnion("kind", [
+  z
+    .object({
+      kind: z.literal("tap"),
+      x: z.number().min(0).max(1),
+      y: z.number().min(0).max(1),
+    })
+    .strict(),
+  z
+    .object({
+      kind: z.literal("gesture"),
+      points: z
+        .array(
+          z
+            .object({
+              type: z.enum(["begin", "move", "end"]),
+              x: z.number().min(0).max(1),
+              y: z.number().min(0).max(1),
+            })
+            .strict(),
+        )
+        .min(2)
+        .max(64),
+    })
+    .strict(),
+  z.object({ kind: z.literal("type"), text: z.string().max(10_000) }).strict(),
+  z
+    .object({
+      kind: z.literal("button"),
+      button: z.enum([
+        "home",
+        "swipe_home",
+        "app_switcher",
+        "lock",
+        "siri",
+        "side_button",
+      ]),
+    })
+    .strict(),
+  z
+    .object({
+      kind: z.literal("rotate"),
+      orientation: z.enum([
+        "portrait",
+        "portrait_upside_down",
+        "landscape_left",
+        "landscape_right",
+      ]),
+    })
+    .strict(),
+]);
+export type SimulatorControlAction = z.infer<
+  typeof simulatorControlActionSchema
+>;
+
+const simulatorStatusCommandSchema = z
+  .object({
+    type: z.literal("simulator.status"),
+    environmentId: z.string().min(1),
+  })
+  .strict();
+
+const simulatorAttachCommandSchema = z
+  .object({
+    type: z.literal("simulator.attach"),
+    environmentId: z.string().min(1),
+    deviceUdid: z.string().min(1),
+  })
+  .strict();
+
+const simulatorLeaseCommandSchema = z
+  .object({
+    type: z.literal("simulator.lease"),
+    environmentId: z.string().min(1),
+  })
+  .strict();
+
+const simulatorControlCommandSchema = z
+  .object({
+    type: z.literal("simulator.control"),
+    environmentId: z.string().min(1),
+    action: simulatorControlActionSchema,
+  })
+  .strict();
+
+const simulatorStopCommandSchema = z
+  .object({
+    type: z.literal("simulator.stop"),
+    environmentId: z.string().min(1),
+  })
+  .strict();
+
+const simulatorAccessibilityCommandSchema = z
+  .object({
+    type: z.literal("simulator.accessibility"),
+    environmentId: z.string().min(1),
+  })
+  .strict();
+
+const simulatorScreenshotCommandSchema = z
+  .object({
+    type: z.literal("simulator.screenshot"),
+    environmentId: z.string().min(1),
+  })
+  .strict();
+
+const simulatorControlResultSchema = z.object({ ok: z.literal(true) }).strict();
+const simulatorStopResultSchema = z
+  .object({ stopped: z.boolean(), deviceUdid: z.string().min(1).nullable() })
+  .strict();
+const simulatorAccessibilityResultSchema = z
+  .object({ tree: jsonValueSchema })
+  .strict();
+const simulatorScreenshotResultSchema = z
+  .object({
+    dataBase64: z.string(),
+    mimeType: z.literal("image/png"),
   })
   .strict();
 
@@ -1027,6 +1200,25 @@ const workspaceStatusCommandSchema = hostDaemonWorkspaceTargetSchema.extend({
   mergeBaseBranch: gitBranchNameSchema.optional(),
 });
 
+const workspaceDockerMountsCommandSchema = hostDaemonWorkspaceTargetSchema
+  .extend({
+    type: z.literal("workspace.docker_mounts"),
+  })
+  .strict();
+
+const workspaceDockerPathActivityCommandSchema = hostDaemonWorkspaceTargetSchema
+  .extend({
+    type: z.literal("workspace.docker_path_activity"),
+    paths: z.array(z.string().min(1)).min(1).max(8),
+  })
+  .strict();
+
+const workspaceGithubDeploymentsCommandSchema = hostDaemonWorkspaceTargetSchema
+  .extend({
+    type: z.literal("workspace.github_deployments"),
+  })
+  .strict();
+
 const workspaceDiffCommandSchema = hostDaemonWorkspaceTargetSchema.extend({
   type: z.literal("workspace.diff"),
   target: workspaceDiffTargetSchema,
@@ -1180,6 +1372,134 @@ const workspaceStatusResultSchema = z.discriminatedUnion("outcome", [
     .object({
       outcome: z.literal("unavailable"),
       failure: workspaceResolutionFailureSchema,
+    })
+    .strict(),
+]);
+
+const dockerGitLocationSchema = z
+  .object({
+    branch: z.string().min(1).nullable(),
+    commonDir: z.string().min(1),
+    root: z.string().min(1),
+  })
+  .strict();
+
+const dockerContainerLabelsSchema = z
+  .object({
+    composeProject: z.string().min(1).nullable(),
+    composeService: z.string().min(1).nullable(),
+    composeWorkingDir: z.string().min(1).nullable(),
+    getbbRole: z.string().min(1).nullable(),
+  })
+  .strict();
+
+const dockerBindMountSchema = z
+  .object({
+    destination: z.string().min(1),
+    readOnly: z.boolean(),
+    source: z.string().min(1),
+    sourceGit: dockerGitLocationSchema.nullable(),
+  })
+  .strict();
+
+const dockerContainerSchema = z
+  .object({
+    composeWorkingDirGit: dockerGitLocationSchema.nullable(),
+    id: z.string().min(1),
+    image: z.string().min(1),
+    labels: dockerContainerLabelsSchema,
+    mounts: z.array(dockerBindMountSchema),
+    name: z.string().min(1),
+    publishedPorts: z.array(z.number().int().min(1).max(65_535)),
+    state: z.string().min(1),
+  })
+  .strict();
+
+const workspaceDockerMountsResultSchema = z.discriminatedUnion("outcome", [
+  z
+    .object({
+      outcome: z.literal("available"),
+      containers: z.array(dockerContainerSchema),
+      workspaceGit: dockerGitLocationSchema,
+    })
+    .strict(),
+  z
+    .object({
+      outcome: z.literal("unavailable"),
+      reason: z.enum(["docker_not_installed", "docker_unavailable"]),
+      message: z.string().min(1),
+    })
+    .strict(),
+]);
+
+const dockerPathActivitySchema = z
+  .object({
+    limited: z.boolean(),
+    newestFileMtimeMs: z.number().nonnegative().nullable(),
+    newestFilePath: z.string().min(1).nullable(),
+    path: z.string().min(1),
+    scannedFiles: z.number().int().nonnegative(),
+  })
+  .strict();
+
+const workspaceDockerPathActivityResultSchema = z.discriminatedUnion(
+  "outcome",
+  [
+    z
+      .object({
+        outcome: z.literal("available"),
+        paths: z.array(dockerPathActivitySchema),
+      })
+      .strict(),
+    z
+      .object({
+        outcome: z.literal("unavailable"),
+        reason: z.enum(["invalid_path", "scan_failed"]),
+        message: z.string().min(1),
+      })
+      .strict(),
+  ],
+);
+
+const githubDeploymentStatusSchema = z
+  .object({
+    createdAt: z.string().min(1),
+    environmentUrl: z.string().min(1).nullable(),
+    logUrl: z.string().min(1).nullable(),
+    state: z.string().min(1),
+    updatedAt: z.string().min(1),
+  })
+  .strict();
+
+const githubDeploymentSchema = z
+  .object({
+    createdAt: z.string().min(1),
+    environment: z.string().min(1),
+    id: z.number().int().positive(),
+    latestStatus: githubDeploymentStatusSchema.nullable(),
+    ref: z.string().min(1),
+    updatedAt: z.string().min(1),
+  })
+  .strict();
+
+const workspaceGithubDeploymentsResultSchema = z.discriminatedUnion("outcome", [
+  z
+    .object({
+      deployments: z.array(githubDeploymentSchema),
+      outcome: z.literal("available"),
+      ref: z.string().min(1),
+      repository: z.string().min(1),
+    })
+    .strict(),
+  z
+    .object({
+      message: z.string().min(1),
+      outcome: z.literal("unavailable"),
+      reason: z.enum([
+        "github_not_installed",
+        "github_unavailable",
+        "not_github_repository",
+      ]),
     })
     .strict(),
 ]);
@@ -1517,7 +1837,7 @@ export const githubRepositoryCatalogSchema = z
   .object({
     accounts: z.array(githubAccountSchema).min(1),
     repositories: z.array(githubRepositorySchema),
-    scope: z.enum(["account", "intersection"]),
+    scope: z.enum(["account", "union"]),
   })
   .strict();
 export type GithubRepositoryCatalog = z.infer<
@@ -1622,6 +1942,18 @@ const providerCliInstallResultSchema = z
   .object({
     events: z.array(providerCliInstallEventSchema),
   })
+  .strict();
+
+const providerAuthStatusCommandSchema = z
+  .object({ type: z.literal("provider_auth.status") })
+  .strict();
+
+const providerAuthStartCommandSchema = providerAuthStartRequestSchema
+  .extend({ type: z.literal("provider_auth.start") })
+  .strict();
+
+const providerAuthSubmitCodeCommandSchema = providerAuthSubmitCodeRequestSchema
+  .extend({ type: z.literal("provider_auth.submit_code") })
   .strict();
 
 type HostDaemonCommandTransport = "settled" | "onlineRpc";
@@ -1957,6 +2289,69 @@ export const hostDaemonCommandRegistry = {
     flushEventsBeforeResult: false,
     envLane: null,
   }),
+  "simulator.status": defineHostDaemonCommandDescriptor({
+    type: "simulator.status",
+    schema: simulatorStatusCommandSchema,
+    resultSchema: simulatorStatusResultSchema,
+    transport: "onlineRpc",
+    retryable: true,
+    flushEventsBeforeResult: false,
+    envLane: "read",
+  }),
+  "simulator.attach": defineHostDaemonCommandDescriptor({
+    type: "simulator.attach",
+    schema: simulatorAttachCommandSchema,
+    resultSchema: simulatorAttachResultSchema,
+    transport: "onlineRpc",
+    retryable: false,
+    flushEventsBeforeResult: false,
+    envLane: "write",
+  }),
+  "simulator.lease": defineHostDaemonCommandDescriptor({
+    type: "simulator.lease",
+    schema: simulatorLeaseCommandSchema,
+    resultSchema: simulatorStreamLeaseSchema,
+    transport: "onlineRpc",
+    retryable: false,
+    flushEventsBeforeResult: false,
+    envLane: "read",
+  }),
+  "simulator.control": defineHostDaemonCommandDescriptor({
+    type: "simulator.control",
+    schema: simulatorControlCommandSchema,
+    resultSchema: simulatorControlResultSchema,
+    transport: "onlineRpc",
+    retryable: false,
+    flushEventsBeforeResult: false,
+    envLane: "write",
+  }),
+  "simulator.stop": defineHostDaemonCommandDescriptor({
+    type: "simulator.stop",
+    schema: simulatorStopCommandSchema,
+    resultSchema: simulatorStopResultSchema,
+    transport: "onlineRpc",
+    retryable: false,
+    flushEventsBeforeResult: false,
+    envLane: "write",
+  }),
+  "simulator.accessibility": defineHostDaemonCommandDescriptor({
+    type: "simulator.accessibility",
+    schema: simulatorAccessibilityCommandSchema,
+    resultSchema: simulatorAccessibilityResultSchema,
+    transport: "onlineRpc",
+    retryable: true,
+    flushEventsBeforeResult: false,
+    envLane: "read",
+  }),
+  "simulator.screenshot": defineHostDaemonCommandDescriptor({
+    type: "simulator.screenshot",
+    schema: simulatorScreenshotCommandSchema,
+    resultSchema: simulatorScreenshotResultSchema,
+    transport: "onlineRpc",
+    retryable: true,
+    flushEventsBeforeResult: false,
+    envLane: "read",
+  }),
   "host.list_commands": defineHostDaemonCommandDescriptor({
     type: "host.list_commands",
     schema: hostListCommandsCommandSchema,
@@ -2146,10 +2541,64 @@ export const hostDaemonCommandRegistry = {
     flushEventsBeforeResult: false,
     envLane: null,
   }),
+  "provider_auth.status": defineHostDaemonCommandDescriptor({
+    type: "provider_auth.status",
+    schema: providerAuthStatusCommandSchema,
+    resultSchema: providerAuthSnapshotSchema,
+    transport: "onlineRpc",
+    retryable: true,
+    flushEventsBeforeResult: false,
+    envLane: null,
+  }),
+  "provider_auth.start": defineHostDaemonCommandDescriptor({
+    type: "provider_auth.start",
+    schema: providerAuthStartCommandSchema,
+    resultSchema: providerAuthSnapshotSchema,
+    transport: "onlineRpc",
+    retryable: false,
+    flushEventsBeforeResult: false,
+    envLane: null,
+  }),
+  "provider_auth.submit_code": defineHostDaemonCommandDescriptor({
+    type: "provider_auth.submit_code",
+    schema: providerAuthSubmitCodeCommandSchema,
+    resultSchema: providerAuthSnapshotSchema,
+    transport: "onlineRpc",
+    retryable: false,
+    flushEventsBeforeResult: false,
+    envLane: null,
+  }),
   "workspace.status": defineHostDaemonCommandDescriptor({
     type: "workspace.status",
     schema: workspaceStatusCommandSchema,
     resultSchema: workspaceStatusResultSchema,
+    transport: "onlineRpc",
+    retryable: true,
+    flushEventsBeforeResult: false,
+    envLane: "read",
+  }),
+  "workspace.docker_mounts": defineHostDaemonCommandDescriptor({
+    type: "workspace.docker_mounts",
+    schema: workspaceDockerMountsCommandSchema,
+    resultSchema: workspaceDockerMountsResultSchema,
+    transport: "onlineRpc",
+    retryable: true,
+    flushEventsBeforeResult: false,
+    envLane: "read",
+  }),
+  "workspace.docker_path_activity": defineHostDaemonCommandDescriptor({
+    type: "workspace.docker_path_activity",
+    schema: workspaceDockerPathActivityCommandSchema,
+    resultSchema: workspaceDockerPathActivityResultSchema,
+    transport: "onlineRpc",
+    retryable: true,
+    flushEventsBeforeResult: false,
+    envLane: "read",
+  }),
+  "workspace.github_deployments": defineHostDaemonCommandDescriptor({
+    type: "workspace.github_deployments",
+    schema: workspaceGithubDeploymentsCommandSchema,
+    resultSchema: workspaceGithubDeploymentsResultSchema,
     transport: "onlineRpc",
     retryable: true,
     flushEventsBeforeResult: false,

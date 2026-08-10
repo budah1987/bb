@@ -77,9 +77,21 @@ import type {
   EnvironmentDiffPatchResponse,
   EnvironmentDiffQuery,
   EnvironmentDiffResponse,
+  EnvironmentDockerActivityResponse,
+  EnvironmentDockerProvenanceResponse,
+  EnvironmentPreviewsResponse,
   EnvironmentPathsQuery,
   EnvironmentPullRequestResponse,
   RenameEnvironmentRequest,
+  SimulatorAccessibilityResponse,
+  SimulatorAttachRequest,
+  SimulatorAttachResponse,
+  SimulatorControlRequest,
+  SimulatorControlResponse,
+  SimulatorLeaseResponse,
+  SimulatorScreenshotResponse,
+  SimulatorStatusResponse,
+  SimulatorStopResponse,
   EnvironmentStatusQuery,
   EnvironmentStatusResponse,
   HostDirectoryListing,
@@ -109,6 +121,9 @@ import type {
   HostProviderCliInstallEvent,
   HostProviderCliInstallRequest,
   HostProviderCliStatusResponse,
+  HostProviderAuthSnapshot,
+  HostProviderAuthStartRequest,
+  HostProviderAuthSubmitCodeRequest,
   HostRetryUpdateResponse,
   ProjectAttachmentContentQuery,
   ProjectAttachmentUploadForm,
@@ -222,6 +237,15 @@ import type {
   UpdateThreadTabsRequest,
 } from "./api/thread-tabs.js";
 import { updateThreadTabsRequestSchema } from "./api/thread-tabs.js";
+import type {
+  GenerateThreadRecapRequest,
+  ThreadNotesResponse,
+  UpdateThreadScratchpadRequest,
+} from "./api/thread-notes.js";
+import {
+  generateThreadRecapRequestSchema,
+  updateThreadScratchpadRequestSchema,
+} from "./api/thread-notes.js";
 import {
   closeTerminalRequestSchema,
   copyProjectAttachmentsRequestSchema,
@@ -244,6 +268,8 @@ import {
   environmentDiffQuerySchema,
   environmentPathsQuerySchema,
   renameEnvironmentRequestSchema,
+  simulatorAttachRequestSchema,
+  simulatorControlRequestSchema,
   environmentStatusQuerySchema,
   hostDirectoryQuerySchema,
   hostCloneDefaultPathQuerySchema,
@@ -257,6 +283,8 @@ import {
   hostPickFolderRequestSchema,
   hostPathsExistRequestSchema,
   hostProviderCliInstallRequestSchema,
+  hostProviderAuthStartRequestSchema,
+  hostProviderAuthSubmitCodeRequestSchema,
   projectAttachmentContentQuerySchema,
   projectBranchesQuerySchema,
   projectCommandsQuerySchema,
@@ -689,6 +717,28 @@ export const publicApiRoutes = {
       ),
       response: textResponse<HostProviderCliInstallEvent>(),
     }),
+    providerAuthStatus: defineRoute({
+      path: "/hosts/:id/provider-auth",
+      method: "get",
+      request: noRequest<PathId>(),
+      response: jsonResponse<HostProviderAuthSnapshot>(),
+    }),
+    providerAuthStart: defineRoute({
+      path: "/hosts/:id/provider-auth/start",
+      method: "post",
+      request: jsonRequest<PathId, HostProviderAuthStartRequest>(
+        hostProviderAuthStartRequestSchema,
+      ),
+      response: jsonResponse<HostProviderAuthSnapshot>(),
+    }),
+    providerAuthSubmitCode: defineRoute({
+      path: "/hosts/:id/provider-auth/submit-code",
+      method: "post",
+      request: jsonRequest<PathId, HostProviderAuthSubmitCodeRequest>(
+        hostProviderAuthSubmitCodeRequestSchema,
+      ),
+      response: jsonResponse<HostProviderAuthSnapshot>(),
+    }),
   },
 
   terminals: {
@@ -794,6 +844,24 @@ export const publicApiRoutes = {
       ),
       response: jsonResponse<EnvironmentStatusResponse>(),
     }),
+    dockerProvenance: defineRoute({
+      path: "/environments/:id/docker-provenance",
+      method: "get",
+      request: noRequest<PathId>(),
+      response: jsonResponse<EnvironmentDockerProvenanceResponse>(),
+    }),
+    dockerActivity: defineRoute({
+      path: "/environments/:id/docker-activity",
+      method: "get",
+      request: noRequest<PathId>(),
+      response: jsonResponse<EnvironmentDockerActivityResponse>(),
+    }),
+    previews: defineRoute({
+      path: "/environments/:id/previews",
+      method: "get",
+      request: noRequest<PathId>(),
+      response: jsonResponse<EnvironmentPreviewsResponse>(),
+    }),
     pullRequest: defineRoute({
       path: "/environments/:id/pull-request",
       method: "get",
@@ -869,6 +937,52 @@ export const publicApiRoutes = {
       method: "post",
       request: noRequest<PathId>(),
       response: jsonResponse<EnvironmentArchiveThreadsResponse>(),
+    }),
+    simulatorStatus: defineRoute({
+      path: "/environments/:id/simulator",
+      method: "get",
+      request: noRequest<PathId>(),
+      response: jsonResponse<SimulatorStatusResponse>(),
+    }),
+    simulatorAttach: defineRoute({
+      path: "/environments/:id/simulator/attach",
+      method: "post",
+      request: jsonRequest<PathId, SimulatorAttachRequest>(
+        simulatorAttachRequestSchema,
+      ),
+      response: jsonResponse<SimulatorAttachResponse>(),
+    }),
+    simulatorLease: defineRoute({
+      path: "/environments/:id/simulator/lease",
+      method: "post",
+      request: noRequest<PathId>(),
+      response: jsonResponse<SimulatorLeaseResponse>(),
+    }),
+    simulatorControl: defineRoute({
+      path: "/environments/:id/simulator/control",
+      method: "post",
+      request: jsonRequest<PathId, SimulatorControlRequest>(
+        simulatorControlRequestSchema,
+      ),
+      response: jsonResponse<SimulatorControlResponse>(),
+    }),
+    simulatorStop: defineRoute({
+      path: "/environments/:id/simulator/stop",
+      method: "post",
+      request: noRequest<PathId>(),
+      response: jsonResponse<SimulatorStopResponse>(),
+    }),
+    simulatorAccessibility: defineRoute({
+      path: "/environments/:id/simulator/accessibility",
+      method: "get",
+      request: noRequest<PathId>(),
+      response: jsonResponse<SimulatorAccessibilityResponse>(),
+    }),
+    simulatorScreenshot: defineRoute({
+      path: "/environments/:id/simulator/screenshot",
+      method: "get",
+      request: noRequest<PathId>(),
+      response: jsonResponse<SimulatorScreenshotResponse>(),
     }),
   },
 
@@ -1123,6 +1237,35 @@ export const publicApiRoutes = {
         jsonResponse<ApiError>({ status: 409 }),
       ],
     }),
+    notes: defineRoute({
+      path: "/threads/:id/notes",
+      method: "get",
+      request: noRequest<PathId>(),
+      response: jsonResponse<ThreadNotesResponse>(),
+    }),
+    updateScratchpad: defineRoute({
+      path: "/threads/:id/notes/scratchpad",
+      method: "put",
+      request: jsonRequest<PathId, UpdateThreadScratchpadRequest>(
+        updateThreadScratchpadRequestSchema,
+      ),
+      response: jsonResponse<ThreadNotesResponse>(),
+    }),
+    generateRecap: defineRoute({
+      path: "/threads/:id/notes/recap",
+      method: "post",
+      request: jsonRequest<PathId, GenerateThreadRecapRequest>(
+        generateThreadRecapRequestSchema,
+      ),
+      response: [
+        jsonResponse<ThreadNotesResponse>(),
+        // Nothing to summarize yet: the thread has no conversation.
+        jsonResponse<ApiError>({ status: 409 }),
+        // Inference is unconfigured, timed out, or returned nothing usable.
+        // The stored recap, if any, is left untouched.
+        jsonResponse<ApiError>({ status: 503 }),
+      ],
+    }),
     pin: defineRoute({
       path: "/threads/:id/pin",
       method: "post",
@@ -1199,6 +1342,12 @@ export const publicApiRoutes = {
     }),
     read: defineRoute({
       path: "/threads/:id/read",
+      method: "post",
+      request: noRequest<PathId>(),
+      response: jsonResponse<ThreadResponse>(),
+    }),
+    viewed: defineRoute({
+      path: "/threads/:id/viewed",
       method: "post",
       request: noRequest<PathId>(),
       response: jsonResponse<ThreadResponse>(),

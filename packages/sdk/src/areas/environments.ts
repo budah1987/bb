@@ -21,10 +21,21 @@ import type {
   EnvironmentDiffPatchResponse,
   EnvironmentDiffQuery,
   EnvironmentDiffResponse,
+  EnvironmentDockerActivityResponse,
+  EnvironmentDockerProvenanceResponse,
   EnvironmentDiffFilesResponse,
   EnvironmentPathsQuery,
   EnvironmentPullRequestResponse,
+  EnvironmentPreviewsResponse,
   EnvironmentStatusResponse,
+  SimulatorAccessibilityResponse,
+  SimulatorAttachResponse,
+  SimulatorControlAction,
+  SimulatorControlResponse,
+  SimulatorLeaseResponse,
+  SimulatorScreenshotResponse,
+  SimulatorStatusResponse,
+  SimulatorStopResponse,
   PullRequestMergeMethod,
   PullRequestCreateActionResponse,
   PullRequestMetadataActionResponse,
@@ -97,6 +108,18 @@ export interface EnvironmentStatusArgs extends EnvironmentStatusQuery {
   signal?: AbortSignal;
 }
 
+export interface EnvironmentDockerProvenanceArgs extends EnvironmentActionArgs {
+  signal?: AbortSignal;
+}
+
+export interface EnvironmentDockerActivityArgs extends EnvironmentActionArgs {
+  signal?: AbortSignal;
+}
+
+export interface EnvironmentPreviewsArgs extends EnvironmentActionArgs {
+  signal?: AbortSignal;
+}
+
 export type EnvironmentDiffArgs = EnvironmentDiffQuery & {
   environmentId: string;
   signal?: AbortSignal;
@@ -114,6 +137,14 @@ export interface EnvironmentDiffBranchesArgs extends EnvironmentDiffBranchesQuer
 
 export interface EnvironmentCommitArgs {
   environmentId: string;
+}
+
+export interface EnvironmentSimulatorAttachArgs extends EnvironmentActionArgs {
+  deviceUdid?: string;
+}
+
+export interface EnvironmentSimulatorControlArgs extends EnvironmentActionArgs {
+  action: SimulatorControlAction;
 }
 
 export interface EnvironmentSquashMergeArgs {
@@ -170,7 +201,19 @@ export type EnvironmentPullRequestResult = EnvironmentPullRequestResponse;
 export type EnvironmentRenameResult = Environment;
 export type EnvironmentSquashMergeResult = SquashMergeActionResponse;
 export type EnvironmentStatusResult = EnvironmentStatusResponse;
+export type EnvironmentDockerProvenanceResult =
+  EnvironmentDockerProvenanceResponse;
+export type EnvironmentDockerActivityResult = EnvironmentDockerActivityResponse;
+export type EnvironmentPreviewsResult = EnvironmentPreviewsResponse;
 export type EnvironmentUpdateResult = Environment;
+export type EnvironmentSimulatorStatusResult = SimulatorStatusResponse;
+export type EnvironmentSimulatorAttachResult = SimulatorAttachResponse;
+export type EnvironmentSimulatorLeaseResult = SimulatorLeaseResponse;
+export type EnvironmentSimulatorControlResult = SimulatorControlResponse;
+export type EnvironmentSimulatorStopResult = SimulatorStopResponse;
+export type EnvironmentSimulatorAccessibilityResult =
+  SimulatorAccessibilityResponse;
+export type EnvironmentSimulatorScreenshotResult = SimulatorScreenshotResponse;
 
 export interface EnvironmentsArea {
   archiveThreads(
@@ -186,8 +229,15 @@ export interface EnvironmentsArea {
   diffPatch(
     args: EnvironmentDiffPatchArgs,
   ): Promise<EnvironmentDiffPatchResult>;
+  dockerProvenance(
+    args: EnvironmentDockerProvenanceArgs,
+  ): Promise<EnvironmentDockerProvenanceResult>;
+  dockerActivity(
+    args: EnvironmentDockerActivityArgs,
+  ): Promise<EnvironmentDockerActivityResult>;
   get(args: EnvironmentGetArgs): Promise<EnvironmentGetResult>;
   pullRequest(args: EnvironmentGetArgs): Promise<EnvironmentPullRequestResult>;
+  previews(args: EnvironmentPreviewsArgs): Promise<EnvironmentPreviewsResult>;
   createPullRequest(
     args: EnvironmentPullRequestCreateArgs,
   ): Promise<EnvironmentCreatePullRequestResult>;
@@ -209,6 +259,27 @@ export interface EnvironmentsArea {
     args: EnvironmentSquashMergeArgs,
   ): Promise<EnvironmentSquashMergeResult>;
   status(args: EnvironmentStatusArgs): Promise<EnvironmentStatusResult>;
+  simulatorStatus(
+    args: EnvironmentActionArgs,
+  ): Promise<EnvironmentSimulatorStatusResult>;
+  simulatorAttach(
+    args: EnvironmentSimulatorAttachArgs,
+  ): Promise<EnvironmentSimulatorAttachResult>;
+  simulatorLease(
+    args: EnvironmentActionArgs,
+  ): Promise<EnvironmentSimulatorLeaseResult>;
+  simulatorControl(
+    args: EnvironmentSimulatorControlArgs,
+  ): Promise<EnvironmentSimulatorControlResult>;
+  simulatorStop(
+    args: EnvironmentActionArgs,
+  ): Promise<EnvironmentSimulatorStopResult>;
+  simulatorAccessibility(
+    args: EnvironmentActionArgs,
+  ): Promise<EnvironmentSimulatorAccessibilityResult>;
+  simulatorScreenshot(
+    args: EnvironmentActionArgs,
+  ): Promise<EnvironmentSimulatorScreenshotResult>;
   update(args: EnvironmentUpdateArgs): Promise<EnvironmentUpdateResult>;
 }
 
@@ -510,6 +581,84 @@ export function createEnvironmentsArea(
           },
           ...signalRequestArgs(input.signal),
         ),
+      );
+    },
+    async dockerProvenance(input) {
+      return transport.readJson(
+        transport.api.v1.environments[":id"]["docker-provenance"].$get(
+          { param: { id: input.environmentId } },
+          ...signalRequestArgs(input.signal),
+        ),
+      );
+    },
+    async dockerActivity(input) {
+      return transport.readJson(
+        transport.api.v1.environments[":id"]["docker-activity"].$get(
+          { param: { id: input.environmentId } },
+          ...signalRequestArgs(input.signal),
+        ),
+      );
+    },
+    async previews(input) {
+      return transport.readJson(
+        transport.api.v1.environments[":id"].previews.$get(
+          { param: { id: input.environmentId } },
+          ...signalRequestArgs(input.signal),
+        ),
+      );
+    },
+    async simulatorStatus(input) {
+      return transport.readJson(
+        transport.api.v1.environments[":id"].simulator.$get({
+          param: { id: input.environmentId },
+        }),
+      );
+    },
+    async simulatorAttach(input) {
+      return transport.readJson(
+        transport.api.v1.environments[":id"].simulator.attach.$post({
+          param: { id: input.environmentId },
+          json:
+            input.deviceUdid === undefined
+              ? {}
+              : { deviceUdid: input.deviceUdid },
+        }),
+      );
+    },
+    async simulatorLease(input) {
+      return transport.readJson(
+        transport.api.v1.environments[":id"].simulator.lease.$post({
+          param: { id: input.environmentId },
+        }),
+      );
+    },
+    async simulatorControl(input) {
+      return transport.readJson(
+        transport.api.v1.environments[":id"].simulator.control.$post({
+          param: { id: input.environmentId },
+          json: { action: input.action },
+        }),
+      );
+    },
+    async simulatorStop(input) {
+      return transport.readJson(
+        transport.api.v1.environments[":id"].simulator.stop.$post({
+          param: { id: input.environmentId },
+        }),
+      );
+    },
+    async simulatorAccessibility(input) {
+      return transport.readJson(
+        transport.api.v1.environments[":id"].simulator.accessibility.$get({
+          param: { id: input.environmentId },
+        }),
+      );
+    },
+    async simulatorScreenshot(input) {
+      return transport.readJson(
+        transport.api.v1.environments[":id"].simulator.screenshot.$get({
+          param: { id: input.environmentId },
+        }),
       );
     },
     async update(input) {

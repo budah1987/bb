@@ -70,6 +70,10 @@ vi.mock("@/components/dialogs/ProjectPathDialog", () => ({
   ProjectPathDialog: () => null,
 }));
 
+vi.mock("@/components/provider-auth/ProviderAuthHost", () => ({
+  ProviderAuthHost: () => null,
+}));
+
 vi.mock("./AppPageHeader", () => ({
   HEADER_ICON_BUTTON_CLASS: "header-icon-button",
   AppPageHeader: ({

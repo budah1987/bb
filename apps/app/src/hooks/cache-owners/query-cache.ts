@@ -21,6 +21,7 @@ import {
   environmentMergeBaseBranchesQueryKeyPrefix,
   environmentPullRequestQueryKey,
   environmentQueryKey,
+  environmentWorkspaceFilesQueryKeyPrefix,
   environmentWorkStatusQueryKey,
   environmentWorkStatusQueryKeyPrefix,
   sidebarNavigationQueryKey,
@@ -372,6 +373,7 @@ export function getEnvironmentWorkspaceStateInvalidationQueryKeys({
     environmentPullRequestQueryKey(environmentId),
     environmentDiffFilesQueryKeyPrefix(environmentId),
     environmentFilePreviewQueryKeyPrefix(environmentId),
+    environmentWorkspaceFilesQueryKeyPrefix(environmentId),
   ];
 }
 
