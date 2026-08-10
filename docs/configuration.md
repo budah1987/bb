@@ -153,6 +153,16 @@ defaults to off: Enter queues and Command+Enter steers. When enabled, Enter
 steers and Command+Enter queues. Set it with
 `bb settings general steerActiveThreadOnEnter <true|false>`.
 
+The "Keep named dev servers running" toggle in Settings → General controls
+named command terminals. It defaults to on, so bb restores a command after an
+unexpected exit, app restart, or host daemon restart. Restore failures retry
+after 1, 2, 5, 10, and then 30 seconds. An explicit Stop action prevents
+another restore. Turning the toggle off keeps running commands active, but it
+disarms their saved restore intent. Turning it on again applies only to newly
+created named commands. Ordinary shell terminals never restart automatically.
+Set the policy with
+`bb settings general devServerRestartPolicy <until-stopped|never>`.
+
 Outside an open typeahead menu, Shift+Enter inserts a newline. In zen mode,
 unmodified Enter also inserts a newline. On coarse-pointer touch devices, the
 software-keyboard Return path inserts a newline and the submit button sends.
@@ -397,6 +407,14 @@ skills. Running plugins contribute a third tier: every `skills/<name>/SKILL.md`
 in an installed plugin (relocatable via the manifest's `bb.skills` field) is
 auto-imported while the plugin is loaded — overridden by project and user
 skills by name, overriding built-ins.
+
+## Repository Manager
+
+Each standard project has repository manager settings. Defaults are enabled,
+`codex`, `gpt-5.4-mini`, medium reasoning, the default service tier, and auto
+permission mode. A manual run creates a visible root thread in the project's
+default workspace. Use `bb project manager show|run|settings` or the SDK's
+`projects.manager` area.
 
 ## Multi-machine
 

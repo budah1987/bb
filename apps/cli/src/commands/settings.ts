@@ -56,9 +56,18 @@ function parseShortcut(value: string): AppShortcut {
 function updateGeneralSetting(
   settings: AppSettings,
   key: string,
-  value: boolean,
+  value: string,
 ): AppSettings {
   switch (key) {
+    case "devServerRestartPolicy": {
+      const policy = value === "until-stopped" ? "until_stopped" : value;
+      if (policy !== "never" && policy !== "until_stopped") {
+        throw new Error(
+          "devServerRestartPolicy must be never or until-stopped.",
+        );
+      }
+      return appSettingsSchema.parse({ ...settings, [key]: policy });
+    }
     case "caffeinate":
     case "showKeyboardHints":
     case "steerActiveThreadOnEnter":
@@ -68,7 +77,10 @@ function updateGeneralSetting(
     case "codexSubagentsDisabled":
     case "claudeCodeSubagentsDisabled":
     case "claudeCodeWorkflowsDisabled":
-      return appSettingsSchema.parse({ ...settings, [key]: value });
+      return appSettingsSchema.parse({
+        ...settings,
+        [key]: parseBoolean(value),
+      });
     default:
       throw new Error(`Unknown general setting '${key}'.`);
   }
@@ -112,18 +124,14 @@ export function registerSettingsCommands(
 
   settings
     .command("general <key> <value>")
-    .description("Set a boolean Settings → General preference")
+    .description("Set a Settings → General preference")
     .option("--json", "Print machine-readable JSON output")
     .action(
       action(async (key: string, value: string, opts: JsonOptions) => {
         const sdk = createCliBbSdk(getUrl());
         const config = await sdk.system.config();
         const result = await sdk.system.updateGeneralSettings(
-          updateGeneralSetting(
-            config.generalSettings,
-            key,
-            parseBoolean(value),
-          ),
+          updateGeneralSetting(config.generalSettings, key, value),
         );
         if (outputJson(opts, result)) return;
         console.log(`${key} updated`);
@@ -185,7 +193,7 @@ export function registerSettingsCommands(
           updateGeneralSetting(
             config.generalSettings,
             "showKeyboardHints",
-            parseBoolean(value),
+            value,
           ),
         );
         if (outputJson(opts, result)) return;

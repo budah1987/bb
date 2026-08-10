@@ -18,6 +18,10 @@ import { Context } from 'hono';
  */
 declare const appSettingsSchema: z$1.ZodObject<{
     caffeinate: z$1.ZodBoolean;
+    devServerRestartPolicy: z$1.ZodEnum<{
+        never: "never";
+        until_stopped: "until_stopped";
+    }>;
     showKeyboardHints: z$1.ZodBoolean;
     steerActiveThreadOnEnter: z$1.ZodBoolean;
     showUnhandledProviderEvents: z$1.ZodBoolean;
@@ -7806,6 +7810,10 @@ type OnboardingTelemetryEvent = z$1.infer<typeof onboardingTelemetryEventSchema>
 declare const systemConfigResponseSchema: z$1.ZodObject<{
     generalSettings: z$1.ZodObject<{
         caffeinate: z$1.ZodBoolean;
+        devServerRestartPolicy: z$1.ZodEnum<{
+            never: "never";
+            until_stopped: "until_stopped";
+        }>;
         showKeyboardHints: z$1.ZodBoolean;
         steerActiveThreadOnEnter: z$1.ZodBoolean;
         showUnhandledProviderEvents: z$1.ZodBoolean;
@@ -8204,6 +8212,11 @@ declare const terminalSessionSchema: z$1.ZodObject<{
     environmentId: z$1.ZodNullable<z$1.ZodString>;
     hostId: z$1.ZodString;
     title: z$1.ZodString;
+    launchCommand: z$1.ZodNullable<z$1.ZodString>;
+    restartPolicy: z$1.ZodEnum<{
+        never: "never";
+        until_stopped: "until_stopped";
+    }>;
     initialCwd: z$1.ZodString;
     cols: z$1.ZodNumber;
     rows: z$1.ZodNumber;
@@ -8235,6 +8248,11 @@ declare const terminalListResponseSchema: z$1.ZodObject<{
         environmentId: z$1.ZodNullable<z$1.ZodString>;
         hostId: z$1.ZodString;
         title: z$1.ZodString;
+        launchCommand: z$1.ZodNullable<z$1.ZodString>;
+        restartPolicy: z$1.ZodEnum<{
+            never: "never";
+            until_stopped: "until_stopped";
+        }>;
         initialCwd: z$1.ZodString;
         cols: z$1.ZodNumber;
         rows: z$1.ZodNumber;
@@ -8269,6 +8287,10 @@ declare const createTerminalRequestSchema: z$1.ZodObject<{
         mode: z$1.ZodLiteral<"command">;
         command: z$1.ZodString;
     }, z$1.core.$strict>], "mode">>;
+    restartPolicy: z$1.ZodOptional<z$1.ZodEnum<{
+        never: "never";
+        until_stopped: "until_stopped";
+    }>>;
     target: z$1.ZodDiscriminatedUnion<[z$1.ZodObject<{
         kind: z$1.ZodLiteral<"thread">;
         threadId: z$1.ZodString;
@@ -13533,6 +13555,7 @@ interface TerminalListArgs {
 interface TerminalCreateArgs {
     cols: number;
     rows: number;
+    restartPolicy?: CreateTerminalRequest["restartPolicy"];
     scope: TerminalCreateScope;
     start?: CreateTerminalRequest["start"];
     title?: string;
@@ -13581,11 +13604,11 @@ interface TerminalsArea {
     output(args: TerminalOutputArgs): Promise<TerminalOutputResult>;
     rename(args: TerminalRenameArgs): Promise<TerminalRenameResult>;
     /**
-     * Replace a terminal with a shell at the same scope, size, and title.
+     * Replace a terminal at the same scope, size, and title.
      * The server serializes concurrent restarts and opens the replacement before
      * closing the old session, so a failed open leaves the old terminal running.
-     * The original command is not replayed because terminal sessions do not
-     * persist launch commands. The replacement has a new terminal ID.
+     * Named command terminals replay their saved command. Shell terminals open
+     * a new shell. The replacement has a new terminal ID.
      */
     restart(args: TerminalRestartArgs): Promise<TerminalRestartResult>;
     resize(args: TerminalResizeArgs): Promise<TerminalResizeResult>;

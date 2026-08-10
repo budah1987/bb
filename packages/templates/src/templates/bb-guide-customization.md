@@ -74,12 +74,17 @@ inserts a newline. iPadOS WebKit preserves these Enter shortcuts for a connected
 Magic Keyboard.
 
   bb settings show
-  bb settings general <key> <true|false>
+  bb settings general <key> <value>
   bb settings replay-onboarding
   bb settings experiment <key> <value>
   bb settings usage [--machine <id-or-name>]
   bb settings version [--force]
   bb settings reload
+
+`devServerRestartPolicy` accepts `until-stopped` or `never`. The default is
+`until-stopped`, which restores named dev-server commands after exits and bb
+restarts. Turning it off leaves running commands active, but prevents their
+next restore. Turning it on again applies to newly created named commands.
 
 `bb settings replay-onboarding` enables the `newOnboarding` experiment and
 clears `onboardingCompletedAt`. The first-run setup guide then shows again on

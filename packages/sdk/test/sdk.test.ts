@@ -54,6 +54,8 @@ function makeTerminalSession(overrides: Record<string, JsonValue> = {}) {
     environmentId: "env_test",
     hostId: "host_test",
     title: "Terminal 1",
+    launchCommand: null,
+    restartPolicy: "never",
     initialCwd: "/workspace",
     cols: 100,
     rows: 30,
@@ -958,6 +960,50 @@ describe("@bb/sdk", () => {
         bodyText: JSON.stringify({}),
         method: "POST",
         url: "http://bb.test/api/v1/terminals/term_old/restart",
+      },
+    ]);
+  });
+
+  it("creates a supervised named command terminal", async () => {
+    const queue = createFetchQueue([
+      {
+        body: makeTerminalSession({
+          launchCommand: "pnpm dev",
+          restartPolicy: "until_stopped",
+          title: "Web dev server",
+        }),
+        status: 201,
+      },
+    ]);
+    const sdk = createBbSdk({
+      transport: createHttpTransport({
+        baseUrl: "http://bb.test",
+        fetch: queue.fetch,
+        runtime: "node",
+      }),
+    });
+
+    await sdk.terminals.create({
+      cols: 80,
+      restartPolicy: "until_stopped",
+      rows: 24,
+      scope: { kind: "thread", threadId: "thr_remote" },
+      start: { mode: "command", command: "pnpm dev" },
+      title: "Web dev server",
+    });
+
+    expect(queue.requests).toEqual([
+      {
+        bodyText: JSON.stringify({
+          cols: 80,
+          rows: 24,
+          restartPolicy: "until_stopped",
+          start: { mode: "command", command: "pnpm dev" },
+          target: { kind: "thread", threadId: "thr_remote" },
+          title: "Web dev server",
+        }),
+        method: "POST",
+        url: "http://bb.test/api/v1/terminals",
       },
     ]);
   });

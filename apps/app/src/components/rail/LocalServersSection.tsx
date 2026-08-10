@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import type {
   EnvironmentDockerService,
   TerminalSession,
@@ -12,6 +12,8 @@ import {
 } from "@/hooks/queries/environment-queries";
 import {
   useEnvironmentTerminals,
+  useCloseTerminal,
+  useRestartTerminal,
   useThreadTerminals,
 } from "@/hooks/queries/thread-terminal-queries";
 import { useThread } from "@/hooks/queries/thread-queries";
@@ -72,7 +74,7 @@ function RowDetail({
         <button
           type="button"
           className={cn(
-            "shrink-0 underline-offset-2 hover:underline focus-visible:rounded-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring",
+            "min-h-10 shrink-0 rounded px-1 underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring",
             isDestructive && "text-destructive",
           )}
           onClick={action.onSelect}
@@ -84,21 +86,69 @@ function RowDetail({
   );
 }
 
-function LocalServerRow({
+type TerminalOperationKind = "restart" | "stop";
+
+interface TerminalOperation {
+  kind: TerminalOperationKind;
+  terminalId: string;
+}
+
+interface TerminalOperationLock {
+  current: TerminalOperation | null;
+}
+
+export function acquireTerminalOperationLock(
+  lock: TerminalOperationLock,
+  operation: TerminalOperation,
+): boolean {
+  if (lock.current !== null) {
+    return false;
+  }
+  lock.current = operation;
+  return true;
+}
+
+function releaseTerminalOperationLock(
+  lock: TerminalOperationLock,
+  operation: TerminalOperation,
+): void {
+  if (lock.current === operation) {
+    lock.current = null;
+  }
+}
+
+export function LocalServerRow({
+  controlsDisabled,
   environmentPath,
+  operation,
+  operationError,
   onOpen,
+  onRestart,
+  onRetry,
+  onStop,
   server,
   status,
 }: {
+  controlsDisabled: boolean;
   environmentPath: string | null | undefined;
+  operation: TerminalOperationKind | null;
+  operationError: { message: string; operation: TerminalOperationKind } | null;
   onOpen: (terminalId: string) => void;
+  onRestart: (terminalId: string) => void;
+  onRetry: (operation: TerminalOperationKind, terminalId: string) => void;
+  onStop: (terminalId: string) => void;
   server: LocalServerDisplay;
   status: LocalServerStatus;
 }) {
+  const [isStopConfirmationVisible, setIsStopConfirmationVisible] =
+    useState(false);
   const handleOpen = useCallback(() => onOpen(server.id), [onOpen, server.id]);
+  const isRestarting = operation === "restart";
+  const isStopping = operation === "stop";
+  const isBusy = operation !== null;
 
   return (
-    <div className="min-w-0">
+    <div className="min-w-0" aria-busy={isBusy}>
       <RailRow
         icon="Terminal"
         label={server.title}
@@ -114,6 +164,61 @@ function LocalServerRow({
           title={`Started in ${server.initialCwd}. Expected ${environmentPath ?? "the thread environment"}.`}
         />
       ) : null}
+      <div
+        className="flex min-h-10 items-center justify-end gap-1 px-2 text-xs text-muted-foreground"
+        aria-live="polite"
+        aria-atomic="true"
+      >
+        <button
+          type="button"
+          className="min-h-10 min-w-10 rounded px-2 transition-[color,opacity,scale] duration-150 hover:text-foreground active:scale-[0.96] disabled:pointer-events-none disabled:opacity-50 motion-reduce:transition-none"
+          disabled={controlsDisabled}
+          onClick={() => onRestart(server.id)}
+          aria-label={`Restart ${server.title}`}
+        >
+          {isRestarting ? "Restarting…" : "Restart"}
+        </button>
+        <button
+          type="button"
+          className="min-h-10 min-w-10 rounded px-2 text-destructive transition-[opacity,scale] duration-150 active:scale-[0.96] disabled:pointer-events-none disabled:opacity-50 motion-reduce:transition-none"
+          disabled={controlsDisabled}
+          onClick={() => {
+            if (!isStopConfirmationVisible) {
+              setIsStopConfirmationVisible(true);
+              return;
+            }
+            setIsStopConfirmationVisible(false);
+            onStop(server.id);
+          }}
+          aria-label={
+            isStopConfirmationVisible
+              ? `Confirm force stop ${server.title}`
+              : `Force stop ${server.title}`
+          }
+        >
+          {isStopping
+            ? "Stopping…"
+            : isStopConfirmationVisible
+              ? "Confirm"
+              : "Force stop"}
+        </button>
+      </div>
+      {operationError === null ? null : (
+        <div
+          role="alert"
+          className="flex min-h-10 items-center gap-2 px-2 pb-1 pl-8 text-xs text-destructive"
+        >
+          <span className="min-w-0 flex-1">{operationError.message}</span>
+          <button
+            type="button"
+            className="min-h-10 min-w-10 shrink-0 rounded px-2 underline-offset-2 transition-[color,scale] duration-150 hover:underline active:scale-[0.96] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring motion-reduce:transition-none"
+            disabled={controlsDisabled}
+            onClick={() => onRetry(operationError.operation, server.id)}
+          >
+            Retry
+          </button>
+        </div>
+      )}
     </div>
   );
 }
@@ -225,6 +330,14 @@ export function LocalServersSection({
     threadId,
     threadId,
   );
+  const closeTerminal = useCloseTerminal();
+  const restartTerminal = useRestartTerminal();
+  const operationLock = useRef<TerminalOperation | null>(null);
+  const [operation, setOperation] = useState<TerminalOperation | null>(null);
+  const [operationError, setOperationError] = useState<{
+    message: string;
+    operation: TerminalOperation;
+  } | null>(null);
 
   const servers = useMemo(() => {
     const sessionsById = new Map<string, TerminalSession>();
@@ -308,6 +421,48 @@ export function LocalServersSection({
     void dockerProvenanceQuery.refetch();
     void dockerActivityQuery.refetch();
   }, [dockerActivityQuery, dockerProvenanceQuery]);
+  const runTerminalOperation = useCallback(
+    (nextOperation: TerminalOperation) => {
+      if (!acquireTerminalOperationLock(operationLock, nextOperation)) {
+        return;
+      }
+
+      setOperation(nextOperation);
+      setOperationError(null);
+      const settle = () => {
+        releaseTerminalOperationLock(operationLock, nextOperation);
+        setOperation((current) => (current === nextOperation ? null : current));
+      };
+
+      if (nextOperation.kind === "restart") {
+        restartTerminal.mutate(
+          { terminalId: nextOperation.terminalId },
+          {
+            onError: () =>
+              setOperationError({
+                message: "Could not restart this server.",
+                operation: nextOperation,
+              }),
+            onSettled: settle,
+          },
+        );
+        return;
+      }
+
+      closeTerminal.mutate(
+        { mode: "force", terminalId: nextOperation.terminalId },
+        {
+          onError: () =>
+            setOperationError({
+              message: "Could not force stop this server.",
+              operation: nextOperation,
+            }),
+          onSettled: settle,
+        },
+      );
+    },
+    [closeTerminal, restartTerminal],
+  );
 
   return (
     <RailSection
@@ -335,14 +490,17 @@ export function LocalServersSection({
             type="button"
             variant="ghost"
             size="sm"
-            className="h-6 shrink-0 px-1.5 text-xs"
+            className="h-10 shrink-0 px-2 text-xs"
             onClick={retry}
           >
             Retry
           </Button>
         </div>
       ) : isLoading ? (
-        <p className={cn(RAIL_BODY_TEXT_CLASS, "py-1 text-muted-foreground")}>
+        <p
+          role="status"
+          className={cn(RAIL_BODY_TEXT_CLASS, "py-1 text-muted-foreground")}
+        >
           Loading servers…
         </p>
       ) : (
@@ -350,8 +508,29 @@ export function LocalServersSection({
           {serverRows.map((row) => (
             <LocalServerRow
               key={row.server.id}
+              controlsDisabled={operation !== null}
               environmentPath={environmentQuery.data?.path}
+              operation={
+                operation?.terminalId === row.server.id ? operation.kind : null
+              }
+              operationError={
+                operationError?.operation.terminalId === row.server.id
+                  ? {
+                      message: operationError.message,
+                      operation: operationError.operation.kind,
+                    }
+                  : null
+              }
               onOpen={openTerminal}
+              onRestart={(terminalId) =>
+                runTerminalOperation({ kind: "restart", terminalId })
+              }
+              onRetry={(kind, terminalId) =>
+                runTerminalOperation({ kind, terminalId })
+              }
+              onStop={(terminalId) =>
+                runTerminalOperation({ kind: "stop", terminalId })
+              }
               server={row.server}
               status={row.status}
             />
@@ -384,7 +563,7 @@ export function LocalServersSection({
               </span>
               <button
                 type="button"
-                className="shrink-0 underline-offset-2 hover:underline focus-visible:rounded-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                className="min-h-10 shrink-0 rounded px-1 underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
                 onClick={recheckDocker}
               >
                 Retry

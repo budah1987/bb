@@ -99,6 +99,12 @@ message agents, or inspect projects, providers, and environments.
   keyboard keeps Return as a newline; iPadOS WebKit preserves the Enter
   shortcuts for a connected Magic Keyboard. Update the preference with
   `bb settings general steerActiveThreadOnEnter <true|false>`.
+- The `devServerRestartPolicy` General preference defaults to `until_stopped`.
+  It restores named command terminals after exits, app restarts, or host daemon
+  restarts until the user stops them. Turning it off disarms existing restore
+  intent without stopping running commands. Turning it on applies to new named
+  commands. Update it with
+  `bb settings general devServerRestartPolicy <until-stopped|never>`.
 - Settings → Keyboard records server-backed per-command shortcut overrides.
   The `showKeyboardHints` preference controls the delayed badges shown while
   holding Command or Control and defaults to true; update it with
@@ -464,6 +470,8 @@ For review or fix pipelines, get the environment ID from
   explicit host ID; terminal commands never silently fall back to primary.
 - Start a server with
   `bb terminal create --thread <thread-id> --title "pnpm dev" --command "pnpm dev"`.
+  Named commands use the saved `devServerRestartPolicy`, which defaults to
+  `until_stopped`. Override it with `--restart-policy never` when needed.
 - All existing-session operations need only the terminal ID. Use
   `bb terminal wait <terminal-id> --contains "Local:" --timeout 120` to wait
   for readiness from new output. Pass `--from-start` only when matching existing
@@ -473,8 +481,8 @@ For review or fix pipelines, get the environment ID from
   `bb terminal send <terminal-id> --text "..." --enter` for interactive input,
   `bb terminal rename <terminal-id> <title>` to rename, and
   `bb terminal close <terminal-id>` when the process is no longer needed.
-- `bb terminal restart <terminal-id>` replaces the session with a shell in the
-  same scope, size, and title. It does not replay the original launch command.
+- `bb terminal restart <terminal-id>` replays a saved command. It opens a new
+  shell when the terminal has no saved command.
 
 ## Failures And Interruptions
 

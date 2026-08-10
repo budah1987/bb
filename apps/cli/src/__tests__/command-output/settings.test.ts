@@ -34,6 +34,26 @@ describe("bb settings commands", () => {
     });
   });
 
+  it("updates the default dev-server restart policy", async () => {
+    const put = vi.fn(async ({ json }) => json);
+    stubServerApi({
+      "v1.system.config.$get": vi.fn(async () => ({
+        generalSettings: defaultAppSettings,
+        experiments: defaultExperiments,
+      })),
+      "v1.settings.general.$put": put,
+    });
+
+    await runCommand(
+      ["settings", "general", "devServerRestartPolicy", "until-stopped"],
+      register,
+    );
+
+    expect(put).toHaveBeenCalledWith({
+      json: { ...defaultAppSettings, devServerRestartPolicy: "until_stopped" },
+    });
+  });
+
   it("updates keyboard hint visibility while preserving the full contract", async () => {
     const put = vi.fn(async ({ json }) => json);
     stubServerApi({

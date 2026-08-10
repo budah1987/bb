@@ -16,6 +16,8 @@ const BASE_TERMINAL_SESSION: TerminalSession = {
   environmentId: "env_terminal_story",
   hostId: "host_terminal_story",
   title: "Terminal 1",
+  launchCommand: null,
+  restartPolicy: "never",
   initialCwd: "/Users/michael/project",
   cols: 100,
   rows: 30,

@@ -64,6 +64,8 @@ function terminalSession(overrides: TerminalSessionOverrides): TerminalSession {
     environmentId: "env_1",
     hostId: "host_1",
     title: "Terminal",
+    launchCommand: null,
+    restartPolicy: "never",
     initialCwd: "/workspace",
     cols: 100,
     rows: 30,

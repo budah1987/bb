@@ -188,7 +188,12 @@ export function registerSystemRoutes(
   });
 
   put(routes.generalSettings, (context, payload) => {
+    const previousSettings = getAppSettings(deps.db);
     setAppSettings(deps.db, payload);
+    deps.terminalSessions.reconcileDevServerRestartPolicy({
+      previous: previousSettings.devServerRestartPolicy,
+      next: payload.devServerRestartPolicy,
+    });
     deps.hub.notifySystem(["config-changed"]);
     schedulePrimaryHostCaffeinateReconciliation(deps, {
       reason: "settings-updated",

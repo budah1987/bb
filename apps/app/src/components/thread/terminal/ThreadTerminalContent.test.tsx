@@ -18,6 +18,8 @@ const session: TerminalSession = {
   environmentId: "env_1",
   hostId: "host_1",
   title: "Terminal",
+  launchCommand: null,
+  restartPolicy: "never",
   initialCwd: "/workspace",
   cols: 100,
   rows: 30,
@@ -68,9 +70,7 @@ describe("ThreadTerminalContent", () => {
     expect(threadTerminalView).not.toHaveBeenCalled();
     expect(rendered.container.firstChild).toBeNull();
 
-    rendered.rerender(
-      <ThreadTerminalContent controller={controller(true)} />,
-    );
+    rendered.rerender(<ThreadTerminalContent controller={controller(true)} />);
 
     expect(threadTerminalView).toHaveBeenCalledOnce();
   });

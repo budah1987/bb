@@ -433,11 +433,14 @@ export type {
 
 export {
   createTerminalSession,
+  disableAllTerminalSupervision,
+  getDesiredTerminalSessionBySupervisionId,
   getTerminalSession,
   getTerminalSessionForThread,
   getThreadlessTerminalSessionForEnvironment,
   listTerminalSessionsByEnvironment,
   listTerminalSessionsByThread,
+  listDesiredTerminalSessionsByHost,
   listThreadlessTerminalSessionsByEnvironment,
   listVisibleTerminalSessions,
   listVisibleTerminalSessionsByThread,
@@ -452,6 +455,7 @@ export {
   markTerminalSessionUserInputById,
   markThreadlessTerminalSessionUserInput,
   markThreadTerminalSessionsExited,
+  setTerminalSupervisionDesired,
   updateTerminalSessionSize,
   updateTerminalSessionSizeById,
   updateTerminalSessionTitle,
@@ -461,6 +465,8 @@ export {
 } from "./terminal-sessions.js";
 export type {
   CreateTerminalSessionInput,
+  DisableAllTerminalSupervisionArgs,
+  SetTerminalSupervisionDesiredArgs,
   GetTerminalSessionArgs,
   GetTerminalSessionForThreadArgs,
   GetThreadlessTerminalSessionForEnvironmentArgs,

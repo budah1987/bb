@@ -14,6 +14,7 @@ export function getAppSettings(db: DbConnection): AppSettings {
   const row = db
     .select({
       caffeinate: appSettings.caffeinate,
+      devServerRestartPolicy: appSettings.devServerRestartPolicy,
       showKeyboardHints: appSettings.showKeyboardHints,
       steerActiveThreadOnEnter: appSettings.steerActiveThreadOnEnter,
       showUnhandledProviderEvents: appSettings.showUnhandledProviderEvents,
@@ -40,6 +41,7 @@ export function setAppSettings(
     .values({
       id: APP_SETTINGS_ROW_ID,
       caffeinate: settings.caffeinate,
+      devServerRestartPolicy: settings.devServerRestartPolicy,
       showKeyboardHints: settings.showKeyboardHints,
       steerActiveThreadOnEnter: settings.steerActiveThreadOnEnter,
       showUnhandledProviderEvents: settings.showUnhandledProviderEvents,
@@ -55,6 +57,7 @@ export function setAppSettings(
       target: appSettings.id,
       set: {
         caffeinate: settings.caffeinate,
+        devServerRestartPolicy: settings.devServerRestartPolicy,
         showKeyboardHints: settings.showKeyboardHints,
         steerActiveThreadOnEnter: settings.steerActiveThreadOnEnter,
         showUnhandledProviderEvents: settings.showUnhandledProviderEvents,
