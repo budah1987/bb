@@ -66,6 +66,7 @@ import { useProjectDisplayName } from "@/hooks/queries/sidebar-navigation-query"
 import { usePromptDraftStorage } from "@/hooks/usePromptDraftStorage";
 import { subscribeComposerFocusRequests } from "@/lib/composer-focus-requests";
 import { ThreadGitActionDialog } from "@/components/dialogs/ThreadGitActionDialog";
+import { PostMergeArchiveDialog } from "@/components/dialogs/PostMergeArchiveDialog";
 import {
   EnvironmentRenameDialog,
   type EnvironmentRenameDialogTarget,
@@ -828,6 +829,8 @@ function ThreadDetailViewInternal(props: ThreadDetailViewInternalProps) {
   const [pullRequestMergeMethod, setPullRequestMergeMethod] = useAtom(
     pullRequestMergeMethodAtom,
   );
+  const [isPostMergeArchivePromptOpen, setIsPostMergeArchivePromptOpen] =
+    useState(false);
   const markThreadRead = useMarkThreadViewed();
   const updateEnvironment = useUpdateEnvironment();
   const workspaceRenameDialog = useDialogState<EnvironmentRenameDialogTarget>();
@@ -890,6 +893,12 @@ function ThreadDetailViewInternal(props: ThreadDetailViewInternalProps) {
     staleTime: 5_000,
   });
   const environment = environmentQuery.data;
+  const isThreadOnProvisionedWorktreeEnvironment =
+    environment !== undefined &&
+    environment.status === "ready" &&
+    environment.path !== null &&
+    (environment.isWorktree ||
+      environment.workspaceProvisionType === "managed-worktree");
   const handleOpenWorkspaceRename = useCallback(() => {
     if (environment === undefined) {
       return;
@@ -1873,6 +1882,11 @@ function ThreadDetailViewInternal(props: ThreadDetailViewInternalProps) {
           throw new Error("Expected pull request merge action response.");
         }
         appToast.success(response.message, { id: toastId });
+        // Offer cleanup after the pull request merges, but never archive on our
+        // own because the user may want to continue this conversation.
+        if (isThreadOnProvisionedWorktreeEnvironment) {
+          setIsPostMergeArchivePromptOpen(true);
+        }
       } catch (error) {
         appToast.error("Failed to merge pull request", {
           id: toastId,
@@ -1884,10 +1898,45 @@ function ThreadDetailViewInternal(props: ThreadDetailViewInternalProps) {
       }
     },
     [
+      isThreadOnProvisionedWorktreeEnvironment,
       requestEnvironmentAction,
       setPullRequestMergeMethod,
       thread?.environmentId,
     ],
+  );
+  // The dialog owns status, confirmation, and failure messaging for this path.
+  const handlePostMergeArchive = useCallback(
+    async ({
+      allowUncommittedChanges,
+    }: {
+      allowUncommittedChanges: boolean;
+    }) => {
+      const environmentId = thread?.environmentId;
+      if (!environmentId) {
+        throw new Error("Workspace is unavailable");
+      }
+      if (!allowUncommittedChanges) {
+        let status;
+        try {
+          status = await sdk.environments.status({ environmentId });
+        } catch {
+          throw new Error(
+            "Couldn’t check this workspace for uncommitted changes. Nothing was archived.",
+          );
+        }
+        if (status.outcome !== "available") {
+          throw new Error(
+            "Couldn’t check this workspace for uncommitted changes. Nothing was archived.",
+          );
+        }
+        if (status.workspace.workingTree.hasUncommittedChanges) {
+          return "uncommitted_confirmation_required" as const;
+        }
+      }
+      await archiveEnvironmentThreads.mutateAsync({ id: environmentId });
+      return "archived" as const;
+    },
+    [archiveEnvironmentThreads, thread?.environmentId],
   );
   const handlePullRequestArchive = useCallback(async () => {
     const environmentId = thread?.environmentId;
@@ -2577,12 +2626,6 @@ function ThreadDetailViewInternal(props: ThreadDetailViewInternalProps) {
         threadEnvironmentDisplay.workspaceDisplayKind,
       )
     : null;
-  const isThreadOnProvisionedWorktreeEnvironment =
-    environment !== undefined &&
-    environment.status === "ready" &&
-    environment.path !== null &&
-    (environment.isWorktree ||
-      environment.workspaceProvisionType === "managed-worktree");
   const onCreateNewThreadInWorktree =
     isThreadOnProvisionedWorktreeEnvironment &&
     projectId &&
@@ -2591,6 +2634,13 @@ function ThreadDetailViewInternal(props: ThreadDetailViewInternalProps) {
       : undefined;
   const promptBannerMergeBaseBranch = effectiveMergeBaseBranch;
   const threadBranchName = workspaceBranch?.currentBranch ?? undefined;
+  const threadWorktreePath = environment?.path ?? undefined;
+  // Directory name, not the environment name: it is what the user sees on disk
+  // and what disambiguates two worktrees of the same repository.
+  const threadWorktreeName = threadWorktreePath
+    ? (threadWorktreePath.split("/").filter(Boolean).at(-1) ??
+      threadWorktreePath)
+    : undefined;
   const threadCheckoutDisplay = workspaceStatus
     ? formatWorkspaceCheckoutDisplay({ checkout: workspaceStatus.checkout })
     : undefined;
@@ -2908,7 +2958,9 @@ function ThreadDetailViewInternal(props: ThreadDetailViewInternalProps) {
         void handleAskAgentToFixPullRequestCheck(check)
       }
       onConvertToDraft={() => void handlePullRequestDraft()}
-      onCommitChanges={() => void gitActions.handleCommitThread()}
+      onCommitChanges={() =>
+        gitActions.threadGitActionDialog.onOpen({ kind: "commit" })
+      }
       onCreate={(input) => void handlePullRequestCreate(input)}
       onGenerateMetadata={handleGeneratePullRequestMetadata}
       onGithubAccountChange={(login) => void handleGithubAccountChange(login)}
@@ -3077,8 +3129,13 @@ function ThreadDetailViewInternal(props: ThreadDetailViewInternalProps) {
           <ThreadGitActionDialog
             target={gitActions.threadGitActionDialog.target}
             branchName={threadBranchName}
+            worktreeName={threadWorktreeName}
+            worktreePath={threadWorktreePath}
             gitStatusDisplay={threadGitStatusDisplay}
             changedFilesSection={workingTreeChangedFilesSection}
+            hasUncommittedChanges={
+              workspaceStatus?.workingTree.hasUncommittedChanges === true
+            }
             showMergeBaseDetails={showBranchComparisonUi}
             mergeBaseBranch={effectiveMergeBaseBranch}
             mergeBaseBranchOptions={mergeBaseBranchOptions}
@@ -3094,8 +3151,17 @@ function ThreadDetailViewInternal(props: ThreadDetailViewInternalProps) {
                 gitActions.threadGitActionDialog.onClose();
               }
             }}
+            onChangeTarget={gitActions.threadGitActionDialog.onOpen}
             onCommit={gitActions.handleCommitThread}
             onSquashMerge={gitActions.handleSquashMergeThread}
+          />
+        ) : null}
+        {threadWorktreeName ? (
+          <PostMergeArchiveDialog
+            open={isPostMergeArchivePromptOpen}
+            worktreeName={threadWorktreeName}
+            onOpenChange={setIsPostMergeArchivePromptOpen}
+            onArchive={handlePostMergeArchive}
           />
         ) : null}
         <EnvironmentRenameDialog

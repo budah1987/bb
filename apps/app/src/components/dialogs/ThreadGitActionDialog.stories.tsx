@@ -22,9 +22,6 @@ const stageClassName =
   "max-w-[34rem] gap-0 overflow-hidden border-border p-0 shadow-sm";
 
 const commitTarget: ThreadGitActionDialogTarget = { kind: "commit" };
-const commitAndSquashTarget: ThreadGitActionDialogTarget = {
-  kind: "commit_and_squash_merge",
-};
 const squashTarget: ThreadGitActionDialogTarget = { kind: "squash_merge" };
 
 const changedFiles: WorkspaceFileStatus[] = [
@@ -80,30 +77,35 @@ export function Overview() {
     <StoryCard>
       <StoryRow
         label="commit"
-        hint='kind="commit" — branch + git status + changed files only, no merge base'
+        hint='kind="commit" — worktree + branch + selectable changed files'
       >
         <DialogStage className={stageClassName}>
           <ThreadGitActionDialogContent
             target={commitTarget}
             branchName={BRANCH_NAMES.feature}
+            worktreeName="bb-feature-worktree"
+            worktreePath="/Users/dev/worktrees/bb-feature-worktree"
             gitStatusDisplay={dirtyGitStatus}
             changedFilesSection={changedFilesSection}
             onOpenChange={noop}
+            onChangeTarget={noop}
             onCommit={asyncNoop}
             onSquashMerge={asyncNoop}
           />
         </DialogStage>
       </StoryRow>
       <StoryRow
-        label="commit + squash merge"
-        hint="commit then squash — adds the Merge base picker"
+        label="squash merge, dirty worktree"
+        hint="uncommitted changes block the merge and point at the Commit dialog"
       >
         <DialogStage className={stageClassName}>
           <ThreadGitActionDialogContent
-            target={commitAndSquashTarget}
+            target={squashTarget}
             branchName={BRANCH_NAMES.feature}
+            worktreeName="bb-feature-worktree"
             gitStatusDisplay={dirtyGitStatus}
             changedFilesSection={changedFilesSection}
+            hasUncommittedChanges
             showMergeBaseDetails
             mergeBaseBranch="main"
             mergeBaseBranchRef={{ name: "main", kind: "local" }}
@@ -111,6 +113,7 @@ export function Overview() {
             mergeBaseRemoteBranchOptions={mergeBaseRemoteOptions}
             onMergeBaseBranchChange={noop}
             onOpenChange={noop}
+            onChangeTarget={noop}
             onCommit={asyncNoop}
             onSquashMerge={asyncNoop}
           />
@@ -132,6 +135,7 @@ export function Overview() {
             mergeBaseRemoteBranchOptions={mergeBaseRemoteOptions}
             onMergeBaseBranchChange={noop}
             onOpenChange={noop}
+            onChangeTarget={noop}
             onCommit={asyncNoop}
             onSquashMerge={asyncNoop}
           />
@@ -150,6 +154,7 @@ export function Overview() {
             mergeBaseBranch="main"
             mergeBaseBranchRef={{ name: "main", kind: "local" }}
             onOpenChange={noop}
+            onChangeTarget={noop}
             onCommit={asyncNoop}
             onSquashMerge={asyncNoop}
           />
@@ -161,16 +166,16 @@ export function Overview() {
       >
         <DialogStage className={stageClassName}>
           <ThreadGitActionDialogContent
-            target={commitAndSquashTarget}
+            target={squashTarget}
             branchName={BRANCH_NAMES.feature}
-            gitStatusDisplay={dirtyGitStatus}
-            changedFilesSection={changedFilesSection}
+            gitStatusDisplay={aheadGitStatus}
             showMergeBaseDetails
             mergeBaseBranch="main"
             mergeBaseBranchOptions={["main"]}
             mergeBaseBranchOptionsLoading
             onMergeBaseBranchChange={noop}
             onOpenChange={noop}
+            onChangeTarget={noop}
             onCommit={asyncNoop}
             onSquashMerge={asyncNoop}
           />
@@ -192,6 +197,7 @@ export function Overview() {
             mergeBaseRemoteBranchOptions={mergeBaseRemoteOptions}
             onMergeBaseBranchChange={noop}
             onOpenChange={noop}
+            onChangeTarget={noop}
             onCommit={asyncNoop}
             onSquashMerge={asyncNoop}
           />
@@ -205,6 +211,7 @@ export function Overview() {
           <ThreadGitActionDialogContent
             target={commitTarget}
             onOpenChange={noop}
+            onChangeTarget={noop}
             onCommit={asyncNoop}
             onSquashMerge={asyncNoop}
           />

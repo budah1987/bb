@@ -79,10 +79,7 @@ function parseFirstIntegerMatch(text: string, pattern: RegExp): number {
 function parseShortstat(shortstat: string): DiffStats {
   return {
     filesCount: parseFirstIntegerMatch(shortstat, /(\d+)\s+files?\s+changed/u),
-    insertions: parseFirstIntegerMatch(
-      shortstat,
-      /(\d+)\s+insertions?\(\+\)/u,
-    ),
+    insertions: parseFirstIntegerMatch(shortstat, /(\d+)\s+insertions?\(\+\)/u),
     deletions: parseFirstIntegerMatch(shortstat, /(\d+)\s+deletions?\(-\)/u),
   };
 }
@@ -754,6 +751,123 @@ describe("Workspace", () => {
 
     expect((await workspace.getStatus()).workingTree.state).toBe("clean");
     await expect(fs.stat(path.join(repoPath, "temp.txt"))).rejects.toThrow();
+  });
+
+  it("commits only selected paths and preserves other staged changes", async () => {
+    const repoPath = await initRepo();
+    const workspace = new Workspace(repoPath);
+
+    await fs.writeFile(path.join(repoPath, "README.md"), "selected\n", "utf8");
+    await fs.writeFile(
+      path.join(repoPath, "selected.txt"),
+      "selected new file\n",
+      "utf8",
+    );
+    await fs.writeFile(
+      path.join(repoPath, "unselected.txt"),
+      "staged but unselected\n",
+      "utf8",
+    );
+    await runGit(["add", "unselected.txt"], { cwd: repoPath });
+
+    await workspace.commit({
+      message: "Commit selected files",
+      noVerify: false,
+      paths: ["README.md", "selected.txt"],
+    });
+
+    const committedPaths = (
+      await runGit(["show", "--format=", "--name-only", "HEAD"], {
+        cwd: repoPath,
+      })
+    ).stdout
+      .trim()
+      .split("\n")
+      .sort();
+    expect(committedPaths).toEqual(["README.md", "selected.txt"]);
+    expect(
+      (
+        await runGit(["diff", "--cached", "--name-only"], {
+          cwd: repoPath,
+        })
+      ).stdout.trim(),
+    ).toBe("unselected.txt");
+  });
+
+  it("commits selected paths before the repository has a HEAD commit", async () => {
+    const repoPath = await makeTempDir("bb-workspace-empty-repo-");
+    await runGit(["init", "-b", "main"], { cwd: repoPath });
+    await runGit(["config", "user.name", "BB Tests"], { cwd: repoPath });
+    await runGit(["config", "user.email", "bb@example.com"], {
+      cwd: repoPath,
+    });
+    await fs.writeFile(
+      path.join(repoPath, "selected.txt"),
+      "selected\n",
+      "utf8",
+    );
+    await fs.writeFile(path.join(repoPath, "other.txt"), "other\n", "utf8");
+
+    await new Workspace(repoPath).commit({
+      message: "Initial selected commit",
+      noVerify: false,
+      paths: ["selected.txt"],
+    });
+
+    expect(
+      (
+        await runGit(["show", "--format=", "--name-only", "HEAD"], {
+          cwd: repoPath,
+        })
+      ).stdout.trim(),
+    ).toBe("selected.txt");
+    expect(
+      (await runGit(["status", "--short"], { cwd: repoPath })).stdout,
+    ).toBe("?? other.txt\n");
+  });
+
+  it("commits both sides of a selected rename", async () => {
+    const repoPath = await initRepo();
+    const workspace = new Workspace(repoPath);
+    await fs.writeFile(path.join(repoPath, "old.txt"), "rename me\n", "utf8");
+    await runGit(["add", "old.txt"], { cwd: repoPath });
+    await runGit(["commit", "-m", "Add rename source"], { cwd: repoPath });
+    await runGit(["mv", "old.txt", "new.txt"], { cwd: repoPath });
+
+    await workspace.commit({
+      message: "Rename file",
+      noVerify: false,
+      paths: ["new.txt"],
+    });
+
+    expect(
+      (
+        await runGit(["show", "--format=", "--name-status", "HEAD"], {
+          cwd: repoPath,
+        })
+      ).stdout,
+    ).toContain("old.txt\tnew.txt");
+  });
+
+  it("rejects a stale selected path without committing", async () => {
+    const repoPath = await initRepo();
+    const workspace = new Workspace(repoPath);
+    const headBefore = (await runGit(["rev-parse", "HEAD"], { cwd: repoPath }))
+      .stdout;
+
+    await expect(
+      workspace.commit({
+        message: "Do not commit",
+        noVerify: false,
+        paths: ["missing.txt"],
+      }),
+    ).rejects.toMatchObject({
+      name: "WorkspaceError",
+      code: "stale_selection",
+    });
+    expect(
+      (await runGit(["rev-parse", "HEAD"], { cwd: repoPath })).stdout,
+    ).toBe(headBefore);
   });
 
   it("throws a typed no_changes error when there is nothing to commit", async () => {

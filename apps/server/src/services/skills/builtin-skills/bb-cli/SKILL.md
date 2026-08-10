@@ -289,6 +289,9 @@ environment pull-request show <id>`. Diff commands require an explicit target
 - `bb environment rename <id> --branch <name>` renames a worktree's checked-out
   branch; use `--folder <name>` instead to move it within its current parent.
   Wait for active work in that environment to finish before either rename.
+- `bb environment commit <id>` commits every change in that worktree. Repeat
+  `--path <path>` to commit only selected changed files. `squash-merge` uses
+  existing branch commits and requires a clean worktree.
 - Spawned child threads inherit permission from explicit flags, then the
   parent thread's last execution, then project defaults.
 - Public permission modes are `accept-edits`, `auto`, and `full`.
