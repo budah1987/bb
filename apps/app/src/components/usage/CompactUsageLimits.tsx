@@ -290,7 +290,7 @@ export function SidebarUsageLimitsContent({
   return (
     <div
       data-testid="sidebar-usage-limits"
-      className="shrink-0 px-1 max-md:hidden pointer-coarse:hidden group-data-[collapsible=icon]:hidden"
+      className="shrink-0 px-1 max-md:hidden group-data-[collapsible=icon]:hidden"
     >
       <Collapsible open={open} onOpenChange={onOpenChange}>
         <CollapsibleTrigger

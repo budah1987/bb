@@ -219,7 +219,7 @@ describe("SidebarUsageLimitsContent", () => {
 
     const container = screen.getByTestId("sidebar-usage-limits");
     expect(container.className).toContain("max-md:hidden");
-    expect(container.className).toContain("pointer-coarse:hidden");
+    expect(container.className).not.toContain("pointer-coarse:hidden");
     const trigger = screen.getByRole("button", {
       name: /Expand details/u,
     });
