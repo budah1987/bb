@@ -17,6 +17,7 @@ import {
   isCommaSeparatedIncludeQueryValue,
   pathListIncludeQueryValueSchema,
 } from "./shared.js";
+import { spaceResponseSchema } from "./spaces.js";
 
 const localProjectPathRequestSchema = z
   .string()
@@ -534,6 +535,7 @@ export type ProjectWithThreadsResponse = z.infer<
 
 export const sidebarBootstrapResponseSchema = z.object({
   sections: z.array(threadSectionSchema),
+  spaces: z.array(spaceResponseSchema),
   projects: z.array(projectWithThreadsResponseSchema),
   personalProject: projectWithThreadsResponseSchema,
 });

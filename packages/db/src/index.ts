@@ -20,6 +20,7 @@ export {
   createHostId,
   createPendingInteractionId,
   createProjectId,
+  createSpaceId,
   createPromptHistoryEntryId,
   createProjectSourceId,
   createTerminalSessionId,

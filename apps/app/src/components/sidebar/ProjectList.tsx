@@ -151,12 +151,14 @@ import {
 } from "./BuiltInSidebarSection";
 import { ReorderableSidebarSectionOrderList } from "./ReorderableSidebarSectionOrderList";
 import { useSidebarModeSectionOrder } from "./useSidebarModeSectionOrder";
+import { filterSidebarThreadsForSpace } from "./spaceThreads";
 import {
   resolveThreadTitleDisplayText,
   type ThreadTitleMentionResources,
 } from "@/components/thread/ThreadTitleMentions";
 
 interface ProjectListProps {
+  activeSpaceProjectIds?: ReadonlySet<string>;
   onNewProject?: () => void;
   onProjectSelect?: () => void;
   isCreatingProject?: boolean;
@@ -1480,6 +1482,7 @@ export function MachineModeSections({
 }
 
 function ProjectListComponent({
+  activeSpaceProjectIds,
   onNewProject,
   onProjectSelect,
   isCreatingProject = false,
@@ -1491,8 +1494,15 @@ function ProjectListComponent({
   const sidebarNavigation = sidebarNavigationQuery.data;
   const sections = sidebarNavigation?.sections ?? EMPTY_SECTION_DEFINITIONS;
   const projects = useMemo(
-    () => sidebarNavigation?.projects.map(stripProjectThreads),
-    [sidebarNavigation],
+    () =>
+      sidebarNavigation?.projects
+        .filter(
+          (project) =>
+            activeSpaceProjectIds === undefined ||
+            activeSpaceProjectIds.has(project.id),
+        )
+        .map(stripProjectThreads),
+    [activeSpaceProjectIds, sidebarNavigation],
   );
   const threads = useMemo(() => {
     if (!sidebarNavigation) {
@@ -1505,7 +1515,11 @@ function ProjectListComponent({
     sidebarThreads.push(...sidebarNavigation.personalProject.threads);
     return sidebarThreads;
   }, [sidebarNavigation]);
-  const draftThreadIds = usePromptDraftInputThreadIds(threads);
+  const spaceThreads = useMemo(
+    () => filterSidebarThreadsForSpace(threads, activeSpaceProjectIds),
+    [activeSpaceProjectIds, threads],
+  );
+  const draftThreadIds = usePromptDraftInputThreadIds(spaceThreads);
   const projectNamesById = useMemo(() => {
     const namesById = new Map<string, string>();
     if (!sidebarNavigation) {
@@ -1526,11 +1540,11 @@ function ProjectListComponent({
   }, [sections]);
   const threadById = useMemo(() => {
     const map = new Map<string, ThreadListEntry>();
-    for (const thread of threads) {
+    for (const thread of spaceThreads) {
       map.set(thread.id, thread);
     }
     return map;
-  }, [threads]);
+  }, [spaceThreads]);
   const titleMentionResources = useMemo(
     () => ({ sectionNamesById, projectNamesById, threadById }),
     [sectionNamesById, projectNamesById, threadById],
@@ -1794,8 +1808,8 @@ function ProjectListComponent({
     }
   }, [chronologicalSort, setChronologicalSort]);
   const pinnedSidebarState = useMemo(
-    () => buildPinnedSidebarState({ draftThreadIds, threads }),
-    [draftThreadIds, threads],
+    () => buildPinnedSidebarState({ draftThreadIds, threads: spaceThreads }),
+    [draftThreadIds, spaceThreads],
   );
   const pinnedRootThreads = useMemo(
     () => pinnedSidebarState.rootNodes.map((node) => node.thread),
@@ -2011,7 +2025,7 @@ function ProjectListComponent({
           sectionNamesById={sectionNamesById}
           projectNamesById={projectNamesById}
           query={threadSearch.query}
-          recentThreads={threads}
+          recentThreads={spaceThreads}
           showSectionLabels={isSectionOrganizationMode}
         />
       </ProjectListShell>
@@ -2032,7 +2046,7 @@ function ProjectListComponent({
         mode={organizationMode}
         renderMachine={() => (
           <MachineModeSections
-            threads={threads}
+            threads={spaceThreads}
             draftThreadIds={draftThreadIds}
             effectivePinnedThreadIds={
               pinnedSidebarState.effectivePinnedThreadIds
@@ -2058,7 +2072,7 @@ function ProjectListComponent({
         renderChronological={() => (
           <>
             <SectionModeSections
-              threads={threads}
+              threads={spaceThreads}
               effectivePinnedThreadIds={
                 pinnedSidebarState.effectivePinnedThreadIds
               }
@@ -2103,7 +2117,7 @@ function ProjectListComponent({
           <>
             <ProjectModeSections
               projects={projects ?? EMPTY_PROJECTS}
-              threads={threads}
+              threads={spaceThreads}
               draftThreadIds={draftThreadIds}
               effectivePinnedThreadIds={
                 pinnedSidebarState.effectivePinnedThreadIds

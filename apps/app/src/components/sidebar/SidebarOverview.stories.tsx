@@ -90,6 +90,7 @@ const personalProject = makeProject({
 
 const loadedSidebarNavigation = {
   sections: [],
+  spaces: [],
   personalProject: {
     ...personalProject,
     defaultExecutionOptions: null,

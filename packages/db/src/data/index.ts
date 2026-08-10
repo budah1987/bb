@@ -21,6 +21,22 @@ export type {
 } from "./projects.js";
 
 export {
+  createSpace,
+  deleteSpace,
+  ensureDefaultSpace,
+  listSpaces,
+  moveProjectToSpace,
+  updateSpace,
+} from "./spaces.js";
+export type {
+  CreateSpaceInput,
+  DeleteSpaceResult,
+  SpaceRow,
+  SpaceWithProjects,
+  UpdateSpaceInput,
+} from "./spaces.js";
+
+export {
   createThreadSection,
   deleteThreadSection,
   getThreadSectionById,

@@ -34,6 +34,8 @@ import type {
   ThreadEventType,
   WorkspaceProvisionType,
   ProjectKind,
+  SpaceColor,
+  SpaceIcon,
 } from "@bb/domain";
 
 export const authUsers = sqliteTable(
@@ -128,6 +130,34 @@ export const projects = sqliteTable(
       .on(table.kind)
       .where(sql`${table.kind} = 'personal'`),
   ],
+);
+
+export const spaces = sqliteTable(
+  "spaces",
+  {
+    id: text("id").primaryKey(),
+    name: text("name").notNull(),
+    icon: text("icon").$type<SpaceIcon>().notNull(),
+    color: text("color").$type<SpaceColor>().notNull(),
+    sortKey: text("sort_key").notNull(),
+    createdAt: integer("created_at").notNull(),
+    updatedAt: integer("updated_at").notNull(),
+  },
+  (table) => [index("spaces_sort_idx").on(table.sortKey, table.id)],
+);
+
+export const spaceProjects = sqliteTable(
+  "space_projects",
+  {
+    projectId: text("project_id")
+      .primaryKey()
+      .references(() => projects.id, { onDelete: "cascade" }),
+    spaceId: text("space_id")
+      .notNull()
+      .references(() => spaces.id, { onDelete: "cascade" }),
+    updatedAt: integer("updated_at").notNull(),
+  },
+  (table) => [index("space_projects_space_idx").on(table.spaceId)],
 );
 
 export const projectExecutionDefaults = sqliteTable(

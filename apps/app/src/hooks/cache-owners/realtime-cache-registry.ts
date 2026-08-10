@@ -461,6 +461,9 @@ export const REALTIME_HOST_CHANGE_REGISTRY = {
 } satisfies HostChangeRegistry;
 
 export const REALTIME_SYSTEM_CHANGE_REGISTRY = {
+  "spaces-changed": {
+    dirty: [dirtyProjectListQueries],
+  },
   "config-changed": {
     dirty: [
       dirtySystemConfigQueries, // Experiments gate UI surfaces; other windows re-read after a settings write.

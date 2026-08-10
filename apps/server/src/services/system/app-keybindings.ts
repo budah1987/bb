@@ -9,6 +9,7 @@ import {
   QUESTION_SELECT_APP_COMMAND_IDS,
   PANE_FOCUS_APP_COMMAND_IDS,
   THREAD_JUMP_APP_COMMAND_IDS,
+  SPACE_JUMP_APP_COMMAND_IDS,
 } from "@bb/domain";
 
 interface ShortcutModifiers {
@@ -124,6 +125,12 @@ export const DEFAULT_APP_KEYBINDINGS: AppKeybindings = [
   // navigation convention: Control+N on macOS and Ctrl+Shift+N elsewhere,
   // while keeping the shorter Mod chord on desktop.
   ...numberedChatBindings(THREAD_JUMP_APP_COMMAND_IDS, mainWithoutModal),
+  ...SPACE_JUMP_APP_COMMAND_IDS.map((command, index) =>
+    binding(command, String(index + 1), { mod: true, shift: true }, {
+      ...mainWithoutModal,
+      desktopOnly: true,
+    }),
+  ),
   binding(
     "pane.focus.previous",
     "[",

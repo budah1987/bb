@@ -37,6 +37,7 @@ export * from "./reasoning-efforts.js";
 export * from "./reasoning-level.js";
 export * from "./retry.js";
 export * from "./setup-script.js";
+export * from "./space.js";
 export * from "./shared-types.js";
 export * from "./stored-thread-event.js";
 export * from "./terminal.js";

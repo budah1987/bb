@@ -293,6 +293,7 @@ export function applyToCachedSidebarNavigationThreads({
       }
       return {
         sections: currentNavigation.sections,
+        spaces: currentNavigation.spaces,
         projects: currentNavigation.projects.map((project) =>
           mapSidebarNavigationProjectThreads(project, mapper),
         ),
