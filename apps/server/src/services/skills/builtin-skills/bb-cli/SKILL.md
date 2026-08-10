@@ -21,6 +21,12 @@ message agents, or inspect projects, providers, and environments.
 
 ## Environment Setup Script
 
+- Use `bb environment docker-provenance <id> --json` to verify that running
+  Docker bind mounts come from the selected checkout.
+- Use `bb environment docker-activity <id> --json` to inspect source and build
+  freshness for mounted Docker builds.
+- Use `bb environment previews <id> --json` to inspect local and deployment
+  preview providers.
 - To make a repo work with bb worktrees, run `bb guide environments`. It
   documents the repo-level `.bb-env-setup.sh` setup hook and the
   `.worktreeinclude` file.

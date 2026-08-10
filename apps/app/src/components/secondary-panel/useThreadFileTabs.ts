@@ -619,6 +619,9 @@ export function useThreadFileTabs({
   const activeSimulatorTab = activeTab?.kind === "simulator" ? activeTab : null;
   const activeNewTab = activeTab?.kind === "new-tab" ? activeTab : null;
   const activeNotesTab = activeTab?.kind === "notes" ? activeTab : null;
+  const activeLocalServersTab =
+    activeTab?.kind === "local-servers" ? activeTab : null;
+  const activePreviewTab = activeTab?.kind === "preview" ? activeTab : null;
   const activePluginPanelTab =
     activeTab?.kind === "plugin-panel" ? activeTab : null;
 
@@ -647,6 +650,8 @@ export function useThreadFileTabs({
     closeTab,
     isNewTabActive: activeNewTab !== null,
     isNotesTabActive: activeNotesTab !== null,
+    isLocalServersTabActive: activeLocalServersTab !== null,
+    activePreviewTab,
     openNotesTab,
     openPluginPanel,
     openTab,

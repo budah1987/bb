@@ -153,6 +153,8 @@ import {
 } from "@/lib/side-chat-plugin";
 import { NewTabPage } from "@/components/secondary-panel/NewTabPage";
 import { NotesPanel } from "@/components/notes/NotesPanel";
+import { LocalServersPanel } from "@/components/secondary-panel/LocalServersPanel";
+import { PreviewPanel } from "@/components/secondary-panel/PreviewPanel";
 import { WorkspaceFilesRow } from "@/components/secondary-panel/ThreadMetadataContent";
 import { SimulatorTabContent } from "@/components/secondary-panel/SimulatorTabContent";
 import { resolveRightPanelFileVisual } from "@/components/secondary-panel/rightPanelFileVisuals";
@@ -633,6 +635,8 @@ function ThreadDetailViewInternal(props: ThreadDetailViewInternalProps) {
     closeTab,
     isNewTabActive,
     isNotesTabActive,
+    isLocalServersTabActive,
+    activePreviewTab,
     openNotesTab,
     openTab,
     openPluginPanel,
@@ -1618,6 +1622,38 @@ function ThreadDetailViewInternal(props: ThreadDetailViewInternalProps) {
               leadingVisual: (
                 <Icon
                   name="EditFile"
+                  className={COARSE_POINTER_COMPACT_ICON_SIZE_CLASS}
+                  aria-hidden
+                />
+              ),
+              statusLabel: null,
+              onSelect: () => handleActivateFileTab(tab.id),
+              onClose: () => closeTab(tab.id),
+            };
+          case "local-servers":
+            return {
+              id: tab.id,
+              filename: "Servers",
+              isActive: tab.id === activeFixedSecondaryTabId,
+              leadingVisual: (
+                <Icon
+                  name="PackageReceive"
+                  className={COARSE_POINTER_COMPACT_ICON_SIZE_CLASS}
+                  aria-hidden
+                />
+              ),
+              statusLabel: null,
+              onSelect: () => handleActivateFileTab(tab.id),
+              onClose: () => closeTab(tab.id),
+            };
+          case "preview":
+            return {
+              id: tab.id,
+              filename: tab.label,
+              isActive: tab.id === activeFixedSecondaryTabId,
+              leadingVisual: (
+                <Icon
+                  name="Browser"
                   className={COARSE_POINTER_COMPACT_ICON_SIZE_CLASS}
                   aria-hidden
                 />
@@ -2774,6 +2810,14 @@ function ThreadDetailViewInternal(props: ThreadDetailViewInternalProps) {
     />
   ) : isNotesTabActive && !isStandaloneCompactPwa ? (
     <NotesPanel threadId={thread.id} />
+  ) : isLocalServersTabActive ? (
+    <LocalServersPanel environmentId={thread.environmentId} />
+  ) : activePreviewTab ? (
+    <PreviewPanel
+      environmentId={activePreviewTab.environmentId}
+      label={activePreviewTab.label}
+      providerId={activePreviewTab.providerId}
+    />
   ) : activeSimulatorTab ? (
     <SimulatorTabContent
       environmentId={activeSimulatorTab.environmentId}

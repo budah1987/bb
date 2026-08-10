@@ -87,6 +87,9 @@ import {
   resolveWorkspaceForCommand,
   workspaceResolutionFailureFromError,
 } from "./workspace-resolution.js";
+import { inspectWorkspaceDockerMounts } from "./command-handlers/docker-mounts.js";
+import { inspectWorkspaceDockerPathActivity } from "./command-handlers/docker-path-activity.js";
+import { discoverWorkspaceGithubDeployments } from "./command-handlers/github-deployments.js";
 import {
   SimulatorManagerError,
   type SimulatorManager,
@@ -658,6 +661,69 @@ const onlineRpcHandlers: OnlineRpcHandlerMap = {
         }),
       };
     }
+  },
+  "workspace.docker_mounts": async (command, options) => {
+    const resolution = await resolveWorkspaceForCommand({
+      dataDir: options.dataDir,
+      environmentId: command.environmentId,
+      requireGit: true,
+      requireManagedWorktree: false,
+      runtimeManager: options.runtimeManager,
+      workspaceContext: command.workspaceContext,
+    });
+    if (!resolution.ok) {
+      return {
+        outcome: "unavailable",
+        reason: "docker_unavailable",
+        message: resolution.failure.message,
+      };
+    }
+    return inspectWorkspaceDockerMounts({
+      env: providerCliEnvFromShellEnv(options.runtimeManager.getShellEnv()),
+      workspacePath: command.workspaceContext.workspacePath,
+    });
+  },
+  "workspace.docker_path_activity": async (command, options) => {
+    const resolution = await resolveWorkspaceForCommand({
+      dataDir: options.dataDir,
+      environmentId: command.environmentId,
+      requireGit: true,
+      requireManagedWorktree: false,
+      runtimeManager: options.runtimeManager,
+      workspaceContext: command.workspaceContext,
+    });
+    if (!resolution.ok) {
+      return {
+        outcome: "unavailable",
+        reason: "scan_failed",
+        message: resolution.failure.message,
+      };
+    }
+    return inspectWorkspaceDockerPathActivity({
+      paths: command.paths,
+      workspacePath: command.workspaceContext.workspacePath,
+    });
+  },
+  "workspace.github_deployments": async (command, options) => {
+    const resolution = await resolveWorkspaceForCommand({
+      dataDir: options.dataDir,
+      environmentId: command.environmentId,
+      requireGit: true,
+      requireManagedWorktree: false,
+      runtimeManager: options.runtimeManager,
+      workspaceContext: command.workspaceContext,
+    });
+    if (!resolution.ok) {
+      return {
+        outcome: "unavailable",
+        reason: "not_github_repository",
+        message: resolution.failure.message,
+      };
+    }
+    return discoverWorkspaceGithubDeployments({
+      env: providerCliEnvFromShellEnv(options.runtimeManager.getShellEnv()),
+      workspacePath: command.workspaceContext.workspacePath,
+    });
   },
   "workspace.diff": async (command, options) => {
     const resolution = await resolveWorkspaceForCommand({

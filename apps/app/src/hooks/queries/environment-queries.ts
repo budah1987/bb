@@ -8,6 +8,9 @@ import type {
   EnvironmentDiffFileResponse,
   EnvironmentDiffBranchesResponse,
   EnvironmentDiffFilesResponse,
+  EnvironmentDockerActivityResponse,
+  EnvironmentDockerProvenanceResponse,
+  EnvironmentPreviewsResponse,
   EnvironmentPullRequestResponse,
   EnvironmentStatusResponse,
   HostPathListResponse,
@@ -25,6 +28,9 @@ import { sdk } from "@/lib/sdk";
 import { useEnvironmentDetailRealtimeSubscription } from "@/hooks/useRealtimeSubscription";
 import {
   environmentDiffFilesQueryKey,
+  environmentDockerActivityQueryKey,
+  environmentDockerProvenanceQueryKey,
+  environmentPreviewsQueryKey,
   environmentDiffTargetKey,
   environmentFilePreviewQueryKey,
   environmentMergeBaseBranchesQueryKey,
@@ -73,7 +79,11 @@ const MERGE_BASE_BRANCHES_STALE_MS = 30_000;
 const MERGE_BASE_BRANCHES_LIMIT = 50;
 /** Staleness window for the environment diff TOC query. */
 const ENVIRONMENT_DIFF_STALE_MS = 5_000;
+const ENVIRONMENT_DOCKER_ACTIVITY_STALE_MS = 60_000;
+const ENVIRONMENT_PREVIEWS_STALE_MS = 15_000;
+const ENVIRONMENT_BUILDING_PREVIEW_REFETCH_MS = 10_000;
 const ENVIRONMENT_WORKSPACE_FILES_LIMIT = 10_000;
+
 function requireEnvironmentId(
   environmentId: string | null | undefined,
   hookName: string,
@@ -160,6 +170,83 @@ export function useEnvironmentWorkStatus(
             environmentId,
           )
         : undefined,
+  });
+}
+
+export function useEnvironmentDockerProvenance(
+  environmentId: string | null | undefined,
+  options?: QueryOptions,
+) {
+  const enabled = (options?.enabled ?? true) && Boolean(environmentId);
+  return useQuery<EnvironmentDockerProvenanceResponse>({
+    queryKey: environmentDockerProvenanceQueryKey(environmentId),
+    queryFn: ({ signal }) =>
+      sdk.environments.dockerProvenance({
+        environmentId: requireEnvironmentId(
+          environmentId,
+          "useEnvironmentDockerProvenance",
+        ),
+        signal,
+      }),
+    enabled,
+    refetchInterval: 10_000,
+    staleTime: 5_000,
+  });
+}
+
+/**
+ * Build freshness is a filesystem scan, so it never rides the provenance poll.
+ * Callers enable it only while something is on screen that reads it, and it
+ * refetches on demand rather than on a timer.
+ */
+export function useEnvironmentDockerActivity(
+  environmentId: string | null | undefined,
+  options?: QueryOptions,
+) {
+  const enabled = (options?.enabled ?? true) && Boolean(environmentId);
+  return useQuery<EnvironmentDockerActivityResponse>({
+    queryKey: environmentDockerActivityQueryKey(environmentId),
+    queryFn: ({ signal }) =>
+      sdk.environments.dockerActivity({
+        environmentId: requireEnvironmentId(
+          environmentId,
+          "useEnvironmentDockerActivity",
+        ),
+        signal,
+      }),
+    enabled,
+    ...EXPENSIVE_MANUAL_QUERY_POLICY,
+    staleTime: ENVIRONMENT_DOCKER_ACTIVITY_STALE_MS,
+  });
+}
+
+/**
+ * Preview providers for the environment. Polls only while a deployment is
+ * still building — a settled list changes when the user acts, not on a timer.
+ */
+export function useEnvironmentPreviews(
+  environmentId: string | null | undefined,
+  options?: QueryOptions,
+) {
+  const enabled = (options?.enabled ?? true) && Boolean(environmentId);
+  return useQuery<EnvironmentPreviewsResponse>({
+    queryKey: environmentPreviewsQueryKey(environmentId),
+    queryFn: ({ signal }) =>
+      sdk.environments.previews({
+        environmentId: requireEnvironmentId(
+          environmentId,
+          "useEnvironmentPreviews",
+        ),
+        signal,
+      }),
+    enabled,
+    refetchInterval: (query) =>
+      query.state.data?.providers.some(
+        (provider) => provider.state === "building",
+      )
+        ? ENVIRONMENT_BUILDING_PREVIEW_REFETCH_MS
+        : false,
+    staleTime: ENVIRONMENT_PREVIEWS_STALE_MS,
   });
 }
 

@@ -249,6 +249,144 @@ export type EnvironmentStatusQuery = z.infer<
   typeof environmentStatusQuerySchema
 >;
 
+export const environmentDockerProvenanceMountSchema = z
+  .object({
+    checkoutRoot: z.string().min(1),
+    destination: z.string().min(1),
+    readOnly: z.boolean(),
+    source: z.string().min(1),
+  })
+  .strict();
+export type EnvironmentDockerProvenanceMount = z.infer<
+  typeof environmentDockerProvenanceMountSchema
+>;
+
+export const environmentDockerServiceSchema = z
+  .object({
+    checkoutStatus: z.enum([
+      "current_checkout",
+      "wrong_checkout",
+      "declared_shared",
+      "ambiguous",
+      "unknown",
+    ]),
+    id: z.string().min(1),
+    image: z.string().min(1),
+    kind: z.enum(["server", "background_service", "shared_worker"]),
+    mounts: z.array(environmentDockerProvenanceMountSchema),
+    name: z.string().min(1),
+    ownerBranch: z.string().min(1).nullable(),
+    ownerCheckoutRoot: z.string().min(1).nullable(),
+    publishedPorts: z.array(z.number().int().min(1).max(65_535)),
+    state: z.string().min(1),
+  })
+  .strict();
+export type EnvironmentDockerService = z.infer<
+  typeof environmentDockerServiceSchema
+>;
+
+export const environmentDockerProvenanceResponseSchema = z.discriminatedUnion(
+  "outcome",
+  [
+    z
+      .object({
+        outcome: z.literal("available"),
+        environmentPath: z.string().min(1),
+        services: z.array(environmentDockerServiceSchema),
+      })
+      .strict(),
+    z
+      .object({
+        outcome: z.literal("unavailable"),
+        reason: z.enum(["docker_not_installed", "docker_unavailable"]),
+        message: z.string().min(1),
+      })
+      .strict(),
+  ],
+);
+export type EnvironmentDockerProvenanceResponse = z.infer<
+  typeof environmentDockerProvenanceResponseSchema
+>;
+
+export const environmentDockerPathActivitySchema = z
+  .object({
+    limited: z.boolean(),
+    newestFileMtimeMs: z.number().nonnegative().nullable(),
+    newestFilePath: z.string().min(1).nullable(),
+    path: z.string().min(1),
+    scannedFiles: z.number().int().nonnegative(),
+  })
+  .strict();
+
+export const environmentDockerServiceActivitySchema = z
+  .object({
+    build: environmentDockerPathActivitySchema.nullable(),
+    freshness: z.enum(["fresh", "stale", "missing_build", "unknown"]),
+    serviceId: z.string().min(1),
+    source: environmentDockerPathActivitySchema.nullable(),
+  })
+  .strict();
+export type EnvironmentDockerServiceActivity = z.infer<
+  typeof environmentDockerServiceActivitySchema
+>;
+
+export const environmentDockerActivityResponseSchema = z.discriminatedUnion(
+  "outcome",
+  [
+    z
+      .object({
+        activities: z.array(environmentDockerServiceActivitySchema),
+        outcome: z.literal("available"),
+      })
+      .strict(),
+    z
+      .object({
+        message: z.string().min(1),
+        outcome: z.literal("unavailable"),
+      })
+      .strict(),
+  ],
+);
+export type EnvironmentDockerActivityResponse = z.infer<
+  typeof environmentDockerActivityResponseSchema
+>;
+
+export const environmentPreviewProviderSchema = z
+  .object({
+    environment: z.string().min(1).nullable(),
+    framePolicy: z.enum(["allowed", "blocked", "unknown"]),
+    frameReason: z.string().min(1).nullable(),
+    id: z.string().min(1),
+    kind: z.enum(["local", "deployment"]),
+    label: z.string().min(1),
+    logUrl: z.string().url().nullable(),
+    source: z.enum(["docker", "github"]),
+    state: z.enum(["ready", "building", "failed", "unknown"]),
+    updatedAt: z.string().min(1).nullable(),
+    url: z.string().url().nullable(),
+  })
+  .strict();
+export type EnvironmentPreviewProvider = z.infer<
+  typeof environmentPreviewProviderSchema
+>;
+
+export const environmentPreviewsResponseSchema = z
+  .object({
+    issues: z.array(
+      z
+        .object({
+          message: z.string().min(1),
+          source: z.enum(["docker", "github"]),
+        })
+        .strict(),
+    ),
+    providers: z.array(environmentPreviewProviderSchema),
+  })
+  .strict();
+export type EnvironmentPreviewsResponse = z.infer<
+  typeof environmentPreviewsResponseSchema
+>;
+
 export const environmentDiffQuerySchema = z.discriminatedUnion("target", [
   z.object({
     target: z.literal("uncommitted"),

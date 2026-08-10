@@ -97,6 +97,18 @@ export const threadTabSchema = z.discriminatedUnion("kind", [
   z.object({ id: threadTabIdSchema, kind: z.literal("new-tab") }).strict(),
   z.object({ id: threadTabIdSchema, kind: z.literal("notes") }).strict(),
   z
+    .object({ id: threadTabIdSchema, kind: z.literal("local-servers") })
+    .strict(),
+  z
+    .object({
+      environmentId: z.string().min(1).nullable(),
+      id: threadTabIdSchema,
+      kind: z.literal("preview"),
+      label: z.string().min(1).max(THREAD_TAB_TITLE_MAX_LENGTH),
+      providerId: z.string().min(1).max(THREAD_TAB_PATH_MAX_LENGTH),
+    })
+    .strict(),
+  z
     .object({
       id: threadTabIdSchema,
       kind: z.literal("side-chat"),
