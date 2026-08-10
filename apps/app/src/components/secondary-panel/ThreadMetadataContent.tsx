@@ -831,6 +831,83 @@ export interface ThreadStorageRowProps {
   isFilesLoading: boolean;
 }
 
+export interface WorkspaceFilesRowProps extends ThreadStorageRowProps {
+  isFilesTruncated?: boolean;
+  onRefresh?: () => void;
+}
+
+export function WorkspaceFilesRow({
+  controller,
+  filesError,
+  isFilesLoading,
+  isFilesTruncated = false,
+  onRefresh,
+}: WorkspaceFilesRowProps) {
+  const { isSearchOpen, openSearch } = controller;
+  return (
+    <DetailRow
+      orientation="vertical"
+      className="mt-3 min-h-48 flex-[1.25]"
+      valueClassName="min-h-0 flex-1 overflow-hidden"
+      labelClassName="flex items-center justify-between gap-2"
+      label={
+        <>
+          <span className="flex min-w-0 items-center gap-1.5">
+            <Icon
+              name="FolderOpen"
+              className="size-3.5 text-subtle-foreground"
+            />
+            <span>Workspace files</span>
+            {isFilesTruncated ? (
+              <span className="text-muted-foreground">(first 10,000)</span>
+            ) : null}
+          </span>
+          <span className="ml-auto flex shrink-0 items-center gap-1">
+            {onRefresh ? (
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className={cn(
+                  COARSE_POINTER_COMPACT_ICON_BUTTON_CLASS,
+                  "shrink-0 text-muted-foreground",
+                )}
+                aria-label="Refresh workspace files"
+                onClick={onRefresh}
+              >
+                <Icon name="RotateCcw" />
+              </Button>
+            ) : null}
+            {isSearchOpen ? null : (
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className={cn(
+                  COARSE_POINTER_COMPACT_ICON_BUTTON_CLASS,
+                  "shrink-0 text-muted-foreground",
+                )}
+                aria-label="Search workspace files"
+                onClick={openSearch}
+              >
+                <Icon name="Search" />
+              </Button>
+            )}
+          </span>
+        </>
+      }
+    >
+      <ThreadStorageBrowser
+        ariaLabel="Workspace file tree"
+        controller={controller}
+        emptyMessage="No workspace files."
+        filesError={filesError}
+        isFilesLoading={isFilesLoading}
+      />
+    </DetailRow>
+  );
+}
+
 export function ThreadStorageRow({
   controller,
   filesError,
@@ -906,6 +983,7 @@ export interface ThreadMetadataContentProps {
   isLoadingMergeBaseBranchOptions: boolean;
   updateThreadPending: boolean;
   storage?: ThreadStorageRowProps;
+  workspaceFiles?: WorkspaceFilesRowProps;
   onAssignParent: (parentThreadId: string | null) => void;
   onParentSelectorOpenChange: (open: boolean) => void;
   onRetryParentThreads: () => void;
@@ -1022,6 +1100,7 @@ export function ThreadMetadataContent(props: ThreadMetadataContentProps) {
     isLoadingMergeBaseBranchOptions,
     updateThreadPending,
     storage,
+    workspaceFiles,
     onAssignParent,
     onParentSelectorOpenChange,
     onRetryParentThreads,
@@ -1087,6 +1166,7 @@ export function ThreadMetadataContent(props: ThreadMetadataContentProps) {
         workspaceStatus={workspaceStatus}
         onChangedFileClick={onChangedFileClick}
       />
+      {workspaceFiles ? <WorkspaceFilesRow {...workspaceFiles} /> : null}
       {storage ? <ThreadStorageRow {...storage} /> : null}
     </ThreadMetadataCard>
   );

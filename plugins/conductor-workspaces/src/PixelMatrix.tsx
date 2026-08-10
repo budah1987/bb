@@ -11,17 +11,17 @@ export function PixelMatrix({
   signal: ConversationSignal;
   label?: string | null;
 }) {
-  if (signal === "idle") {
-    return <span className="conductor-signal-slot" aria-hidden />;
-  }
   const accessibleLabel =
     label ??
-    (signal === "activity" ? "Conversation working" : "Unread conversation");
+    (signal === "passive"
+      ? null
+      : `${signal[0]?.toUpperCase()}${signal.slice(1)} conversation`);
   return (
     <span
       className={`conductor-signal-slot conductor-pixel-matrix conductor-pixel-matrix--${signal}`}
-      role="img"
-      aria-label={accessibleLabel}
+      {...(accessibleLabel
+        ? { role: "img", "aria-label": accessibleLabel }
+        : { "aria-hidden": true })}
     >
       {CELLS.map((index) => (
         <span

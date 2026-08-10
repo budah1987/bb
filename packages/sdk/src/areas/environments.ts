@@ -25,6 +25,14 @@ import type {
   EnvironmentPathsQuery,
   EnvironmentPullRequestResponse,
   EnvironmentStatusResponse,
+  SimulatorAccessibilityResponse,
+  SimulatorAttachResponse,
+  SimulatorControlAction,
+  SimulatorControlResponse,
+  SimulatorLeaseResponse,
+  SimulatorScreenshotResponse,
+  SimulatorStatusResponse,
+  SimulatorStopResponse,
   PullRequestMergeMethod,
   PullRequestCreateActionResponse,
   PullRequestMetadataActionResponse,
@@ -116,6 +124,14 @@ export interface EnvironmentCommitArgs {
   environmentId: string;
 }
 
+export interface EnvironmentSimulatorAttachArgs extends EnvironmentActionArgs {
+  deviceUdid?: string;
+}
+
+export interface EnvironmentSimulatorControlArgs extends EnvironmentActionArgs {
+  action: SimulatorControlAction;
+}
+
 export interface EnvironmentSquashMergeArgs {
   environmentId: string;
   mergeBaseBranch: string;
@@ -171,6 +187,14 @@ export type EnvironmentRenameResult = Environment;
 export type EnvironmentSquashMergeResult = SquashMergeActionResponse;
 export type EnvironmentStatusResult = EnvironmentStatusResponse;
 export type EnvironmentUpdateResult = Environment;
+export type EnvironmentSimulatorStatusResult = SimulatorStatusResponse;
+export type EnvironmentSimulatorAttachResult = SimulatorAttachResponse;
+export type EnvironmentSimulatorLeaseResult = SimulatorLeaseResponse;
+export type EnvironmentSimulatorControlResult = SimulatorControlResponse;
+export type EnvironmentSimulatorStopResult = SimulatorStopResponse;
+export type EnvironmentSimulatorAccessibilityResult =
+  SimulatorAccessibilityResponse;
+export type EnvironmentSimulatorScreenshotResult = SimulatorScreenshotResponse;
 
 export interface EnvironmentsArea {
   archiveThreads(
@@ -209,6 +233,27 @@ export interface EnvironmentsArea {
     args: EnvironmentSquashMergeArgs,
   ): Promise<EnvironmentSquashMergeResult>;
   status(args: EnvironmentStatusArgs): Promise<EnvironmentStatusResult>;
+  simulatorStatus(
+    args: EnvironmentActionArgs,
+  ): Promise<EnvironmentSimulatorStatusResult>;
+  simulatorAttach(
+    args: EnvironmentSimulatorAttachArgs,
+  ): Promise<EnvironmentSimulatorAttachResult>;
+  simulatorLease(
+    args: EnvironmentActionArgs,
+  ): Promise<EnvironmentSimulatorLeaseResult>;
+  simulatorControl(
+    args: EnvironmentSimulatorControlArgs,
+  ): Promise<EnvironmentSimulatorControlResult>;
+  simulatorStop(
+    args: EnvironmentActionArgs,
+  ): Promise<EnvironmentSimulatorStopResult>;
+  simulatorAccessibility(
+    args: EnvironmentActionArgs,
+  ): Promise<EnvironmentSimulatorAccessibilityResult>;
+  simulatorScreenshot(
+    args: EnvironmentActionArgs,
+  ): Promise<EnvironmentSimulatorScreenshotResult>;
   update(args: EnvironmentUpdateArgs): Promise<EnvironmentUpdateResult>;
 }
 
@@ -510,6 +555,60 @@ export function createEnvironmentsArea(
           },
           ...signalRequestArgs(input.signal),
         ),
+      );
+    },
+    async simulatorStatus(input) {
+      return transport.readJson(
+        transport.api.v1.environments[":id"].simulator.$get({
+          param: { id: input.environmentId },
+        }),
+      );
+    },
+    async simulatorAttach(input) {
+      return transport.readJson(
+        transport.api.v1.environments[":id"].simulator.attach.$post({
+          param: { id: input.environmentId },
+          json:
+            input.deviceUdid === undefined
+              ? {}
+              : { deviceUdid: input.deviceUdid },
+        }),
+      );
+    },
+    async simulatorLease(input) {
+      return transport.readJson(
+        transport.api.v1.environments[":id"].simulator.lease.$post({
+          param: { id: input.environmentId },
+        }),
+      );
+    },
+    async simulatorControl(input) {
+      return transport.readJson(
+        transport.api.v1.environments[":id"].simulator.control.$post({
+          param: { id: input.environmentId },
+          json: { action: input.action },
+        }),
+      );
+    },
+    async simulatorStop(input) {
+      return transport.readJson(
+        transport.api.v1.environments[":id"].simulator.stop.$post({
+          param: { id: input.environmentId },
+        }),
+      );
+    },
+    async simulatorAccessibility(input) {
+      return transport.readJson(
+        transport.api.v1.environments[":id"].simulator.accessibility.$get({
+          param: { id: input.environmentId },
+        }),
+      );
+    },
+    async simulatorScreenshot(input) {
+      return transport.readJson(
+        transport.api.v1.environments[":id"].simulator.screenshot.$get({
+          param: { id: input.environmentId },
+        }),
       );
     },
     async update(input) {

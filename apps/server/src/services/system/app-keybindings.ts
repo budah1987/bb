@@ -152,6 +152,7 @@ export const DEFAULT_APP_KEYBINDINGS: AppKeybindings = [
   binding("panel.newTab", "t", { mod: true }, mainWithoutModal),
   binding("panel.close", "w", { mod: true }, mainWithoutModal),
   binding("panel.toggle", "j", { mod: true }, mainWithoutModal),
+  binding("rail.toggle", "j", { mod: true, shift: true }, mainWithoutModal),
   binding("file.quickOpen", "p", { mod: true }, mainWithoutModal),
   binding("diff.toggle", "d", { mod: true }, {
     ...mainWithoutModal,

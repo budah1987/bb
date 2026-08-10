@@ -1,9 +1,9 @@
 // @vitest-environment jsdom
 
-import { cleanup, render } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { POINTER_COARSE_QUERY } from "@bb/shared-ui/hooks/use-pointer-coarse";
-import { NewTabFileSearch } from "./NewTabFileSearch";
+import { NewTabActions, NewTabFileSearch } from "./NewTabFileSearch";
 
 vi.mock("@/hooks/useFileSearchSuggestions", () => ({
   useFileSearchSuggestions: () => ({
@@ -55,6 +55,17 @@ function renderFileSearch() {
 }
 
 describe("NewTabFileSearch", () => {
+  it("opens the simulator from Actions and marks a live session", () => {
+    const onOpenSimulator = vi.fn();
+    render(
+      <NewTabActions onOpenSimulator={onOpenSimulator} simulatorRunning />,
+    );
+
+    expect(screen.getByText("Running")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: /Open simulator/u }));
+    expect(onOpenSimulator).toHaveBeenCalledTimes(1);
+  });
+
   it("does not autofocus the search input on coarse pointers", () => {
     mockPointerCoarse(true);
     const focusSpy = vi

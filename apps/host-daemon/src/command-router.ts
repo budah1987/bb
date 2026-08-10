@@ -112,6 +112,7 @@ export interface CommandRouterOptions {
   resolveInteractiveRequest?: CommandDispatchOptions["resolveInteractiveRequest"];
   caffeinateManager?: CommandDispatchOptions["caffeinateManager"];
   ensureConnectTunnelIdentity?: CommandDispatchOptions["ensureConnectTunnelIdentity"];
+  simulatorManager?: CommandDispatchOptions["simulatorManager"];
   threadStorageRootPath: string;
   logger: CommandRouterLogger;
 }
@@ -305,6 +306,7 @@ export class CommandRouter {
       resolveInteractiveRequest: this.options.resolveInteractiveRequest,
       caffeinateManager: this.options.caffeinateManager,
       ensureConnectTunnelIdentity: this.options.ensureConnectTunnelIdentity,
+      simulatorManager: this.options.simulatorManager,
       threadStorageRootPath: this.options.threadStorageRootPath,
     };
   }

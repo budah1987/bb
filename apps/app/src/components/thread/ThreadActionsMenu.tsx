@@ -19,11 +19,13 @@ import { Button } from "@bb/shared-ui/button";
 import { COARSE_POINTER_ICON_SIZE_CLASS } from "@bb/shared-ui/coarse-pointer-sizing";
 import { useIsCompactViewport } from "@bb/shared-ui/hooks/use-compact-viewport";
 import { cn } from "@bb/shared-ui/lib/utils";
-import { isThreadRead } from "@/lib/thread-read-state";
+import { getThreadReadToggleAction } from "@/components/sidebar/threadReadState";
 import { useThreadActions } from "./ThreadActionsProvider";
 
 interface ThreadActionsMenuBaseProps {
   thread: Thread;
+  /** Adds an environment-scoped rename action when the thread has a workspace. */
+  onRenameWorkspace?: () => void;
   /**
    * Pass `false` to hide the Delete entry (e.g. sidebar rows that intentionally
    * route users to the thread detail page for destructive actions). Defaults
@@ -132,6 +134,7 @@ function ThreadActionMenuSeparator({
 function ThreadActionsMenuItems({
   thread,
   canDelete = true,
+  onRenameWorkspace,
   onOpenInSplit,
   responsiveActions = [],
   surface,
@@ -147,7 +150,7 @@ function ThreadActionsMenuItems({
   const isCompactViewport = useIsCompactViewport();
   const isDrawer = surface === "dropdown" && isCompactViewport;
   const showSeparators = !isDrawer;
-  const isRead = isThreadRead(thread);
+  const readAction = getThreadReadToggleAction(thread);
   const isArchived = thread.archivedAt != null;
   const isPinned = thread.pinnedAt !== null;
 
@@ -191,12 +194,12 @@ function ThreadActionsMenuItems({
       {/* Quick status toggles. */}
       <ThreadActionMenuItem
         surface={surface}
-        icon={isRead ? "Mail" : "MailOpen"}
+        icon={readAction === "mark_unread" ? "Mail" : "MailOpen"}
         onSelect={() => {
           toggleRead(thread);
         }}
       >
-        {isRead ? "Mark unread" : "Mark read"}
+        {readAction === "mark_unread" ? "Mark as unread" : "Mark as read"}
       </ThreadActionMenuItem>
       <ThreadActionMenuItem
         surface={surface}
@@ -216,8 +219,19 @@ function ThreadActionsMenuItems({
           }, 0);
         }}
       >
-        Rename
+        Rename conversation
       </ThreadActionMenuItem>
+      {onRenameWorkspace ? (
+        <ThreadActionMenuItem
+          surface={surface}
+          icon="Folder"
+          onSelect={() => {
+            window.setTimeout(onRenameWorkspace, 0);
+          }}
+        >
+          Rename workspace
+        </ThreadActionMenuItem>
+      ) : null}
       {showSeparators ? <ThreadActionMenuSeparator surface={surface} /> : null}
       <ThreadActionMenuItem
         surface={surface}
@@ -253,6 +267,7 @@ function ThreadActionsMenuItems({
 export function ThreadActionsMenu({
   thread,
   canDelete = true,
+  onRenameWorkspace,
   onOpenInSplit,
   responsiveActions,
   onOpenChange,
@@ -286,6 +301,7 @@ export function ThreadActionsMenu({
         <ThreadActionsMenuItems
           thread={thread}
           canDelete={canDelete}
+          onRenameWorkspace={onRenameWorkspace}
           onOpenInSplit={onOpenInSplit}
           responsiveActions={responsiveActions}
           surface="dropdown"
@@ -299,6 +315,7 @@ export function ThreadActionsContextMenu({
   children,
   thread,
   canDelete = true,
+  onRenameWorkspace,
   onOpenInSplit,
   onOpenChange,
 }: ThreadActionsContextMenuProps) {
@@ -309,6 +326,7 @@ export function ThreadActionsContextMenu({
         <ThreadActionsMenuItems
           thread={thread}
           canDelete={canDelete}
+          onRenameWorkspace={onRenameWorkspace}
           onOpenInSplit={onOpenInSplit}
           surface="context"
         />

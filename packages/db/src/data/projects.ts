@@ -22,6 +22,7 @@ export type CreateProjectSourceInput = CreateProjectLocalPathSourceInput;
 export interface CreateProjectInput {
   name: string;
   source: CreateProjectSourceInput;
+  githubAccountLogin?: string | null;
 }
 
 export type ProjectRow = typeof projects.$inferSelect;
@@ -139,6 +140,7 @@ export function createProject(
       .values({
         id: projectId,
         name: input.name,
+        githubAccountLogin: input.githubAccountLogin ?? null,
         sortKey,
         createdAt: now,
         updatedAt: now,
@@ -217,6 +219,7 @@ export function listPublicProjects(db: DbConnection) {
 
 export interface UpdateProjectInput {
   name?: string;
+  githubAccountLogin?: string | null;
 }
 
 export function setProjectGitRemoteUrlIfMissing(

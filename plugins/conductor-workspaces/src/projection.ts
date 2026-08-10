@@ -30,6 +30,7 @@ export interface ConductorProject {
   id: string;
   name: string;
   repositoryName: string | null;
+  githubAccountLogin: string | null;
   workspaces: readonly ConductorWorkspace[];
 }
 
@@ -140,16 +141,16 @@ export function buildConductorProjection(
     else workspacesByProject.set(first.projectId, [workspace]);
   }
 
-  const projectedProjects = [...workspacesByProject.entries()]
-    .map(([projectId, workspaces]): ConductorProject => {
-      const project = projectById.get(projectId);
+  const projectedProjects = [...projectById.entries()]
+    .filter(([, project]) => !project.isPersonal)
+    .map(([projectId, project]): ConductorProject => {
+      const workspaces = workspacesByProject.get(projectId) ?? [];
       workspaces.sort((left, right) => right.updatedAt - left.updatedAt);
       return {
         id: projectId,
-        name: project?.name ?? "Unknown repository",
-        repositoryName: githubRepositoryName(
-          project?.experimental_gitRemoteUrl,
-        ),
+        name: project.name,
+        repositoryName: githubRepositoryName(project.experimental_gitRemoteUrl),
+        githubAccountLogin: project.experimental_githubAccountLogin ?? null,
         workspaces,
       };
     })

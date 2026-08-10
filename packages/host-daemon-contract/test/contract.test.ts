@@ -198,6 +198,43 @@ const ONLINE_RPC_RESPONSE_RESULT_FIXTURES: OnlineRpcResponseResultFixtures = {
   "provider_auth.status": PROVIDER_AUTH_SNAPSHOT_RESULT,
   "provider_auth.start": PROVIDER_AUTH_SNAPSHOT_RESULT,
   "provider_auth.submit_code": PROVIDER_AUTH_SNAPSHOT_RESULT,
+  "simulator.status": {
+    supported: true,
+    message: null,
+    devices: [
+      {
+        udid: "SIM-1",
+        name: "iPhone 17 Pro",
+        runtime: "iOS 26 0",
+        state: "Shutdown",
+      },
+    ],
+    active: null,
+  },
+  "simulator.attach": {
+    session: {
+      deviceUdid: "SIM-1",
+      deviceName: "iPhone 17 Pro",
+      state: "running",
+    },
+    lease: {
+      gatewayPort: 3210,
+      token: "abcdefghijklmnopqrstuvwxyz0123456789",
+      expiresAt: 1_800_000_000_000,
+    },
+  },
+  "simulator.lease": {
+    gatewayPort: 3210,
+    token: "abcdefghijklmnopqrstuvwxyz0123456789",
+    expiresAt: 1_800_000_000_000,
+  },
+  "simulator.control": { ok: true },
+  "simulator.stop": { stopped: true, deviceUdid: "SIM-1" },
+  "simulator.accessibility": { tree: { role: "application" } },
+  "simulator.screenshot": {
+    dataBase64: "iVBORw0KGgo=",
+    mimeType: "image/png",
+  },
   "host.list_files": {
     files: [
       {
@@ -1123,11 +1160,10 @@ describe("host-daemon local schemas", () => {
 });
 
 describe("host-daemon command schemas", () => {
-  // Version 80 includes live workspace metadata refresh and scopes GitHub PR
-  // commands to an authenticated account. Older daemons do not support the
-  // added messages and fields, so the bump forces an update.
-  it("uses protocol version 81 for provider authentication", () => {
-    expect(HOST_DAEMON_PROTOCOL_VERSION).toBe(81);
+  // Version 82 combines provider authentication with the version 81 host
+  // contract. Older daemons do not support the added authentication messages.
+  it("uses protocol version 82 for provider authentication", () => {
+    expect(HOST_DAEMON_PROTOCOL_VERSION).toBe(82);
   });
 
   it("binds Plan cancellation to a required turn id and typed result", () => {

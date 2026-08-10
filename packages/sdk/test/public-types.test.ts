@@ -256,6 +256,13 @@ type ExpectedEnvironmentsKey =
   | "rename"
   | "squashMerge"
   | "status"
+  | "simulatorAccessibility"
+  | "simulatorAttach"
+  | "simulatorControl"
+  | "simulatorLease"
+  | "simulatorScreenshot"
+  | "simulatorStatus"
+  | "simulatorStop"
   | "update";
 
 type ExpectedFilesKey =
@@ -370,6 +377,8 @@ type ExpectedThreadsKey =
   | "list"
   | "markRead"
   | "markUnread"
+  | "markViewed"
+  | "notes"
   | "open"
   | "output"
   | "paneAction"
@@ -407,6 +416,7 @@ type ExpectedThreadQueuedMessagesKey =
   | "setGroupBoundary"
   | "update";
 type ExpectedThreadTabsKey = "get" | "update";
+type ExpectedThreadNotesKey = "generateRecap" | "get" | "setScratchpad";
 type ExpectedTerminalsKey =
   | "close"
   | "create"
@@ -538,5 +548,8 @@ describe("SDK public type entrypoints", () => {
     expectTypeOf<
       keyof RootBbSdk["threads"]["tabs"]
     >().toEqualTypeOf<ExpectedThreadTabsKey>();
+    expectTypeOf<
+      keyof RootBbSdk["threads"]["notes"]
+    >().toEqualTypeOf<ExpectedThreadNotesKey>();
   });
 });

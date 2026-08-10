@@ -6,6 +6,7 @@ import {
   createBrowserFixedPanelTab,
   createEmptyFixedPanelTabsState,
   createHostFilePreviewFixedPanelTab,
+  createSimulatorFixedPanelTab,
   createTerminalFixedPanelTab,
   createThreadInfoFixedPanelTab,
   createThreadStorageFilePreviewFixedPanelTab,
@@ -33,6 +34,35 @@ function makeInitialState(): FixedPanelTabsState {
 }
 
 describe("fixed-panel-tabs-state", () => {
+  it("persists one stable simulator tab identity per environment", () => {
+    const first = createSimulatorFixedPanelTab({ environmentId: "env-1" });
+    const sameEnvironment = createSimulatorFixedPanelTab({
+      environmentId: "env-1",
+    });
+    const otherEnvironment = createSimulatorFixedPanelTab({
+      environmentId: "env-2",
+    });
+    const state = createEmptyFixedPanelTabsState({
+      secondary: {
+        activeTabId: first.id,
+        isOpen: true,
+        tabs: [first],
+      },
+      lastUsedAt: NOW,
+    });
+
+    const parsed = parseFixedPanelTabsState({
+      initialValue: EMPTY_FIXED_PANEL_TABS_STATE,
+      now: NOW,
+      storedValue: serializeFixedPanelTabsState({ state }),
+    });
+
+    expect(sameEnvironment.id).toBe(first.id);
+    expect(otherEnvironment.id).not.toBe(first.id);
+    expect(areFixedPanelTabsEquivalent(first, sameEnvironment)).toBe(true);
+    expect(parsed.secondary.tabs).toEqual([first]);
+  });
+
   it("parses current secondary tab state", () => {
     const now = 1_000;
     const workspaceTab = createWorkspaceFilePreviewFixedPanelTab({

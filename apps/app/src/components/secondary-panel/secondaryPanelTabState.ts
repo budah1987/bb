@@ -93,8 +93,10 @@ export function isSecondaryFileTab(
     case "host-file-preview":
     case "thread-storage-file-preview":
     case "browser":
+    case "simulator":
     case "terminal":
     case "new-tab":
+    case "notes":
     case "plugin-panel":
       return true;
     case "thread-info":
@@ -416,8 +418,10 @@ export function buildOrderedSecondaryPanelFileTabs({
         break;
       case "host-file-preview":
       case "browser":
+      case "simulator":
       case "terminal":
       case "new-tab":
+      case "notes":
       case "thread-storage-file-preview":
       case "plugin-panel":
         displayable.push(tab);

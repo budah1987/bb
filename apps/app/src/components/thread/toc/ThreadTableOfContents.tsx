@@ -727,7 +727,7 @@ export function ThreadTableOfContents({
           {open ? (
             <div
               id={`thread-toc-panel-${threadId}`}
-              className="pointer-events-auto absolute right-full top-0 w-[18.25rem] max-w-[calc(100vw-3rem)] pr-1"
+              className="pointer-events-auto absolute left-full top-0 w-[18.25rem] max-w-[calc(100vw-3rem)] pl-1"
             >
               <div className="rounded-lg border border-border bg-popover p-1 shadow-lg">
                 <div className="flex items-center gap-1 pb-1">

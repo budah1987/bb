@@ -27,6 +27,7 @@ export const THREAD_SEARCH_QUERY_KEY = "threadSearch";
 export const THREADS_DISABLED_QUERY_KEY = "threadsDisabled";
 export const THREAD_QUERY_KEY = "thread";
 export const THREAD_TABS_QUERY_KEY = "threadTabs";
+export const THREAD_NOTES_QUERY_KEY = "threadNotes";
 export const THREAD_DETAIL_BOOTSTRAP_QUERY_KEY = "threadDetailBootstrap";
 export const THREAD_DEFAULT_EXECUTION_OPTIONS_QUERY_KEY =
   "threadDefaultExecutionOptions";
@@ -50,6 +51,10 @@ export const ENVIRONMENT_DIFF_PATCH_QUERY_KEY = "environmentDiffPatch";
 export const ENVIRONMENT_DIFF_FILE_QUERY_KEY = "environmentDiffFile";
 export const ENVIRONMENT_FILE_PREVIEW_QUERY_KEY = "environmentFilePreview";
 export const ENVIRONMENT_PATHS_QUERY_KEY = "environmentPaths";
+export const ENVIRONMENT_WORKSPACE_FILES_QUERY_KEY =
+  "environmentWorkspaceFiles";
+export const ENVIRONMENT_SIMULATOR_STATUS_QUERY_KEY =
+  "environmentSimulatorStatus";
 export const THREAD_TIMELINE_QUERY_KEY = "threadTimeline";
 export const THREAD_CONVERSATION_OUTLINE_QUERY_KEY =
   "threadConversationOutline";
@@ -191,6 +196,10 @@ export type ThreadQueryKey = readonly [typeof THREAD_QUERY_KEY, string];
 export type ThreadTabsQueryKeyPrefix = readonly [typeof THREAD_TABS_QUERY_KEY];
 export type ThreadTabsQueryKey = readonly [
   typeof THREAD_TABS_QUERY_KEY,
+  string,
+];
+export type ThreadNotesQueryKey = readonly [
+  typeof THREAD_NOTES_QUERY_KEY,
   string,
 ];
 export type ThreadDetailBootstrapQueryKeyPrefix = readonly [
@@ -433,6 +442,15 @@ export type EnvironmentPathsQueryKeyPrefix = readonly [
   typeof ENVIRONMENT_PATHS_QUERY_KEY,
   string,
 ];
+export type EnvironmentWorkspaceFilesQueryKey = readonly [
+  typeof ENVIRONMENT_WORKSPACE_FILES_QUERY_KEY,
+  string | null | undefined,
+  string | null,
+];
+export type EnvironmentWorkspaceFilesQueryKeyPrefix = readonly [
+  typeof ENVIRONMENT_WORKSPACE_FILES_QUERY_KEY,
+  string,
+];
 export type SystemProvidersQueryKey = readonly [
   typeof SYSTEM_PROVIDERS_QUERY_KEY,
   string | null,
@@ -595,6 +613,19 @@ export function environmentPathsQueryKeyPrefix(
   return [ENVIRONMENT_PATHS_QUERY_KEY, environmentId];
 }
 
+export function environmentWorkspaceFilesQueryKey(
+  environmentId: string | null | undefined,
+  rootPath: string | null,
+): EnvironmentWorkspaceFilesQueryKey {
+  return [ENVIRONMENT_WORKSPACE_FILES_QUERY_KEY, environmentId, rootPath];
+}
+
+export function environmentWorkspaceFilesQueryKeyPrefix(
+  environmentId: string,
+): EnvironmentWorkspaceFilesQueryKeyPrefix {
+  return [ENVIRONMENT_WORKSPACE_FILES_QUERY_KEY, environmentId];
+}
+
 export function projectPromptHistoryQueryKey(
   projectId: string | null | undefined,
 ): ProjectPromptHistoryQueryKey {
@@ -688,6 +719,10 @@ export function threadQueryKey(threadId: string): ThreadQueryKey {
 
 export function threadTabsQueryKey(threadId: string): ThreadTabsQueryKey {
   return [THREAD_TABS_QUERY_KEY, threadId];
+}
+
+export function threadNotesQueryKey(threadId: string): ThreadNotesQueryKey {
+  return [THREAD_NOTES_QUERY_KEY, threadId];
 }
 
 export function allThreadTabsQueryKeyPrefix(): ThreadTabsQueryKeyPrefix {
@@ -854,6 +889,15 @@ export function environmentQueryKey(
   environmentId: string | null | undefined,
 ): EnvironmentQueryKey {
   return [ENVIRONMENT_QUERY_KEY, environmentId];
+}
+
+export function environmentSimulatorStatusQueryKey(
+  environmentId: string | null | undefined,
+) {
+  return [
+    ENVIRONMENT_SIMULATOR_STATUS_QUERY_KEY,
+    environmentId ?? null,
+  ] as const;
 }
 
 export function environmentWorkStatusQueryKey(

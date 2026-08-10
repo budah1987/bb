@@ -4,12 +4,13 @@ import {
   useMemo,
   useRef,
   useState,
+  type CSSProperties,
   type MouseEvent as ReactMouseEvent,
   type PointerEvent as ReactPointerEvent,
+  type ReactNode,
 } from "react";
 import { Link } from "react-router-dom";
 import type { ThreadListEntry } from "@bb/domain";
-import { ThreadStatusGlyph } from "@/components/sidebar/ThreadRow";
 import { useThreadActions } from "@/components/thread/ThreadActionsProvider";
 import { Icon } from "@bb/shared-ui/icon";
 import { Button } from "@bb/shared-ui/button";
@@ -21,26 +22,20 @@ import {
 } from "@bb/shared-ui/drawer";
 import { formatRelativeTime } from "@/lib/relative-time";
 import { getThreadRoutePath, isProjectlessProjectId } from "@/lib/route-paths";
-import {
-  getThreadListIndicatorLabel,
-  hasActiveBackgroundAgentActivity,
-  hasActiveBackgroundCommandActivity,
-  hasActiveGoalActivity,
-  hasActivePlanModeActivity,
-  hasActiveWorkflowActivity,
-  isBusyThread,
-  isRuntimeBusyThread,
-  isUnreadDoneThread,
-  resolveThreadListIndicator,
-  type ThreadListIndicatorState,
-} from "@/lib/thread-activity";
+import { isBusyThread, isUnreadDoneThread } from "@/lib/thread-activity";
 import { getThreadDisplayTitle } from "@/lib/thread-title";
+import { getThreadReadToggleAction } from "@/components/sidebar/threadReadState";
 import { cn } from "@bb/shared-ui/lib/utils";
-import { usePromptDraftHasInput } from "@/hooks/usePromptDraftStorage";
 import "./RootComposeMobileSessions.css";
 
 export type MobileSessionFilter = "active" | "inactive" | "all";
-export type MobileSessionGroupKind = "needs-you" | "running" | "inactive";
+export type MobileSessionGroupKind =
+  | "waiting"
+  | "working"
+  | "ready"
+  | "failed"
+  | "awaiting-reply"
+  | "passive";
 
 interface MobileSessionGroup {
   kind: MobileSessionGroupKind;
@@ -49,12 +44,14 @@ interface MobileSessionGroup {
 }
 
 interface MobileSessionRowProps {
-  activeAncestor: boolean;
+  displayTitle?: string;
   groupKind: MobileSessionGroupKind;
   highlighted: boolean;
   now: number;
   onOpenActions: (thread: ThreadListEntry) => void;
+  priority: boolean;
   projectName: string | null;
+  showMetadata?: boolean;
   thread: ThreadListEntry;
 }
 
@@ -110,12 +107,44 @@ export function getMobileSessionGroupKind(
   thread: ThreadListEntry,
   activeAncestorIds: ReadonlySet<string> = NO_ACTIVE_MOBILE_SESSION_ANCESTORS,
 ): MobileSessionGroupKind {
-  if (thread.hasPendingInteraction || isUnreadDoneThread(thread)) {
-    return "needs-you";
-  }
+  if (thread.hasPendingInteraction) return "waiting";
+  if (isUnreadDoneThread(thread))
+    return thread.status === "error" ? "failed" : "ready";
   if (isBusyThread(thread) || activeAncestorIds.has(thread.id))
-    return "running";
-  return "inactive";
+    return "working";
+  if (isAwaitingReplyThread(thread)) return "awaiting-reply";
+  return "passive";
+}
+
+export function isAwaitingReplyThread(thread: ThreadListEntry): boolean {
+  return (
+    thread.status === "idle" &&
+    !thread.hasPendingInteraction &&
+    !isBusyThread(thread) &&
+    thread.lastReadAt !== null &&
+    thread.lastReadAt > thread.latestAttentionAt
+  );
+}
+
+function getMobileWorkspaceGroupKind(
+  threads: readonly ThreadListEntry[],
+  activeAncestorIds: ReadonlySet<string>,
+): MobileSessionGroupKind {
+  const signals = new Set(
+    threads.map((thread) =>
+      getMobileSessionGroupKind(thread, activeAncestorIds),
+    ),
+  );
+  for (const signal of [
+    "failed",
+    "waiting",
+    "working",
+    "ready",
+    "awaiting-reply",
+  ] as const) {
+    if (signals.has(signal)) return signal;
+  }
+  return "passive";
 }
 
 export function buildMobileSessionGroups({
@@ -130,12 +159,27 @@ export function buildMobileSessionGroups({
   threads: readonly ThreadListEntry[];
 }): MobileSessionGroup[] {
   const normalizedQuery = query.trim().toLocaleLowerCase();
+  const focusedEnvironmentIds = new Set(
+    threads.flatMap((thread) =>
+      thread.pinnedAt !== null && thread.environmentId !== null
+        ? [thread.environmentId]
+        : [],
+    ),
+  );
   const activeAncestorIds = getActiveMobileSessionAncestorIds(threads);
   const visibleThreads = threads
     .filter((thread) => {
       const group = getMobileSessionGroupKind(thread, activeAncestorIds);
-      if (filter === "active" && group === "inactive") return false;
-      if (filter === "inactive" && group !== "inactive") return false;
+      if (
+        thread.pinnedAt !== null ||
+        (thread.environmentId !== null &&
+          focusedEnvironmentIds.has(thread.environmentId))
+      ) {
+        return false;
+      }
+      if (group === "awaiting-reply") return false;
+      if (filter === "active" && group === "passive") return false;
+      if (filter === "inactive" && group !== "passive") return false;
       if (normalizedQuery.length === 0) return true;
 
       const projectName = projectNamesById.get(thread.projectId) ?? "";
@@ -149,9 +193,11 @@ export function buildMobileSessionGroups({
     .sort(compareMobileSessions);
 
   const groupDefinitions: Array<Pick<MobileSessionGroup, "kind" | "label">> = [
-    { kind: "needs-you", label: "Needs you" },
-    { kind: "running", label: "Running" },
-    { kind: "inactive", label: "Inactive" },
+    { kind: "waiting", label: "Waiting" },
+    { kind: "failed", label: "Failed" },
+    { kind: "working", label: "Working" },
+    { kind: "ready", label: "Ready" },
+    { kind: "passive", label: "Inactive" },
   ];
 
   return groupDefinitions.flatMap((definition) => {
@@ -166,24 +212,50 @@ export function buildMobileSessionGroups({
   });
 }
 
-function getSessionStatusText(
-  groupKind: MobileSessionGroupKind,
-  indicatorState: ThreadListIndicatorState,
-  thread: ThreadListEntry,
-): string {
-  if (groupKind === "needs-you") {
-    return thread.hasPendingInteraction
-      ? "Needs your response"
-      : "Needs your attention";
-  }
+function getSessionStatusText(groupKind: MobileSessionGroupKind): string {
+  if (groupKind === "waiting") return "Waiting";
+  if (groupKind === "failed") return "Failed";
+  if (groupKind === "ready") return "Ready";
+  if (groupKind === "working") return "Working";
+  if (groupKind === "awaiting-reply") return "Awaiting Reply";
+  return "";
+}
 
-  const indicatorLabel = getThreadListIndicatorLabel(
-    resolveThreadListIndicator(indicatorState),
+const PIXEL_CELLS = Array.from({ length: 25 }, (_, index) => index);
+
+function ActivityPixelMatrix({
+  label,
+  signal,
+  priority,
+}: {
+  label: string | null;
+  signal: MobileSessionGroupKind;
+  priority: boolean;
+}) {
+  return (
+    <span
+      className={cn(
+        "mobile-activity-matrix",
+        `mobile-activity-matrix--${signal}`,
+        priority && "mobile-activity-matrix--priority",
+      )}
+      {...(label
+        ? { role: "img", "aria-label": label }
+        : { "aria-hidden": true })}
+    >
+      {PIXEL_CELLS.map((index) => (
+        <span
+          key={index}
+          className="mobile-activity-pixel"
+          style={
+            {
+              "--pixel-phase": (index % 5) + Math.floor(index / 5),
+            } as CSSProperties
+          }
+        />
+      ))}
+    </span>
   );
-  if (groupKind === "running") return indicatorLabel ?? "Working";
-  if (thread.status === "error") return "Failed";
-  if (isUnreadDoneThread(thread)) return "Finished";
-  return "Inactive";
 }
 
 const SESSION_LONG_PRESS_DELAY_MS = 500;
@@ -196,8 +268,14 @@ function MobileSessionActionsDrawer({
   onOpenChange: (open: boolean) => void;
   thread: ThreadListEntry | null;
 }) {
-  const { archiveThreadAndChildren, requestDelete, requestRename } =
-    useThreadActions();
+  const {
+    archiveThreadAndChildren,
+    requestDelete,
+    requestRename,
+    togglePin,
+    toggleRead,
+  } = useThreadActions();
+  const readAction = thread ? getThreadReadToggleAction(thread) : "mark_read";
 
   const runAction = useCallback(
     (action: (target: ThreadListEntry) => void) => {
@@ -221,6 +299,32 @@ function MobileSessionActionsDrawer({
           </DrawerDescription>
         </div>
         <div className="grid gap-1 px-2">
+          <Button
+            type="button"
+            variant="ghost"
+            className="min-h-12 justify-start gap-3 px-3 text-sm font-normal"
+            onClick={() => runAction(togglePin)}
+          >
+            <Icon
+              name={thread?.pinnedAt === null ? "Pin" : "PinOff"}
+              className="size-5"
+              aria-hidden
+            />
+            {thread?.pinnedAt === null ? "Add to Focus" : "Remove from Focus"}
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            className="min-h-12 justify-start gap-3 px-3 text-sm font-normal"
+            onClick={() => runAction(toggleRead)}
+          >
+            <Icon
+              name={readAction === "mark_read" ? "MailOpen" : "Mail"}
+              className="size-5"
+              aria-hidden
+            />
+            {readAction === "mark_read" ? "Mark as read" : "Mark as unread"}
+          </Button>
           <Button
             type="button"
             variant="ghost"
@@ -255,45 +359,35 @@ function MobileSessionActionsDrawer({
 }
 
 function MobileSessionRow({
-  activeAncestor,
+  displayTitle,
   groupKind,
   highlighted,
   now,
   onOpenActions,
+  priority,
   projectName,
+  showMetadata = true,
   thread,
 }: MobileSessionRowProps) {
   const longPressTimerRef = useRef<number | null>(null);
   const longPressOriginRef = useRef<{ x: number; y: number } | null>(null);
   const longPressTriggeredRef = useRef(false);
-  const threadTitle = getThreadDisplayTitle(thread);
-  const isUnreadDone = isUnreadDoneThread(thread);
-  const isUnreadError = isUnreadDone && thread.status === "error";
-  const hasUnsubmittedDraft = usePromptDraftHasInput({
-    kind: "thread",
-    projectId: thread.projectId,
-    threadId: thread.id,
-  });
-  const indicatorState: ThreadListIndicatorState = {
-    hasPendingInteraction: thread.hasPendingInteraction,
-    hasUnsubmittedDraft,
-    hasUnreadError: isUnreadError,
-    hasUnreadSuccess: isUnreadDone && !isUnreadError,
-    isBackgroundAgentActive: hasActiveBackgroundAgentActivity(thread),
-    isBackgroundCommandActive: hasActiveBackgroundCommandActivity(thread),
-    isGoalActive: hasActiveGoalActivity(thread),
-    isPlanModeActive: hasActivePlanModeActivity(thread),
-    isRuntimeActive: isRuntimeBusyThread(thread) || activeAncestor,
-    isWorkflowActive: hasActiveWorkflowActivity(thread),
-  };
-  const statusText = getSessionStatusText(groupKind, indicatorState, thread);
+  const threadTitle = displayTitle ?? getThreadDisplayTitle(thread);
+  const statusText = getSessionStatusText(groupKind);
   const relativeTime = formatRelativeTime({
     timestamp: thread.updatedAt,
     now,
   });
-  const metadata = [statusText, projectName, relativeTime]
+  const metadata = [
+    projectName,
+    thread.environmentBranchName ?? thread.environmentName,
+  ]
     .filter((value): value is string => value !== null)
     .join(" · ");
+  const visibleStatus =
+    groupKind === "passive" || groupKind === "awaiting-reply"
+      ? relativeTime
+      : statusText;
 
   const cancelLongPress = useCallback(() => {
     if (longPressTimerRef.current !== null) {
@@ -343,10 +437,13 @@ function MobileSessionRow({
           projectId: thread.projectId,
           threadId: thread.id,
         })}
-        aria-label={`Open ${threadTitle} — ${metadata}`}
+        aria-label={`Open ${threadTitle} — ${visibleStatus}${metadata ? `, ${metadata}` : ""}`}
         aria-description="Press and hold for thread actions"
         className={cn(
-          "flex min-h-14 touch-pan-y select-none items-center gap-3 rounded-lg px-3 py-2 text-foreground/90 [-webkit-touch-callout:none] transition-[transform,background-color,color] duration-150 active:scale-[0.985] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring",
+          "grid touch-pan-y select-none grid-cols-[auto_minmax(0,1fr)_auto] items-center rounded-lg text-foreground/90 [-webkit-touch-callout:none] transition-[transform,background-color,color] duration-150 active:scale-[0.985] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring",
+          priority
+            ? "min-h-16 gap-x-3 px-3 py-3"
+            : "min-h-14 gap-x-2.5 px-3 py-2",
           highlighted ? "bg-surface-selected" : "hover:bg-state-hover",
         )}
         onClickCapture={(event) => {
@@ -371,29 +468,40 @@ function MobileSessionRow({
         onPointerMove={handlePointerMove}
         onPointerUp={cancelLongPress}
       >
-        <span className="min-w-0 flex-1 space-y-0.5">
-          <span className="block truncate text-sm font-medium">
+        <ActivityPixelMatrix
+          signal={groupKind}
+          priority={priority}
+          label={groupKind === "passive" ? null : statusText}
+        />
+        <span className={cn("min-w-0", priority ? "space-y-1" : "space-y-0.5")}>
+          <span
+            className={cn(
+              "block truncate font-medium",
+              priority ? "text-base" : "text-sm",
+            )}
+          >
             {threadTitle}
           </span>
-          <span className="block truncate text-xs leading-4 text-muted-foreground">
-            {metadata}
-          </span>
+          {showMetadata && metadata ? (
+            <span className="block truncate text-xs leading-4 text-muted-foreground">
+              {metadata}
+            </span>
+          ) : null}
         </span>
         <span
           className={cn(
-            "flex size-7 shrink-0 items-center justify-center rounded-full bg-surface-raised",
-            groupKind === "needs-you" && "[&_svg]:!text-warning-text",
-            groupKind === "running" && "[&_svg]:!text-success-foreground",
-            groupKind === "inactive" &&
-              thread.status === "error" &&
-              "[&_svg]:!text-destructive",
+            "shrink-0 whitespace-nowrap text-right font-medium tabular-nums",
+            "text-xs",
+            groupKind === "working" && "text-primary",
+            groupKind === "ready" && "text-success",
+            groupKind === "waiting" && "text-warning-text",
+            groupKind === "failed" && "text-destructive",
+            groupKind === "awaiting-reply" &&
+              "text-[color:var(--mobile-awaiting-reply)]",
+            groupKind === "passive" && "text-subtle-foreground",
           )}
         >
-          {resolveThreadListIndicator(indicatorState) === "none" ? (
-            <span className="size-1.5 rounded-full bg-muted-foreground/45" />
-          ) : (
-            <ThreadStatusGlyph {...indicatorState} />
-          )}
+          {visibleStatus}
         </span>
       </Link>
     </li>
@@ -427,6 +535,46 @@ function getAdjacentFilter(
   return FILTERS[index + delta]?.value ?? null;
 }
 
+function MobilePrioritySection({
+  children,
+  contentId,
+  initiallyExpanded = true,
+  label,
+}: {
+  children: ReactNode;
+  contentId: string;
+  initiallyExpanded?: boolean;
+  label: string;
+}) {
+  const [expanded, setExpanded] = useState(initiallyExpanded);
+
+  return (
+    <section className="mobile-priority-section" aria-label={label}>
+      <button
+        type="button"
+        className="mobile-priority-section__toggle"
+        aria-expanded={expanded}
+        aria-controls={contentId}
+        onClick={() => setExpanded((current) => !current)}
+      >
+        <span>{label}</span>
+        <Icon
+          name="ChevronDown"
+          className="mobile-priority-section__chevron size-3.5"
+          aria-hidden
+        />
+      </button>
+      <div
+        id={contentId}
+        className="mobile-priority-section__content"
+        data-collapsed={!expanded || undefined}
+      >
+        <div className="mobile-priority-section__content-inner">{children}</div>
+      </div>
+    </section>
+  );
+}
+
 export function RootComposeMobileSessions({
   highlightedThreadId,
   projectNamesById,
@@ -456,15 +604,72 @@ export function RootComposeMobileSessions({
       buildMobileSessionGroups({ filter, projectNamesById, query, threads }),
     [filter, projectNamesById, query, threads],
   );
-  const needsYouCount = threads.filter(
+  const focusedThreads = useMemo(() => {
+    const normalizedQuery = query.trim().toLocaleLowerCase();
+    const pinnedThreads = threads
+      .filter((thread) => {
+        if (thread.pinnedAt === null) return false;
+        if (!normalizedQuery) return true;
+        return [
+          getThreadDisplayTitle(thread),
+          projectNamesById.get(thread.projectId) ?? "",
+          thread.environmentName ?? "",
+          thread.environmentBranchName ?? "",
+        ].some((value) => value.toLocaleLowerCase().includes(normalizedQuery));
+      })
+      .sort(compareMobileSessions);
+    const representatives = new Map<string, ThreadListEntry>();
+    for (const thread of pinnedThreads) {
+      const key = thread.environmentId ?? `thread:${thread.id}`;
+      if (!representatives.has(key)) representatives.set(key, thread);
+    }
+    return [...representatives.entries()].map(([key, thread]) => {
+      const workspaceThreads = key.startsWith("thread:")
+        ? [thread]
+        : threads.filter((candidate) => candidate.environmentId === key);
+      return {
+        thread,
+        groupKind: getMobileWorkspaceGroupKind(
+          workspaceThreads,
+          activeAncestorIds,
+        ),
+      };
+    });
+  }, [activeAncestorIds, projectNamesById, query, threads]);
+  const focusedEnvironmentIds = new Set(
+    threads.flatMap((thread) =>
+      thread.pinnedAt !== null && thread.environmentId !== null
+        ? [thread.environmentId]
+        : [],
+    ),
+  );
+  const secondaryThreads = threads.filter(
     (thread) =>
-      getMobileSessionGroupKind(thread, activeAncestorIds) === "needs-you",
-  ).length;
-  const runningCount = threads.filter(
+      thread.pinnedAt === null &&
+      (thread.environmentId === null ||
+        !focusedEnvironmentIds.has(thread.environmentId)),
+  );
+  const awaitingReplyThreads = secondaryThreads
+    .filter((thread) => {
+      if (!isAwaitingReplyThread(thread)) return false;
+      const normalizedQuery = query.trim().toLocaleLowerCase();
+      if (!normalizedQuery) return true;
+      return [
+        getThreadDisplayTitle(thread),
+        projectNamesById.get(thread.projectId) ?? "",
+        thread.environmentName ?? "",
+        thread.environmentBranchName ?? "",
+      ].some((value) => value.toLocaleLowerCase().includes(normalizedQuery));
+    })
+    .sort(compareMobileSessions);
+  const filterableThreads = secondaryThreads.filter(
+    (thread) => !isAwaitingReplyThread(thread),
+  );
+  const activeCount = filterableThreads.filter(
     (thread) =>
-      getMobileSessionGroupKind(thread, activeAncestorIds) === "running",
+      getMobileSessionGroupKind(thread, activeAncestorIds) !== "passive",
   ).length;
-  const activeCount = needsYouCount + runningCount;
+  const inactiveCount = filterableThreads.length - activeCount;
 
   const openSearch = () => {
     setSearchOpen(true);
@@ -584,18 +789,10 @@ export function RootComposeMobileSessions({
   return (
     <section
       data-root-compose-mobile-sessions=""
-      aria-labelledby="root-compose-mobile-sessions"
+      aria-label="Command Center"
       className="hidden flex-col gap-3 max-md:flex pointer-coarse:flex"
     >
-      <div className="flex items-center justify-between gap-3 px-1">
-        <div className="min-w-0">
-          <h2 id="root-compose-mobile-sessions" className="text-sm font-medium">
-            Sessions
-          </h2>
-          <p className="truncate text-xs text-muted-foreground">
-            {runningCount} running · {needsYouCount} need you
-          </p>
-        </div>
+      <div className="flex items-center justify-end px-1">
         <button
           type="button"
           aria-label="Search sessions"
@@ -639,23 +836,79 @@ export function RootComposeMobileSessions({
         </div>
       ) : null}
 
+      {focusedThreads.length > 0 ? (
+        <MobilePrioritySection contentId="mobile-focus-rows" label="Focus">
+          <ul className="space-y-px">
+            {focusedThreads.map(({ groupKind, thread }) => (
+              <MobileSessionRow
+                key={thread.id}
+                displayTitle={
+                  thread.environmentName ??
+                  thread.environmentBranchName ??
+                  undefined
+                }
+                groupKind={groupKind}
+                highlighted={thread.id === highlightedThreadId}
+                now={renderedAt}
+                onOpenActions={setActionsThread}
+                priority
+                projectName={
+                  isProjectlessProjectId(thread.projectId)
+                    ? null
+                    : (projectNamesById.get(thread.projectId) ?? null)
+                }
+                thread={thread}
+              />
+            ))}
+          </ul>
+        </MobilePrioritySection>
+      ) : null}
+
+      {awaitingReplyThreads.length > 0 ? (
+        <MobilePrioritySection
+          contentId="mobile-awaiting-reply-rows"
+          initiallyExpanded={awaitingReplyThreads.length <= 4}
+          label="Awaiting Reply"
+        >
+          <ul className="space-y-px">
+            {awaitingReplyThreads.map((thread) => (
+              <MobileSessionRow
+                key={thread.id}
+                groupKind="awaiting-reply"
+                highlighted={thread.id === highlightedThreadId}
+                now={renderedAt}
+                onOpenActions={setActionsThread}
+                priority={false}
+                projectName={
+                  isProjectlessProjectId(thread.projectId)
+                    ? null
+                    : (projectNamesById.get(thread.projectId) ?? null)
+                }
+                showMetadata={false}
+                thread={thread}
+              />
+            ))}
+          </ul>
+        </MobilePrioritySection>
+      ) : null}
+
       <div
         role="tablist"
         aria-label="Session filter"
         data-active-tab={filter}
-        className="mobile-session-tabs relative grid grid-cols-3 gap-1 rounded-lg bg-surface-raised p-1"
+        className="mobile-session-tabs relative grid grid-cols-3 border-b border-border-hairline"
       >
         <span
           aria-hidden
-          className="mobile-session-tabs__pill pointer-events-none absolute bottom-1 left-1 top-1 rounded-md border border-border-hairline bg-background shadow-sm"
+          className="mobile-session-tabs__pill pointer-events-none absolute -bottom-px left-0 h-0.5 bg-foreground"
         />
         {FILTERS.map((option) => {
           const count =
             option.value === "active"
               ? activeCount
               : option.value === "inactive"
-                ? threads.length - activeCount
-                : threads.length;
+                ? inactiveCount
+                : filterableThreads.length;
           return (
             <button
               key={option.value}
@@ -665,7 +918,7 @@ export function RootComposeMobileSessions({
               aria-label={`${option.label} (${count})`}
               tabIndex={filter === option.value ? 0 : -1}
               className={cn(
-                "relative z-10 flex min-h-10 items-center justify-center gap-1.5 rounded-md px-2 text-xs font-medium transition-[color,transform] duration-150 active:scale-[0.96] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                "relative z-10 flex min-h-11 items-center justify-center gap-1.5 px-2 text-xs font-medium transition-[color,transform] duration-150 active:scale-[0.96] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring",
                 filter === option.value
                   ? "text-foreground"
                   : "text-muted-foreground hover:text-foreground",
@@ -736,49 +989,35 @@ export function RootComposeMobileSessions({
             <span className="min-w-0 flex-1 truncate">
               Starting conversation
             </span>
-            <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-surface-raised text-success-foreground">
-              <Icon
-                name="Loading"
-                className="size-4 animate-spin"
-                aria-hidden
-              />
-            </span>
+            <ActivityPixelMatrix
+              signal="working"
+              priority={false}
+              label="Starting conversation"
+            />
           </div>
         ) : null}
 
         {groups.length > 0 ? (
-          <div className="space-y-4">
-            {groups.map((group) => (
-              <div key={group.kind} className="space-y-1">
-                <div className="flex items-center justify-between px-3">
-                  <h3 className="text-xs font-medium text-muted-foreground">
-                    {group.label}
-                  </h3>
-                  <span className="text-xs tabular-nums text-subtle-foreground">
-                    {group.threads.length}
-                  </span>
-                </div>
-                <ul className="space-y-px">
-                  {group.threads.map((thread) => (
-                    <MobileSessionRow
-                      key={thread.id}
-                      activeAncestor={activeAncestorIds.has(thread.id)}
-                      groupKind={group.kind}
-                      highlighted={thread.id === highlightedThreadId}
-                      now={renderedAt}
-                      onOpenActions={setActionsThread}
-                      projectName={
-                        isProjectlessProjectId(thread.projectId)
-                          ? null
-                          : (projectNamesById.get(thread.projectId) ?? null)
-                      }
-                      thread={thread}
-                    />
-                  ))}
-                </ul>
-              </div>
-            ))}
-          </div>
+          <ul className="space-y-px">
+            {groups.flatMap((group) =>
+              group.threads.map((thread) => (
+                <MobileSessionRow
+                  key={thread.id}
+                  groupKind={group.kind}
+                  highlighted={thread.id === highlightedThreadId}
+                  now={renderedAt}
+                  onOpenActions={setActionsThread}
+                  priority={false}
+                  projectName={
+                    isProjectlessProjectId(thread.projectId)
+                      ? null
+                      : (projectNamesById.get(thread.projectId) ?? null)
+                  }
+                  thread={thread}
+                />
+              )),
+            )}
+          </ul>
         ) : (
           <div className="flex min-h-28 flex-col items-center justify-center gap-1 px-6 text-center">
             <p className="text-sm text-foreground/85">
@@ -786,7 +1025,7 @@ export function RootComposeMobileSessions({
             </p>
             <p className="text-xs text-muted-foreground">
               {filter === "active"
-                ? "Running conversations and anything waiting for you appear here."
+                ? "Working, ready, waiting, and failed sessions appear here."
                 : "Try another filter or start a new conversation."}
             </p>
           </div>
