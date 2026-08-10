@@ -14,8 +14,8 @@ data, so switching back to BB's standard sidebar is lossless.
 
 The authoritative source lives at `plugins/conductor-workspaces` on the
 `bbamir/main` branch of `budah1987/bb`. BBamir bundles, installs, and enables
-the plugin automatically. Existing direct installations continue using their
-selected source path.
+the plugin automatically. Existing direct installations keep a valid selected
+source path. BBamir replaces a missing direct source with its bundled copy.
 
 Choose **BBamir** under **Settings → Appearance → Sidebar** on each client.
 The desktop and mobile web apps load the same plugin bundle, but the sidebar
