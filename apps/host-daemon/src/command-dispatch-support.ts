@@ -23,6 +23,8 @@ import type { TerminalManager } from "./terminals/terminal-manager.js";
 import type { FetchProjectAttachment } from "./project-attachments.js";
 import type { FetchSkillTree } from "./skill-trees.js";
 import type { CaffeinateManager } from "./command-handlers/caffeinate.js";
+import type { ProviderAuthManager } from "./provider-auth.js";
+import type { SimulatorManager } from "./simulator/simulator-manager.js";
 
 type DispatchCommand = HostDaemonCommand | HostDaemonOnlineRpcCommand;
 
@@ -61,11 +63,16 @@ export interface CommandDispatchOptions {
   streamProviderCliInstall?: (
     args: ProviderCliInstallRequest & { env?: NodeJS.ProcessEnv },
   ) => ReadableStream<Uint8Array>;
+  providerAuthManager?: Pick<
+    ProviderAuthManager,
+    "snapshot" | "start" | "submitCode"
+  >;
   resolveInteractiveRequest?: (
     request: InteractiveResolveCommandInput,
   ) => Promise<void>;
   caffeinateManager?: CaffeinateManager;
   ensureConnectTunnelIdentity?: () => Promise<HostDaemonConnectTunnelIdentity>;
+  simulatorManager?: SimulatorManager;
   threadStorageRootPath: string;
 }
 

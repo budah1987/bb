@@ -16,19 +16,22 @@ import {
   buildMobileSessionGroups,
   getActiveMobileSessionAncestorIds,
   getMobileSessionGroupKind,
+  isAwaitingReplyThread,
 } from "./RootComposeMobileSessions";
 
 const threadActions = vi.hoisted(() => ({
   archiveThreadAndChildren: vi.fn(),
   requestDelete: vi.fn(),
   requestRename: vi.fn(),
+  togglePin: vi.fn(),
+  toggleRead: vi.fn(),
 }));
 
 vi.mock("@/components/thread/ThreadActionsProvider", () => ({
   useThreadActions: () => ({
     ...threadActions,
-    togglePin: vi.fn(),
-    toggleRead: vi.fn(),
+    togglePin: threadActions.togglePin,
+    toggleRead: threadActions.toggleRead,
     unarchiveThread: vi.fn(),
   }),
 }));
@@ -105,8 +108,8 @@ describe("mobile session grouping", () => {
       runtime: { displayStatus: "active", hostReconnectGraceExpiresAt: null },
     });
 
-    expect(getMobileSessionGroupKind(waiting)).toBe("needs-you");
-    expect(getMobileSessionGroupKind(running)).toBe("running");
+    expect(getMobileSessionGroupKind(waiting)).toBe("waiting");
+    expect(getMobileSessionGroupKind(running)).toBe("working");
     expect(
       buildMobileSessionGroups({
         filter: "active",
@@ -114,10 +117,10 @@ describe("mobile session grouping", () => {
         query: "",
         threads: [running, waiting],
       }).map((group) => group.kind),
-    ).toEqual(["needs-you", "running"]);
+    ).toEqual(["waiting", "working"]);
   });
 
-  it("keeps completed unread threads in Active until they are read", () => {
+  it("keeps completed unread threads active until they are read", () => {
     const completedUnread = makeThread({
       id: "thr_completed_unread",
       title: "Completed unread",
@@ -125,7 +128,7 @@ describe("mobile session grouping", () => {
       latestAttentionAt: 2,
     });
 
-    expect(getMobileSessionGroupKind(completedUnread)).toBe("needs-you");
+    expect(getMobileSessionGroupKind(completedUnread)).toBe("ready");
     expect(
       buildMobileSessionGroups({
         filter: "active",
@@ -133,7 +136,7 @@ describe("mobile session grouping", () => {
         query: "",
         threads: [completedUnread],
       }).map((group) => group.kind),
-    ).toEqual(["needs-you"]);
+    ).toEqual(["ready"]);
     expect(
       buildMobileSessionGroups({
         filter: "inactive",
@@ -142,6 +145,31 @@ describe("mobile session grouping", () => {
         threads: [completedUnread],
       }),
     ).toEqual([]);
+  });
+
+  it("identifies viewed agent output that has not received a reply", () => {
+    const awaitingReply = makeThread({
+      id: "thr_awaiting_reply",
+      lastReadAt: 3,
+      latestAttentionAt: 2,
+      updatedAt: 2,
+    });
+
+    expect(isAwaitingReplyThread(awaitingReply)).toBe(true);
+    expect(getMobileSessionGroupKind(awaitingReply)).toBe("awaiting-reply");
+    expect(
+      buildMobileSessionGroups({
+        filter: "all",
+        projectNamesById: projectNames,
+        query: "",
+        threads: [awaitingReply],
+      }),
+    ).toEqual([]);
+    expect(
+      isAwaitingReplyThread(
+        makeThread({ lastReadAt: 2, latestAttentionAt: 2 }),
+      ),
+    ).toBe(false);
   });
 
   it("keeps an idle parent running while a descendant agent is active", () => {
@@ -164,7 +192,7 @@ describe("mobile session grouping", () => {
 
     expect(activeAncestorIds).toEqual(new Set([parent.id]));
     expect(getMobileSessionGroupKind(parent, activeAncestorIds)).toBe(
-      "running",
+      "working",
     );
     expect(
       buildMobileSessionGroups({
@@ -206,7 +234,7 @@ describe("RootComposeMobileSessions", () => {
       </MemoryRouter>,
     );
 
-    const sessions = screen.getByRole("region", { name: "Sessions" });
+    const sessions = screen.getByRole("region", { name: "Command Center" });
     expect(sessions.className).toContain("max-md:flex");
     expect(sessions.className).toContain("pointer-coarse:flex");
   });
@@ -237,10 +265,62 @@ describe("RootComposeMobileSessions", () => {
     );
 
     expect(screen.getAllByRole("link")).toHaveLength(8);
-    expect(screen.getByText("8 running · 0 need you")).not.toBeNull();
+    expect(screen.queryByRole("heading", { name: "Sessions" })).toBeNull();
+    expect(screen.queryByText(/running ·/u)).toBeNull();
   });
 
-  it("shows an idle parent as working while its sub-agent runs", () => {
+  it("keeps focused workspaces large and outside the secondary filters", () => {
+    const focused = makeThread({
+      id: "thr_focused",
+      environmentId: "env_focus",
+      environmentName: "Activity workspace",
+      environmentBranchName: "amir/activity",
+      pinnedAt: 10,
+      status: "active",
+      runtime: { displayStatus: "active", hostReconnectGraceExpiresAt: null },
+    });
+    const sibling = makeThread({
+      id: "thr_sibling",
+      environmentId: "env_focus",
+      environmentName: "Activity workspace",
+      environmentBranchName: "amir/activity",
+      title: "Research tab",
+    });
+
+    render(
+      <MemoryRouter>
+        <RootComposeMobileSessions
+          highlightedThreadId={null}
+          projectNamesById={projectNames}
+          showCreatingRow={false}
+          threads={[focused, sibling]}
+        />
+      </MemoryRouter>,
+    );
+
+    const focusToggle = screen.getByRole("button", { name: "Focus" });
+    const focusSection = focusToggle.closest("section");
+    expect(focusSection).not.toBeNull();
+    expect(
+      within(focusSection as HTMLElement).getByText("Activity workspace"),
+    ).not.toBeNull();
+    expect(
+      within(focusSection as HTMLElement)
+        .getByRole("link")
+        .className.includes("min-h-16"),
+    ).toBe(true);
+    expect(screen.getByRole("tab", { name: "All (0)" })).not.toBeNull();
+    expect(screen.queryByText("Research tab")).toBeNull();
+    fireEvent.click(focusToggle);
+    expect(focusToggle.getAttribute("aria-expanded")).toBe("false");
+    expect(
+      focusSection
+        ?.querySelector(".mobile-priority-section__content")
+        ?.hasAttribute("data-collapsed"),
+    ).toBe(true);
+  });
+
+  it("shows a passive parent as working while its sub-agent runs", () => {
     const parent = makeThread({
       id: "thr_parent",
       title: "Coordinate agents",
@@ -267,9 +347,42 @@ describe("RootComposeMobileSessions", () => {
     expect(screen.getByRole("tab", { name: "Inactive (0)" })).not.toBeNull();
     expect(
       screen.getByRole("link", {
-        name: /Open Coordinate agents — Thread working/,
+        name: /Open Coordinate agents — Working/,
       }),
     ).not.toBeNull();
+  });
+
+  it("keeps awaiting replies above the filters and lets the section collapse", () => {
+    const awaitingReply = makeThread({
+      id: "thr_awaiting_reply",
+      title: "Review mobile navigation",
+      lastReadAt: 3,
+      latestAttentionAt: 2,
+      updatedAt: 2,
+    });
+
+    render(
+      <MemoryRouter>
+        <RootComposeMobileSessions
+          highlightedThreadId={null}
+          projectNamesById={projectNames}
+          showCreatingRow={false}
+          threads={[awaitingReply]}
+        />
+      </MemoryRouter>,
+    );
+
+    const toggle = screen.getByRole("button", { name: "Awaiting Reply" });
+    expect(screen.getByText("Review mobile navigation")).not.toBeNull();
+    expect(screen.getByRole("tab", { name: "All (0)" })).not.toBeNull();
+    fireEvent.click(toggle);
+    expect(toggle.getAttribute("aria-expanded")).toBe("false");
+    expect(
+      toggle
+        .closest("section")
+        ?.querySelector(".mobile-priority-section__content")
+        ?.hasAttribute("data-collapsed"),
+    ).toBe(true);
   });
 
   it("uses the existing activity glyph animation with semantic session colors", () => {
@@ -299,16 +412,16 @@ describe("RootComposeMobileSessions", () => {
       </MemoryRouter>,
     );
 
-    const waitingGlyph = screen.getByLabelText("Thread needs user input");
-    const runningGlyph = screen.getByLabelText("Thread working");
-    expect(waitingGlyph.parentElement?.className).toContain("warning-text");
-    expect(runningGlyph.classList).toContain("animate-spin");
-    expect(runningGlyph.parentElement?.className).toContain(
-      "success-foreground",
-    );
+    const waitingGlyph = screen.getByLabelText("Waiting");
+    const runningGlyph = screen.getByLabelText("Working");
+    expect(waitingGlyph.className).toContain("mobile-activity-matrix--waiting");
+    expect(runningGlyph.className).toContain("mobile-activity-matrix--working");
+    expect(
+      runningGlyph.querySelectorAll(".mobile-activity-pixel"),
+    ).toHaveLength(25);
   });
 
-  it("labels completed unread work as needing attention and retains its badge", () => {
+  it("labels completed unread work as ready without a badge", () => {
     render(
       <MemoryRouter>
         <RootComposeMobileSessions
@@ -326,8 +439,8 @@ describe("RootComposeMobileSessions", () => {
       </MemoryRouter>,
     );
 
-    expect(screen.getByText(/^Needs your attention · BB ·/)).not.toBeNull();
-    expect(screen.getByLabelText("Unread thread succeeded")).not.toBeNull();
+    expect(screen.getByText("Ready")).not.toBeNull();
+    expect(screen.getByLabelText("Ready")).not.toBeNull();
     expect(screen.getByRole("tab", { name: "Active (1)" })).not.toBeNull();
     expect(screen.getByRole("tab", { name: "Inactive (0)" })).not.toBeNull();
   });
@@ -539,20 +652,15 @@ describe("RootComposeMobileSessions", () => {
     const search = screen.getByRole("searchbox", { name: "Search sessions" });
     fireEvent.change(search, { target: { value: "ghost" } });
 
-    const runningGroup = screen.getByRole("heading", { name: "Running" })
-      .parentElement?.parentElement;
-    expect(runningGroup).not.toBeNull();
-    expect(
-      within(runningGroup as HTMLElement).getByText("Theme work"),
-    ).not.toBeNull();
+    expect(screen.getByText("Theme work")).not.toBeNull();
     expect(screen.queryByText("BB activity")).toBeNull();
   });
 
   it("opens thread actions on touch hold and routes every action through the shared provider", () => {
     vi.useFakeTimers();
     const thread = makeThread({
-      status: "active",
-      runtime: { displayStatus: "active", hostReconnectGraceExpiresAt: null },
+      lastReadAt: 3,
+      latestAttentionAt: 2,
     });
     render(
       <MemoryRouter>
@@ -580,6 +688,16 @@ describe("RootComposeMobileSessions", () => {
         screen.getByRole("heading", { name: "Mobile activity" }),
       ).not.toBeNull();
     };
+
+    openActions();
+    fireEvent.click(screen.getByRole("button", { name: "Add to Focus" }));
+    act(() => vi.runOnlyPendingTimers());
+    expect(threadActions.togglePin).toHaveBeenCalledWith(thread);
+
+    openActions();
+    fireEvent.click(screen.getByRole("button", { name: "Mark as read" }));
+    act(() => vi.runOnlyPendingTimers());
+    expect(threadActions.toggleRead).toHaveBeenCalledWith(thread);
 
     openActions();
     fireEvent.click(screen.getByRole("button", { name: "Rename" }));

@@ -617,6 +617,20 @@
       "when": 1786099664877,
       "tag": "0087_open_payback",
       "breakpoints": true
+    },
+    {
+      "idx": 88,
+      "version": "6",
+      "when": 1786160343330,
+      "tag": "0088_unusual_iron_patriot",
+      "breakpoints": true
+    },
+    {
+      "idx": 89,
+      "version": "6",
+      "when": 1786181797997,
+      "tag": "0089_demonic_vin_gonzales",
+      "breakpoints": true
     }
   ]
 }

@@ -24,20 +24,28 @@ export function ConversationActionMenu({
   thread,
   children,
   onRename,
+  onSetRead,
   onArchive,
   onDelete,
 }: {
   thread: PluginSidebarThread;
   children: ReactNode;
   onRename: () => void;
+  onSetRead: (read: boolean) => void;
   onArchive: () => void;
   onDelete: () => void;
 }) {
   const title = threadDisplayTitle(thread);
+  const isExplicitlyRead = thread.lastReadAt === thread.latestAttentionAt;
   return (
     <ContextMenu>
       <ContextMenuTrigger asChild>{children}</ContextMenuTrigger>
       <ContextMenuContent aria-label={`${title} actions`}>
+        <ContextMenuItem onSelect={() => onSetRead(!isExplicitlyRead)}>
+          <Icon name={isExplicitlyRead ? "Mail" : "MailOpen"} aria-hidden />
+          {isExplicitlyRead ? "Mark as unread" : "Mark as read"}
+        </ContextMenuItem>
+        <ContextMenuSeparator />
         <ContextMenuItem onSelect={onRename}>
           <Icon name="Edit" aria-hidden />
           Rename…

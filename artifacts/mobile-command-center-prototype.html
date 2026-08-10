@@ -1,0 +1,443 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>BB mobile Command Center</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --stage: oklch(0.13 0.012 254);
+      --bezel: oklch(0.09 0.008 254);
+      --canvas: oklch(0.18 0.012 254);
+      --surface: oklch(0.215 0.013 254);
+      --raised: oklch(0.245 0.015 254);
+      --hover: color-mix(in oklch, white 7%, var(--surface));
+      --selected: color-mix(in oklch, oklch(0.68 0.12 250) 15%, var(--surface));
+      --ink: oklch(0.94 0.008 254);
+      --muted: color-mix(in oklch, var(--ink) 58%, var(--canvas));
+      --subtle: color-mix(in oklch, var(--ink) 38%, var(--canvas));
+      --line: color-mix(in oklch, var(--ink) 11%, var(--canvas));
+      --working: oklch(0.73 0.13 244);
+      --ready: oklch(0.76 0.15 151);
+      --waiting: oklch(0.79 0.14 83);
+      --failed: oklch(0.68 0.19 27);
+      font-family: "Inter Variable", Inter, ui-sans-serif, sans-serif;
+    }
+    * { box-sizing: border-box; }
+    html, body { width: 100%; height: 100%; }
+    body {
+      margin: 0;
+      display: grid;
+      place-items: center;
+      overflow: hidden;
+      background: var(--stage);
+      color: var(--ink);
+      font-size: 14px;
+    }
+    button, input { font: inherit; color: inherit; }
+    button { cursor: pointer; }
+    button:focus-visible, input:focus-visible {
+      outline: 2px solid var(--working);
+      outline-offset: 2px;
+    }
+
+    .device {
+      position: relative;
+      width: min(402px, calc(100vw - 24px));
+      height: min(844px, calc(100vh - 24px));
+      padding: 8px;
+      border-radius: 42px;
+      background: var(--bezel);
+      box-shadow: 0 22px 60px oklch(0.04 0.01 254 / .48);
+    }
+    .screen {
+      position: relative;
+      height: 100%;
+      overflow: hidden;
+      border-radius: 34px;
+      background: var(--canvas);
+    }
+    .statusbar {
+      position: absolute;
+      z-index: 10;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 48px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 22px;
+      font-size: 12px;
+      font-weight: 620;
+      pointer-events: none;
+    }
+    .signal { letter-spacing: 2px; color: var(--muted); }
+
+    .page {
+      position: absolute;
+      inset: 48px 0 0;
+      display: flex;
+      min-height: 0;
+      flex-direction: column;
+    }
+    .topbar {
+      flex: 0 0 auto;
+      display: flex;
+      min-height: 74px;
+      align-items: center;
+      justify-content: space-between;
+      padding: 8px 18px;
+    }
+    .chrome-icon {
+      width: 40px;
+      height: 40px;
+      border: 0;
+      border-radius: 10px;
+      background: transparent;
+      color: var(--muted);
+    }
+    .chrome-icon:hover { background: var(--hover); color: var(--ink); }
+    .chrome-icon svg { width: 22px; height: 22px; }
+
+    .scroll {
+      min-height: 0;
+      flex: 1;
+      overflow: auto;
+      padding: 14px 12px 110px;
+      scrollbar-width: none;
+    }
+    .scroll::-webkit-scrollbar { display: none; }
+
+    .section-label {
+      display: flex;
+      align-items: center;
+      min-height: 24px;
+      padding: 0 8px;
+      color: var(--subtle);
+      font-size: 11px;
+      font-weight: 580;
+    }
+    .section-label span:last-child { margin-left: auto; font-variant-numeric: tabular-nums; }
+    .pane-row {
+      width: 100%;
+      min-height: 44px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      border: 0;
+      border-radius: 9px;
+      padding: 6px 9px;
+      background: transparent;
+      text-align: left;
+    }
+    .pane-row:hover { background: var(--hover); }
+    .pane-row.current { background: var(--selected); }
+    .pane-index { width: 19px; color: var(--subtle); font-size: 11px; text-align: center; }
+    .pane-name { min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .return-hint { color: var(--subtle); font-size: 11px; }
+
+    .sessions-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 0 4px 10px;
+    }
+    .sessions-title strong { display: block; font-size: 16px; font-weight: 620; letter-spacing: -.02em; }
+    .search-button {
+      width: 42px;
+      height: 42px;
+      border: 0;
+      border-radius: 10px;
+      background: transparent;
+      color: var(--muted);
+      font-size: 17px;
+    }
+    .search-button:hover { background: var(--hover); color: var(--ink); }
+    .search-wrap { display: none; position: relative; margin-bottom: 10px; }
+    .search-wrap.open { display: block; }
+    .search-wrap input {
+      width: 100%;
+      height: 42px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 0 40px 0 13px;
+      background: var(--surface);
+    }
+    .clear-search {
+      position: absolute;
+      top: 3px;
+      right: 3px;
+      width: 36px;
+      height: 36px;
+      border: 0;
+      background: transparent;
+      color: var(--muted);
+    }
+
+    .tabs {
+      position: relative;
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 3px;
+      margin: 6px 0 14px;
+      padding: 4px;
+      border-radius: 10px;
+      background: var(--surface);
+    }
+    .tab {
+      min-height: 38px;
+      border: 0;
+      border-radius: 7px;
+      background: transparent;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 560;
+    }
+    .tab.active { background: var(--raised); color: var(--ink); }
+    .tab span { margin-left: 4px; color: var(--subtle); font-variant-numeric: tabular-nums; }
+
+    .group { margin-bottom: 18px; }
+    .group.focus-group { margin-bottom: 24px; }
+    .session-row {
+      width: 100%;
+      min-height: 61px;
+      display: flex;
+      align-items: center;
+      gap: 11px;
+      border: 0;
+      border-radius: 10px;
+      padding: 8px;
+      background: transparent;
+      text-align: left;
+    }
+    .focus-group .session-row {
+      min-height: 76px;
+      gap: 13px;
+      padding: 11px 8px;
+    }
+    .focus-group .session-title { font-size: 15px; font-weight: 590; }
+    .focus-group .session-meta { margin-top: 5px; font-size: 12px; }
+    .focus-group .status-text { font-size: 13px; }
+    .focus-group .activity {
+      width: 20px;
+      height: 20px;
+      flex-basis: 20px;
+      grid-template-columns: repeat(3, 4px);
+      grid-template-rows: repeat(3, 4px);
+    }
+    .focus-group .activity i { width: 4px; height: 4px; }
+    .secondary-groups .group { margin-bottom: 14px; }
+    .secondary-groups .session-row {
+      min-height: 50px;
+      gap: 9px;
+      padding: 5px 8px;
+    }
+    .secondary-groups .session-title { font-size: 13px; }
+    .secondary-groups .session-meta { margin-top: 2px; font-size: 10px; }
+    .secondary-groups .status-text { font-size: 11px; }
+    .secondary-groups .section-label { min-height: 20px; }
+    .session-row:hover, .session-row.selected { background: var(--hover); }
+    .session-copy { min-width: 0; flex: 1; }
+    .session-title { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; font-weight: 540; }
+    .session-meta { display: block; margin-top: 4px; color: var(--subtle); font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .status-text { flex: 0 0 auto; font-size: 12px; font-weight: 540; white-space: nowrap; }
+    .status-text.working { color: var(--working); }
+    .status-text.ready { color: var(--ready); }
+    .status-text.waiting { color: var(--waiting); }
+    .status-text.failed { color: var(--failed); }
+    .status-text.passive { color: var(--subtle); font-variant-numeric: tabular-nums; }
+
+    .activity {
+      width: 15px;
+      height: 15px;
+      flex: 0 0 15px;
+      display: grid;
+      grid-template-columns: repeat(3, 3px);
+      grid-template-rows: repeat(3, 3px);
+      align-content: center;
+      justify-content: center;
+      gap: 1px;
+      color: var(--subtle);
+    }
+    .activity i { width: 3px; height: 3px; background: currentColor; opacity: .18; }
+    .activity.working { color: var(--working); }
+    .activity.ready { color: var(--ready); }
+    .activity.waiting { color: var(--waiting); }
+    .activity.failed { color: var(--failed); }
+    .activity.passive i { opacity: .1; }
+    .activity.passive i:nth-child(5) { opacity: .45; }
+    .activity.ready i:nth-child(-n+6),
+    .activity.waiting i:nth-child(odd),
+    .activity.failed i:nth-child(1), .activity.failed i:nth-child(3),
+    .activity.failed i:nth-child(5), .activity.failed i:nth-child(7),
+    .activity.failed i:nth-child(9) { opacity: 1; }
+    .activity.working i { animation: pixel-cycle 1.15s steps(1, end) infinite; }
+    .activity.working i:nth-child(2) { animation-delay: -.15s; }
+    .activity.working i:nth-child(3) { animation-delay: -.3s; }
+    .activity.working i:nth-child(4) { animation-delay: -.45s; }
+    .activity.working i:nth-child(5) { animation-delay: -.6s; }
+    .activity.working i:nth-child(6) { animation-delay: -.75s; }
+    .activity.working i:nth-child(7) { animation-delay: -.9s; }
+    .activity.working i:nth-child(8) { animation-delay: -1.05s; }
+    @keyframes pixel-cycle { 0%, 18% { opacity: 1; } 19%, 100% { opacity: .13; } }
+
+    .composer-wrap {
+      position: absolute;
+      z-index: 12;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      padding: 12px 12px max(16px, env(safe-area-inset-bottom));
+      background: color-mix(in oklab, var(--canvas) 94%, transparent);
+      backdrop-filter: blur(14px);
+    }
+    .composer {
+      min-height: 58px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      padding: 7px 8px 7px 14px;
+      background: var(--surface);
+    }
+    .composer-placeholder { min-width: 0; flex: 1; color: var(--muted); font-size: 14px; }
+    .voice {
+      width: 42px;
+      height: 42px;
+      margin-left: auto;
+      border: 0;
+      border-radius: 11px;
+      background: var(--ink);
+      color: var(--canvas);
+    }
+    .voice svg { width: 21px; height: 21px; }
+
+    .home-indicator {
+      position: absolute;
+      z-index: 30;
+      left: 50%;
+      bottom: 5px;
+      width: 128px;
+      height: 4px;
+      transform: translateX(-50%);
+      border-radius: 3px;
+      background: color-mix(in oklch, var(--ink) 70%, transparent);
+      pointer-events: none;
+    }
+    .empty { padding: 26px 20px; text-align: center; color: var(--muted); }
+
+    @media (prefers-reduced-motion: reduce) {
+      .activity.working i { animation: none; opacity: .14; }
+      .activity.working i:nth-child(1), .activity.working i:nth-child(5), .activity.working i:nth-child(9) { opacity: 1; }
+    }
+  </style>
+</head>
+<body>
+  <div class="device" aria-label="Mobile device preview">
+    <div class="screen">
+      <div class="statusbar" aria-hidden="true"><span>21:20 ◔</span><span class="signal">▮▮▮ ◒ 27</span></div>
+      <main class="page">
+        <header class="topbar">
+          <button class="chrome-icon" aria-label="Open sidebar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="18" height="18" rx="4"/><path d="M9 3v18"/><path d="M5.8 8h.01M5.8 12h.01" stroke-linecap="round"/></svg></button>
+          <button class="chrome-icon" aria-label="Open workspace"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="18" height="18" rx="4"/><path d="M3 15h18"/><path d="M8 18h8" stroke-linecap="round"/></svg></button>
+        </header>
+
+        <div class="scroll" id="scrollArea">
+          <div class="sessions-head">
+            <div class="sessions-title"><strong>Sessions</strong></div>
+            <button class="search-button" id="searchButton" aria-label="Search workspaces">⌕</button>
+          </div>
+          <div class="search-wrap" id="searchWrap"><input id="searchInput" type="search" placeholder="Search workspaces" aria-label="Search workspaces" /><button class="clear-search" id="clearSearch" aria-label="Close search">×</button></div>
+
+          <div id="focusGroup"></div>
+          <div class="tabs" role="tablist" aria-label="Other workspace filter">
+            <button class="tab active" data-filter="activity" role="tab">Activity <span>2</span></button>
+            <button class="tab" data-filter="earlier" role="tab">Earlier <span>2</span></button>
+            <button class="tab" data-filter="all" role="tab">All <span>4</span></button>
+          </div>
+          <div class="secondary-groups" id="groups"></div>
+        </div>
+
+        <div class="composer-wrap">
+          <div class="composer">
+            <div class="composer-placeholder">Ask anything…</div>
+            <button class="voice" aria-label="Start voice input"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><rect x="8" y="3" width="8" height="12" rx="4"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3M9 21h6" stroke-linecap="round"/></svg></button>
+          </div>
+        </div>
+      </main>
+      <div class="home-indicator" aria-hidden="true"></div>
+    </div>
+  </div>
+
+  <script>
+    const workspaces = [
+      { id: 'activity', title: 'Activity redesign', repo: 'bbamir', branch: 'amir/activity-model', group: 'Focus', state: 'working', status: 'Working', time: 'now' },
+      { id: 'auth', title: 'Authentication cleanup', repo: 'ghost-api', branch: 'amir/auth-cleanup', group: 'Focus', state: 'waiting', status: 'Waiting', time: '3m' },
+      { id: 'plugins', title: 'Plugin marketplace', repo: 'bbamir', branch: 'amir/plugin-marketplace', group: 'Ready', state: 'ready', status: 'Ready', time: '8m' },
+      { id: 'billing', title: 'Billing webhooks', repo: 'ghost-api', branch: 'amir/webhooks', group: 'Ready', state: 'failed', status: 'Failed', time: '1h' },
+      { id: 'protocol', title: 'Daemon protocol cleanup', repo: 'bbamir', branch: 'amir/protocol', group: 'Earlier', state: 'passive', status: '2h', time: '2h' },
+      { id: 'editor', title: 'Editor command routing', repo: 'bbamir', branch: 'amir/commands', group: 'Earlier', state: 'passive', status: '1d', time: '1d' }
+    ];
+    let filter = 'activity';
+    let query = '';
+
+    function activity(status) {
+      return `<span class="activity ${status}" aria-hidden="true">${'<i></i>'.repeat(9)}</span>`;
+    }
+    function row(item) {
+      return `<button class="session-row" data-id="${item.id}" aria-label="${item.title}, ${item.status}">
+        ${activity(item.state)}
+        <span class="session-copy"><span class="session-title">${item.title}</span><span class="session-meta">${item.repo} · ${item.branch}</span></span>
+        <span class="status-text ${item.state}">${item.status}</span>
+      </button>`;
+    }
+    function render() {
+      const normalized = query.trim().toLowerCase();
+      const matchesQuery = item => !normalized || `${item.title} ${item.repo} ${item.branch}`.toLowerCase().includes(normalized);
+      const focused = workspaces.filter(item => item.group === 'Focus' && matchesQuery(item));
+      const visible = workspaces.filter(item => {
+        if (item.group === 'Focus') return false;
+        if (filter === 'activity' && item.state === 'passive') return false;
+        if (filter === 'earlier' && item.state !== 'passive') return false;
+        return matchesQuery(item);
+      });
+      document.getElementById('focusGroup').innerHTML = focused.length
+        ? `<section class="group focus-group"><div class="section-label"><span>Focus</span><span>${focused.length}</span></div>${focused.map(row).join('')}</section>`
+        : '';
+      const order = ['Ready', 'Earlier'];
+      document.getElementById('groups').innerHTML = order.map(group => {
+        const items = visible.filter(item => item.group === group);
+        if (!items.length) return '';
+        const label = group === 'Ready' ? 'Ready and waiting' : group;
+        return `<section class="group"><div class="section-label"><span>${label}</span><span>${items.length}</span></div>${items.map(row).join('')}</section>`;
+      }).join('') || `<div class="empty">No matching workspaces</div>`;
+      document.querySelectorAll('.session-row').forEach(button => button.onclick = () => {
+        document.querySelectorAll('.session-row').forEach(row => row.classList.remove('selected'));
+        button.classList.add('selected');
+      });
+    }
+
+    document.querySelectorAll('.tab').forEach(tab => tab.onclick = () => {
+      filter = tab.dataset.filter;
+      document.querySelectorAll('.tab').forEach(item => item.classList.toggle('active', item === tab));
+      render();
+    });
+    document.getElementById('searchButton').onclick = () => {
+      document.getElementById('searchWrap').classList.add('open');
+      document.getElementById('searchInput').focus();
+    };
+    document.getElementById('clearSearch').onclick = () => {
+      query = '';
+      document.getElementById('searchInput').value = '';
+      document.getElementById('searchWrap').classList.remove('open');
+      render();
+    };
+    document.getElementById('searchInput').oninput = event => { query = event.target.value; render(); };
+    render();
+  </script>
+</body>
+</html>

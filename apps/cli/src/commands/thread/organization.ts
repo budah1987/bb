@@ -185,7 +185,11 @@ export function registerOrganizationCommands(
   ] as const) {
     parent
       .command(`${name} [id]`)
-      .description(`Mark a thread ${name}`)
+      .description(
+        markRead
+          ? "Mark a thread read and clear Awaiting Reply"
+          : "Mark a thread unread",
+      )
       .option("--self", "Target the current thread (from BB_THREAD_ID)")
       .option("--json", "Print machine-readable JSON output")
       .action(

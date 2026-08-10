@@ -3,6 +3,7 @@ import {
   FILE_LIST_QUERY_MAX_LENGTH,
   gitBranchNameSchema,
   gitBranchRefClassificationSchema,
+  jsonValueSchema,
   threadGitDiffResponseSchema,
   threadPullRequestSchema,
   workspaceDiffTargetSchema,
@@ -66,6 +67,157 @@ export const environmentPathsQuerySchema = z.object({
 });
 export type EnvironmentPathsQuery = z.infer<typeof environmentPathsQuerySchema>;
 
+export const simulatorDeviceSchema = z
+  .object({
+    udid: z.string().min(1),
+    name: z.string().min(1),
+    runtime: z.string().min(1),
+    state: z.enum(["Booted", "Shutdown"]),
+  })
+  .strict();
+
+export const simulatorActiveSessionSchema = z
+  .object({
+    deviceUdid: z.string().min(1),
+    deviceName: z.string().min(1),
+    state: z.literal("running"),
+  })
+  .strict();
+
+export const simulatorControlActionSchema = z.discriminatedUnion("kind", [
+  z
+    .object({
+      kind: z.literal("tap"),
+      x: z.number().min(0).max(1),
+      y: z.number().min(0).max(1),
+    })
+    .strict(),
+  z
+    .object({
+      kind: z.literal("gesture"),
+      points: z
+        .array(
+          z
+            .object({
+              type: z.enum(["begin", "move", "end"]),
+              x: z.number().min(0).max(1),
+              y: z.number().min(0).max(1),
+            })
+            .strict(),
+        )
+        .min(2)
+        .max(64),
+    })
+    .strict(),
+  z.object({ kind: z.literal("type"), text: z.string().max(10_000) }).strict(),
+  z
+    .object({
+      kind: z.literal("button"),
+      button: z.enum([
+        "home",
+        "swipe_home",
+        "app_switcher",
+        "lock",
+        "siri",
+        "side_button",
+      ]),
+    })
+    .strict(),
+  z
+    .object({
+      kind: z.literal("rotate"),
+      orientation: z.enum([
+        "portrait",
+        "portrait_upside_down",
+        "landscape_left",
+        "landscape_right",
+      ]),
+    })
+    .strict(),
+]);
+export type SimulatorControlAction = z.infer<
+  typeof simulatorControlActionSchema
+>;
+
+export const simulatorStatusResponseSchema = z
+  .object({
+    supported: z.boolean(),
+    message: z.string().nullable(),
+    devices: z.array(simulatorDeviceSchema),
+    active: simulatorActiveSessionSchema.nullable(),
+  })
+  .strict();
+export type SimulatorStatusResponse = z.infer<
+  typeof simulatorStatusResponseSchema
+>;
+
+export const simulatorAttachRequestSchema = z
+  .object({ deviceUdid: z.string().min(1).optional() })
+  .strict();
+export type SimulatorAttachRequest = z.infer<
+  typeof simulatorAttachRequestSchema
+>;
+
+export const simulatorStreamConnectionSchema = z
+  .object({
+    url: z.string().url(),
+    token: z.string().min(32),
+    expiresAt: z.number().int().positive(),
+    transport: z.enum(["loopback", "tunnel"]),
+  })
+  .strict();
+export type SimulatorStreamConnection = z.infer<
+  typeof simulatorStreamConnectionSchema
+>;
+
+export const simulatorAttachResponseSchema = z
+  .object({
+    session: simulatorActiveSessionSchema,
+    stream: simulatorStreamConnectionSchema,
+  })
+  .strict();
+export type SimulatorAttachResponse = z.infer<
+  typeof simulatorAttachResponseSchema
+>;
+
+export const simulatorLeaseResponseSchema = simulatorStreamConnectionSchema;
+export type SimulatorLeaseResponse = z.infer<
+  typeof simulatorLeaseResponseSchema
+>;
+
+export const simulatorControlRequestSchema = z
+  .object({ action: simulatorControlActionSchema })
+  .strict();
+export type SimulatorControlRequest = z.infer<
+  typeof simulatorControlRequestSchema
+>;
+
+export const simulatorControlResponseSchema = z
+  .object({ ok: z.literal(true) })
+  .strict();
+export type SimulatorControlResponse = z.infer<
+  typeof simulatorControlResponseSchema
+>;
+
+export const simulatorStopResponseSchema = z
+  .object({ stopped: z.boolean(), deviceUdid: z.string().min(1).nullable() })
+  .strict();
+export type SimulatorStopResponse = z.infer<typeof simulatorStopResponseSchema>;
+
+export const simulatorAccessibilityResponseSchema = z
+  .object({ tree: jsonValueSchema })
+  .strict();
+export type SimulatorAccessibilityResponse = z.infer<
+  typeof simulatorAccessibilityResponseSchema
+>;
+
+export const simulatorScreenshotResponseSchema = z
+  .object({ dataBase64: z.string(), mimeType: z.literal("image/png") })
+  .strict();
+export type SimulatorScreenshotResponse = z.infer<
+  typeof simulatorScreenshotResponseSchema
+>;
+
 export const environmentDiffBranchesQuerySchema = branchListQuerySchema.extend({
   selectedBranch: gitBranchNameSchema.optional(),
 });
@@ -95,6 +247,144 @@ export const environmentStatusQuerySchema = z.object({
 });
 export type EnvironmentStatusQuery = z.infer<
   typeof environmentStatusQuerySchema
+>;
+
+export const environmentDockerProvenanceMountSchema = z
+  .object({
+    checkoutRoot: z.string().min(1),
+    destination: z.string().min(1),
+    readOnly: z.boolean(),
+    source: z.string().min(1),
+  })
+  .strict();
+export type EnvironmentDockerProvenanceMount = z.infer<
+  typeof environmentDockerProvenanceMountSchema
+>;
+
+export const environmentDockerServiceSchema = z
+  .object({
+    checkoutStatus: z.enum([
+      "current_checkout",
+      "wrong_checkout",
+      "declared_shared",
+      "ambiguous",
+      "unknown",
+    ]),
+    id: z.string().min(1),
+    image: z.string().min(1),
+    kind: z.enum(["server", "background_service", "shared_worker"]),
+    mounts: z.array(environmentDockerProvenanceMountSchema),
+    name: z.string().min(1),
+    ownerBranch: z.string().min(1).nullable(),
+    ownerCheckoutRoot: z.string().min(1).nullable(),
+    publishedPorts: z.array(z.number().int().min(1).max(65_535)),
+    state: z.string().min(1),
+  })
+  .strict();
+export type EnvironmentDockerService = z.infer<
+  typeof environmentDockerServiceSchema
+>;
+
+export const environmentDockerProvenanceResponseSchema = z.discriminatedUnion(
+  "outcome",
+  [
+    z
+      .object({
+        outcome: z.literal("available"),
+        environmentPath: z.string().min(1),
+        services: z.array(environmentDockerServiceSchema),
+      })
+      .strict(),
+    z
+      .object({
+        outcome: z.literal("unavailable"),
+        reason: z.enum(["docker_not_installed", "docker_unavailable"]),
+        message: z.string().min(1),
+      })
+      .strict(),
+  ],
+);
+export type EnvironmentDockerProvenanceResponse = z.infer<
+  typeof environmentDockerProvenanceResponseSchema
+>;
+
+export const environmentDockerPathActivitySchema = z
+  .object({
+    limited: z.boolean(),
+    newestFileMtimeMs: z.number().nonnegative().nullable(),
+    newestFilePath: z.string().min(1).nullable(),
+    path: z.string().min(1),
+    scannedFiles: z.number().int().nonnegative(),
+  })
+  .strict();
+
+export const environmentDockerServiceActivitySchema = z
+  .object({
+    build: environmentDockerPathActivitySchema.nullable(),
+    freshness: z.enum(["fresh", "stale", "missing_build", "unknown"]),
+    serviceId: z.string().min(1),
+    source: environmentDockerPathActivitySchema.nullable(),
+  })
+  .strict();
+export type EnvironmentDockerServiceActivity = z.infer<
+  typeof environmentDockerServiceActivitySchema
+>;
+
+export const environmentDockerActivityResponseSchema = z.discriminatedUnion(
+  "outcome",
+  [
+    z
+      .object({
+        activities: z.array(environmentDockerServiceActivitySchema),
+        outcome: z.literal("available"),
+      })
+      .strict(),
+    z
+      .object({
+        message: z.string().min(1),
+        outcome: z.literal("unavailable"),
+      })
+      .strict(),
+  ],
+);
+export type EnvironmentDockerActivityResponse = z.infer<
+  typeof environmentDockerActivityResponseSchema
+>;
+
+export const environmentPreviewProviderSchema = z
+  .object({
+    environment: z.string().min(1).nullable(),
+    framePolicy: z.enum(["allowed", "blocked", "unknown"]),
+    frameReason: z.string().min(1).nullable(),
+    id: z.string().min(1),
+    kind: z.enum(["local", "deployment"]),
+    label: z.string().min(1),
+    logUrl: z.string().url().nullable(),
+    source: z.enum(["docker", "github"]),
+    state: z.enum(["ready", "building", "failed", "unknown"]),
+    updatedAt: z.string().min(1).nullable(),
+    url: z.string().url().nullable(),
+  })
+  .strict();
+export type EnvironmentPreviewProvider = z.infer<
+  typeof environmentPreviewProviderSchema
+>;
+
+export const environmentPreviewsResponseSchema = z
+  .object({
+    issues: z.array(
+      z
+        .object({
+          message: z.string().min(1),
+          source: z.enum(["docker", "github"]),
+        })
+        .strict(),
+    ),
+    providers: z.array(environmentPreviewProviderSchema),
+  })
+  .strict();
+export type EnvironmentPreviewsResponse = z.infer<
+  typeof environmentPreviewsResponseSchema
 >;
 
 export const environmentDiffQuerySchema = z.discriminatedUnion("target", [

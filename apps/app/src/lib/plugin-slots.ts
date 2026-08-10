@@ -10,6 +10,7 @@ import type {
   PluginSettingsSectionRegistration,
   PluginSidebarFooterActionRegistration,
   PluginThreadHeaderActionRegistration,
+  PluginThreadRailSectionRegistration,
   PluginThreadListRegistration,
   PluginThreadPanelActionRegistration,
 } from "@bb/plugin-sdk";
@@ -37,6 +38,8 @@ export interface PluginRegistrationSet {
   threadLists?: readonly PluginThreadListRegistration[];
   /** Optional for the same reason as `threadLists`: bundles built earlier. */
   threadHeaderActions?: readonly PluginThreadHeaderActionRegistration[];
+  /** Optional so older frontend bundles remain compatible. */
+  threadRailSections?: readonly PluginThreadRailSectionRegistration[];
   fileOpeners: readonly PluginFileOpenerRegistration[];
   messageDirectives: readonly PluginMessageDirectiveRegistration[];
   messageActions?: readonly PluginMessageActionRegistration[];
@@ -71,6 +74,8 @@ export interface PluginThreadListSlot
   extends PluginThreadListRegistration, PluginSlotBase {}
 export interface PluginThreadHeaderActionSlot
   extends PluginThreadHeaderActionRegistration, PluginSlotBase {}
+export interface PluginThreadRailSectionSlot
+  extends PluginThreadRailSectionRegistration, PluginSlotBase {}
 export interface PluginFileOpenerSlot
   extends PluginFileOpenerRegistration, PluginSlotBase {}
 export interface PluginMessageDirectiveSlot
@@ -89,6 +94,7 @@ export interface PluginSlotSnapshot {
   sidebarFooterActions: readonly PluginSidebarFooterActionSlot[];
   threadLists: readonly PluginThreadListSlot[];
   threadHeaderActions: readonly PluginThreadHeaderActionSlot[];
+  threadRailSections: readonly PluginThreadRailSectionSlot[];
   fileOpeners: readonly PluginFileOpenerSlot[];
   messageDirectives: readonly PluginMessageDirectiveSlot[];
   messageActions: readonly PluginMessageActionSlot[];
@@ -104,6 +110,7 @@ export const EMPTY_PLUGIN_SLOT_SNAPSHOT: PluginSlotSnapshot = {
   sidebarFooterActions: [],
   threadLists: [],
   threadHeaderActions: [],
+  threadRailSections: [],
   fileOpeners: [],
   messageDirectives: [],
   messageActions: [],
@@ -126,6 +133,7 @@ function buildSnapshot(): PluginSlotSnapshot {
     sidebarFooterActions: PluginSidebarFooterActionSlot[];
     threadLists: PluginThreadListSlot[];
     threadHeaderActions: PluginThreadHeaderActionSlot[];
+    threadRailSections: PluginThreadRailSectionSlot[];
     fileOpeners: PluginFileOpenerSlot[];
     messageDirectives: PluginMessageDirectiveSlot[];
     messageActions: PluginMessageActionSlot[];
@@ -139,6 +147,7 @@ function buildSnapshot(): PluginSlotSnapshot {
     sidebarFooterActions: [],
     threadLists: [],
     threadHeaderActions: [],
+    threadRailSections: [],
     fileOpeners: [],
     messageDirectives: [],
     messageActions: [],
@@ -181,6 +190,9 @@ function buildSnapshot(): PluginSlotSnapshot {
     }
     for (const registration of set.threadHeaderActions ?? []) {
       next.threadHeaderActions.push({ ...registration, pluginId, generation });
+    }
+    for (const registration of set.threadRailSections ?? []) {
+      next.threadRailSections.push({ ...registration, pluginId, generation });
     }
     for (const registration of set.fileOpeners) {
       next.fileOpeners.push({ ...registration, pluginId, generation });

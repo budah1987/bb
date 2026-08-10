@@ -1,0 +1,358 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Usage limit concepts</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --canvas: #111318;
+        --panel: #191c23;
+        --panel-strong: #20242d;
+        --ink: #f4f5f7;
+        --muted: #969dab;
+        --line: #303642;
+        --accent: #79cec5;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html,
+      body {
+        margin: 0;
+        min-height: 100%;
+        background: var(--canvas);
+      }
+
+      body {
+        padding: 18px;
+        color: var(--ink);
+        font-family:
+          Inter,
+          ui-sans-serif,
+          system-ui,
+          -apple-system,
+          BlinkMacSystemFont,
+          "Segoe UI",
+          sans-serif;
+      }
+
+      main {
+        width: min(100%, 1500px);
+        margin: 0 auto;
+      }
+
+      header {
+        display: flex;
+        align-items: end;
+        justify-content: space-between;
+        gap: 16px;
+        margin-bottom: 14px;
+      }
+
+      h1 {
+        margin: 0 0 3px;
+        font-size: 18px;
+        line-height: 1.3;
+      }
+      header p {
+        margin: 0;
+        color: var(--muted);
+        font-size: 12px;
+      }
+
+      .recommendation {
+        flex: none;
+        border: 1px solid color-mix(in oklab, var(--accent) 40%, var(--line));
+        border-radius: 999px;
+        padding: 6px 10px;
+        background: color-mix(in oklab, var(--accent) 10%, transparent);
+        color: #a9e0da;
+        font-size: 11px;
+        white-space: nowrap;
+      }
+
+      [role="tablist"] {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 6px;
+        padding: 4px;
+        margin-bottom: 12px;
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        background: var(--panel);
+      }
+
+      [role="tab"] {
+        min-width: 0;
+        border: 0;
+        border-radius: 8px;
+        padding: 9px 10px;
+        background: transparent;
+        color: var(--muted);
+        font: inherit;
+        font-size: 12px;
+        cursor: pointer;
+      }
+
+      [role="tab"]:hover {
+        color: var(--ink);
+        background: #ffffff08;
+      }
+      [role="tab"][aria-selected="true"] {
+        color: var(--ink);
+        background: var(--panel-strong);
+        box-shadow: inset 0 0 0 1px #ffffff0a;
+      }
+      [role="tab"]:focus-visible {
+        outline: 2px solid var(--accent);
+        outline-offset: 2px;
+      }
+
+      .panel {
+        overflow: hidden;
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        background: var(--panel);
+      }
+
+      .panel[hidden] {
+        display: none;
+      }
+
+      figure {
+        margin: 0;
+      }
+
+      .image-wrap {
+        position: relative;
+        display: grid;
+        min-height: 320px;
+        place-items: center;
+        overflow: auto;
+        background: #0c0e12;
+      }
+
+      img {
+        display: block;
+        width: 100%;
+        height: auto;
+        object-fit: contain;
+      }
+
+      figcaption {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 18px;
+        padding: 12px 14px;
+        border-top: 1px solid var(--line);
+      }
+
+      .copy strong {
+        display: block;
+        margin-bottom: 2px;
+        font-size: 13px;
+      }
+      .copy span {
+        display: block;
+        color: var(--muted);
+        font-size: 11px;
+        line-height: 1.45;
+      }
+      .fit {
+        flex: none;
+        color: var(--muted);
+        font-size: 10px;
+        text-align: right;
+      }
+
+      @media (max-width: 680px) {
+        body {
+          padding: 10px;
+        }
+        header {
+          align-items: start;
+        }
+        .recommendation {
+          display: none;
+        }
+        [role="tab"] {
+          padding-inline: 6px;
+          font-size: 11px;
+        }
+        .image-wrap {
+          min-height: 220px;
+        }
+        figcaption {
+          align-items: start;
+        }
+        .fit {
+          display: none;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <header>
+        <div>
+          <h1>Command Center usage limits</h1>
+          <p>
+            Claude includes 5 hr, weekly, and Fable; Codex includes 5 hr and
+            weekly.
+          </p>
+        </div>
+        <div class="recommendation">Recommended: A desktop · C mobile</div>
+      </header>
+
+      <div role="tablist" aria-label="Usage limit design variations">
+        <button
+          id="tab-a"
+          role="tab"
+          aria-selected="true"
+          aria-controls="panel-a"
+        >
+          A · Micro bars
+        </button>
+        <button
+          id="tab-b"
+          role="tab"
+          aria-selected="false"
+          aria-controls="panel-b"
+          tabindex="-1"
+        >
+          B · Rings
+        </button>
+        <button
+          id="tab-c"
+          role="tab"
+          aria-selected="false"
+          aria-controls="panel-c"
+          tabindex="-1"
+        >
+          C · Peek + expand
+        </button>
+      </div>
+
+      <section
+        id="panel-a"
+        class="panel"
+        role="tabpanel"
+        aria-labelledby="tab-a"
+      >
+        <figure>
+          <div class="image-wrap">
+            <img
+              src="a-micro-bars.png"
+              alt="Desktop and mobile mockups using compact horizontal usage bars"
+            />
+          </div>
+          <figcaption>
+            <div class="copy">
+              <strong>Always-visible micro bars</strong
+              ><span
+                >Best desktop scanability, with all five limits visible directly
+                above the sidebar footer.</span
+              >
+            </div>
+            <div class="fit">Desktop: strongest<br />Mobile: taller</div>
+          </figcaption>
+        </figure>
+      </section>
+
+      <section
+        id="panel-b"
+        class="panel"
+        role="tabpanel"
+        aria-labelledby="tab-b"
+        hidden
+      >
+        <figure>
+          <div class="image-wrap">
+            <img
+              src="b-remaining-rings.png"
+              alt="Desktop and mobile mockups using compact circular remaining-capacity rings"
+            />
+          </div>
+          <figcaption>
+            <div class="copy">
+              <strong>Remaining-capacity rings</strong
+              ><span
+                >Distinctive and compact, though precise comparisons take more
+                effort at sidebar scale.</span
+              >
+            </div>
+            <div class="fit">Desktop: compact<br />Mobile: strong</div>
+          </figcaption>
+        </figure>
+      </section>
+
+      <section
+        id="panel-c"
+        class="panel"
+        role="tabpanel"
+        aria-labelledby="tab-c"
+        hidden
+      >
+        <figure>
+          <div class="image-wrap">
+            <img
+              src="c-peek-expand.png"
+              alt="Desktop popover and mobile bottom sheet opened from a compact usage summary"
+            />
+          </div>
+          <figcaption>
+            <div class="copy">
+              <strong>Peek and expand</strong
+              ><span
+                >Lowest permanent footprint; surfaces the tightest limit and
+                moves the full breakdown into a popover or bottom sheet.</span
+              >
+            </div>
+            <div class="fit">Desktop: minimal<br />Mobile: strongest</div>
+          </figcaption>
+        </figure>
+      </section>
+    </main>
+
+    <script>
+      const tabs = [...document.querySelectorAll('[role="tab"]')];
+      const panels = [...document.querySelectorAll('[role="tabpanel"]')];
+
+      function selectTab(next) {
+        tabs.forEach((tab) => {
+          const selected = tab === next;
+          tab.setAttribute("aria-selected", String(selected));
+          tab.tabIndex = selected ? 0 : -1;
+        });
+        panels.forEach((panel) => {
+          panel.hidden = panel.id !== next.getAttribute("aria-controls");
+        });
+      }
+
+      tabs.forEach((tab, index) => {
+        tab.addEventListener("click", () => selectTab(tab));
+        tab.addEventListener("keydown", (event) => {
+          if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key))
+            return;
+          event.preventDefault();
+          const targetIndex =
+            event.key === "Home"
+              ? 0
+              : event.key === "End"
+                ? tabs.length - 1
+                : (index +
+                    (event.key === "ArrowRight" ? 1 : -1) +
+                    tabs.length) %
+                  tabs.length;
+          selectTab(tabs[targetIndex]);
+          tabs[targetIndex].focus();
+        });
+      });
+    </script>
+  </body>
+</html>

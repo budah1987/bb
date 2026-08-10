@@ -104,6 +104,79 @@ function createFetchQueue(
 }
 
 describe("@bb/sdk", () => {
+  it("routes typed simulator status, attach, and control requests", async () => {
+    const queue = createFetchQueue([
+      {
+        body: {
+          supported: true,
+          message: null,
+          devices: [
+            {
+              udid: "device-1",
+              name: "iPhone 17 Pro",
+              runtime: "iOS 26 0",
+              state: "Shutdown",
+            },
+          ],
+          active: null,
+        },
+      },
+      {
+        body: {
+          session: {
+            deviceUdid: "device-1",
+            deviceName: "iPhone 17 Pro",
+            state: "running",
+          },
+          stream: {
+            url: "http://127.0.0.1:41000/stream.mjpeg",
+            token: "a".repeat(32),
+            expiresAt: 2_000_000_000_000,
+            transport: "loopback",
+          },
+        },
+      },
+      { body: { ok: true } },
+    ]);
+    const sdk = createBbSdk({
+      transport: createHttpTransport({
+        baseUrl: "http://bb.test",
+        fetch: queue.fetch,
+        runtime: "node",
+      }),
+    });
+
+    await sdk.environments.simulatorStatus({ environmentId: "env_remote" });
+    await sdk.environments.simulatorAttach({
+      environmentId: "env_remote",
+      deviceUdid: "device-1",
+    });
+    await sdk.environments.simulatorControl({
+      environmentId: "env_remote",
+      action: { kind: "tap", x: 0.5, y: 0.25 },
+    });
+
+    expect(queue.requests).toEqual([
+      {
+        bodyText: undefined,
+        method: "GET",
+        url: "http://bb.test/api/v1/environments/env_remote/simulator",
+      },
+      {
+        bodyText: JSON.stringify({ deviceUdid: "device-1" }),
+        method: "POST",
+        url: "http://bb.test/api/v1/environments/env_remote/simulator/attach",
+      },
+      {
+        bodyText: JSON.stringify({
+          action: { kind: "tap", x: 0.5, y: 0.25 },
+        }),
+        method: "POST",
+        url: "http://bb.test/api/v1/environments/env_remote/simulator/control",
+      },
+    ]);
+  });
+
   it("deletes threads through the POST action supported by remote tunnels", async () => {
     const queue = createFetchQueue([{ body: { ok: true } }]);
     const sdk = createBbSdk({
@@ -910,6 +983,80 @@ describe("@bb/sdk", () => {
         bodyText: undefined,
         method: "GET",
         url: "http://bb.test/api/v1/environments/env_pr/pull-request",
+      },
+    ]);
+  });
+
+  it("routes Docker provenance calls through the HTTP transport", async () => {
+    const response = {
+      outcome: "available",
+      environmentPath: "/repo-feature",
+      services: [],
+    };
+    const queue = createFetchQueue([{ body: response }]);
+    const sdk = createBbSdk({
+      transport: createHttpTransport({
+        baseUrl: "http://bb.test",
+        fetch: queue.fetch,
+        runtime: "node",
+      }),
+    });
+
+    await expect(
+      sdk.environments.dockerProvenance({ environmentId: "env_feature" }),
+    ).resolves.toEqual(response);
+
+    expect(queue.requests).toEqual([
+      {
+        bodyText: undefined,
+        method: "GET",
+        url: "http://bb.test/api/v1/environments/env_feature/docker-provenance",
+      },
+    ]);
+  });
+
+  it("routes Docker activity calls through the HTTP transport", async () => {
+    const response = { activities: [], outcome: "available" };
+    const queue = createFetchQueue([{ body: response }]);
+    const sdk = createBbSdk({
+      transport: createHttpTransport({
+        baseUrl: "http://bb.test",
+        fetch: queue.fetch,
+        runtime: "node",
+      }),
+    });
+
+    await expect(
+      sdk.environments.dockerActivity({ environmentId: "env_feature" }),
+    ).resolves.toEqual(response);
+    expect(queue.requests).toEqual([
+      {
+        bodyText: undefined,
+        method: "GET",
+        url: "http://bb.test/api/v1/environments/env_feature/docker-activity",
+      },
+    ]);
+  });
+
+  it("routes preview calls through the HTTP transport", async () => {
+    const response = { issues: [], providers: [] };
+    const queue = createFetchQueue([{ body: response }]);
+    const sdk = createBbSdk({
+      transport: createHttpTransport({
+        baseUrl: "http://bb.test",
+        fetch: queue.fetch,
+        runtime: "node",
+      }),
+    });
+
+    await expect(
+      sdk.environments.previews({ environmentId: "env_feature" }),
+    ).resolves.toEqual(response);
+    expect(queue.requests).toEqual([
+      {
+        bodyText: undefined,
+        method: "GET",
+        url: "http://bb.test/api/v1/environments/env_feature/previews",
       },
     ]);
   });

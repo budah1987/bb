@@ -9,6 +9,8 @@ import { useThreadTabs } from "@/hooks/queries/thread-tabs-query";
 import {
   EMPTY_FIXED_PANEL_TABS_STATE,
   createGitDiffFixedPanelTab,
+  createLocalServersFixedPanelTab,
+  createPreviewFixedPanelTab,
   createPullRequestFixedPanelTab,
   createTerminalFixedPanelTab,
   createThreadInfoFixedPanelTab,
@@ -27,7 +29,9 @@ import {
   reconcileFixedPanelTabsState,
   scheduleLocalThreadTabsMigration,
   scheduleThreadTabsPersistence,
+  toSyncedThreadTabs,
 } from "./thread-tabs-sync";
+import type { ThreadTab } from "@bb/server-contract";
 
 const FIXED_PANEL_TABS_TOUCH_THROTTLE_MS = 60 * 1000;
 
@@ -48,6 +52,15 @@ type FixedPanelSecondaryPanelOpener = () => void;
 type FixedPanelSecondaryPanelCloser = () => void;
 type FixedPanelTerminalIdSetter = (terminalId: string | null) => void;
 type FixedPanelTerminalIdRemover = (terminalId: string) => void;
+type FixedPanelLocalServersOpener = () => void;
+
+export interface OpenFixedPreviewPanelArgs {
+  environmentId: string | null;
+  label: string;
+  providerId: string;
+}
+
+type FixedPanelPreviewOpener = (args: OpenFixedPreviewPanelArgs) => void;
 
 function hasThreadId(threadId: string | null | undefined): threadId is string {
   return threadId !== null && threadId !== undefined && threadId.length > 0;
@@ -226,7 +239,7 @@ export function useFixedPanelTabsState(
     if (tabsQuery.data.revision === 0 && state.secondary.tabs.length > 0) {
       scheduleLocalThreadTabsMigration({
         queryClient,
-        tabs: state.secondary.tabs,
+        tabs: toSyncedThreadTabs(state.secondary.tabs),
         threadId: resolvedThreadId,
       });
       return;
@@ -255,20 +268,21 @@ export function useUpdateFixedPanelTabsState(
     (update: FixedPanelTabsStateUpdater) => {
       if (!hasThreadId(panelStateId)) return;
       const now = Date.now();
-      let tabsToPersist: readonly FixedPanelTab[] | null = null;
+      let tabsToPersist: readonly ThreadTab[] | null = null;
       setState((current) => {
         const next = update(current);
         if (next === current) {
           return current;
         }
         const touched = touchFixedPanelTabsState(next, now);
+        const syncedTabs = toSyncedThreadTabs(touched.secondary.tabs);
         if (
           !areThreadTabListsEquivalent(
-            current.secondary.tabs,
-            touched.secondary.tabs,
+            toSyncedThreadTabs(current.secondary.tabs),
+            syncedTabs,
           )
         ) {
-          tabsToPersist = touched.secondary.tabs;
+          tabsToPersist = syncedTabs;
         }
         return touched;
       });
@@ -410,6 +424,76 @@ export function useSetFixedRightTerminalActiveTerminal(
           secondary: {
             tabs,
             activeTabId,
+            isOpen: true,
+          },
+        };
+      });
+    },
+    [updateState],
+  );
+}
+
+export function useOpenFixedLocalServersPanel(
+  panelStateId: FixedPanelTabsPanelStateId,
+  syncThreadId: FixedPanelTabsSyncThreadId,
+): FixedPanelLocalServersOpener {
+  const updateState = useUpdateFixedPanelTabsState(panelStateId, syncThreadId);
+  return useCallback(() => {
+    updateState((current) => {
+      const tab = createLocalServersFixedPanelTab();
+      const tabs = current.secondary.tabs.some(
+        (candidate) => candidate.id === tab.id,
+      )
+        ? current.secondary.tabs
+        : [...current.secondary.tabs, tab];
+      return {
+        ...current,
+        secondary: {
+          tabs,
+          activeTabId: tab.id,
+          isOpen: true,
+        },
+      };
+    });
+  }, [updateState]);
+}
+
+/**
+ * Opens (or focuses) one preview provider's tab. Providers are siblings: a
+ * second provider opens beside the first rather than replacing it, so two
+ * previews can be compared without losing either.
+ */
+export function useOpenFixedPreviewPanel(
+  panelStateId: FixedPanelTabsPanelStateId,
+  syncThreadId: FixedPanelTabsSyncThreadId,
+): FixedPanelPreviewOpener {
+  const updateState = useUpdateFixedPanelTabsState(panelStateId, syncThreadId);
+  return useCallback(
+    ({ environmentId, label, providerId }: OpenFixedPreviewPanelArgs) => {
+      updateState((current) => {
+        const tab = createPreviewFixedPanelTab({
+          environmentId,
+          label,
+          providerId,
+        });
+        const existingTab = current.secondary.tabs.find(
+          (candidate) => candidate.id === tab.id,
+        );
+        const tabs = existingTab
+          ? current.secondary.tabs
+          : [...current.secondary.tabs, tab];
+        if (
+          tabs === current.secondary.tabs &&
+          current.secondary.activeTabId === tab.id &&
+          current.secondary.isOpen
+        ) {
+          return current;
+        }
+        return {
+          ...current,
+          secondary: {
+            tabs,
+            activeTabId: tab.id,
             isOpen: true,
           },
         };

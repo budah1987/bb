@@ -31,6 +31,8 @@ import {
 import { handleHostRemoved } from "../internal/session-owner-side-effects.js";
 
 const PROVIDER_CLI_INSTALL_TIMEOUT_MS = 15 * 60 * 1000;
+const PROVIDER_AUTH_START_TIMEOUT_MS = 30 * 1000;
+const PROVIDER_AUTH_SUBMIT_TIMEOUT_MS = 90 * 1000;
 const FOLDER_PICKER_TIMEOUT_MS = 10 * 60 * 1000;
 
 function providerCliInstallEventsToNdjson(events: readonly unknown[]): string {
@@ -291,6 +293,43 @@ export function registerHostRoutes(
       timeoutMs: COMMAND_TIMEOUT_MS,
       command: {
         type: "provider_cli.status",
+      },
+    });
+    return context.json(result);
+  });
+
+  get(routes.providerAuthStatus, async (context) => {
+    const hostId = context.req.param("id");
+    assertUsableHostId(deps, { hostId });
+    const result = await callHostRetryableOnlineRpc(deps, {
+      hostId,
+      timeoutMs: COMMAND_TIMEOUT_MS,
+      command: { type: "provider_auth.status" },
+    });
+    return context.json(result);
+  });
+
+  post(routes.providerAuthStart, async (context, payload) => {
+    const hostId = context.req.param("id");
+    assertUsableHostId(deps, { hostId });
+    const result = await callHostOnlineRpc(deps, {
+      hostId,
+      timeoutMs: PROVIDER_AUTH_START_TIMEOUT_MS,
+      command: { type: "provider_auth.start", provider: payload.provider },
+    });
+    return context.json(result);
+  });
+
+  post(routes.providerAuthSubmitCode, async (context, payload) => {
+    const hostId = context.req.param("id");
+    assertUsableHostId(deps, { hostId });
+    const result = await callHostOnlineRpc(deps, {
+      hostId,
+      timeoutMs: PROVIDER_AUTH_SUBMIT_TIMEOUT_MS,
+      command: {
+        type: "provider_auth.submit_code",
+        sessionId: payload.sessionId,
+        code: payload.code,
       },
     });
     return context.json(result);

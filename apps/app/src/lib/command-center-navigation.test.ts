@@ -73,7 +73,7 @@ describe("canPopToInAppHistoryEntry", () => {
 });
 
 describe("shouldPreserveLayoutForCommandCenter", () => {
-  it("preserves the layout only for a validated standalone-compact commit", () => {
+  it("preserves the layout for every standalone-compact root page", () => {
     expect(
       shouldPreserveLayoutForCommandCenter({
         content: newThreadContent,
@@ -90,14 +90,14 @@ describe("shouldPreserveLayoutForCommandCenter", () => {
         navigation,
       }),
     ).toBe(false);
-    // A direct `/` in the installed app carries no intent.
+    // A direct `/` remains the Command Center after a PWA restart.
     expect(
       shouldPreserveLayoutForCommandCenter({
         content: newThreadContent,
         isStandaloneCompactPwa: true,
         navigation: null,
       }),
-    ).toBe(false);
+    ).toBe(true);
     // The intent is scoped to the Command Center surface, not carried onward.
     expect(
       shouldPreserveLayoutForCommandCenter({

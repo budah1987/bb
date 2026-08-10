@@ -20,7 +20,7 @@ describe("getThreadReadToggleAction", () => {
     ).toBe("mark_read");
   });
 
-  it("marks a thread unread when the latest attention is already covered", () => {
+  it("marks an explicitly handled thread unread", () => {
     expect(
       getThreadReadToggleAction({
         lastReadAt: 10,
@@ -29,4 +29,12 @@ describe("getThreadReadToggleAction", () => {
     ).toBe("mark_unread");
   });
 
+  it("marks a viewed thread read to clear its awaiting reply state", () => {
+    expect(
+      getThreadReadToggleAction({
+        lastReadAt: 11,
+        latestAttentionAt: 10,
+      }),
+    ).toBe("mark_read");
+  });
 });

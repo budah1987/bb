@@ -48,6 +48,12 @@ function withoutLegacySideChatTabs(
   );
 }
 
+export function toSyncedThreadTabs(
+  tabs: readonly FixedPanelTab[],
+): readonly ThreadTab[] {
+  return tabs;
+}
+
 export function areThreadTabListsEquivalent(
   left: readonly ThreadTab[],
   right: readonly ThreadTab[],
@@ -67,7 +73,12 @@ export function reconcileFixedPanelTabsState(
   current: FixedPanelTabsState,
   serverTabs: readonly ThreadTab[],
 ): FixedPanelTabsState {
-  if (areThreadTabListsEquivalent(current.secondary.tabs, serverTabs)) {
+  if (
+    areThreadTabListsEquivalent(
+      toSyncedThreadTabs(current.secondary.tabs),
+      serverTabs,
+    )
+  ) {
     return current;
   }
   const tabs = withoutLegacySideChatTabs(serverTabs);

@@ -13,6 +13,7 @@ import {
   type PluginSidebarFooterActionRegistration,
   type PluginThreadListRegistration,
   type PluginThreadHeaderActionRegistration,
+  type PluginThreadRailSectionRegistration,
   type PluginThreadPanelActionRegistration,
 } from "@bb/plugin-sdk";
 import {
@@ -79,6 +80,7 @@ export function collectPluginAppRegistrations(
   const sidebarFooterActions: PluginSidebarFooterActionRegistration[] = [];
   const threadLists: PluginThreadListRegistration[] = [];
   const threadHeaderActions: PluginThreadHeaderActionRegistration[] = [];
+  const threadRailSections: PluginThreadRailSectionRegistration[] = [];
   const fileOpeners: PluginFileOpenerRegistration[] = [];
   const messageDirectives: PluginMessageDirectiveRegistration[] = [];
   const messageActions: PluginMessageActionRegistration[] = [];
@@ -93,6 +95,7 @@ export function collectPluginAppRegistrations(
     sidebarFooterAction: new Set<string>(),
     threadList: new Set<string>(),
     threadHeaderAction: new Set<string>(),
+    threadRailSection: new Set<string>(),
     fileOpener: new Set<string>(),
     messageDirective: new Set<string>(),
     messageAction: new Set<string>(),
@@ -254,6 +257,16 @@ export function collectPluginAppRegistrations(
           component: requireComponent(kind, registration.component),
         });
       },
+      experimental_threadRailSection(registration) {
+        const kind = "slots.experimental_threadRailSection";
+        const id = requireSlotId(kind, registration?.id);
+        requireUniqueId(kind, seenIds.threadRailSection, id);
+        threadRailSections.push({
+          id,
+          title: requireNonEmptyString(kind, "title", registration.title),
+          component: requireComponent(kind, registration.component),
+        });
+      },
       fileOpener(registration) {
         const kind = "slots.fileOpener";
         const id = requireSlotId(kind, registration?.id);
@@ -342,6 +355,7 @@ export function collectPluginAppRegistrations(
     sidebarFooterActions,
     threadLists,
     threadHeaderActions,
+    threadRailSections,
     fileOpeners,
     messageDirectives,
     messageActions,

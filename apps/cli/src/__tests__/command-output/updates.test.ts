@@ -9,6 +9,7 @@ import {
 } from "../helpers/command-output-harness.js";
 import type { CommandRegistrar } from "../helpers/command-output-harness.js";
 import { registerUpdatesCommands } from "../../commands/updates.js";
+import * as fixtures from "../helpers/command-output-fixtures.js";
 
 const hosts: Host[] = [
   {
@@ -141,6 +142,77 @@ describe("bb updates command output", () => {
     expect(payload.machines).toHaveLength(2);
     expect(payload.machines[0].providerStatus).toEqual(status);
     expect(payload.machines[1].providerStatus).toBeNull();
+  });
+
+  it("bb updates from-bb creates an isolated BBamir update thread", async () => {
+    const thread = fixtures.makeThread({
+      id: "thread-bbamir-update",
+      projectId: "proj-bbamir",
+      providerId: "codex",
+      status: "starting",
+    });
+    interface SpawnRequest {
+      json: {
+        environment: {
+          hostId: string;
+          type: string;
+          workspace: { baseBranch: { kind: string }; type: string };
+        };
+        input: Array<{ text: string; type: string }>;
+        origin: string;
+        projectId: string;
+        title: string;
+      };
+    }
+    const post = vi.fn(async (_request: SpawnRequest) => thread);
+    stubServerApi({
+      "v1.projects.:id.$get": vi.fn(async () => ({
+        id: "proj-bbamir",
+        kind: "standard",
+        name: "BBamir",
+        gitRemoteUrl: "https://github.com/budah1987/bb.git",
+        createdAt: 1,
+        updatedAt: 1,
+        sources: [
+          {
+            id: "source-bbamir",
+            projectId: "proj-bbamir",
+            type: "local_path",
+            hostId: "host-primary",
+            path: "/Users/amir/bb",
+            isDefault: true,
+            createdAt: 1,
+            updatedAt: 1,
+          },
+        ],
+      })),
+      "v1.hosts.$get": vi.fn(async () => hosts),
+      "v1.threads.$post": post,
+    });
+
+    await runCommand(
+      ["updates", "from-bb", "--project", "proj-bbamir"],
+      register,
+    );
+
+    expect(post).toHaveBeenCalledOnce();
+    const request = post.mock.calls[0]?.[0];
+    if (!request) throw new Error("Expected the thread create request.");
+    expect(request.json.origin).toBe("cli");
+    expect(request.json.projectId).toBe("proj-bbamir");
+    expect(request.json.title).toBe("Update BBamir from bb");
+    expect(request.json.environment).toEqual({
+      type: "host",
+      hostId: "host-primary",
+      workspace: {
+        type: "managed-worktree",
+        baseBranch: { kind: "default" },
+      },
+    });
+    expect(request.json.input[0]?.text).toContain("Never edit, reset, clean");
+    expect(collectLogPayloads(vi.mocked(console.log))).toContain(
+      "BBamir update workspace created: thread-bbamir-update",
+    );
   });
 
   it("bb updates apply runs each available provider update", async () => {

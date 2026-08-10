@@ -1,4 +1,6 @@
 import {
+  lazy,
+  Suspense,
   useCallback,
   useEffect,
   useMemo,
@@ -68,6 +70,7 @@ import {
 import { BrowserTabDeck } from "@/components/secondary-panel/BrowserTabDeck";
 import type { BrowserAddressFocusRequest } from "@/components/secondary-panel/BrowserTabContent";
 import { NewTabPage } from "@/components/secondary-panel/NewTabPage";
+import { SimulatorTabContent } from "@/components/secondary-panel/SimulatorTabContent";
 import { EmptyStatePanel } from "@bb/shared-ui/empty-state";
 import { Icon } from "@bb/shared-ui/icon";
 import { PageShell } from "@/components/ui/page-shell.js";
@@ -210,7 +213,10 @@ import {
   resolveRootComposeProviderRouting,
 } from "./root-compose-environment-selection";
 import { RootComposeMobileSessions } from "./RootComposeMobileSessions";
+import { useRootComposeProviderAuthLoginOpen } from "@/components/provider-auth/provider-auth-mobile-view-store";
+import { CommandCenterUsageRail } from "@/components/usage/CompactUsageLimits";
 import { RootComposeEmptyWelcome } from "./RootComposeEmptyWelcome";
+
 import { useThreadStorageViewer } from "@/components/secondary-panel/useThreadStorageViewer";
 import {
   useThreadFileTabs,
@@ -254,6 +260,12 @@ import {
 } from "@/components/commands/AppCommandProvider";
 import { useOptionalPaneContext } from "./thread-detail/PaneContext";
 import { RootComposePanelCommandHandlers } from "./RootComposePanelCommandHandlers";
+
+const RootComposeProviderAuth = lazy(() =>
+  import("@/components/provider-auth/RootComposeProviderAuth").then(
+    (module) => ({ default: module.RootComposeProviderAuth }),
+  ),
+);
 
 const ROOT_COMPOSE_ZEN_MODE_STORAGE_KEY = "bb.promptbox.zen-mode.root-compose";
 const ROOT_COMPOSE_SIDEBAR_ACTION_ALIGNED_TOP_PADDING_CLASS = "pt-14";
@@ -1709,6 +1721,9 @@ export function RootComposeView() {
     }
     return namesById;
   }, [sidebarNavigationQuery.data]);
+  // A provider login takes over the compact Command Center: on a phone the
+  // handshake needs the whole screen, not a row above the session list.
+  const providerAuthLoginOpen = useRootComposeProviderAuthLoginOpen();
 
   const selectedThreadModel = activeModel?.model ?? selectedModel;
   const handleProjectChange = useCallback<ProjectSelectionChangeHandler>(
@@ -2253,6 +2268,7 @@ export function RootComposeView() {
   const { threadPanelActions: rootPanelThreadPanelActions } = usePluginSlots();
   const {
     activePluginPanelTab,
+    activeSimulatorTab,
     activeHostFileEnvironmentId,
     activeHostFileLineRange,
     activeHostFilePath,
@@ -2517,6 +2533,10 @@ export function RootComposeView() {
   const handleOpenBrowser = useCallback(() => {
     openBrowserTabAndReveal();
   }, [openBrowserTabAndReveal]);
+  const handleOpenSimulator = useCallback(() => {
+    openTab({ kind: "simulator" });
+    openCompactDrawer();
+  }, [openCompactDrawer, openTab]);
   const handleBrowserAddressFocusRequestConsumed = useCallback(
     (request: BrowserAddressFocusRequest) => {
       setBrowserAddressFocusRequest((current) =>
@@ -2800,6 +2820,22 @@ export function RootComposeView() {
               onClose: () => closeTab(tab.id),
             };
           }
+          case "simulator":
+            return {
+              id: tab.id,
+              filename: "Simulator",
+              isActive: tab.id === activeFixedSecondaryTabId,
+              leadingVisual: (
+                <Icon
+                  name="Smartphone"
+                  className={COARSE_POINTER_COMPACT_ICON_SIZE_CLASS}
+                  aria-hidden
+                />
+              ),
+              statusLabel: null,
+              onSelect: () => handleActivateFileTab(tab.id),
+              onClose: () => closeTab(tab.id),
+            };
           case "terminal": {
             const session = terminalsById.get(tab.terminalId);
             return {
@@ -2861,6 +2897,63 @@ export function RootComposeView() {
               leadingVisual: (
                 <Icon
                   name="NewTab"
+                  className={COARSE_POINTER_COMPACT_ICON_SIZE_CLASS}
+                  aria-hidden
+                />
+              ),
+              statusLabel: null,
+              onSelect: () => handleActivateFileTab(tab.id),
+              onClose: () => closeTab(tab.id),
+            };
+          case "notes":
+            // Notes are per-thread; root compose has no thread, so this tab
+            // can only arrive from persisted state. Render it hidden rather
+            // than pruning it — a prune would delete the user's thread tab.
+            return {
+              id: tab.id,
+              filename: "Notes",
+              isHidden: true,
+              isActive: tab.id === activeFixedSecondaryTabId,
+              leadingVisual: (
+                <Icon
+                  name="EditFile"
+                  className={COARSE_POINTER_COMPACT_ICON_SIZE_CLASS}
+                  aria-hidden
+                />
+              ),
+              statusLabel: null,
+              onSelect: () => handleActivateFileTab(tab.id),
+              onClose: () => closeTab(tab.id),
+            };
+          case "local-servers":
+            return {
+              id: tab.id,
+              filename: "Servers",
+              isHidden: true,
+              isActive: tab.id === activeFixedSecondaryTabId,
+              leadingVisual: (
+                <Icon
+                  name="PackageReceive"
+                  className={COARSE_POINTER_COMPACT_ICON_SIZE_CLASS}
+                  aria-hidden
+                />
+              ),
+              statusLabel: null,
+              onSelect: () => handleActivateFileTab(tab.id),
+              onClose: () => closeTab(tab.id),
+            };
+          // Previews belong to a thread's environment, which the root compose
+          // view does not have. Persisted state can still hold one, so it is
+          // parsed and kept but never shown here.
+          case "preview":
+            return {
+              id: tab.id,
+              filename: tab.label,
+              isHidden: true,
+              isActive: tab.id === activeFixedSecondaryTabId,
+              leadingVisual: (
+                <Icon
+                  name="Browser"
                   className={COARSE_POINTER_COMPACT_ICON_SIZE_CLASS}
                   aria-hidden
                 />
@@ -3157,10 +3250,18 @@ export function RootComposeView() {
         onSelect={handleSelectFileSearchResult}
         recentItemsThreadId={ROOT_COMPOSE_FIXED_PANEL_STATE_ID}
         onOpenBrowser={rootPanelThreadId ? handleOpenBrowser : undefined}
+        onOpenSimulator={
+          rootPanelEnvironmentId ? handleOpenSimulator : undefined
+        }
         onStartTerminal={
           canCreateRootTerminal ? handleStartTerminal : undefined
         }
         showFileSearch={!isProjectless}
+      />
+    ) : activeSimulatorTab ? (
+      <SimulatorTabContent
+        environmentId={activeSimulatorTab.environmentId}
+        isActive={isSecondaryPanelOpen}
       />
     ) : activeWorkspaceFilePath !== null &&
       activeWorkspaceFileEnvironmentId !== null ? (
@@ -3786,32 +3887,41 @@ export function RootComposeView() {
             onPanelChange: handleSecondaryPanelChange,
           }}
         >
-          {showEmptyWelcome ? (
-            <RootComposeEmptyWelcome
-              onCompose={handleStartComposing}
-              onAddProject={quickCreateProject.openCreateDialog}
-              addProjectDisabled={
-                !quickCreateProject.isAvailable || quickCreateProject.isCreating
-              }
-            />
-          ) : (
-            <>
-              <RootComposeMobileSessions
-                highlightedThreadId={lastCreatedThreadId}
-                projectNamesById={mobileSessionProjectNamesById}
-                showCreatingRow={createThread.isPending}
-                threads={mobileSessionThreads}
+          <CommandCenterUsageRail />
+          <>
+            {/* Above Sessions and outside its filters. This also remains
+                visible before the first project exists. */}
+            <Suspense fallback={null}>
+              <RootComposeProviderAuth />
+            </Suspense>
+            {providerAuthLoginOpen ? null : showEmptyWelcome ? (
+              <RootComposeEmptyWelcome
+                onCompose={handleStartComposing}
+                onAddProject={quickCreateProject.openCreateDialog}
+                addProjectDisabled={
+                  !quickCreateProject.isAvailable ||
+                  quickCreateProject.isCreating
+                }
               />
-              <div className="sticky bottom-0 z-10 -mx-1 mt-4 bg-background/95 px-1 pb-[max(0.25rem,env(safe-area-inset-bottom))] pt-2 backdrop-blur-sm md:static md:mx-0 md:mt-0 md:bg-transparent md:p-0 md:backdrop-blur-none">
-                <OverflowFade
-                  placement="above"
-                  tone="background"
-                  className="md:hidden"
+            ) : (
+              <>
+                <RootComposeMobileSessions
+                  highlightedThreadId={lastCreatedThreadId}
+                  projectNamesById={mobileSessionProjectNamesById}
+                  showCreatingRow={createThread.isPending}
+                  threads={mobileSessionThreads}
                 />
-                {promptBox}
-              </div>
-            </>
-          )}
+                <div className="sticky bottom-0 z-10 -mx-1 mt-4 bg-background/95 px-1 pb-[max(0.25rem,env(safe-area-inset-bottom))] pt-2 backdrop-blur-sm md:static md:mx-0 md:mt-0 md:bg-transparent md:p-0 md:backdrop-blur-none">
+                  <OverflowFade
+                    placement="above"
+                    tone="background"
+                    className="md:hidden"
+                  />
+                  {promptBox}
+                </div>
+              </>
+            )}
+          </>
         </RootComposeSecondaryContent>
       </PluginComposerHostProvider>
     </>

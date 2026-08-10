@@ -54,6 +54,29 @@ const backfillReportSchema = z.object({
   duplicateConversations: z.number().int().nonnegative(),
 });
 
+const githubAccountSchema = z.object({
+  login: z.string().min(1),
+  active: z.boolean(),
+});
+
+const githubRepositorySchema = z.object({
+  name: z.string().min(1),
+  nameWithOwner: z.string().min(3),
+  owner: z.string().min(1),
+  url: z.string().url(),
+  isPrivate: z.boolean(),
+  defaultBranch: z.string().min(1).nullable(),
+  updatedAt: z.string().min(1),
+  accessibleBy: z.array(z.string().min(1)).min(1),
+  activeAccount: z.string().min(1).nullable(),
+});
+
+const githubCatalogSchema = z.object({
+  hostId: z.string().min(1),
+  accounts: z.array(githubAccountSchema),
+  repositories: z.array(githubRepositorySchema),
+});
+
 export const conductorRpcContract = defineRpcContract({
   readWorkspaceRenameDetails: {
     input: z.object({ environmentId: z.string().min(1) }),
@@ -94,6 +117,26 @@ export const conductorRpcContract = defineRpcContract({
   recordReconciliation: {
     input: backfillReportSchema,
     output: z.object({ recorded: z.boolean() }),
+  },
+  readGithubCatalog: {
+    input: z.object({}),
+    output: githubCatalogSchema,
+  },
+  createGithubProject: {
+    input: z.object({
+      accountLogin: z.string().min(1).nullable(),
+      hostId: z.string().min(1),
+      name: z.string().trim().min(1),
+      remoteUrl: z.string().url(),
+    }),
+    output: z.object({ projectId: z.string().min(1) }),
+  },
+  setProjectGithubAccount: {
+    input: z.object({
+      accountLogin: z.string().min(1).nullable(),
+      projectId: z.string().min(1),
+    }),
+    output: z.object({ accountLogin: z.string().min(1).nullable() }),
   },
 });
 
@@ -251,6 +294,43 @@ export default function plugin(bb: BbPluginApi) {
         version: report.version,
       });
       return { recorded: true };
+    },
+    async readGithubCatalog() {
+      const hosts = await bb.sdk.hosts.list();
+      const host =
+        hosts.find((candidate) => candidate.status === "connected") ?? hosts[0];
+      if (!host) {
+        throw new Error(
+          "No BB host is available for GitHub repository discovery",
+        );
+      }
+      const catalog = await bb.sdk.system.githubRepositories({
+        hostId: host.id,
+      });
+      return {
+        hostId: host.id,
+        accounts: catalog.accounts,
+        repositories: catalog.repositories,
+      };
+    },
+    async createGithubProject({ accountLogin, hostId, name, remoteUrl }) {
+      const project = await bb.sdk.projects.create({
+        name,
+        source: {
+          hostId,
+          remoteUrl,
+          type: "clone",
+        },
+        githubAccountLogin: accountLogin,
+      });
+      return { projectId: project.id };
+    },
+    async setProjectGithubAccount({ accountLogin, projectId }) {
+      const project = await bb.sdk.projects.update({
+        projectId,
+        githubAccountLogin: accountLogin,
+      });
+      return { accountLogin: project.githubAccountLogin };
     },
   });
 }
