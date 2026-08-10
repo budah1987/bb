@@ -212,6 +212,9 @@ const CACHE_OWNER_QUERY_KEY_IMPORTS: CacheOwnerQueryKeyImportRegistry = {
     "threadSearchQueryKeyPrefix",
     "threadsQueryKey",
   ],
+  "hooks/cache-owners/provider-auth-cache-owner.ts": [
+    "hostProviderAuthQueryKey",
+  ],
   "hooks/cache-owners/provider-cli-status-cache-owner.ts": [
     "hostProviderCliStatusQueryKey",
   ],

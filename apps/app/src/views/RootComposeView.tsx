@@ -210,6 +210,10 @@ import {
   resolveRootComposeProviderRouting,
 } from "./root-compose-environment-selection";
 import { RootComposeMobileSessions } from "./RootComposeMobileSessions";
+import {
+  RootComposeProviderAuth,
+  useRootComposeProviderAuthLoginOpen,
+} from "@/components/provider-auth/RootComposeProviderAuth";
 import { RootComposeEmptyWelcome } from "./RootComposeEmptyWelcome";
 import { useThreadStorageViewer } from "@/components/secondary-panel/useThreadStorageViewer";
 import {
@@ -1709,6 +1713,9 @@ export function RootComposeView() {
     }
     return namesById;
   }, [sidebarNavigationQuery.data]);
+  // A provider login takes over the compact Command Center: on a phone the
+  // handshake needs the whole screen, not a row above the session list.
+  const providerAuthLoginOpen = useRootComposeProviderAuthLoginOpen();
 
   const selectedThreadModel = activeModel?.model ?? selectedModel;
   const handleProjectChange = useCallback<ProjectSelectionChangeHandler>(
@@ -3786,32 +3793,38 @@ export function RootComposeView() {
             onPanelChange: handleSecondaryPanelChange,
           }}
         >
-          {showEmptyWelcome ? (
-            <RootComposeEmptyWelcome
-              onCompose={handleStartComposing}
-              onAddProject={quickCreateProject.openCreateDialog}
-              addProjectDisabled={
-                !quickCreateProject.isAvailable || quickCreateProject.isCreating
-              }
-            />
-          ) : (
-            <>
-              <RootComposeMobileSessions
-                highlightedThreadId={lastCreatedThreadId}
-                projectNamesById={mobileSessionProjectNamesById}
-                showCreatingRow={createThread.isPending}
-                threads={mobileSessionThreads}
+          <>
+            {/* Above Sessions and outside its filters. This also remains
+                visible before the first project exists. */}
+            <RootComposeProviderAuth />
+            {providerAuthLoginOpen ? null : showEmptyWelcome ? (
+              <RootComposeEmptyWelcome
+                onCompose={handleStartComposing}
+                onAddProject={quickCreateProject.openCreateDialog}
+                addProjectDisabled={
+                  !quickCreateProject.isAvailable ||
+                  quickCreateProject.isCreating
+                }
               />
-              <div className="sticky bottom-0 z-10 -mx-1 mt-4 bg-background/95 px-1 pb-[max(0.25rem,env(safe-area-inset-bottom))] pt-2 backdrop-blur-sm md:static md:mx-0 md:mt-0 md:bg-transparent md:p-0 md:backdrop-blur-none">
-                <OverflowFade
-                  placement="above"
-                  tone="background"
-                  className="md:hidden"
+            ) : (
+              <>
+                <RootComposeMobileSessions
+                  highlightedThreadId={lastCreatedThreadId}
+                  projectNamesById={mobileSessionProjectNamesById}
+                  showCreatingRow={createThread.isPending}
+                  threads={mobileSessionThreads}
                 />
-                {promptBox}
-              </div>
-            </>
-          )}
+                <div className="sticky bottom-0 z-10 -mx-1 mt-4 bg-background/95 px-1 pb-[max(0.25rem,env(safe-area-inset-bottom))] pt-2 backdrop-blur-sm md:static md:mx-0 md:mt-0 md:bg-transparent md:p-0 md:backdrop-blur-none">
+                  <OverflowFade
+                    placement="above"
+                    tone="background"
+                    className="md:hidden"
+                  />
+                  {promptBox}
+                </div>
+              </>
+            )}
+          </>
         </RootComposeSecondaryContent>
       </PluginComposerHostProvider>
     </>

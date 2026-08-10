@@ -43,6 +43,7 @@ import { getThreadDisplayTitle } from "@/lib/thread-title";
 import { applyResizeCursor, clearResizeCursor } from "@/lib/resizeCursor";
 import { cn } from "@bb/shared-ui/lib/utils";
 import { ProjectPathDialog } from "@/components/dialogs/ProjectPathDialog";
+import { ProviderAuthHost } from "@/components/provider-auth/ProviderAuthHost";
 import { ProjectActionsMenu } from "@/components/project/ProjectActionsMenu";
 import { ProjectActionsProvider } from "@/components/project/ProjectActionsProvider";
 import {
@@ -874,6 +875,11 @@ export function AppLayout({ children }: AppLayoutProps) {
                     />
                   ) : null}
                   <main className="flex min-h-0 flex-1 flex-col p-4 md:p-5">
+                    {/* Above the routed page, not inside it: a signed-out
+                        provider blocks work everywhere, and this must not be
+                        dismissible or route-scoped. Compact viewports get the
+                        Command Center surface instead. */}
+                    <ProviderAuthHost />
                     {children}
                   </main>
                 </div>

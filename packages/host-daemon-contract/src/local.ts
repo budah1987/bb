@@ -287,6 +287,89 @@ export type ProviderCliInstallEvent = z.infer<
   typeof providerCliInstallEventSchema
 >;
 
+export const providerAuthKeyValues = ["claudeCode", "codex"] as const;
+export const providerAuthKeySchema = z.enum(providerAuthKeyValues);
+export type ProviderAuthKey = z.infer<typeof providerAuthKeySchema>;
+
+export const providerAuthStateValues = [
+  "loggedIn",
+  "loggedOut",
+  "unavailable",
+  "unknown",
+] as const;
+export const providerAuthStateSchema = z.enum(providerAuthStateValues);
+export type ProviderAuthState = z.infer<typeof providerAuthStateSchema>;
+
+export const providerAuthStatusSchema = z
+  .object({
+    provider: providerAuthKeySchema,
+    displayName: z.string().min(1),
+    state: providerAuthStateSchema,
+    authMethod: z.string().min(1).nullable(),
+    accountEmail: z.string().min(1).nullable(),
+    organizationName: z.string().min(1).nullable(),
+    message: z.string().min(1).nullable(),
+  })
+  .strict();
+export type ProviderAuthStatus = z.infer<typeof providerAuthStatusSchema>;
+
+export const providerAuthSessionPhaseValues = [
+  "starting",
+  "waitingForUser",
+  "waitingForCode",
+  "verifying",
+  "succeeded",
+  "recoveryRequired",
+  "failed",
+] as const;
+export const providerAuthSessionPhaseSchema = z.enum(
+  providerAuthSessionPhaseValues,
+);
+export type ProviderAuthSessionPhase = z.infer<
+  typeof providerAuthSessionPhaseSchema
+>;
+
+export const providerAuthSessionSchema = z
+  .object({
+    sessionId: z.string().min(1),
+    provider: providerAuthKeySchema,
+    phase: providerAuthSessionPhaseSchema,
+    oauthUrl: z.string().url().nullable(),
+    userCode: z.string().min(1).nullable(),
+    codeInputRequired: z.boolean(),
+    message: z.string().min(1).nullable(),
+    recoveryCommand: z.string().min(1).nullable(),
+    startedAt: z.number().int().positive(),
+  })
+  .strict();
+export type ProviderAuthSession = z.infer<typeof providerAuthSessionSchema>;
+
+export const providerAuthSnapshotSchema = z
+  .object({
+    statuses: z.record(providerAuthKeySchema, providerAuthStatusSchema),
+    sessions: z.array(providerAuthSessionSchema),
+  })
+  .strict();
+export type ProviderAuthSnapshot = z.infer<typeof providerAuthSnapshotSchema>;
+
+export const providerAuthStartRequestSchema = z
+  .object({ provider: providerAuthKeySchema })
+  .strict();
+export type ProviderAuthStartRequest = z.infer<
+  typeof providerAuthStartRequestSchema
+>;
+
+export const providerAuthSubmitCodeRequestSchema = z
+  .object({
+    sessionId: z.string().min(1),
+    // The provider owns the code format. BB must forward it unchanged.
+    code: z.string().min(1).max(4096),
+  })
+  .strict();
+export type ProviderAuthSubmitCodeRequest = z.infer<
+  typeof providerAuthSubmitCodeRequestSchema
+>;
+
 // ---------------------------------------------------------------------------
 // Route type definition for Hono typed client
 // ---------------------------------------------------------------------------

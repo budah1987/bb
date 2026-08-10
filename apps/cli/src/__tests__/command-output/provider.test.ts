@@ -3,11 +3,49 @@ import {
   setupCommandOutputTestEnvironment,
   collectLogPayloads,
   getHelpOutput,
+  readlineMocks,
   runCommand,
   stubServerApi,
 } from "../helpers/command-output-harness.js";
 import type { CommandRegistrar } from "../helpers/command-output-harness.js";
 import { registerProviderCommands } from "../../commands/provider.js";
+
+function providerAuthStatuses(claudeState: "loggedIn" | "loggedOut") {
+  return {
+    claudeCode: {
+      provider: "claudeCode",
+      displayName: "Claude Code",
+      state: claudeState,
+      authMethod: claudeState === "loggedIn" ? "claude.ai" : null,
+      accountEmail: claudeState === "loggedIn" ? "person@example.com" : null,
+      organizationName: claudeState === "loggedIn" ? "Example" : null,
+      message: null,
+    },
+    codex: {
+      provider: "codex",
+      displayName: "Codex",
+      state: "loggedOut",
+      authMethod: null,
+      accountEmail: null,
+      organizationName: null,
+      message: null,
+    },
+  };
+}
+
+function providerAuthSession(phase: "waitingForCode" | "succeeded") {
+  return {
+    sessionId: "session-1",
+    provider: "claudeCode",
+    phase,
+    oauthUrl: "https://claude.ai/oauth/test",
+    userCode: null,
+    codeInputRequired: true,
+    message: null,
+    recoveryCommand: null,
+    startedAt: 1,
+  };
+}
 
 describe("bb provider command output", () => {
   setupCommandOutputTestEnvironment();
@@ -175,5 +213,42 @@ describe("bb provider command output", () => {
     expect(console.error).toHaveBeenCalledWith(
       "Error: Cannot combine --machine or --host with --environment; the environment already selects its machine.",
     );
+  });
+
+  it("forwards the Claude one-time code unchanged", async () => {
+    const submit = vi.fn(async () => ({
+      statuses: providerAuthStatuses("loggedIn"),
+      sessions: [providerAuthSession("succeeded")],
+    }));
+    readlineMocks.question.mockResolvedValue("  exact-code  ");
+    stubServerApi({
+      "v1.hosts.$get": vi.fn(async () => [
+        {
+          id: "host-remote",
+          name: "builder",
+          type: "persistent",
+          status: "connected",
+          lastSeenAt: 1,
+          lastRejectedProtocolVersion: null,
+          createdAt: 1,
+          updatedAt: 1,
+        },
+      ]),
+      "v1.hosts.:id.provider-auth.start.$post": vi.fn(async () => ({
+        statuses: providerAuthStatuses("loggedOut"),
+        sessions: [providerAuthSession("waitingForCode")],
+      })),
+      "v1.hosts.:id.provider-auth.submit-code.$post": submit,
+    });
+
+    await runCommand(
+      ["provider", "auth", "login", "claude", "--machine", "builder"],
+      register,
+    );
+
+    expect(submit).toHaveBeenCalledWith({
+      param: { id: "host-remote" },
+      json: { sessionId: "session-1", code: "  exact-code  " },
+    });
   });
 });

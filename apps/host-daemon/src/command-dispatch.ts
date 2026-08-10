@@ -69,6 +69,7 @@ import {
   ProviderCliInstallInProgressError,
   streamProviderCliInstall,
 } from "./provider-cli-health.js";
+import { providerAuthManager } from "./provider-auth.js";
 import {
   ensureThreadRuntime,
   startThread,
@@ -532,6 +533,21 @@ const onlineRpcHandlers: OnlineRpcHandlerMap = {
     getProviderCliStatus({
       env: providerCliEnvFromShellEnv(options.runtimeManager.getShellEnv()),
     }),
+  "provider_auth.status": async (_command, options) =>
+    (options.providerAuthManager ?? providerAuthManager).snapshot(
+      providerCliEnvFromShellEnv(options.runtimeManager.getShellEnv()),
+    ),
+  "provider_auth.start": async (command, options) =>
+    (options.providerAuthManager ?? providerAuthManager).start(
+      command.provider,
+      providerCliEnvFromShellEnv(options.runtimeManager.getShellEnv()),
+    ),
+  "provider_auth.submit_code": async (command, options) =>
+    (options.providerAuthManager ?? providerAuthManager).submitCode(
+      command.sessionId,
+      command.code,
+      providerCliEnvFromShellEnv(options.runtimeManager.getShellEnv()),
+    ),
   "provider_cli.install": installProviderCliOnHost,
   "workspace.discover_repos": async (command, options) =>
     discoverRepos({

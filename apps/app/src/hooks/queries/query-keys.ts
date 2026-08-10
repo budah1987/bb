@@ -61,6 +61,7 @@ export const SYSTEM_EXECUTION_OPTIONS_QUERY_KEY = "systemExecutionOptions";
 export const SYSTEM_CLI_SKILLS_QUERY_KEY = "systemCliSkills";
 export const SYSTEM_VERSION_QUERY_KEY = "systemVersion";
 export const HOST_PROVIDER_CLI_STATUS_QUERY_KEY = "hostProviderCliStatus";
+export const HOST_PROVIDER_AUTH_QUERY_KEY = "hostProviderAuth";
 export const SYSTEM_USAGE_LIMITS_QUERY_KEY = "systemUsageLimits";
 export const SYSTEM_GITHUB_ACCOUNTS_QUERY_KEY = "systemGithubAccounts";
 export const SYSTEM_GITHUB_REPOSITORIES_QUERY_KEY = "systemGithubRepositories";
@@ -447,6 +448,10 @@ export type SystemCliSkillsQueryKey = readonly [
 export type SystemVersionQueryKey = readonly [typeof SYSTEM_VERSION_QUERY_KEY];
 export type HostProviderCliStatusQueryKey = readonly [
   typeof HOST_PROVIDER_CLI_STATUS_QUERY_KEY,
+  string | null,
+];
+export type HostProviderAuthQueryKey = readonly [
+  typeof HOST_PROVIDER_AUTH_QUERY_KEY,
   string | null,
 ];
 export type SystemUsageLimitsQueryKey = readonly [
@@ -1094,6 +1099,12 @@ export function hostProviderCliStatusQueryKey(
   hostId: string | null,
 ): HostProviderCliStatusQueryKey {
   return [HOST_PROVIDER_CLI_STATUS_QUERY_KEY, hostId];
+}
+
+export function hostProviderAuthQueryKey(
+  hostId: string | null,
+): HostProviderAuthQueryKey {
+  return [HOST_PROVIDER_AUTH_QUERY_KEY, hostId];
 }
 
 export function systemUsageLimitsQueryKey(
