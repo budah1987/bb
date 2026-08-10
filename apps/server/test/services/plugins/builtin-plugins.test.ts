@@ -205,6 +205,7 @@ describe("builtin plugin reconciliation", () => {
       ["ask-user-question", "MessageQuestion"],
       ["automations", "Clock"],
       ["connect", "Smartphone"],
+      ["conductor-workspaces", "PanelsTopLeft"],
       ["custom-instructions", "EditFile"],
       ["inline-vis", "AppWindow"],
       ["provider-retry", "ArrowReloadHorizontal"],
