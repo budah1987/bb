@@ -1,0 +1,1225 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>bb usage meter concepts</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --page: #0e0f11;
+        --panel: #1b1c1e;
+        --panel-2: #222326;
+        --panel-3: #292a2e;
+        --ink: #f3f1ed;
+        --muted: #aaa8a4;
+        --quiet: #74736f;
+        --line: rgb(255 255 255 / 9%);
+        --blue: #53b8ec;
+        --blue-soft: #9edcf9;
+        --coral: #e8a186;
+        --green: #67d48a;
+        --pink: #e85d94;
+        --radius: 18px;
+        font-family:
+          Inter,
+          ui-sans-serif,
+          -apple-system,
+          BlinkMacSystemFont,
+          "Segoe UI",
+          sans-serif;
+        font-synthesis: none;
+        -webkit-font-smoothing: antialiased;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        min-width: 320px;
+        min-height: 100vh;
+        background:
+          radial-gradient(
+            circle at 12% -10%,
+            rgb(83 184 236 / 9%),
+            transparent 31rem
+          ),
+          radial-gradient(
+            circle at 96% 0%,
+            rgb(232 161 134 / 7%),
+            transparent 28rem
+          ),
+          var(--page);
+        color: var(--ink);
+      }
+
+      button {
+        font: inherit;
+      }
+
+      button:focus-visible {
+        outline: 2px solid var(--blue-soft);
+        outline-offset: 3px;
+      }
+
+      .page {
+        width: min(1280px, calc(100% - 32px));
+        margin-inline: auto;
+        padding-block: 42px 56px;
+      }
+
+      .intro {
+        display: flex;
+        align-items: end;
+        justify-content: space-between;
+        gap: 28px;
+        margin-block-end: 28px;
+      }
+
+      .eyebrow {
+        margin: 0 0 10px;
+        color: var(--blue-soft);
+        font-size: 12px;
+        font-weight: 650;
+        line-height: 1.2;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+
+      h1 {
+        margin: 0;
+        max-width: 680px;
+        font-size: clamp(28px, 4vw, 46px);
+        font-weight: 670;
+        line-height: 1.08;
+        letter-spacing: -0.035em;
+        text-wrap: balance;
+      }
+
+      .intro-copy {
+        max-width: 380px;
+        margin: 0;
+        color: var(--muted);
+        font-size: 14px;
+        line-height: 1.55;
+        text-wrap: pretty;
+      }
+
+      .concepts {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 18px;
+      }
+
+      .concept {
+        min-width: 0;
+        padding: 10px;
+        border: 1px solid var(--line);
+        border-radius: 24px;
+        background: rgb(255 255 255 / 2.5%);
+        box-shadow: 0 24px 70px rgb(0 0 0 / 25%);
+      }
+
+      .concept-meta {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        min-height: 54px;
+        padding: 4px 6px 10px 8px;
+      }
+
+      .concept-name {
+        display: block;
+        font-size: 14px;
+        font-weight: 650;
+        line-height: 1.25;
+      }
+
+      .concept-note {
+        display: block;
+        margin-block-start: 3px;
+        color: var(--quiet);
+        font-size: 11px;
+        line-height: 1.3;
+      }
+
+      .state-toggle {
+        min-width: 84px;
+        min-height: 36px;
+        padding-inline: 13px;
+        border: 1px solid rgb(255 255 255 / 11%);
+        border-radius: 12px;
+        background: var(--panel-3);
+        color: var(--ink);
+        font-size: 12px;
+        font-weight: 600;
+        cursor: pointer;
+        transition-property: background-color, border-color, scale;
+        transition-duration: 140ms;
+      }
+
+      .state-toggle:hover {
+        background: #303136;
+        border-color: rgb(255 255 255 / 17%);
+      }
+      .state-toggle:active {
+        scale: 0.96;
+      }
+
+      .stage {
+        position: relative;
+        height: 690px;
+        overflow: hidden;
+        border: 1px solid rgb(255 255 255 / 8%);
+        border-radius: 16px;
+        background: #202123;
+        isolation: isolate;
+      }
+
+      .sidebar-content {
+        height: 100%;
+        padding: 20px 17px 90px;
+        color: #d7d5d2;
+        transition-property: filter, opacity;
+        transition-duration: 220ms;
+        transition-timing-function: cubic-bezier(0.2, 0, 0, 1);
+      }
+
+      .window-row,
+      .sidebar-link,
+      .section-head,
+      .thread-row {
+        display: flex;
+        align-items: center;
+      }
+
+      .window-row {
+        justify-content: space-between;
+        margin-block-end: 24px;
+      }
+      .lights {
+        display: flex;
+        gap: 8px;
+      }
+      .light {
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+      }
+      .light.red {
+        background: #ff5f57;
+      }
+      .light.yellow {
+        background: #febc2e;
+      }
+      .light.green {
+        background: #28c840;
+      }
+      .history {
+        color: #8d8c89;
+        letter-spacing: 12px;
+        font-size: 20px;
+      }
+
+      .sidebar-link {
+        min-height: 36px;
+        gap: 11px;
+        font-size: 14px;
+        font-weight: 560;
+      }
+
+      .sidebar-link .ico {
+        width: 18px;
+        color: #aaa9a6;
+        text-align: center;
+      }
+      .section-head {
+        justify-content: space-between;
+        margin-block: 23px 10px;
+        color: #959490;
+        font-size: 12px;
+        font-weight: 650;
+      }
+
+      .thread-row {
+        min-height: 56px;
+        gap: 10px;
+        padding-inline: 3px;
+      }
+
+      .thread-dot {
+        flex: 0 0 auto;
+        width: 11px;
+        height: 11px;
+        opacity: 0.65;
+        background: radial-gradient(circle, #777 1.5px, transparent 2px) 0 0 /
+          5px 5px;
+      }
+
+      .thread-text {
+        min-width: 0;
+        flex: 1;
+      }
+      .thread-title,
+      .thread-sub {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .thread-title {
+        font-size: 13px;
+        font-weight: 600;
+        line-height: 1.35;
+      }
+      .thread-sub {
+        margin-block-start: 2px;
+        color: #8f8e8b;
+        font-size: 11px;
+        line-height: 1.3;
+      }
+      .status {
+        color: var(--pink);
+        font-size: 11px;
+        white-space: nowrap;
+      }
+
+      .panel-dim {
+        position: absolute;
+        inset: 0;
+        z-index: 1;
+        pointer-events: none;
+        opacity: 0;
+        background: linear-gradient(
+          to bottom,
+          transparent 18%,
+          rgb(10 11 12 / 22%) 48%,
+          rgb(10 11 12 / 68%) 100%
+        );
+        transition: opacity 220ms cubic-bezier(0.2, 0, 0, 1);
+      }
+
+      .usage-shell {
+        position: absolute;
+        z-index: 2;
+        inset-inline: 8px;
+        inset-block-end: 8px;
+      }
+
+      .stage.expanded .panel-dim {
+        opacity: 1;
+        backdrop-filter: blur(2px);
+      }
+
+      .meter-trigger,
+      .usage-card {
+        width: 100%;
+        color: inherit;
+      }
+
+      .meter-trigger {
+        display: flex;
+        align-items: center;
+        border: 0;
+        cursor: pointer;
+      }
+
+      .usage-card {
+        display: none;
+      }
+      .stage.expanded .meter-trigger {
+        display: none;
+      }
+      .stage.expanded .usage-card {
+        display: block;
+      }
+
+      .provider-mark {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 20px;
+        height: 20px;
+        border-radius: 7px;
+        background: rgb(255 255 255 / 7%);
+        color: var(--muted);
+        font-size: 10px;
+        font-weight: 750;
+      }
+
+      .provider-mark.codex {
+        color: var(--blue-soft);
+        background: rgb(83 184 236 / 12%);
+      }
+      .provider-mark.claude {
+        color: #f0b39b;
+        background: rgb(232 161 134 / 13%);
+      }
+      .value {
+        font-variant-numeric: tabular-nums;
+      }
+
+      .chevron {
+        flex: 0 0 auto;
+        width: 28px;
+        height: 28px;
+        display: grid;
+        place-items: center;
+        color: var(--quiet);
+        font-size: 15px;
+      }
+
+      .card-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+      }
+
+      .card-title {
+        font-size: 14px;
+        font-weight: 680;
+        letter-spacing: -0.01em;
+      }
+      .card-meta {
+        margin-block-start: 3px;
+        color: var(--quiet);
+        font-size: 11px;
+      }
+
+      .close-button {
+        width: 36px;
+        height: 36px;
+        border: 0;
+        border-radius: 11px;
+        background: rgb(255 255 255 / 5%);
+        color: var(--muted);
+        cursor: pointer;
+        transition-property: background-color, scale;
+        transition-duration: 140ms;
+      }
+
+      .close-button:hover {
+        background: rgb(255 255 255 / 9%);
+      }
+      .close-button:active {
+        scale: 0.96;
+      }
+
+      .provider-heading {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 12px;
+        font-weight: 650;
+      }
+
+      .provider-heading .summary {
+        margin-inline-start: auto;
+        color: var(--muted);
+        font-weight: 560;
+      }
+      .metric {
+        margin-block-start: 13px;
+      }
+
+      .metric-top {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: 12px;
+        font-size: 12px;
+      }
+
+      .metric-label {
+        color: var(--muted);
+      }
+      .metric-value {
+        color: #e5e3df;
+        font-weight: 650;
+        font-variant-numeric: tabular-nums;
+      }
+      .metric-value.hot {
+        color: var(--coral);
+      }
+      .metric-value.empty {
+        color: var(--quiet);
+      }
+
+      .bar {
+        display: block;
+        height: 5px;
+        margin-block-start: 7px;
+        overflow: hidden;
+        border-radius: 99px;
+        background: rgb(255 255 255 / 8%);
+      }
+
+      .fill {
+        height: 100%;
+        border-radius: inherit;
+        background: var(--blue);
+      }
+      .fill.hot {
+        background: var(--coral);
+      }
+      .reset {
+        margin-block-start: 6px;
+        color: var(--quiet);
+        font-size: 10px;
+      }
+
+      /* Variant 1 — floating card */
+      .v1 .meter-trigger {
+        min-height: 58px;
+        gap: 12px;
+        padding: 9px 10px;
+        border: 1px solid rgb(255 255 255 / 9%);
+        border-radius: 14px;
+        background: rgb(37 38 41 / 92%);
+        box-shadow: 0 8px 28px rgb(0 0 0 / 28%);
+        backdrop-filter: blur(14px);
+      }
+
+      .v1 .mini-provider {
+        min-width: 0;
+        flex: 1;
+      }
+      .v1 .mini-name {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        color: var(--muted);
+        font-size: 10px;
+        font-weight: 650;
+      }
+      .v1 .mini-value {
+        display: block;
+        margin-block-start: 3px;
+        font-size: 13px;
+        font-weight: 690;
+        font-variant-numeric: tabular-nums;
+      }
+      .v1 .mini-value.claude {
+        color: #efb49d;
+      }
+      .v1 .mini-value.codex {
+        color: var(--blue-soft);
+      }
+      .v1 .mini-divider {
+        align-self: stretch;
+        width: 1px;
+        background: var(--line);
+      }
+
+      .v1 .usage-card {
+        padding: 16px;
+        border: 1px solid rgb(255 255 255 / 11%);
+        border-radius: 20px;
+        background: rgb(35 36 39 / 94%);
+        box-shadow:
+          0 22px 60px rgb(0 0 0 / 48%),
+          inset 0 1px rgb(255 255 255 / 5%);
+        backdrop-filter: blur(20px);
+      }
+
+      .v1 .provider-block {
+        margin-block-start: 14px;
+        padding: 13px;
+        border-radius: 14px;
+        background: rgb(255 255 255 / 3.5%);
+      }
+
+      /* Variant 2 — compact dock */
+      .v2 .usage-shell {
+        inset-inline: 0;
+        inset-block-end: 0;
+      }
+      .v2 .meter-trigger {
+        min-height: 72px;
+        padding: 10px 14px 12px;
+        border-block-start: 1px solid rgb(255 255 255 / 10%);
+        background: rgb(30 31 33 / 97%);
+        box-shadow: 0 -14px 36px rgb(0 0 0 / 25%);
+      }
+
+      .v2 .dock-provider {
+        flex: 1;
+        min-width: 0;
+      }
+      .v2 .dock-provider + .dock-provider {
+        margin-inline-start: 18px;
+        padding-inline-start: 18px;
+        border-inline-start: 1px solid var(--line);
+      }
+      .v2 .dock-top {
+        display: flex;
+        justify-content: space-between;
+        gap: 8px;
+        font-size: 11px;
+      }
+      .v2 .dock-name {
+        color: var(--muted);
+        font-weight: 650;
+      }
+      .v2 .dock-value {
+        font-weight: 700;
+        font-variant-numeric: tabular-nums;
+      }
+      .v2 .bar {
+        height: 4px;
+        margin-block-start: 9px;
+      }
+
+      .v2 .usage-card {
+        padding: 0 14px 16px;
+        border-block-start: 1px solid rgb(255 255 255 / 12%);
+        background: rgb(29 30 32 / 96%);
+        box-shadow: 0 -20px 50px rgb(0 0 0 / 38%);
+        backdrop-filter: blur(18px);
+      }
+
+      .v2 .card-head {
+        min-height: 62px;
+      }
+      .v2 .provider-line {
+        padding-block: 14px;
+        border-block-start: 1px solid var(--line);
+      }
+      .v2 .provider-line:first-of-type {
+        border-block-start: 0;
+      }
+      .v2 .metric-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 14px;
+      }
+
+      /* Variant 3 — provider cards */
+      .v3 .meter-trigger {
+        min-height: 76px;
+        gap: 8px;
+        padding: 8px;
+        border: 0;
+        border-radius: 15px;
+        background: rgb(28 29 31 / 92%);
+        box-shadow: 0 12px 36px rgb(0 0 0 / 28%);
+        backdrop-filter: blur(16px);
+      }
+
+      .v3 .mini-card {
+        display: flex;
+        flex: 1;
+        min-width: 0;
+        min-height: 58px;
+        flex-direction: column;
+        justify-content: space-between;
+        padding: 9px 10px;
+        border-radius: 11px;
+        background: rgb(255 255 255 / 4%);
+        text-align: start;
+      }
+
+      .v3 .mini-card.claude {
+        background: rgb(232 161 134 / 9%);
+      }
+      .v3 .mini-card.codex {
+        background: rgb(83 184 236 / 9%);
+      }
+      .v3 .mini-card-top {
+        color: var(--muted);
+        font-size: 10px;
+        font-weight: 650;
+      }
+      .v3 .mini-card-bottom {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: 6px;
+      }
+      .v3 .mini-big {
+        font-size: 15px;
+        font-weight: 720;
+        font-variant-numeric: tabular-nums;
+      }
+      .v3 .mini-small {
+        color: var(--quiet);
+        font-size: 9px;
+      }
+
+      .v3 .usage-card {
+        padding: 15px;
+        border: 1px solid rgb(255 255 255 / 10%);
+        border-radius: 21px;
+        background: rgb(32 33 36 / 96%);
+        box-shadow: 0 22px 60px rgb(0 0 0 / 46%);
+        backdrop-filter: blur(22px);
+      }
+
+      .v3 .provider-card {
+        margin-block-start: 12px;
+        padding: 13px;
+        border-radius: 15px;
+        background: rgb(255 255 255 / 3.5%);
+        box-shadow: inset 0 0 0 1px rgb(255 255 255 / 5%);
+      }
+
+      .v3 .provider-card.claude {
+        background: linear-gradient(
+          135deg,
+          rgb(232 161 134 / 10%),
+          rgb(255 255 255 / 3%)
+        );
+      }
+      .v3 .provider-card.codex {
+        background: linear-gradient(
+          135deg,
+          rgb(83 184 236 / 10%),
+          rgb(255 255 255 / 3%)
+        );
+      }
+      .v3 .metrics-inline {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 13px;
+      }
+
+      .stage.expanded .usage-card {
+        animation: panel-in 220ms cubic-bezier(0.2, 0, 0, 1) both;
+      }
+
+      @keyframes panel-in {
+        from {
+          opacity: 0;
+          translate: 0 8px;
+        }
+        to {
+          opacity: 1;
+          translate: 0 0;
+        }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        *,
+        *::before,
+        *::after {
+          animation-duration: 0.01ms !important;
+          transition-duration: 0.01ms !important;
+        }
+      }
+
+      @media (max-width: 1040px) {
+        .concepts {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+      }
+
+      @media (max-width: 720px) {
+        .page {
+          width: min(430px, calc(100% - 20px));
+          padding-block: 24px 36px;
+        }
+        .intro {
+          align-items: start;
+          flex-direction: column;
+          gap: 12px;
+        }
+        .intro-copy {
+          max-width: 36rem;
+        }
+        .concepts {
+          grid-template-columns: 1fr;
+        }
+        .stage {
+          height: 650px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="page">
+      <header class="intro">
+        <div>
+          <p class="eyebrow">bb desktop · usage meter study</p>
+          <h1>Three ways to make limits feel clear and calm.</h1>
+        </div>
+        <p class="intro-copy">
+          Open each concept to compare its hierarchy. The surrounding sidebar
+          softens only when the detailed panel needs attention.
+        </p>
+      </header>
+
+      <section class="concepts" aria-label="Usage meter concepts">
+        <article class="concept">
+          <div class="concept-meta">
+            <div>
+              <span class="concept-name">01 · Floating card</span
+              ><span class="concept-note">Balanced and familiar</span>
+            </div>
+            <button class="state-toggle" type="button" aria-pressed="false">
+              Expand
+            </button>
+          </div>
+          <div class="stage v1" data-variant="Floating card">
+            <div class="sidebar-content"></div>
+            <div class="panel-dim"></div>
+            <div class="usage-shell">
+              <button
+                class="meter-trigger"
+                type="button"
+                aria-label="Open Floating card usage details"
+              >
+                <span class="mini-provider"
+                  ><span class="mini-name"
+                    ><span class="provider-mark claude">A</span>Claude</span
+                  ><span class="mini-value claude">5hr&nbsp; 92%</span></span
+                >
+                <span class="mini-divider" aria-hidden="true"></span>
+                <span class="mini-provider"
+                  ><span class="mini-name"
+                    ><span class="provider-mark codex">C</span>Codex</span
+                  ><span class="mini-value codex">Weekly&nbsp; 26%</span></span
+                >
+                <span class="chevron" aria-hidden="true">⌃</span>
+              </button>
+              <section
+                class="usage-card"
+                aria-label="Floating card usage details"
+              >
+                <div class="card-head">
+                  <div>
+                    <div class="card-title">Usage limits</div>
+                    <div class="card-meta">Updated just now</div>
+                  </div>
+                  <button
+                    class="close-button"
+                    type="button"
+                    aria-label="Close usage details"
+                  >
+                    ⌄
+                  </button>
+                </div>
+                <div class="provider-block">
+                  <div class="provider-heading">
+                    <span class="provider-mark claude">A</span>Claude
+                    <span class="summary value">5hr 92%</span>
+                  </div>
+                  <div class="metric">
+                    <div class="metric-top">
+                      <span class="metric-label">5 hour</span
+                      ><span class="metric-value hot">92%</span>
+                    </div>
+                    <div class="bar">
+                      <div class="fill hot" style="width: 92%"></div>
+                    </div>
+                    <div class="reset">Resets in 1 hr 42 min</div>
+                  </div>
+                  <div class="metric">
+                    <div class="metric-top">
+                      <span class="metric-label">Weekly</span
+                      ><span class="metric-value">49%</span>
+                    </div>
+                    <div class="bar">
+                      <div class="fill" style="width: 49%"></div>
+                    </div>
+                    <div class="reset">Resets Fri 5:00 PM</div>
+                  </div>
+                  <div class="metric">
+                    <div class="metric-top">
+                      <span class="metric-label">Fable</span
+                      ><span class="metric-value">58%</span>
+                    </div>
+                    <div class="bar">
+                      <div class="fill" style="width: 58%"></div>
+                    </div>
+                    <div class="reset">Resets Fri 5:00 PM</div>
+                  </div>
+                </div>
+                <div class="provider-block">
+                  <div class="provider-heading">
+                    <span class="provider-mark codex">C</span>Codex
+                    <span class="summary value">Weekly 26%</span>
+                  </div>
+                  <div class="metric">
+                    <div class="metric-top">
+                      <span class="metric-label">5 hour</span
+                      ><span class="metric-value empty">—</span>
+                    </div>
+                    <div class="bar"></div>
+                  </div>
+                  <div class="metric">
+                    <div class="metric-top">
+                      <span class="metric-label">Weekly</span
+                      ><span class="metric-value">26%</span>
+                    </div>
+                    <div class="bar">
+                      <div class="fill" style="width: 26%"></div>
+                    </div>
+                    <div class="reset">Resets Sat 2:58 PM</div>
+                  </div>
+                </div>
+              </section>
+            </div>
+          </div>
+        </article>
+
+        <article class="concept">
+          <div class="concept-meta">
+            <div>
+              <span class="concept-name">02 · Compact dock</span
+              ><span class="concept-note">Dense and desktop-native</span>
+            </div>
+            <button class="state-toggle" type="button" aria-pressed="false">
+              Expand
+            </button>
+          </div>
+          <div class="stage v2" data-variant="Compact dock">
+            <div class="sidebar-content"></div>
+            <div class="panel-dim"></div>
+            <div class="usage-shell">
+              <button
+                class="meter-trigger"
+                type="button"
+                aria-label="Open Compact dock usage details"
+              >
+                <span class="dock-provider"
+                  ><span class="dock-top"
+                    ><span class="dock-name">Claude · 5hr</span
+                    ><span class="dock-value" style="color: var(--coral)"
+                      >92%</span
+                    ></span
+                  ><span class="bar"
+                    ><span class="fill hot" style="width: 92%"></span></span
+                ></span>
+                <span class="dock-provider"
+                  ><span class="dock-top"
+                    ><span class="dock-name">Codex · week</span
+                    ><span class="dock-value" style="color: var(--blue-soft)"
+                      >26%</span
+                    ></span
+                  ><span class="bar"
+                    ><span class="fill" style="width: 26%"></span></span
+                ></span>
+                <span class="chevron" aria-hidden="true">⌃</span>
+              </button>
+              <section
+                class="usage-card"
+                aria-label="Compact dock usage details"
+              >
+                <div class="card-head">
+                  <div>
+                    <div class="card-title">Usage limits</div>
+                    <div class="card-meta">Current billing windows</div>
+                  </div>
+                  <button
+                    class="close-button"
+                    type="button"
+                    aria-label="Close usage details"
+                  >
+                    ⌄
+                  </button>
+                </div>
+                <div class="provider-line">
+                  <div class="provider-heading">
+                    <span class="provider-mark claude">A</span>Claude
+                    <span class="summary value">Peak 92%</span>
+                  </div>
+                  <div class="metric-grid">
+                    <div class="metric">
+                      <div class="metric-top">
+                        <span class="metric-label">5 hour</span
+                        ><span class="metric-value hot">92%</span>
+                      </div>
+                      <div class="bar">
+                        <div class="fill hot" style="width: 92%"></div>
+                      </div>
+                      <div class="reset">1 hr 42 min</div>
+                    </div>
+                    <div class="metric">
+                      <div class="metric-top">
+                        <span class="metric-label">Weekly</span
+                        ><span class="metric-value">49%</span>
+                      </div>
+                      <div class="bar">
+                        <div class="fill" style="width: 49%"></div>
+                      </div>
+                      <div class="reset">Fri 5:00 PM</div>
+                    </div>
+                  </div>
+                  <div class="metric">
+                    <div class="metric-top">
+                      <span class="metric-label">Fable weekly</span
+                      ><span class="metric-value">58%</span>
+                    </div>
+                    <div class="bar">
+                      <div class="fill" style="width: 58%"></div>
+                    </div>
+                    <div class="reset">Resets Fri 5:00 PM</div>
+                  </div>
+                </div>
+                <div class="provider-line">
+                  <div class="provider-heading">
+                    <span class="provider-mark codex">C</span>Codex
+                    <span class="summary value">Weekly 26%</span>
+                  </div>
+                  <div class="metric-grid">
+                    <div class="metric">
+                      <div class="metric-top">
+                        <span class="metric-label">5 hour</span
+                        ><span class="metric-value empty">—</span>
+                      </div>
+                      <div class="bar"></div>
+                      <div class="reset">No active window</div>
+                    </div>
+                    <div class="metric">
+                      <div class="metric-top">
+                        <span class="metric-label">Weekly</span
+                        ><span class="metric-value">26%</span>
+                      </div>
+                      <div class="bar">
+                        <div class="fill" style="width: 26%"></div>
+                      </div>
+                      <div class="reset">Sat 2:58 PM</div>
+                    </div>
+                  </div>
+                </div>
+              </section>
+            </div>
+          </div>
+        </article>
+
+        <article class="concept">
+          <div class="concept-meta">
+            <div>
+              <span class="concept-name">03 · Provider cards</span
+              ><span class="concept-note">Strongest provider separation</span>
+            </div>
+            <button class="state-toggle" type="button" aria-pressed="false">
+              Expand
+            </button>
+          </div>
+          <div class="stage v3" data-variant="Provider cards">
+            <div class="sidebar-content"></div>
+            <div class="panel-dim"></div>
+            <div class="usage-shell">
+              <button
+                class="meter-trigger"
+                type="button"
+                aria-label="Open Provider cards usage details"
+              >
+                <span class="mini-card claude"
+                  ><span class="mini-card-top">Claude · 5 hour</span
+                  ><span class="mini-card-bottom"
+                    ><span class="mini-big" style="color: #efb49d">92%</span
+                    ><span class="mini-small">1h 42m</span></span
+                  ></span
+                >
+                <span class="mini-card codex"
+                  ><span class="mini-card-top">Codex · weekly</span
+                  ><span class="mini-card-bottom"
+                    ><span class="mini-big" style="color: var(--blue-soft)"
+                      >26%</span
+                    ><span class="mini-small">Sat</span></span
+                  ></span
+                >
+                <span class="chevron" aria-hidden="true">⌃</span>
+              </button>
+              <section
+                class="usage-card"
+                aria-label="Provider cards usage details"
+              >
+                <div class="card-head">
+                  <div>
+                    <div class="card-title">Usage limits</div>
+                    <div class="card-meta">
+                      Two providers · four active windows
+                    </div>
+                  </div>
+                  <button
+                    class="close-button"
+                    type="button"
+                    aria-label="Close usage details"
+                  >
+                    ⌄
+                  </button>
+                </div>
+                <div class="provider-card claude">
+                  <div class="provider-heading">
+                    <span class="provider-mark claude">A</span>Claude
+                    <span class="summary value">Peak 92%</span>
+                  </div>
+                  <div class="metrics-inline">
+                    <div class="metric">
+                      <div class="metric-top">
+                        <span class="metric-label">5 hour</span
+                        ><span class="metric-value hot">92%</span>
+                      </div>
+                      <div class="bar">
+                        <div class="fill hot" style="width: 92%"></div>
+                      </div>
+                      <div class="reset">1 hr 42 min</div>
+                    </div>
+                    <div class="metric">
+                      <div class="metric-top">
+                        <span class="metric-label">Weekly</span
+                        ><span class="metric-value">49%</span>
+                      </div>
+                      <div class="bar">
+                        <div class="fill" style="width: 49%"></div>
+                      </div>
+                      <div class="reset">Fri 5:00 PM</div>
+                    </div>
+                  </div>
+                  <div class="metric">
+                    <div class="metric-top">
+                      <span class="metric-label">Fable weekly</span
+                      ><span class="metric-value">58%</span>
+                    </div>
+                    <div class="bar">
+                      <div class="fill" style="width: 58%"></div>
+                    </div>
+                    <div class="reset">Resets Fri 5:00 PM</div>
+                  </div>
+                </div>
+                <div class="provider-card codex">
+                  <div class="provider-heading">
+                    <span class="provider-mark codex">C</span>Codex
+                    <span class="summary value">Weekly 26%</span>
+                  </div>
+                  <div class="metrics-inline">
+                    <div class="metric">
+                      <div class="metric-top">
+                        <span class="metric-label">5 hour</span
+                        ><span class="metric-value empty">—</span>
+                      </div>
+                      <div class="bar"></div>
+                      <div class="reset">No active window</div>
+                    </div>
+                    <div class="metric">
+                      <div class="metric-top">
+                        <span class="metric-label">Weekly</span
+                        ><span class="metric-value">26%</span>
+                      </div>
+                      <div class="bar">
+                        <div class="fill" style="width: 26%"></div>
+                      </div>
+                      <div class="reset">Sat 2:58 PM</div>
+                    </div>
+                  </div>
+                </div>
+              </section>
+            </div>
+          </div>
+        </article>
+      </section>
+    </main>
+
+    <template id="sidebar-template">
+      <div class="window-row">
+        <div class="lights">
+          <span class="light red"></span><span class="light yellow"></span
+          ><span class="light green"></span>
+        </div>
+        <span class="history">‹ ›</span>
+      </div>
+      <div class="sidebar-link"><span class="ico">⊕</span>New thread</div>
+      <div class="sidebar-link"><span class="ico">◌</span>GitHub</div>
+      <div class="sidebar-link"><span class="ico">☷</span>Tasks</div>
+      <div class="sidebar-link"><span class="ico">›</span>More (6)</div>
+      <div class="section-head"><span>Focus</span><span>⌄</span></div>
+      <div class="thread-row">
+        <span class="thread-dot"></span>
+        <div class="thread-text">
+          <div class="thread-title">amir/user-activation-fix</div>
+          <div class="thread-sub">amir/user-activation-fix</div>
+        </div>
+        <span class="status">Awaiting</span>
+      </div>
+      <div class="thread-row">
+        <span class="thread-dot"></span>
+        <div class="thread-text">
+          <div class="thread-title">Demand Capture</div>
+          <div class="thread-sub">bb/identify-demand-projection-data</div>
+        </div>
+        <span class="status">Awaiting</span>
+      </div>
+      <div class="thread-row">
+        <span class="thread-dot"></span>
+        <div class="thread-text">
+          <div class="thread-title">E2E Demo – Hotel Lobby</div>
+          <div class="thread-sub">amir/hotel-lobby-e2edemo</div>
+        </div>
+        <span class="status">Awaiting</span>
+      </div>
+      <div class="thread-row">
+        <span class="thread-dot"></span>
+        <div class="thread-text">
+          <div class="thread-title">feature/phone-emulator</div>
+          <div class="thread-sub">feature/phone-emulator</div>
+        </div>
+        <span class="status">Awaiting</span>
+      </div>
+      <div class="section-head"><span>BBamir</span><span>＋</span></div>
+      <div class="thread-row">
+        <span class="thread-dot"></span>
+        <div class="thread-text">
+          <div class="thread-title">GitHub Refinement</div>
+          <div class="thread-sub">chore/github-refinement</div>
+        </div>
+        <span class="status" style="color: var(--blue)">Working</span>
+      </div>
+      <div class="thread-row">
+        <span class="thread-dot"></span>
+        <div class="thread-text">
+          <div class="thread-title">Activity Visualization</div>
+          <div class="thread-sub">bb/improve-bbamir-activity</div>
+        </div>
+      </div>
+    </template>
+
+    <script>
+      const template = document.querySelector("#sidebar-template");
+      document
+        .querySelectorAll(".sidebar-content")
+        .forEach((slot) => slot.append(template.content.cloneNode(true)));
+
+      function setExpanded(stage, expanded) {
+        const concept = stage.closest(".concept");
+        const outerToggle = concept.querySelector(".state-toggle");
+        stage.classList.toggle("expanded", expanded);
+        outerToggle.setAttribute("aria-pressed", String(expanded));
+        outerToggle.textContent = expanded ? "Collapse" : "Expand";
+        const trigger = stage.querySelector(".meter-trigger");
+        trigger.setAttribute("aria-expanded", String(expanded));
+        if (
+          !expanded &&
+          document.activeElement?.classList.contains("close-button")
+        )
+          trigger.focus();
+      }
+
+      document.querySelectorAll(".stage").forEach((stage) => {
+        const concept = stage.closest(".concept");
+        concept
+          .querySelector(".state-toggle")
+          .addEventListener("click", () =>
+            setExpanded(stage, !stage.classList.contains("expanded")),
+          );
+        stage
+          .querySelector(".meter-trigger")
+          .addEventListener("click", () => setExpanded(stage, true));
+        stage
+          .querySelector(".close-button")
+          .addEventListener("click", () => setExpanded(stage, false));
+      });
+
+      document.addEventListener("keydown", (event) => {
+        if (event.key !== "Escape") return;
+        const expanded = [...document.querySelectorAll(".stage.expanded")];
+        expanded.forEach((stage) => setExpanded(stage, false));
+      });
+    </script>
+  </body>
+</html>
