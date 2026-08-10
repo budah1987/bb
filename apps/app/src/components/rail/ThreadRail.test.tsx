@@ -73,6 +73,20 @@ vi.mock("./FeedbackReviewSection", () => ({
   ),
 }));
 
+vi.mock("./ReviewQueueSection", () => ({
+  ReviewQueueSection: ({
+    enabled,
+    threadId,
+  }: {
+    enabled: boolean;
+    threadId: string;
+  }) => (
+    <div data-testid="review-queue-section" data-enabled={enabled}>
+      {threadId}
+    </div>
+  ),
+}));
+
 vi.mock("@/components/plugin/PluginThreadRailSections", () => ({
   PluginThreadRailSections: ({
     enabled,
@@ -120,6 +134,9 @@ describe("ThreadRail", () => {
     expect(screen.getByTestId("feedback-review-section").textContent).toBe(
       "thr_1",
     );
+    expect(screen.getByTestId("review-queue-section").textContent).toBe(
+      "thr_1",
+    );
     expect(screen.getByTestId("plugin-rail-sections").textContent).toBe(
       "thr_1",
     );
@@ -127,6 +144,7 @@ describe("ThreadRail", () => {
       "notes-panel",
       "local-servers-section",
       "preview-section",
+      "review-queue-section",
       "feedback-review-section",
       "plugin-rail-sections",
     ]) {
@@ -175,6 +193,7 @@ describe("ThreadRail", () => {
       "notes-panel",
       "local-servers-section",
       "preview-section",
+      "review-queue-section",
       "feedback-review-section",
       "plugin-rail-sections",
     ]) {
