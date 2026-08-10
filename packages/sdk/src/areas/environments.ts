@@ -1,4 +1,8 @@
-import { environmentSchema, type Environment } from "@bb/domain";
+import {
+  environmentSchema,
+  type Environment,
+  type WorkspaceCommitPaths,
+} from "@bb/domain";
 import {
   commitActionResponseSchema,
   pullRequestCreateActionResponseSchema,
@@ -137,6 +141,7 @@ export interface EnvironmentDiffBranchesArgs extends EnvironmentDiffBranchesQuer
 
 export interface EnvironmentCommitArgs {
   environmentId: string;
+  paths?: WorkspaceCommitPaths;
 }
 
 export interface EnvironmentSimulatorAttachArgs extends EnvironmentActionArgs {
@@ -388,6 +393,9 @@ export function createEnvironmentsArea(
           param: { id: input.environmentId },
           json: {
             action: "commit",
+            ...(input.paths === undefined
+              ? {}
+              : { options: { paths: input.paths } }),
           },
         }),
       );

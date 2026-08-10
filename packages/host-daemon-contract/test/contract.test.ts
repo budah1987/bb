@@ -886,6 +886,8 @@ const INTENTIONAL_OPTIONAL_HOST_DAEMON_FIELDS: Record<string, string> = {
     "environment.provision only includes checkout instructions for unmanaged workspaces that requested a branch mutation.",
   "hostDaemonCommandSchema.pullRequestNumber":
     "managed worktree provisioning includes a pull request number only when the worktree must start from a fetched GitHub PR head.",
+  "hostDaemonCommandSchema.paths":
+    "workspace.commit omits paths to commit every change in the selected worktree; presence scopes the commit to exact changed files.",
   "hostDaemonCommandSchema.targetPath":
     "project.clone omits targetPath when the daemon should derive its default checkout location for the project.",
   "hostDaemonOnlineRpcCommandSchema.expectedSha256":
@@ -928,6 +930,8 @@ const INTENTIONAL_OPTIONAL_HOST_DAEMON_FIELDS: Record<string, string> = {
     "host.list_files may omit a search string to list files without filtering.",
   "hostDaemonOnlineRpcCommandSchema.path":
     "host.browse_directory may omit path to list the host's home directory, which a remote caller cannot resolve.",
+  "hostDaemonOnlineRpcCommandSchema.paths":
+    "workspace.diff omits paths for the full target diff; commit message generation supplies paths for an exact selected-file diff.",
   "hostDaemonOnlineRpcCommandSchema.ref":
     "host.read_file may omit ref to read from disk; setting ref switches to git history at that ref.",
   "hostDaemonOnlineRpcCommandSchema.rootPath":
@@ -1218,10 +1222,10 @@ describe("host-daemon local schemas", () => {
 });
 
 describe("host-daemon command schemas", () => {
-  // Version 83 adds environment preview facts to the version 82 provider
-  // authentication and simulator contract. Older daemons cannot parse them.
-  it("uses protocol version 83 for environment preview facts", () => {
-    expect(HOST_DAEMON_PROTOCOL_VERSION).toBe(83);
+  // Version 84 adds selected-path workspace diff and commit fields to the
+  // version 83 environment preview contract. Older daemons cannot parse them.
+  it("uses protocol version 84 for selected-path workspace commits", () => {
+    expect(HOST_DAEMON_PROTOCOL_VERSION).toBe(84);
   });
 
   it("binds Plan cancellation to a required turn id and typed result", () => {
@@ -1333,10 +1337,12 @@ describe("host-daemon command schemas", () => {
           workspaceProvisionType: "unmanaged",
         },
         message: "Checkpoint work",
+        paths: ["README.md", "src/index.ts"],
       }),
     ).toMatchObject({
       type: "workspace.commit",
       message: "Checkpoint work",
+      paths: ["README.md", "src/index.ts"],
     });
 
     expect(

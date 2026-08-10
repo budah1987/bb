@@ -791,6 +791,38 @@ describe("bb environment command output", () => {
     });
   });
 
+  it("bb environment commit posts selected paths", async () => {
+    const post = vi.fn(async () => ({
+      ok: true,
+      action: "commit",
+      message: "Created commit abc123",
+      commitSha: "abc123",
+      commitSubject: "Commit selected files",
+    }));
+    stubServerApi({ "v1.environments.:id.actions.$post": post });
+
+    await runCommand(
+      [
+        "environment",
+        "commit",
+        "env-commit-selected",
+        "--path",
+        "README.md",
+        "--path",
+        "src/index.ts",
+      ],
+      register,
+    );
+
+    expect(post).toHaveBeenCalledWith({
+      param: { id: "env-commit-selected" },
+      json: {
+        action: "commit",
+        options: { paths: ["README.md", "src/index.ts"] },
+      },
+    });
+  });
+
   it("bb environment update sets the merge base branch", async () => {
     const environment = fixtures.makeEnvironment({
       id: "env-update-1",

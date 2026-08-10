@@ -114,9 +114,11 @@ Making your repo work with bb:
     --folder <name>                       Move the worktree within its parent folder
 
   bb environment commit <id>              Create a commit in the environment
+    --path <path>                         Changed path; repeat for selected files
 
   bb environment squash-merge <id>        Squash-merge into a target branch
     --merge-base-branch <branch>          Target branch (required)
+                                           Blocks until this worktree is clean
 
   bb environment archive-threads <id>     Archive all threads in an environment
 

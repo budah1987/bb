@@ -1,0 +1,45 @@
+:root {
+  --resize-dur: 300ms;
+  --resize-ease: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.t-resize {
+  transition:
+    width var(--resize-dur) var(--resize-ease),
+    height var(--resize-dur) var(--resize-ease);
+  will-change: width, height;
+}
+
+.compact-usage-dock {
+  height: var(--usage-collapsed-height);
+}
+
+.compact-usage-dock[data-open="true"] {
+  height: var(--usage-expanded-height);
+}
+
+.compact-usage-details {
+  opacity: 0;
+  filter: blur(2px);
+  pointer-events: none;
+  transition:
+    opacity 150ms ease-out,
+    filter 150ms ease-out;
+}
+
+.compact-usage-dock[data-open="true"] .compact-usage-details {
+  opacity: 1;
+  filter: blur(0);
+  pointer-events: auto;
+  transition-delay: 60ms;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .t-resize {
+    transition: none !important;
+  }
+
+  .compact-usage-details {
+    transition: none !important;
+  }
+}

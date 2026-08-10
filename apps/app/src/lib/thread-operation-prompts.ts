@@ -1,8 +1,19 @@
 import { assertNever } from "@bb/core-ui";
-import type { EnvironmentActionRequest } from "@bb/server-contract";
+import type {
+  EnvironmentActionFailureDetails,
+  EnvironmentActionRequest,
+} from "@bb/server-contract";
 import { renderTemplate } from "@bb/templates";
 
-type SquashMergeCommitFailureStage = "prep_commit" | "squash_commit";
+/**
+ * Squash merge never commits for you, so the only stage that can fail is the
+ * squash commit itself. Sourced from the contract so a new stage is a type
+ * error here rather than a silently unhandled prompt.
+ */
+type SquashMergeCommitFailureStage = Extract<
+  EnvironmentActionFailureDetails,
+  { kind: "squash_merge_commit_failed" }
+>["stage"];
 
 export function buildSquashMergeConflictFollowUpInstruction(
   request: Extract<EnvironmentActionRequest, { action: "squash_merge" }>,
@@ -33,11 +44,6 @@ export function buildSquashMergeCommitFailureFollowUpInstruction(
   const errorMessage = options.errorMessage?.trim() || undefined;
 
   switch (options.stage) {
-    case "prep_commit":
-      return renderTemplate("threadOperationSquashMergeCommitFailureFollowUp", {
-        prepCommitMergeBaseBranch: mergeBaseBranch,
-        errorMessage,
-      });
     case "squash_commit":
       return renderTemplate("threadOperationSquashMergeCommitFailureFollowUp", {
         squashCommitMergeBaseBranch: mergeBaseBranch,

@@ -10,7 +10,7 @@ describe("formatProviderUsageReset", () => {
     );
   });
 
-  it("marks elapsed and malformed reset times without inventing a date", () => {
+  it("handles elapsed, malformed, and missing reset times", () => {
     expect(formatProviderUsageReset("2026-08-08T19:59:00.000Z", now)).toBe(
       "Resetting now",
     );

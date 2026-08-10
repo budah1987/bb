@@ -603,4 +603,33 @@ describe("ProjectRow interactions", () => {
       });
     });
   });
+
+  it("renames a direct local workspace from its right-click menu", async () => {
+    renderProjectRow(vi.fn(), {
+      status: "ready",
+      threads: [
+        makeThread({
+          id: "thr_local_a",
+          environmentId: "env_local",
+          environmentName: "Local workspace",
+          environmentBranchName: "main",
+          environmentWorkspaceDisplayKind: "other",
+        }),
+        makeThread({
+          id: "thr_local_b",
+          environmentId: "env_local",
+          environmentName: "Local workspace",
+          environmentBranchName: "main",
+          environmentWorkspaceDisplayKind: "other",
+        }),
+      ],
+    });
+
+    fireEvent.contextMenu(screen.getByText("Local workspace"));
+    fireEvent.click(await screen.findByRole("menuitem", { name: "Rename" }));
+
+    expect(
+      await screen.findByRole("dialog", { name: "Rename environment" }),
+    ).not.toBeNull();
+  });
 });

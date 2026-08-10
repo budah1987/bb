@@ -37,7 +37,12 @@ export function useRequestEnvironmentAction() {
     }: RequestEnvironmentActionMutationRequest): Promise<EnvironmentActionResponse> => {
       switch (request.action) {
         case "commit":
-          return sdk.environments.commit({ environmentId: id });
+          return sdk.environments.commit({
+            environmentId: id,
+            ...(request.options === undefined
+              ? {}
+              : { paths: request.options.paths }),
+          });
         case "squash_merge":
           return sdk.environments.squashMerge({
             environmentId: id,
@@ -68,7 +73,7 @@ export function useRequestEnvironmentAction() {
           return sdk.environments.markPullRequestDraft({ environmentId: id });
       }
     },
-    onSuccess: (_response, variables) => {
+    onSettled: (_response, _error, variables) => {
       invalidateEnvironmentActionQueries({
         environmentId: variables.id,
         queryClient,
@@ -83,6 +88,8 @@ export function useArchiveEnvironmentThreads() {
   return useMutation({
     meta: {
       errorMessage: "Failed to archive threads.",
+      // Every caller reports its own failure, inline or as an owned toast.
+      showErrorToast: false,
     },
     mutationFn: ({
       id,
