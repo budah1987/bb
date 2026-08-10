@@ -224,7 +224,12 @@ status|install` to inspect or install provider CLIs on a selected machine.
   CLI update state across every machine — the CLI counterpart of Settings →
   Updates. `bb updates apply [--machine <id-or-name>]` runs every available
   provider CLI install/update sequentially; update bb-app itself with the
-  printed upgrade command or the desktop relaunch.
+  printed upgrade command or the desktop relaunch. `bb updates from-bb
+--project <id> [--machine <id-or-name>]` starts the protected BBamir
+  upstream-update workspace used by Settings → Updates; it refuses a project
+  that is not named `BBamir`, requires one connected local checkout, pauses for
+  explicit conflict choices, and keeps the candidate isolated until checks
+  pass.
 - Use `bb project create --name <name> --root <path> --machine <id-or-name>`
   to bind a new project's local path to a connected enrolled machine, or use
   `--remote-url <url>` to clone a repository first. Use `--host` as an alias.

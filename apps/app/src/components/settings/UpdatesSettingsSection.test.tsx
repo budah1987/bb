@@ -28,6 +28,14 @@ import {
 } from "@/hooks/useUpdateInventory";
 import { UpdatesSettingsSection } from "./UpdatesSettingsSection";
 
+vi.mock("react-router-dom", async (original) => {
+  const actual = await original<typeof import("react-router-dom")>();
+  return {
+    ...actual,
+    useNavigate: () => vi.fn(),
+  };
+});
+
 vi.mock("@/components/ui/app-toast", () => ({
   appToast: {
     dismiss: vi.fn(),
@@ -49,6 +57,25 @@ vi.mock("@/hooks/useUpdateInventory", () => ({
 
 vi.mock("@/hooks/useDesktopUpdateInfo", () => ({
   useDesktopUpdateInfo: vi.fn(),
+}));
+
+vi.mock("@/hooks/mutations/thread-runtime-mutations", () => ({
+  useCreateThread: () => ({
+    isPending: false,
+    mutateAsync: vi.fn(),
+  }),
+}));
+
+vi.mock("@/hooks/queries/host-queries", () => ({
+  useHosts: () => ({ data: [] }),
+}));
+
+vi.mock("@/hooks/queries/sidebar-navigation-query", () => ({
+  useSidebarNavigation: () => ({ data: undefined }),
+}));
+
+vi.mock("@/hooks/queries/system-queries", () => ({
+  useSystemConfig: () => ({ data: undefined }),
 }));
 
 const retryHostUpdateMutateMock = vi.hoisted(() => vi.fn());
