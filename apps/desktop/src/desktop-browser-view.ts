@@ -4,11 +4,16 @@ import {
   BB_DESKTOP_BROWSER_MAX_URL_LENGTH,
   clampBbDesktopBrowserViewBounds,
   type BbDesktopBrowserAttachRequest,
+  type BbDesktopBrowserAnnotationDraft,
+  type BbDesktopBrowserAnnotationMarker,
+  type BbDesktopBrowserFocusAnnotationRequest,
   type BbDesktopBrowserNavigateRequest,
   type BbDesktopBrowserOpenTabRequest,
   type BbDesktopBrowserScopedOpenTabRequest,
   type BbDesktopBrowserSetBoundsRequest,
+  type BbDesktopBrowserSetAnnotationModeRequest,
   type BbDesktopBrowserSetVisibleRequest,
+  type BbDesktopBrowserSyncAnnotationsRequest,
   type BbDesktopBrowserSnapshot,
   type BbDesktopBrowserState,
   type BbDesktopBrowserViewportBounds,
@@ -17,10 +22,19 @@ import {
 import type { AppCommandId, AppShortcutInput } from "@bb/domain";
 import {
   BB_DESKTOP_BROWSER_OPEN_TAB_CHANNEL,
+  BB_DESKTOP_BROWSER_ANNOTATION_DRAFT_CHANNEL,
   BB_DESKTOP_BROWSER_SCOPED_OPEN_TAB_CHANNEL,
   BB_DESKTOP_BROWSER_SNAPSHOT_CHANNEL,
   BB_DESKTOP_BROWSER_STATE_CHANNEL,
 } from "./desktop-browser-ipc.js";
+import {
+  BB_BROWSER_ANNOTATION_DISABLE_SCRIPT,
+  BB_BROWSER_ANNOTATION_ENABLE_SCRIPT,
+  BB_BROWSER_ANNOTATION_ISOLATED_WORLD_ID,
+  buildBrowserAnnotationFocusScript,
+  buildBrowserAnnotationSyncScript,
+  parseBrowserAnnotationDraft,
+} from "./desktop-browser-annotations.js";
 import {
   evaluatePopupRate,
   isAllowedBrowserUrl,
@@ -75,13 +89,17 @@ interface BrowserViewEntry {
   desiredBounds: BbDesktopBrowserViewBounds;
   popupTimestamps: number[];
   visible: boolean;
+  annotationEnabled: boolean;
+  annotationMarkers: BbDesktopBrowserAnnotationMarker[];
+  annotationRun: number;
 }
 
 export type DesktopBrowserHostWebContentsPayload =
   | BbDesktopBrowserState
   | BbDesktopBrowserOpenTabRequest
   | BbDesktopBrowserScopedOpenTabRequest
-  | BbDesktopBrowserSnapshot;
+  | BbDesktopBrowserSnapshot
+  | BbDesktopBrowserAnnotationDraft;
 
 export interface DesktopBrowserHostContentBounds {
   height: number;
@@ -157,6 +175,15 @@ export interface DesktopBrowserViewManager {
   ): void;
   setVisible(
     args: HostScopedRequestArgs<BbDesktopBrowserSetVisibleRequest>,
+  ): void;
+  setAnnotationMode(
+    args: HostScopedRequestArgs<BbDesktopBrowserSetAnnotationModeRequest>,
+  ): void;
+  focusAnnotation(
+    args: HostScopedRequestArgs<BbDesktopBrowserFocusAnnotationRequest>,
+  ): void;
+  syncAnnotations(
+    args: HostScopedRequestArgs<BbDesktopBrowserSyncAnnotationsRequest>,
   ): void;
   /**
    * Hide every visible view owned by the window for the duration of a native
@@ -456,6 +483,44 @@ export function createDesktopBrowserViewManager(
   ): void {
     const webContents = entry.view.webContents;
 
+    const armAnnotationDraft = (): void => {
+      if (!entry.annotationEnabled || webContents.isDestroyed()) {
+        return;
+      }
+      const run = entry.annotationRun;
+      webContents
+        .executeJavaScriptInIsolatedWorld(
+          BB_BROWSER_ANNOTATION_ISOLATED_WORLD_ID,
+          [{ code: BB_BROWSER_ANNOTATION_ENABLE_SCRIPT }],
+        )
+        .then((payload: unknown) => {
+          if (!entry.annotationEnabled || run !== entry.annotationRun) {
+            return;
+          }
+          const draft = parseBrowserAnnotationDraft(tabId, payload);
+          if (draft !== null) {
+            send(
+              hostWindow,
+              BB_DESKTOP_BROWSER_ANNOTATION_DRAFT_CHANNEL,
+              draft,
+            );
+          }
+          armAnnotationDraft();
+        })
+        .catch(() => {
+          // Navigation destroys the isolated world. `did-finish-load` re-arms it.
+        });
+    };
+    const syncAnnotationMarkers = (): void => {
+      if (!entry.annotationEnabled || webContents.isDestroyed()) return;
+      webContents
+        .executeJavaScriptInIsolatedWorld(
+          BB_BROWSER_ANNOTATION_ISOLATED_WORLD_ID,
+          [{ code: buildBrowserAnnotationSyncScript(entry.annotationMarkers) }],
+        )
+        .catch(() => {});
+    };
+
     webContents.on("before-input-event", (event, input) => {
       if (input.type !== "keyDown" || input.isAutoRepeat || input.isComposing) {
         return;
@@ -561,6 +626,13 @@ export function createDesktopBrowserViewManager(
     const refresh = () => pushState(hostWindow, tabId);
     webContents.on("did-start-loading", refresh);
     webContents.on("did-stop-loading", refresh);
+    webContents.on("did-finish-load", () => {
+      if (entry.annotationEnabled) {
+        entry.annotationRun += 1;
+        armAnnotationDraft();
+        syncAnnotationMarkers();
+      }
+    });
     webContents.on("did-navigate", (_event, url) => {
       commitEntryMainFrameUrl(entry, url);
       entry.lastErrorText = null;
@@ -616,6 +688,9 @@ export function createDesktopBrowserViewManager(
       desiredBounds: args.desiredBounds,
       popupTimestamps: [],
       visible: false,
+      annotationEnabled: false,
+      annotationMarkers: [],
+      annotationRun: 0,
     };
     wireWebContents(args.hostWindow, args.tabId, entry);
     args.hostWindow.contentView.addChildView(view);
@@ -752,6 +827,80 @@ export function createDesktopBrowserViewManager(
         ) {
           entry.view.webContents.focus();
         }
+      });
+    },
+    setAnnotationMode({ hostWindow, request }) {
+      withEntry({ hostWindow, tabId: request.tabId }, (entry) => {
+        entry.annotationEnabled = request.enabled;
+        entry.annotationRun += 1;
+        if (request.enabled) {
+          // Reuse the same isolated controller after each completed draft.
+          const webContents = entry.view.webContents;
+          const run = entry.annotationRun;
+          webContents
+            .executeJavaScriptInIsolatedWorld(
+              BB_BROWSER_ANNOTATION_ISOLATED_WORLD_ID,
+              [{ code: BB_BROWSER_ANNOTATION_ENABLE_SCRIPT }],
+            )
+            .then((payload: unknown) => {
+              if (!entry.annotationEnabled || run !== entry.annotationRun) {
+                return;
+              }
+              const draft = parseBrowserAnnotationDraft(request.tabId, payload);
+              if (draft !== null) {
+                send(
+                  hostWindow,
+                  BB_DESKTOP_BROWSER_ANNOTATION_DRAFT_CHANNEL,
+                  draft,
+                );
+              }
+              // Re-enter through the public method to wait for another draft.
+              this.setAnnotationMode({ hostWindow, request });
+            })
+            .catch(() => {});
+          webContents
+            .executeJavaScriptInIsolatedWorld(
+              BB_BROWSER_ANNOTATION_ISOLATED_WORLD_ID,
+              [
+                {
+                  code: buildBrowserAnnotationSyncScript(
+                    entry.annotationMarkers,
+                  ),
+                },
+              ],
+            )
+            .catch(() => {});
+          return;
+        }
+        entry.view.webContents
+          .executeJavaScriptInIsolatedWorld(
+            BB_BROWSER_ANNOTATION_ISOLATED_WORLD_ID,
+            [{ code: BB_BROWSER_ANNOTATION_DISABLE_SCRIPT }],
+          )
+          .catch(() => {});
+      });
+    },
+    focusAnnotation({ hostWindow, request }) {
+      withEntry({ hostWindow, tabId: request.tabId }, (entry) => {
+        if (!entry.annotationEnabled) return;
+        entry.view.webContents
+          .executeJavaScriptInIsolatedWorld(
+            BB_BROWSER_ANNOTATION_ISOLATED_WORLD_ID,
+            [{ code: buildBrowserAnnotationFocusScript(request.rectangle) }],
+          )
+          .catch(() => {});
+      });
+    },
+    syncAnnotations({ hostWindow, request }) {
+      withEntry({ hostWindow, tabId: request.tabId }, (entry) => {
+        entry.annotationMarkers = [...request.annotations];
+        if (!entry.annotationEnabled) return;
+        entry.view.webContents
+          .executeJavaScriptInIsolatedWorld(
+            BB_BROWSER_ANNOTATION_ISOLATED_WORLD_ID,
+            [{ code: buildBrowserAnnotationSyncScript(request.annotations) }],
+          )
+          .catch(() => {});
       });
     },
     beginWindowResize(hostWindow) {

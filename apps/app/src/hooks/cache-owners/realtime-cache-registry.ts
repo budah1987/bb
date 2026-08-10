@@ -79,6 +79,7 @@ import {
   systemConfigQueryKey,
   allSystemProvidersQueryKeyPrefix,
   threadDefaultExecutionOptionsQueryKey,
+  threadAnnotationsQueryKeyPrefix,
   threadQueryKey,
   threadNotesQueryKey,
   threadTabsQueryKey,
@@ -346,6 +347,10 @@ export const REALTIME_THREAD_CHANGE_REGISTRY = {
   "tabs-changed": {
     flush: "immediate",
     dirty: [dirtyThreadTabsQueries],
+  },
+  "annotations-changed": {
+    flush: "immediate",
+    dirty: [dirtyThreadAnnotationQueries],
   },
   "terminals-changed": {
     flush: "debounced",
@@ -663,6 +668,12 @@ function dirtyThreadTabsQueries({
   threadId,
 }: ThreadRealtimeDirtyContext): QueryKey[] {
   return threadId ? [threadTabsQueryKey(threadId)] : [];
+}
+
+function dirtyThreadAnnotationQueries({
+  threadId,
+}: ThreadRealtimeDirtyContext): QueryKey[] {
+  return threadId ? [threadAnnotationsQueryKeyPrefix(threadId)] : [];
 }
 
 function dirtyThreadNotesQueries({

@@ -190,6 +190,21 @@ export type {
   StoredThreadNotes,
   ThreadRecapTriggerCounts,
 } from "./thread-notes.js";
+export {
+  createBrowserAnnotation,
+  deleteBrowserAnnotation,
+  deleteBrowserAnnotations,
+  getBrowserAnnotation,
+  listBrowserAnnotations,
+  updateBrowserAnnotation,
+} from "./browser-annotations.js";
+export type {
+  BrowserAnnotationStatus,
+  BrowserAnnotationWriteResult,
+  CreateBrowserAnnotationInput,
+  StoredBrowserAnnotation,
+  UpdateBrowserAnnotationInput,
+} from "./browser-annotations.js";
 export { getExperiments, setExperiments } from "./experiments.js";
 export {
   deleteInstalledPlugin,

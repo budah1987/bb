@@ -106,6 +106,107 @@ function createFetchQueue(
 }
 
 describe("@bb/sdk", () => {
+  it("maps browser annotation lifecycle requests", async () => {
+    const annotation = {
+      id: "annotation-1",
+      threadId: "thread-1",
+      environmentId: null,
+      browserTabId: "browser-1",
+      url: "http://localhost:3000",
+      selector: "main",
+      viewport: { width: 1200, height: 800 },
+      rectangle: { x: 0, y: 0, width: 1200, height: 800 },
+      comment: "Reduce the spacing.",
+      status: "open",
+      revision: 1,
+      createdAt: "2026-08-10T00:00:00.000Z",
+      updatedAt: "2026-08-10T00:00:00.000Z",
+    } as const;
+    const queue = createFetchQueue([
+      { body: { annotations: [annotation] } },
+      { body: annotation },
+      { body: { ...annotation, revision: 2, status: "resolved" } },
+      { body: { ok: true } },
+      { body: { deleted: 1 } },
+    ]);
+    const sdk = createBbSdk({
+      transport: createHttpTransport({
+        baseUrl: "http://bb.test",
+        fetch: queue.fetch,
+        runtime: "node",
+      }),
+    });
+
+    await sdk.threads.annotations.list({
+      threadId: "thread-1",
+      browserTabId: "browser-1",
+      status: "open",
+    });
+    await sdk.threads.annotations.create({
+      threadId: "thread-1",
+      environmentId: null,
+      browserTabId: "browser-1",
+      url: annotation.url,
+      selector: annotation.selector,
+      viewport: annotation.viewport,
+      rectangle: annotation.rectangle,
+      comment: annotation.comment,
+      status: "open",
+    });
+    await sdk.threads.annotations.update({
+      threadId: "thread-1",
+      annotationId: "annotation-1",
+      expectedRevision: 1,
+      status: "resolved",
+    });
+    await sdk.threads.annotations.delete({
+      threadId: "thread-1",
+      annotationId: "annotation-1",
+      expectedRevision: 2,
+    });
+    await sdk.threads.annotations.clear({
+      threadId: "thread-1",
+      browserTabId: "browser-1",
+      ids: null,
+    });
+
+    expect(queue.requests).toEqual([
+      {
+        bodyText: undefined,
+        method: "GET",
+        url: "http://bb.test/api/v1/threads/thread-1/annotations?browserTabId=browser-1&status=open",
+      },
+      {
+        bodyText: JSON.stringify({
+          environmentId: null,
+          browserTabId: "browser-1",
+          url: annotation.url,
+          selector: annotation.selector,
+          viewport: annotation.viewport,
+          rectangle: annotation.rectangle,
+          comment: annotation.comment,
+          status: "open",
+        }),
+        method: "POST",
+        url: "http://bb.test/api/v1/threads/thread-1/annotations",
+      },
+      {
+        bodyText: JSON.stringify({ expectedRevision: 1, status: "resolved" }),
+        method: "PATCH",
+        url: "http://bb.test/api/v1/threads/thread-1/annotations/annotation-1",
+      },
+      {
+        bodyText: undefined,
+        method: "DELETE",
+        url: "http://bb.test/api/v1/threads/thread-1/annotations/annotation-1?expectedRevision=2",
+      },
+      {
+        bodyText: JSON.stringify({ browserTabId: "browser-1", ids: null }),
+        method: "POST",
+        url: "http://bb.test/api/v1/threads/thread-1/annotations/clear",
+      },
+    ]);
+  });
   it("routes typed simulator status, attach, and control requests", async () => {
     const queue = createFetchQueue([
       {

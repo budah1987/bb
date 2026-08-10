@@ -7,6 +7,7 @@ import {
   render,
   screen,
 } from "@testing-library/react";
+import type { ReactElement } from "react";
 import type {
   BbDesktopBrowserApi,
   BbDesktopBrowserState,
@@ -16,7 +17,9 @@ import {
   createBbDesktopApi,
   createNoopDesktopBrowserApi,
 } from "@/test/bb-desktop-test-utils";
+import { createQueryClientTestHarness } from "@/test/queryClientTestHarness";
 import { BrowserTabContent } from "./BrowserTabContent";
+import { browserAnnotationStore } from "@/lib/browser-annotations";
 
 const desktopInfo = {
   lastCheckedAt: null,
@@ -33,16 +36,25 @@ interface BrowserChromeHarness {
   emitState: (state: BbDesktopBrowserState) => void;
   goBack: ReturnType<typeof vi.fn>;
   stop: ReturnType<typeof vi.fn>;
+  setAnnotationMode: ReturnType<typeof vi.fn>;
+  syncAnnotations: ReturnType<typeof vi.fn>;
 }
 
 function createBrowserChromeHarness(): BrowserChromeHarness {
   const stateListeners = new Set<(state: BbDesktopBrowserState) => void>();
   const goBack = vi.fn();
   const stop = vi.fn();
+  const setAnnotationMode = vi.fn();
+  const syncAnnotations = vi.fn();
   const api: BbDesktopBrowserApi = {
     ...createNoopDesktopBrowserApi(),
     goBack,
     stop,
+    setAnnotationMode,
+    syncAnnotations,
+    onAnnotationDraft() {
+      return () => {};
+    },
     onState(listener) {
       stateListeners.add(listener);
       return () => stateListeners.delete(listener);
@@ -55,6 +67,8 @@ function createBrowserChromeHarness(): BrowserChromeHarness {
     },
     goBack,
     stop,
+    setAnnotationMode,
+    syncAnnotations,
   };
 }
 
@@ -75,7 +89,7 @@ function browserState(
 
 function renderBrowserChrome(harness: BrowserChromeHarness, initialUrl = "") {
   window.bbDesktop = createBbDesktopApi(desktopInfo, harness.api);
-  return render(
+  return renderWithQueryClient(
     <>
       <BrowserTabContent
         tabId="browser:test"
@@ -90,6 +104,11 @@ function renderBrowserChrome(harness: BrowserChromeHarness, initialUrl = "") {
       <button type="button">Outside browser</button>
     </>,
   );
+}
+
+function renderWithQueryClient(content: ReactElement) {
+  const { wrapper } = createQueryClientTestHarness();
+  return render(content, { wrapper });
 }
 
 function expectChromeVisible(): HTMLElement {
@@ -118,7 +137,9 @@ describe("BrowserTabContent persistent navigation", () => {
     fireEvent.pointerLeave(chrome);
     act(() => screen.getByRole("button", { name: "Outside browser" }).focus());
     expectChromeVisible();
-    expect(screen.getByLabelText("Address and search bar")).not.toBeNull();
+    expect(
+      screen.getByLabelText("Address and search bar").hasAttribute("required"),
+    ).toBe(true);
   });
 
   it("keeps navigation visible while loading and preserves the stop action", () => {
@@ -129,8 +150,92 @@ describe("BrowserTabContent persistent navigation", () => {
     expectChromeVisible();
 
     const stopButton = screen.getByRole("button", { name: "Stop loading" });
+    expect(screen.getByRole("status").textContent).toBe("Page loading");
+    expect(stopButton.classList).toContain("!size-10");
+    expect(stopButton.classList).toContain("active:scale-[0.96]");
     fireEvent.click(stopButton);
     expect(harness.stop).toHaveBeenCalledWith("browser:test");
+  });
+
+  it("syncs only open annotations into native markers", () => {
+    const harness = createBrowserChromeHarness();
+    const first = browserAnnotationStore.addDraft("thread-1", {
+      tabId: "browser:test",
+      selector: "main",
+      url: "https://example.com/docs",
+      viewport: { width: 1200, height: 800 },
+      rectangle: { x: 0, y: 0, width: 100, height: 40 },
+      comment: "First",
+    });
+    browserAnnotationStore.addDraft("thread-1", {
+      tabId: "browser:test",
+      selector: "footer",
+      url: "https://example.com/docs",
+      viewport: { width: 1200, height: 800 },
+      rectangle: { x: 0, y: 700, width: 100, height: 40 },
+      comment: "Second",
+    });
+    const sent = browserAnnotationStore.addDraft("thread-1", {
+      tabId: "browser:test",
+      selector: "header",
+      url: "https://example.com/docs",
+      viewport: { width: 1200, height: 800 },
+      rectangle: { x: 0, y: 0, width: 100, height: 40 },
+      comment: "Sent",
+    });
+    const deleted = browserAnnotationStore.addDraft("thread-1", {
+      tabId: "browser:test",
+      selector: "aside",
+      url: "https://example.com/docs",
+      viewport: { width: 1200, height: 800 },
+      rectangle: { x: 0, y: 80, width: 100, height: 40 },
+      comment: "Deleted",
+    });
+    browserAnnotationStore.resolveDraft("thread-1", "browser:test", first.id);
+    browserAnnotationStore.markSent("thread-1", "browser:test", sent.id);
+    browserAnnotationStore.removeDraft("thread-1", "browser:test", deleted.id);
+
+    renderBrowserChrome(harness, "https://example.com/docs");
+
+    expect(
+      screen.getByRole("button", { name: "Annotate page, 1 drafts" }),
+    ).toBeTruthy();
+    expect(harness.syncAnnotations).toHaveBeenLastCalledWith({
+      tabId: "browser:test",
+      annotations: [
+        expect.objectContaining({
+          number: 1,
+          selector: "footer",
+          comment: "Second",
+        }),
+      ],
+    });
+  });
+
+  it("uses 40px recovery actions with reduced-motion press feedback", () => {
+    const harness = createBrowserChromeHarness();
+    renderBrowserChrome(harness, "https://example.com/docs");
+
+    act(() =>
+      harness.emitState(browserState({ errorText: "ERR_CONNECTION_REFUSED" })),
+    );
+    expect(screen.getByRole("alert").textContent).toContain(
+      "ERR_CONNECTION_REFUSED",
+    );
+
+    const buttons = [
+      screen
+        .getAllByRole("button", { name: "Reload" })
+        .find((button) => button.classList.contains("min-h-10")),
+      screen.getByRole("button", { name: "Open externally" }),
+    ];
+    for (const button of buttons) {
+      expect(button).toBeDefined();
+      if (button === undefined) continue;
+      expect(button.classList).toContain("min-h-10");
+      expect(button.classList).toContain("active:scale-[0.96]");
+      expect(button.classList).toContain("motion-reduce:transition-none");
+    }
   });
 
   it("preserves browser navigation actions", () => {
@@ -141,5 +246,43 @@ describe("BrowserTabContent persistent navigation", () => {
     act(() => harness.emitState(browserState({ canGoBack: true })));
     fireEvent.click(screen.getByRole("button", { name: "Go back" }));
     expect(harness.goBack).toHaveBeenCalledWith("browser:test");
+  });
+
+  it("disables annotation capture when the native view hides or unmounts", () => {
+    const harness = createBrowserChromeHarness();
+    window.bbDesktop = createBbDesktopApi(desktopInfo, harness.api);
+    const content = (canShowNativeBrowserView: boolean) => (
+      <BrowserTabContent
+        tabId="browser:test"
+        initialUrl="https://example.com/docs"
+        addressFocusRequest={null}
+        canShowNativeBrowserView={canShowNativeBrowserView}
+        visibilityCoordinator={null}
+        environmentId={null}
+        threadId="thread-annotation-toggle"
+        onUpdate={() => {}}
+      />
+    );
+    const view = renderWithQueryClient(content(true));
+    harness.setAnnotationMode.mockClear();
+
+    fireEvent.click(
+      screen.getByRole("button", { name: /^Annotate page(?:,|$)/ }),
+    );
+    expect(harness.setAnnotationMode).toHaveBeenLastCalledWith({
+      tabId: "browser:test",
+      enabled: true,
+    });
+
+    view.rerender(content(false));
+    expect(harness.setAnnotationMode).toHaveBeenLastCalledWith({
+      tabId: "browser:test",
+      enabled: false,
+    });
+    view.unmount();
+    expect(harness.setAnnotationMode).toHaveBeenLastCalledWith({
+      tabId: "browser:test",
+      enabled: false,
+    });
   });
 });

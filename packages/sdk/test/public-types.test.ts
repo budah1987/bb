@@ -369,6 +369,7 @@ type ExpectedThemeKey = "catalog" | "get" | "set";
 type ExpectedThreadSectionsKey = "create" | "delete" | "list" | "update";
 
 type ExpectedThreadsKey =
+  | "annotations"
   | "archive"
   | "archiveAll"
   | "cancelPlan"
@@ -426,6 +427,12 @@ type ExpectedThreadQueuedMessagesKey =
   | "update";
 type ExpectedThreadTabsKey = "get" | "update";
 type ExpectedThreadNotesKey = "generateRecap" | "get" | "setScratchpad";
+type ExpectedThreadAnnotationsKey =
+  | "clear"
+  | "create"
+  | "delete"
+  | "list"
+  | "update";
 type ExpectedTerminalsKey =
   | "close"
   | "create"
@@ -563,5 +570,8 @@ describe("SDK public type entrypoints", () => {
     expectTypeOf<
       keyof RootBbSdk["threads"]["notes"]
     >().toEqualTypeOf<ExpectedThreadNotesKey>();
+    expectTypeOf<
+      keyof RootBbSdk["threads"]["annotations"]
+    >().toEqualTypeOf<ExpectedThreadAnnotationsKey>();
   });
 });

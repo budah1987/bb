@@ -8,6 +8,8 @@ import { z } from "zod";
  */
 export const BB_DESKTOP_BROWSER_MAX_URL_LENGTH = 4096;
 export const BB_DESKTOP_BROWSER_MAX_TITLE_LENGTH = 1024;
+export const BB_DESKTOP_BROWSER_MAX_ANNOTATION_SELECTOR_LENGTH = 2048;
+export const BB_DESKTOP_BROWSER_MAX_ANNOTATION_COMMENT_LENGTH = 8000;
 
 /**
  * Pixel rect (CSS px, which equal device-independent points on macOS) of the
@@ -221,6 +223,91 @@ export type BbDesktopBrowserSnapshot = z.infer<
   typeof bbDesktopBrowserSnapshotSchema
 >;
 
+export const bbDesktopBrowserSetAnnotationModeRequestSchema = z
+  .object({
+    tabId: z.string().min(1),
+    enabled: z.boolean(),
+  })
+  .strict();
+export type BbDesktopBrowserSetAnnotationModeRequest = z.infer<
+  typeof bbDesktopBrowserSetAnnotationModeRequestSchema
+>;
+
+export const bbDesktopBrowserAnnotationRectangleSchema = z
+  .object({
+    x: z.number().finite(),
+    y: z.number().finite(),
+    width: z.number().finite().nonnegative(),
+    height: z.number().finite().nonnegative(),
+  })
+  .strict();
+
+export const bbDesktopBrowserFocusAnnotationRequestSchema = z
+  .object({
+    tabId: z.string().min(1),
+    rectangle: bbDesktopBrowserAnnotationRectangleSchema,
+  })
+  .strict();
+export type BbDesktopBrowserFocusAnnotationRequest = z.infer<
+  typeof bbDesktopBrowserFocusAnnotationRequestSchema
+>;
+
+export const bbDesktopBrowserAnnotationMarkerSchema = z
+  .object({
+    id: z.string().min(1).max(256),
+    number: z.number().int().positive().max(50),
+    selector: z
+      .string()
+      .min(1)
+      .max(BB_DESKTOP_BROWSER_MAX_ANNOTATION_SELECTOR_LENGTH),
+    comment: z
+      .string()
+      .trim()
+      .min(1)
+      .max(BB_DESKTOP_BROWSER_MAX_ANNOTATION_COMMENT_LENGTH),
+    rectangle: bbDesktopBrowserAnnotationRectangleSchema,
+  })
+  .strict();
+export type BbDesktopBrowserAnnotationMarker = z.infer<
+  typeof bbDesktopBrowserAnnotationMarkerSchema
+>;
+
+export const bbDesktopBrowserSyncAnnotationsRequestSchema = z
+  .object({
+    tabId: z.string().min(1),
+    annotations: z.array(bbDesktopBrowserAnnotationMarkerSchema).max(50),
+  })
+  .strict();
+export type BbDesktopBrowserSyncAnnotationsRequest = z.infer<
+  typeof bbDesktopBrowserSyncAnnotationsRequestSchema
+>;
+
+export const bbDesktopBrowserAnnotationDraftSchema = z
+  .object({
+    tabId: z.string().min(1),
+    selector: z
+      .string()
+      .min(1)
+      .max(BB_DESKTOP_BROWSER_MAX_ANNOTATION_SELECTOR_LENGTH),
+    url: z.string().min(1).max(BB_DESKTOP_BROWSER_MAX_URL_LENGTH),
+    viewport: z
+      .object({
+        width: z.number().int().positive(),
+        height: z.number().int().positive(),
+      })
+      .strict(),
+    rectangle: bbDesktopBrowserAnnotationRectangleSchema,
+    comment: z
+      .string()
+      .trim()
+      .min(1)
+      .max(BB_DESKTOP_BROWSER_MAX_ANNOTATION_COMMENT_LENGTH),
+  })
+  .strict();
+export type BbDesktopBrowserAnnotationDraft = z.infer<
+  typeof bbDesktopBrowserAnnotationDraftSchema
+>;
+
 export type BbDesktopBrowserStateHandler = (
   state: BbDesktopBrowserState,
 ) => void;
@@ -232,6 +319,9 @@ export type BbDesktopBrowserScopedOpenTabHandler = (
 ) => void;
 export type BbDesktopBrowserSnapshotHandler = (
   snapshot: BbDesktopBrowserSnapshot,
+) => void;
+export type BbDesktopBrowserAnnotationDraftHandler = (
+  draft: BbDesktopBrowserAnnotationDraft,
 ) => void;
 export type BbDesktopBrowserUnsubscribe = () => void;
 
@@ -269,5 +359,15 @@ export interface BbDesktopBrowserApi {
    */
   onSnapshot?(
     listener: BbDesktopBrowserSnapshotHandler,
+  ): BbDesktopBrowserUnsubscribe;
+  /** Enable the native page annotation controller. Optional for version skew. */
+  setAnnotationMode?(request: BbDesktopBrowserSetAnnotationModeRequest): void;
+  /** Focus a stored annotation in its native browser tab. Optional for version skew. */
+  focusAnnotation?(request: BbDesktopBrowserFocusAnnotationRequest): void;
+  /** Synchronize visible server annotations into native page markers. Optional for version skew. */
+  syncAnnotations?(request: BbDesktopBrowserSyncAnnotationsRequest): void;
+  /** Subscribe to completed page annotation drafts. Optional for version skew. */
+  onAnnotationDraft?(
+    listener: BbDesktopBrowserAnnotationDraftHandler,
   ): BbDesktopBrowserUnsubscribe;
 }

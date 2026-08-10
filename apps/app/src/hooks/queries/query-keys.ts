@@ -28,6 +28,7 @@ export const THREADS_DISABLED_QUERY_KEY = "threadsDisabled";
 export const THREAD_QUERY_KEY = "thread";
 export const THREAD_TABS_QUERY_KEY = "threadTabs";
 export const THREAD_NOTES_QUERY_KEY = "threadNotes";
+export const THREAD_ANNOTATIONS_QUERY_KEY = "threadAnnotations";
 export const THREAD_DETAIL_BOOTSTRAP_QUERY_KEY = "threadDetailBootstrap";
 export const THREAD_DEFAULT_EXECUTION_OPTIONS_QUERY_KEY =
   "threadDefaultExecutionOptions";
@@ -206,6 +207,15 @@ export type ThreadTabsQueryKey = readonly [
 export type ThreadNotesQueryKey = readonly [
   typeof THREAD_NOTES_QUERY_KEY,
   string,
+];
+export interface ThreadAnnotationsQueryFilters {
+  browserTabId?: string;
+  status?: "open" | "sent" | "resolved";
+}
+export type ThreadAnnotationsQueryKey = readonly [
+  typeof THREAD_ANNOTATIONS_QUERY_KEY,
+  string,
+  ThreadAnnotationsQueryFilters,
 ];
 export type ThreadDetailBootstrapQueryKeyPrefix = readonly [
   typeof THREAD_DETAIL_BOOTSTRAP_QUERY_KEY,
@@ -742,6 +752,19 @@ export function threadTabsQueryKey(threadId: string): ThreadTabsQueryKey {
 
 export function threadNotesQueryKey(threadId: string): ThreadNotesQueryKey {
   return [THREAD_NOTES_QUERY_KEY, threadId];
+}
+
+export function threadAnnotationsQueryKey(
+  threadId: string,
+  filters: ThreadAnnotationsQueryFilters = {},
+): ThreadAnnotationsQueryKey {
+  return [THREAD_ANNOTATIONS_QUERY_KEY, threadId, filters];
+}
+
+export function threadAnnotationsQueryKeyPrefix(
+  threadId: string,
+): readonly [typeof THREAD_ANNOTATIONS_QUERY_KEY, string] {
+  return [THREAD_ANNOTATIONS_QUERY_KEY, threadId];
 }
 
 export function allThreadTabsQueryKeyPrefix(): ThreadTabsQueryKeyPrefix {

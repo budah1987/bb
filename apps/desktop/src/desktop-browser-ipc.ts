@@ -23,3 +23,11 @@ export const BB_DESKTOP_BROWSER_SCOPED_OPEN_TAB_CHANNEL =
   "bb-desktop:browser:scoped-open-tab";
 export const BB_DESKTOP_BROWSER_SNAPSHOT_CHANNEL =
   "bb-desktop:browser:snapshot";
+export const BB_DESKTOP_BROWSER_SET_ANNOTATION_MODE_CHANNEL =
+  "bb-desktop:browser:set-annotation-mode";
+export const BB_DESKTOP_BROWSER_FOCUS_ANNOTATION_CHANNEL =
+  "bb-desktop:browser:focus-annotation";
+export const BB_DESKTOP_BROWSER_SYNC_ANNOTATIONS_CHANNEL =
+  "bb-desktop:browser:sync-annotations";
+export const BB_DESKTOP_BROWSER_ANNOTATION_DRAFT_CHANNEL =
+  "bb-desktop:browser:annotation-draft";
