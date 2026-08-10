@@ -10,6 +10,7 @@ import { RecapSection } from "./RecapSection";
 import { ScratchpadSection } from "./ScratchpadSection";
 
 export interface NotesPanelProps {
+  enabled?: boolean;
   threadId: string;
 }
 
@@ -21,16 +22,16 @@ export interface NotesPanelProps {
  * summary as current simply by hiding the fact. Opening the tab at all is the
  * deliberate act — nothing further should be required to see the truth.
  */
-export function NotesPanel({ threadId }: NotesPanelProps) {
+export function NotesPanel({ enabled = true, threadId }: NotesPanelProps) {
   const [isRecapExpanded, setIsRecapExpanded] = useState(true);
   const [isScratchpadExpanded, setIsScratchpadExpanded] = useState(true);
-  const notesQuery = useThreadNotes(threadId);
+  const notesQuery = useThreadNotes(threadId, { enabled });
   // Only the recap needs the thread's current sequence, and only to judge
   // staleness — so the outline (a whole-thread payload) is fetched only while
   // the recap is open. React Query dedupes it against the timeline minimap's
   // own fetch when that is already mounted.
   const outlineQuery = useThreadConversationOutline(threadId, {
-    enabled: isRecapExpanded,
+    enabled: enabled && isRecapExpanded,
   });
   const toggleRecap = useCallback(
     () => setIsRecapExpanded((current) => !current),
@@ -52,20 +53,19 @@ export function NotesPanel({ threadId }: NotesPanelProps) {
   // changes, or a thread whose recap genuinely cannot be generated would retry
   // on every cache update.
   const generateRecap = useGenerateThreadRecap();
-  const requestRecapRef = useRef(generateRecap.mutate);
-  requestRecapRef.current = generateRecap.mutate;
+  const requestRecap = generateRecap.mutate;
   const hasRequestedRecapRef = useRef(false);
   useEffect(() => {
     hasRequestedRecapRef.current = false;
   }, [threadId]);
   useEffect(() => {
-    if (!isRecapExpanded || hasRequestedRecapRef.current) return;
+    if (!enabled || !isRecapExpanded || hasRequestedRecapRef.current) return;
     // Wait for the first read: without it we cannot tell an already-current
     // recap from a missing one, and would post before knowing anything.
     if (notesQuery.isLoading) return;
     hasRequestedRecapRef.current = true;
-    requestRecapRef.current({ threadId });
-  }, [isRecapExpanded, notesQuery.isLoading, threadId]);
+    requestRecap({ threadId });
+  }, [enabled, isRecapExpanded, notesQuery.isLoading, requestRecap, threadId]);
 
   return (
     <div className="flex min-w-0 flex-col px-1.5">

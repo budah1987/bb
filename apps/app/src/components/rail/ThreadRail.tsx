@@ -127,13 +127,20 @@ export function ThreadRail({ threadId }: ThreadRailProps) {
           <div className="flex min-w-0 flex-col px-1.5">
             <RailPanelTitle>Environment</RailPanelTitle>
             <div className={RAIL_SECTION_STACK_CLASS}>
-              <LocalServersSection threadId={threadId} />
-              <PreviewSection threadId={threadId} />
-              <PluginThreadRailSections threadId={threadId} />
+              {/* Keep section state for the exit animation, but pause hidden work. */}
+              <LocalServersSection
+                threadId={threadId}
+                enabled={isRailVisible}
+              />
+              <PreviewSection threadId={threadId} enabled={isRailVisible} />
+              <PluginThreadRailSections
+                threadId={threadId}
+                enabled={isRailVisible}
+              />
             </div>
           </div>
           <div className="mt-1 border-t border-border-hairline pt-1">
-            <NotesPanel threadId={threadId} />
+            <NotesPanel threadId={threadId} enabled={isRailVisible} />
           </div>
         </div>
       </aside>

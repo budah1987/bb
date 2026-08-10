@@ -3,14 +3,22 @@ import { usePluginSlots } from "@/lib/plugin-slots";
 import { PluginSlotMount } from "./PluginSlotMount";
 
 /** Plugin sections shown after BB's core environment rows in the right rail. */
-export function PluginThreadRailSections({ threadId }: { threadId: string }) {
+export function PluginThreadRailSections({
+  enabled = true,
+  threadId,
+}: {
+  enabled?: boolean;
+  threadId: string;
+}) {
   const { threadRailSections } = usePluginSlots();
   const threadQuery = useThread(threadId, {
-    enabled: threadRailSections.length > 0,
+    enabled: enabled && threadRailSections.length > 0,
   });
   const thread = threadQuery.data;
 
-  if (threadRailSections.length === 0 || thread === undefined) return null;
+  if (!enabled || threadRailSections.length === 0 || thread === undefined) {
+    return null;
+  }
 
   return (
     <>

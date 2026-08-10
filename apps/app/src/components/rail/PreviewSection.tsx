@@ -59,6 +59,7 @@ function PreviewRow({
 }
 
 export interface PreviewSectionProps {
+  enabled?: boolean;
   threadId: string;
 }
 
@@ -67,11 +68,14 @@ export interface PreviewSectionProps {
  * any deployments — in one list. A local provider without a shared address
  * remains visible because that missing address is useful state.
  */
-export function PreviewSection({ threadId }: PreviewSectionProps) {
+export function PreviewSection({
+  enabled = true,
+  threadId,
+}: PreviewSectionProps) {
   const [isExpanded, setIsExpanded] = useState(true);
-  const threadQuery = useThread(threadId);
+  const threadQuery = useThread(threadId, { enabled });
   const environmentId = threadQuery.data?.environmentId;
-  const previewsQuery = useEnvironmentPreviews(environmentId);
+  const previewsQuery = useEnvironmentPreviews(environmentId, { enabled });
   const openPreviewPanel = useOpenFixedPreviewPanel(threadId, threadId);
 
   const providers = useMemo(

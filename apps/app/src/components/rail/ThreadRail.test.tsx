@@ -18,26 +18,58 @@ vi.mock("@/hooks/useStandaloneCompactPwa", () => ({
 // The rail's only content today; its data hooks need a query client it has no
 // business owning in this test.
 vi.mock("@/components/notes/NotesPanel", () => ({
-  NotesPanel: ({ threadId }: { threadId: string }) => (
-    <div data-testid="notes-panel">{threadId}</div>
+  NotesPanel: ({
+    enabled,
+    threadId,
+  }: {
+    enabled: boolean;
+    threadId: string;
+  }) => (
+    <div data-testid="notes-panel" data-enabled={enabled}>
+      {threadId}
+    </div>
   ),
 }));
 
 vi.mock("./LocalServersSection", () => ({
-  LocalServersSection: ({ threadId }: { threadId: string }) => (
-    <div data-testid="local-servers-section">{threadId}</div>
+  LocalServersSection: ({
+    enabled,
+    threadId,
+  }: {
+    enabled: boolean;
+    threadId: string;
+  }) => (
+    <div data-testid="local-servers-section" data-enabled={enabled}>
+      {threadId}
+    </div>
   ),
 }));
 
 vi.mock("./PreviewSection", () => ({
-  PreviewSection: ({ threadId }: { threadId: string }) => (
-    <div data-testid="preview-section">{threadId}</div>
+  PreviewSection: ({
+    enabled,
+    threadId,
+  }: {
+    enabled: boolean;
+    threadId: string;
+  }) => (
+    <div data-testid="preview-section" data-enabled={enabled}>
+      {threadId}
+    </div>
   ),
 }));
 
 vi.mock("@/components/plugin/PluginThreadRailSections", () => ({
-  PluginThreadRailSections: ({ threadId }: { threadId: string }) => (
-    <div data-testid="plugin-rail-sections">{threadId}</div>
+  PluginThreadRailSections: ({
+    enabled,
+    threadId,
+  }: {
+    enabled: boolean;
+    threadId: string;
+  }) => (
+    <div data-testid="plugin-rail-sections" data-enabled={enabled}>
+      {threadId}
+    </div>
   ),
 }));
 
@@ -74,6 +106,16 @@ describe("ThreadRail", () => {
     expect(screen.getByTestId("plugin-rail-sections").textContent).toBe(
       "thr_1",
     );
+    for (const testId of [
+      "notes-panel",
+      "local-servers-section",
+      "preview-section",
+      "plugin-rail-sections",
+    ]) {
+      expect(screen.getByTestId(testId).getAttribute("data-enabled")).toBe(
+        "true",
+      );
+    }
   });
 
   it("renders nothing in the standalone compact PWA even when visible", () => {
@@ -88,7 +130,7 @@ describe("ThreadRail", () => {
     expect(window.localStorage.getItem("bb.thread.railVisible")).toBe("true");
   });
 
-  it("presents nothing while hidden, but stays mounted so it can animate out", () => {
+  it("stays mounted while hidden and pauses child work", () => {
     // Stated, not inherited from the atom's default — this asserts the hidden
     // branch, and must keep asserting it if the default ever flips.
     window.localStorage.setItem("bb.thread.railVisible", "false");
@@ -111,5 +153,15 @@ describe("ThreadRail", () => {
     // toggle animate in both directions.
     expect(card?.className).toContain("translate-x-full");
     expect(card?.className).toContain("opacity-0");
+    for (const testId of [
+      "notes-panel",
+      "local-servers-section",
+      "preview-section",
+      "plugin-rail-sections",
+    ]) {
+      expect(screen.getByTestId(testId).getAttribute("data-enabled")).toBe(
+        "false",
+      );
+    }
   });
 });

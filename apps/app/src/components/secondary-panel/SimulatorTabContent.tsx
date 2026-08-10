@@ -18,6 +18,7 @@ import { cn } from "@bb/shared-ui/lib/utils";
 import { sdk } from "@/lib/sdk";
 import { useEnvironmentSimulatorStatus } from "@/hooks/queries/environment-queries";
 import { invalidateEnvironmentSimulatorStatus } from "@/hooks/cache-owners/simulator-cache-owner";
+import { MjpegFrameBuffer } from "./mjpeg-frame-buffer";
 import { SECONDARY_PANEL_TOP_CHROME_BACKGROUND_CLASS } from "./panelChromeClasses";
 
 interface SimulatorTabContentProps {
@@ -31,6 +32,7 @@ interface NormalizedPoint {
 }
 
 interface DragState {
+  bounds: Pick<DOMRect, "height" | "left" | "top" | "width">;
   points: NormalizedPoint[];
   pointerId: number;
 }
@@ -39,37 +41,15 @@ function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : "Simulator request failed.";
 }
 
-function concatBytes(
-  a: Uint8Array<ArrayBuffer>,
-  b: Uint8Array<ArrayBufferLike>,
-): Uint8Array<ArrayBuffer> {
-  const result = new Uint8Array(a.length + b.length);
-  result.set(a);
-  result.set(b, a.length);
-  return result;
-}
-
-function markerIndex(
-  bytes: Uint8Array,
-  first: number,
-  second: number,
-  start = 0,
-): number {
-  for (let index = start; index < bytes.length - 1; index += 1) {
-    if (bytes[index] === first && bytes[index + 1] === second) return index;
-  }
-  return -1;
-}
-
 function useMjpegFrame(
-  stream: SimulatorStreamConnection | null,
-  enabled: boolean,
-): { frameUrl: string | null; disconnected: boolean } {
-  const [frameUrl, setFrameUrl] = useState<string | null>(null);
+  stream: SimulatorStreamConnection,
+  onFrame: (url: string) => void,
+): { disconnected: boolean; hasFrame: boolean } {
   const [disconnected, setDisconnected] = useState(false);
+  const [hasFrame, setHasFrame] = useState(false);
+  const hasFrameRef = useRef(false);
 
   useEffect(() => {
-    if (!stream || !enabled) return;
     const controller = new AbortController();
     let currentUrl: string | null = null;
     void (async () => {
@@ -84,46 +64,82 @@ function useMjpegFrame(
         }
         setDisconnected(false);
         const reader = response.body.getReader();
-        let buffer = new Uint8Array();
+        const buffer = new MjpegFrameBuffer();
         while (!controller.signal.aborted) {
           const chunk = await reader.read();
           if (chunk.done) break;
-          buffer = concatBytes(buffer, chunk.value);
-          let start = markerIndex(buffer, 0xff, 0xd8);
-          let end = start < 0 ? -1 : markerIndex(buffer, 0xff, 0xd9, start + 2);
-          while (start >= 0 && end >= 0) {
-            const blob = new Blob([buffer.slice(start, end + 2)], {
-              type: "image/jpeg",
-            });
-            const nextUrl = URL.createObjectURL(blob);
-            if (currentUrl) URL.revokeObjectURL(currentUrl);
-            currentUrl = nextUrl;
-            setFrameUrl(nextUrl);
-            buffer = buffer.slice(end + 2);
-            start = markerIndex(buffer, 0xff, 0xd8);
-            end = start < 0 ? -1 : markerIndex(buffer, 0xff, 0xd9, start + 2);
-          }
-          if (buffer.length > 8 * 1024 * 1024) {
-            buffer = buffer.slice(Math.max(0, buffer.length - 1024));
+          const frame = buffer.push(chunk.value).at(-1);
+          if (frame === undefined) continue;
+
+          const nextUrl = URL.createObjectURL(
+            new Blob([frame], { type: "image/jpeg" }),
+          );
+          onFrame(nextUrl);
+          if (currentUrl) URL.revokeObjectURL(currentUrl);
+          currentUrl = nextUrl;
+          if (!hasFrameRef.current) {
+            hasFrameRef.current = true;
+            setHasFrame(true);
           }
         }
         if (!controller.signal.aborted) setDisconnected(true);
-      } catch (error) {
+      } catch {
         if (!controller.signal.aborted) setDisconnected(true);
       }
     })();
     return () => {
       controller.abort();
       if (currentUrl) URL.revokeObjectURL(currentUrl);
-      setFrameUrl(null);
     };
-  }, [enabled, stream]);
+  }, [onFrame, stream]);
 
-  return { frameUrl, disconnected };
+  return { disconnected, hasFrame };
 }
 
-function normalizedPoint(event: PointerEvent<HTMLElement>): NormalizedPoint {
-  const bounds = event.currentTarget.getBoundingClientRect();
+function SimulatorStreamImage({
+  onDisconnectedChange,
+  stream,
+}: {
+  onDisconnectedChange: (disconnected: boolean) => void;
+  stream: SimulatorStreamConnection;
+}) {
+  const imageRef = useRef<HTMLImageElement>(null);
+  const applyFrame = useCallback((url: string) => {
+    if (imageRef.current) imageRef.current.src = url;
+  }, []);
+  const { disconnected, hasFrame } = useMjpegFrame(stream, applyFrame);
+
+  useEffect(() => {
+    onDisconnectedChange(disconnected);
+  }, [disconnected, onDisconnectedChange]);
+
+  return (
+    <>
+      <img
+        ref={imageRef}
+        alt=""
+        draggable={false}
+        className={cn("size-full object-contain", !hasFrame && "invisible")}
+      />
+      {!hasFrame ? (
+        <div className="absolute inset-0 flex items-center justify-center gap-2 text-sm text-white/70">
+          <Icon name="Spinner" className="size-4 animate-spin" />
+          Connecting…
+        </div>
+      ) : null}
+      {disconnected ? (
+        <div className="absolute left-1/2 top-2 -translate-x-1/2 rounded-full bg-background/90 px-2 py-1 text-xs shadow">
+          Reconnecting…
+        </div>
+      ) : null}
+    </>
+  );
+}
+
+function normalizedPoint(
+  event: PointerEvent<HTMLElement>,
+  bounds: Pick<DOMRect, "height" | "left" | "top" | "width">,
+): NormalizedPoint {
   return {
     x: Math.max(0, Math.min(1, (event.clientX - bounds.left) / bounds.width)),
     y: Math.max(0, Math.min(1, (event.clientY - bounds.top) / bounds.height)),
@@ -146,6 +162,7 @@ export function SimulatorTabContent({
   const [orientation, setOrientation] = useState<"portrait" | "landscape_left">(
     "portrait",
   );
+  const [disconnected, setDisconnected] = useState(false);
   const dragRef = useRef<DragState | null>(null);
 
   const refreshStatus = useCallback(async () => {
@@ -205,7 +222,6 @@ export function SimulatorTabContent({
     return () => window.clearTimeout(timer);
   }, [requestLease, stream]);
 
-  const { frameUrl, disconnected } = useMjpegFrame(stream, isActive);
   const mutationError =
     (attachCancelled ? null : attach.error) ??
     lease.error ??
@@ -219,15 +235,17 @@ export function SimulatorTabContent({
   const handlePointerDown = useCallback((event: PointerEvent<HTMLElement>) => {
     event.currentTarget.focus();
     event.currentTarget.setPointerCapture(event.pointerId);
+    const bounds = event.currentTarget.getBoundingClientRect();
     dragRef.current = {
+      bounds,
       pointerId: event.pointerId,
-      points: [normalizedPoint(event)],
+      points: [normalizedPoint(event, bounds)],
     };
   }, []);
   const handlePointerMove = useCallback((event: PointerEvent<HTMLElement>) => {
     const drag = dragRef.current;
     if (!drag || drag.pointerId !== event.pointerId) return;
-    const point = normalizedPoint(event);
+    const point = normalizedPoint(event, drag.bounds);
     const previous = drag.points.at(-1);
     if (
       !previous ||
@@ -241,7 +259,7 @@ export function SimulatorTabContent({
       const drag = dragRef.current;
       dragRef.current = null;
       if (!drag || drag.pointerId !== event.pointerId) return;
-      const end = normalizedPoint(event);
+      const end = normalizedPoint(event, drag.bounds);
       const start = drag.points[0] ?? end;
       if (Math.hypot(end.x - start.x, end.y - start.y) < 0.02) {
         sendControl({ kind: "tap", ...end });
@@ -468,12 +486,11 @@ export function SimulatorTabContent({
             dragRef.current = null;
           }}
         >
-          {frameUrl ? (
-            <img
-              src={frameUrl}
-              alt=""
-              draggable={false}
-              className="size-full object-contain"
+          {isActive && stream ? (
+            <SimulatorStreamImage
+              key={`${stream.url}:${stream.token}`}
+              stream={stream}
+              onDisconnectedChange={setDisconnected}
             />
           ) : (
             <div className="flex size-full items-center justify-center gap-2 text-sm text-white/70">
@@ -481,11 +498,6 @@ export function SimulatorTabContent({
               Connecting…
             </div>
           )}
-          {disconnected ? (
-            <div className="absolute left-1/2 top-2 -translate-x-1/2 rounded-full bg-background/90 px-2 py-1 text-xs shadow">
-              Reconnecting…
-            </div>
-          ) : null}
         </div>
       </div>
       {mutationError ? (

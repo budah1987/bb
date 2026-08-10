@@ -183,6 +183,7 @@ function DockerServiceRow({
 }
 
 export interface LocalServersSectionProps {
+  enabled?: boolean;
   threadId: string;
 }
 
@@ -197,18 +198,24 @@ export interface LocalServersSectionProps {
  * "Running" rather than a green one — the rail never claims a build is current
  * on the strength of the container being up.
  */
-export function LocalServersSection({ threadId }: LocalServersSectionProps) {
+export function LocalServersSection({
+  enabled = true,
+  threadId,
+}: LocalServersSectionProps) {
   const [isExpanded, setIsExpanded] = useState(true);
-  const threadQuery = useThread(threadId);
+  const threadQuery = useThread(threadId, { enabled });
   const environmentId = threadQuery.data?.environmentId;
-  const environmentQuery = useEnvironment(environmentId);
-  const dockerProvenanceQuery = useEnvironmentDockerProvenance(environmentId);
-  const dockerActivityQuery = useEnvironmentDockerActivity(environmentId, {
-    enabled: isExpanded,
+  const environmentQuery = useEnvironment(environmentId, { enabled });
+  const dockerProvenanceQuery = useEnvironmentDockerProvenance(environmentId, {
+    enabled,
   });
-  const threadTerminalsQuery = useThreadTerminals(threadId);
+  const dockerActivityQuery = useEnvironmentDockerActivity(environmentId, {
+    enabled: enabled && isExpanded,
+  });
+  const threadTerminalsQuery = useThreadTerminals(threadId, { enabled });
   const environmentTerminalsQuery = useEnvironmentTerminals(
     environmentId ?? "",
+    { enabled },
   );
   const openTerminal = useSetFixedRightTerminalActiveTerminal(
     threadId,

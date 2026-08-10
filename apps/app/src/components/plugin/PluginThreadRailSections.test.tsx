@@ -9,16 +9,20 @@ import { PluginThreadRailSections } from "./PluginThreadRailSections";
 
 const state = vi.hoisted<{
   component: ComponentType<PluginThreadRailSectionProps>;
-}>(() => ({ component: () => null }));
+  threadQueryOptions: unknown[];
+}>(() => ({ component: () => null, threadQueryOptions: [] }));
 
 vi.mock("@/hooks/queries/thread-queries", () => ({
-  useThread: () => ({
-    data: {
-      id: "thr_1",
-      projectId: "proj_1",
-      environmentId: "env_1",
-    },
-  }),
+  useThread: (_threadId: string, options: unknown) => {
+    state.threadQueryOptions.push(options);
+    return {
+      data: {
+        id: "thr_1",
+        projectId: "proj_1",
+        environmentId: "env_1",
+      },
+    };
+  },
 }));
 
 vi.mock("@/lib/plugin-slots", () => ({
@@ -38,6 +42,7 @@ vi.mock("@/lib/plugin-slots", () => ({
 afterEach(() => {
   cleanup();
   resetAllCrashedPluginSlotsForTest();
+  state.threadQueryOptions = [];
   vi.restoreAllMocks();
 });
 
@@ -71,5 +76,16 @@ describe("PluginThreadRailSections", () => {
     const { container } = render(<PluginThreadRailSections threadId="thr_1" />);
 
     expect(container.textContent).toBe("");
+  });
+
+  it("does not mount plugin content or load its thread while disabled", () => {
+    state.component = () => <div>Plugin checks</div>;
+
+    const { container } = render(
+      <PluginThreadRailSections threadId="thr_1" enabled={false} />,
+    );
+
+    expect(container.textContent).toBe("");
+    expect(state.threadQueryOptions).toEqual([{ enabled: false }]);
   });
 });
