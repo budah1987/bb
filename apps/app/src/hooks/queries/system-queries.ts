@@ -278,6 +278,7 @@ export function useSystemUsageLimits(args: UseSystemUsageLimitsArgs = {}) {
       }),
     enabled: args.enabled ?? true,
     ...FOCUS_OWNED_LIVE_QUERY_POLICY,
+    refetchInterval: 30_000,
   });
 }
 
