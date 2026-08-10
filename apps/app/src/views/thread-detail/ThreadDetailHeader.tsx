@@ -48,6 +48,11 @@ interface ThreadHeaderGitAction {
   target: ThreadGitActionDialogTarget;
 }
 
+interface ThreadHeaderContext {
+  branchName?: string;
+  projectName: string;
+}
+
 interface ThreadDetailHeaderProps {
   /**
    * Renders the thread menu. Responsive header actions belong in the menu only
@@ -63,6 +68,11 @@ interface ThreadDetailHeaderProps {
   onToggleSecondaryPanel: () => void;
   /** Plugin-contributed thread action buttons (design §4.9); optional. */
   pluginActions?: ReactNode;
+  /**
+   * Project and branch replace the conversation title when the selected
+   * sidebar provider renders that title in its thread context bar.
+   */
+  threadContext?: ThreadHeaderContext;
   threadHeaderGitActions: ThreadHeaderGitAction[];
   threadTitle: string;
   workspaceOpenButton?: ReactNode;
@@ -76,6 +86,7 @@ export function ThreadDetailHeader({
   onOpenThreadGitAction,
   onToggleSecondaryPanel,
   pluginActions,
+  threadContext,
   threadHeaderGitActions,
   threadTitle,
   workspaceOpenButton,
@@ -145,6 +156,13 @@ export function ThreadDetailHeader({
   // stable positions in the thread header.
   const showRightPanelToggle =
     secondaryPanelHost === null && !isSecondaryPanelOpen;
+  const rendersThreadContext = threadContext !== undefined;
+  const threadContextLabel = [
+    threadContext ? `Project: ${threadContext.projectName}` : null,
+    threadContext?.branchName ? `Branch: ${threadContext.branchName}` : null,
+  ]
+    .filter((label): label is string => label !== null)
+    .join(", ");
   const railLabel = isRailVisible ? "Hide rail" : "Show rail";
   // Unlike the panel toggle, this one stays put whether the rail is showing or
   // not: the rail carries no chrome of its own to hide itself from, so the
@@ -163,22 +181,68 @@ export function ThreadDetailHeader({
           isSplitPaneHeader && isFocused && CONTEXT_SELECTION_SURFACE_CLASS,
         )}
       >
-        <p
-          className={cn(
-            "relative min-w-0 truncate text-sm font-normal transition-colors",
-            isSplitPaneHeader && !isFocused && CONTEXT_INACTIVE_TEXT_CLASS,
-            beginPaneDrag &&
-              cn(
-                "cursor-grab touch-none select-none",
-                // Opt the drag handle out of the macOS title-bar drag region so a
-                // pane-reorder gesture isn't swallowed as a window drag.
-                usesDesktopChrome && MACOS_WINDOW_NO_DRAG_CLASS,
-              ),
-          )}
-          onPointerDown={beginPaneDrag ? handleTitlePointerDown : undefined}
-        >
-          <ThreadTitleMentions title={threadTitle} />
-        </p>
+        {rendersThreadContext ? (
+          <div
+            role="group"
+            aria-label={threadContextLabel || "Thread context"}
+            className={cn(
+              "relative flex min-w-0 items-center gap-2 text-sm font-normal transition-colors",
+              isSplitPaneHeader && !isFocused && CONTEXT_INACTIVE_TEXT_CLASS,
+              beginPaneDrag &&
+                cn(
+                  "cursor-grab touch-none select-none",
+                  // Opt the drag handle out of the macOS title-bar drag region so a
+                  // pane-reorder gesture isn't swallowed as a window drag.
+                  usesDesktopChrome && MACOS_WINDOW_NO_DRAG_CLASS,
+                ),
+            )}
+            onPointerDown={beginPaneDrag ? handleTitlePointerDown : undefined}
+          >
+            {threadContext ? (
+              <span className="flex min-w-0 items-center gap-1.5">
+                <Icon name="Folder" className="size-3.5 shrink-0" aria-hidden />
+                <span
+                  className="min-w-0 truncate"
+                  title={`Project: ${threadContext.projectName}`}
+                >
+                  {threadContext.projectName}
+                </span>
+              </span>
+            ) : null}
+            {threadContext?.branchName ? (
+              <span className="flex min-w-0 items-center gap-1.5">
+                <Icon
+                  name="GitBranch"
+                  className="size-3.5 shrink-0"
+                  aria-hidden
+                />
+                <span
+                  className="min-w-0 truncate"
+                  title={`Branch: ${threadContext.branchName}`}
+                >
+                  {threadContext.branchName}
+                </span>
+              </span>
+            ) : null}
+          </div>
+        ) : (
+          <p
+            className={cn(
+              "relative min-w-0 truncate text-sm font-normal transition-colors",
+              isSplitPaneHeader && !isFocused && CONTEXT_INACTIVE_TEXT_CLASS,
+              beginPaneDrag &&
+                cn(
+                  "cursor-grab touch-none select-none",
+                  // Opt the drag handle out of the macOS title-bar drag region so a
+                  // pane-reorder gesture isn't swallowed as a window drag.
+                  usesDesktopChrome && MACOS_WINDOW_NO_DRAG_CLASS,
+                ),
+            )}
+            onPointerDown={beginPaneDrag ? handleTitlePointerDown : undefined}
+          >
+            <ThreadTitleMentions title={threadTitle} />
+          </p>
+        )}
       </div>
       {childPillLabel ? (
         <Pill variant="outline" size="sm">

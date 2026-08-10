@@ -2,6 +2,12 @@ import { useIsCompactViewport } from "@bb/shared-ui/hooks/use-compact-viewport";
 import { useThreadListProvider } from "@/components/sidebar/threadListProvider";
 import { PluginSlotMount } from "./PluginSlotMount";
 
+/** Whether the selected sidebar provider supplies a thread context bar. */
+export function useHasPluginThreadContextBar(): boolean {
+  const provider = useThreadListProvider();
+  return provider?.experimental_contextBar !== undefined;
+}
+
 /**
  * The selected sidebar provider's pane companion. Selection is client-local,
  * so this surface follows the same provider resolution and fallback as the
