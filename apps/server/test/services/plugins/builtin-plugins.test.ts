@@ -529,6 +529,33 @@ describe("builtin plugin reconciliation", () => {
     expect(loadCount()).toBe(2);
   });
 
+  it("replaces a missing direct source with the bundled builtin", async () => {
+    const directRoot = join(workDir, "missing-direct-source");
+    await cp(fixtureRoot, directRoot, { recursive: true });
+    service = createService({
+      db,
+      dataDir: join(workDir, "data"),
+      includeBuiltin: false,
+    });
+    await service.start();
+    await service.install(directRoot);
+    await service.setEnabled("builtin-fixture", false);
+    await service.stop();
+    await rm(directRoot, { recursive: true, force: true });
+
+    service = createService({ db, dataDir: join(workDir, "data") });
+    await service.start();
+
+    expect(service.list()).toMatchObject([
+      {
+        id: "builtin-fixture",
+        source: "builtin:fixture",
+        enabled: false,
+        status: "disabled",
+      },
+    ]);
+  });
+
   it("keeps builtin CLI and UI contributions available", async () => {
     service = createService({
       db,

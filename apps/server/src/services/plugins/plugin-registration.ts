@@ -1,3 +1,4 @@
+import { existsSync } from "node:fs";
 import { resolve } from "node:path";
 import {
   getInstalledPlugin,
@@ -486,9 +487,12 @@ export function createPluginRegistration(context: PluginRegistrationContext) {
       const sameBundledSource =
         existing?.sourceKind === "builtin" &&
         existing.sourceBuiltinName === bundled.name;
+      const existingSourceIsMissing =
+        existing !== undefined && !existsSync(existing.rootDir);
       if (
         existing !== undefined &&
         !sameBundledSource &&
+        !existingSourceIsMissing &&
         !rowMatchesInstallSource(existing, provenance, {
           kind: "builtin",
           name: bundled.name,
