@@ -6,6 +6,7 @@ import {
   threadGitDiffResponseSchema,
   threadPullRequestSchema,
   workspaceDiffTargetSchema,
+  workspaceCommitPathsSchema,
   workspaceStatusSchema,
   workspaceFolderNameSchema,
 } from "@bb/domain";
@@ -237,10 +238,18 @@ export type PullRequestMetadataOptions = z.infer<
   typeof pullRequestMetadataOptionsSchema
 >;
 
+export const commitOptionsSchema = z
+  .object({
+    paths: workspaceCommitPathsSchema,
+  })
+  .strict();
+export type CommitOptions = z.infer<typeof commitOptionsSchema>;
+
 export const environmentActionRequestSchema = z.discriminatedUnion("action", [
   z
     .object({
       action: z.literal("commit"),
+      options: commitOptionsSchema.optional(),
     })
     .strict(),
   z
@@ -373,13 +382,19 @@ export const environmentActionFailureDetailsSchema = z.discriminatedUnion(
       errorMessage: z.string(),
     }),
     z.object({
+      kind: z.literal("commit_selection_stale"),
+    }),
+    z.object({
       kind: z.literal("squash_merge_conflict"),
       conflictFiles: z.array(z.string()),
     }),
     z.object({
       kind: z.literal("squash_merge_commit_failed"),
-      stage: z.enum(["prep_commit", "squash_commit"]),
+      stage: z.literal("squash_commit"),
       errorMessage: z.string(),
+    }),
+    z.object({
+      kind: z.literal("squash_merge_dirty_worktree"),
     }),
     z.object({
       kind: z.literal("workspace_unavailable"),

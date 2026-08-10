@@ -19,6 +19,7 @@ import {
 
 interface EnvironmentCommitCommandOptions {
   json?: boolean;
+  path?: string[];
 }
 
 interface EnvironmentShowCommandOptions {
@@ -268,7 +269,7 @@ function buildEnvironmentDiffPatchArgs(
   }
 }
 
-function collectPath(value: string, previous: string[]): string[] {
+function collectPath(value: string, previous: string[] = []): string[] {
   return [...previous, value];
 }
 
@@ -726,13 +727,17 @@ export function registerEnvironmentCommands(
   environment
     .command("commit <id>")
     .description("Commit changes in an environment")
+    .option("--path <path>", "Changed file path (repeatable)", collectPath)
     .option("--json", "Print machine-readable JSON output")
     .action(
       action(async (id: string, opts: EnvironmentCommitCommandOptions) => {
         const sdk = createCliBbSdk(getUrl());
         let result: CommitActionResponse;
         try {
-          result = await sdk.environments.commit({ environmentId: id });
+          result = await sdk.environments.commit({
+            environmentId: id,
+            ...(opts.path === undefined ? {} : { paths: opts.path }),
+          });
         } catch (err: unknown) {
           throw prependErrorContext(
             `Failed to commit in environment ${id}`,

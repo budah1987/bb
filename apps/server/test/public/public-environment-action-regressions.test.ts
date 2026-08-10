@@ -297,6 +297,81 @@ describe("public environment action regressions", () => {
     });
   });
 
+  it("blocks squash merge when the selected worktree has uncommitted changes", async () => {
+    await withTestHarness(async (harness) => {
+      const { host } = seedHostSession(harness.deps, {
+        id: "host-squash-dirty-worktree",
+      });
+      const { project } = seedProjectWithSource(harness.deps, {
+        hostId: host.id,
+      });
+      const environment = seedEnvironment(harness.deps, {
+        hostId: host.id,
+        projectId: project.id,
+        managed: true,
+        workspaceProvisionType: "managed-worktree",
+        branchName: "feature/dirty",
+        defaultBranch: "main",
+        path: "/tmp/squash-dirty-worktree",
+      });
+
+      const responsePromise = harness.app.request(
+        `/api/v1/environments/${environment.id}/actions`,
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            action: "squash_merge",
+            options: { mergeBaseBranch: "main" },
+          }),
+        },
+      );
+
+      const statusCommand = await waitForQueuedCommand(
+        harness,
+        ({ command }) =>
+          command.type === "workspace.status" &&
+          command.environmentId === environment.id,
+      );
+      await reportQueuedCommandSuccess(harness, statusCommand, {
+        outcome: "available",
+        workspaceStatus: {
+          workingTree: {
+            insertions: 1,
+            deletions: 0,
+            files: [
+              {
+                path: "README.md",
+                status: "M",
+                insertions: 1,
+                deletions: 0,
+              },
+            ],
+            hasUncommittedChanges: true,
+            state: "dirty_uncommitted",
+          },
+          branch: {
+            currentBranch: "feature/dirty",
+            defaultBranch: "main",
+          },
+          checkout: {
+            kind: "branch",
+            branchName: "feature/dirty",
+            headSha: null,
+          },
+          mergeBase: null,
+        },
+      });
+
+      const response = await responsePromise;
+      expect(response.status).toBe(409);
+      await expect(readJson(response)).resolves.toMatchObject({
+        code: "dirty_worktree",
+        details: { kind: "squash_merge_dirty_worktree" },
+      });
+    });
+  });
+
   it("clears the stored branch during detached squash-merge status preflight", async () => {
     await withTestHarness(async (harness) => {
       const { host } = seedHostSession(harness.deps, {

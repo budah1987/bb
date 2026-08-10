@@ -803,7 +803,14 @@ function useArchiveEnvironmentThreadGroupAction({
           navigate(`/projects/${projectId}`);
         }
       })
-      .catch(() => undefined);
+      .catch((error: unknown) => {
+        appToast.error("Failed to archive workspace", {
+          description: getMutationErrorMessage({
+            error,
+            fallbackMessage: "Workspace was not archived",
+          }),
+        });
+      });
   }, [
     archiveThreads,
     environmentId,

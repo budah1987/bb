@@ -929,9 +929,11 @@ describe("server-contract canonical schemas", () => {
     expect(
       environmentActionRequestSchema.parse({
         action: "commit",
+        options: { paths: ["README.md", "src/index.ts"] },
       }),
     ).toMatchObject({
       action: "commit",
+      options: { paths: ["README.md", "src/index.ts"] },
     });
 
     expect(

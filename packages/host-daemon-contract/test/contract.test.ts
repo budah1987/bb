@@ -764,6 +764,8 @@ const INTENTIONAL_OPTIONAL_HOST_DAEMON_FIELDS: Record<string, string> = {
     "environment.provision only includes checkout instructions for unmanaged workspaces that requested a branch mutation.",
   "hostDaemonCommandSchema.pullRequestNumber":
     "managed worktree provisioning includes a pull request number only when the worktree must start from a fetched GitHub PR head.",
+  "hostDaemonCommandSchema.paths":
+    "workspace.commit omits paths to commit every change in the selected worktree; presence scopes the commit to exact changed files.",
   "hostDaemonCommandSchema.targetPath":
     "project.clone omits targetPath when the daemon should derive its default checkout location for the project.",
   "hostDaemonOnlineRpcCommandSchema.expectedSha256":
@@ -806,6 +808,8 @@ const INTENTIONAL_OPTIONAL_HOST_DAEMON_FIELDS: Record<string, string> = {
     "host.list_files may omit a search string to list files without filtering.",
   "hostDaemonOnlineRpcCommandSchema.path":
     "host.browse_directory may omit path to list the host's home directory, which a remote caller cannot resolve.",
+  "hostDaemonOnlineRpcCommandSchema.paths":
+    "workspace.diff omits paths for the full target diff; commit message generation supplies paths for an exact selected-file diff.",
   "hostDaemonOnlineRpcCommandSchema.ref":
     "host.read_file may omit ref to read from disk; setting ref switches to git history at that ref.",
   "hostDaemonOnlineRpcCommandSchema.rootPath":
@@ -1099,8 +1103,8 @@ describe("host-daemon command schemas", () => {
   // Version 80 includes live workspace metadata refresh and scopes GitHub PR
   // commands to an authenticated account. Older daemons do not support the
   // added messages and fields, so the bump forces an update.
-  it("uses protocol version 80 for account-scoped GitHub workflows", () => {
-    expect(HOST_DAEMON_PROTOCOL_VERSION).toBe(80);
+  it("uses protocol version 81 for selected-path workspace commits", () => {
+    expect(HOST_DAEMON_PROTOCOL_VERSION).toBe(81);
   });
 
   it("binds Plan cancellation to a required turn id and typed result", () => {
@@ -1212,10 +1216,12 @@ describe("host-daemon command schemas", () => {
           workspaceProvisionType: "unmanaged",
         },
         message: "Checkpoint work",
+        paths: ["README.md", "src/index.ts"],
       }),
     ).toMatchObject({
       type: "workspace.commit",
       message: "Checkpoint work",
+      paths: ["README.md", "src/index.ts"],
     });
 
     expect(

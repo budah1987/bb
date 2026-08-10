@@ -396,6 +396,7 @@ const commandHandlers: CommandHandlerMap = {
     return entry.workspace.commit({
       message: command.message,
       noVerify: true,
+      paths: command.paths,
     });
   },
   "workspace.squash_merge": squashMerge,
@@ -586,6 +587,7 @@ const onlineRpcHandlers: OnlineRpcHandlerMap = {
         outcome: "available",
         diff: await resolution.entry.workspace.getDiff({
           target: command.target,
+          paths: command.paths,
           maxDiffBytes: command.maxDiffBytes,
           maxFileListBytes: command.maxFileListBytes,
         }),

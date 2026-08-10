@@ -1,5 +1,34 @@
 import { z } from "zod";
 
+export const WORKSPACE_COMMIT_MAX_PATHS = 10_000;
+export const WORKSPACE_REPOSITORY_PATH_MAX_LENGTH = 4_096;
+
+const workspaceRepositoryPathSchema = z
+  .string()
+  .min(1)
+  .max(WORKSPACE_REPOSITORY_PATH_MAX_LENGTH)
+  .refine(
+    (value) =>
+      !value.startsWith("/") &&
+      !/^[A-Za-z]:[\\/]/u.test(value) &&
+      !value.split("/").includes(".."),
+    "Path must be repository-relative",
+  );
+
+/**
+ * Selected repository-relative paths for a partial workspace commit. Omission
+ * means every change in the selected worktree; an explicit list is non-empty
+ * and unique so every layer applies one unambiguous selection.
+ */
+export const workspaceCommitPathsSchema = z
+  .array(workspaceRepositoryPathSchema)
+  .min(1)
+  .max(WORKSPACE_COMMIT_MAX_PATHS)
+  .refine((paths) => new Set(paths).size === paths.length, {
+    message: "Commit paths must be unique",
+  });
+export type WorkspaceCommitPaths = z.infer<typeof workspaceCommitPathsSchema>;
+
 export const workspaceDiffTargetSchema = z.discriminatedUnion("type", [
   z.object({
     type: z.literal("uncommitted"),

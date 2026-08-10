@@ -4,6 +4,7 @@ import type {
   ThreadGitDiffResponse,
   WorkspaceCommitSummary,
   WorkspaceDiffTarget,
+  WorkspaceCommitPaths,
   WorkspaceFileStatus,
   WorkspaceFileStatusKind,
   WorkspaceStatus,
@@ -53,6 +54,7 @@ import { runGitWithWorktreeMetadataLock } from "./worktree-metadata-lock.js";
 
 export interface DiffOptions {
   target?: WorkspaceDiffTarget;
+  paths?: WorkspaceCommitPaths;
   maxDiffBytes?: number;
   maxFileListBytes?: number;
 }
@@ -66,6 +68,7 @@ export type DiffResult = ThreadGitDiffResponse;
 export interface CommitOptions {
   message: string;
   noVerify: boolean;
+  paths?: WorkspaceCommitPaths;
 }
 
 export interface CommitResult {
@@ -489,7 +492,11 @@ function withDiffPathspec(
   }
   const withoutSeparator =
     args[args.length - 1] === "--" ? args.slice(0, -1) : args;
-  return [...withoutSeparator, "--", ...paths];
+  return [
+    ...withoutSeparator,
+    "--",
+    ...paths.map((path) => `:(literal)${path}`),
+  ];
 }
 
 /**
@@ -883,6 +890,7 @@ export class Workspace {
     return this.buildDiffSummary({
       maxDiffBytes: options.maxDiffBytes,
       maxFileListBytes: options.maxFileListBytes,
+      paths: options.paths,
       target,
     });
   }
@@ -1042,23 +1050,102 @@ export class Workspace {
     await ensureGitRepo(this.path);
 
     return this.withMutation(async () => {
-      await runGit(["add", "-A"], { cwd: this.path });
+      let commitPaths: string[] | undefined;
+      let headSha: string | null = null;
+      if (options.paths !== undefined) {
+        const status = await runGit(
+          ["status", "--porcelain=v1", "--untracked-files=all"],
+          { cwd: this.path },
+        );
+        const changedPaths = new Set(
+          parsePorcelainEntries(status.stdout).map((entry) => entry.path),
+        );
+        const stalePaths = options.paths.filter(
+          (selectedPath) => !changedPaths.has(selectedPath),
+        );
+        if (stalePaths.length > 0) {
+          const displayedPaths = stalePaths.slice(0, 5).join(", ");
+          const remainingCount = stalePaths.length - 5;
+          throw new WorkspaceError(
+            "stale_selection",
+            `Selected paths are no longer changed: ${displayedPaths}${
+              remainingCount > 0 ? ` and ${remainingCount} more` : ""
+            }`,
+          );
+        }
+
+        headSha = await this.getHeadSha();
+        const nameStatus = headSha
+          ? await runGit(
+              ["diff", "--no-ext-diff", "--name-status", "-M", "-z", headSha],
+              { cwd: this.path },
+            )
+          : { stdout: "" };
+        const previousPathByPath = new Map(
+          parseNameStatusSourceEntries(nameStatus.stdout).map(
+            (entry) => [entry.path, entry.previousPath] as const,
+          ),
+        );
+        commitPaths = options.paths.flatMap((selectedPath) => {
+          const previousPath = previousPathByPath.get(selectedPath);
+          return previousPath && previousPath !== selectedPath
+            ? [previousPath, selectedPath]
+            : [selectedPath];
+        });
+      } else {
+        await runGit(["add", "-A"], { cwd: this.path });
+      }
       // Detect "nothing to commit" deterministically inside the mutation lock,
       // so a commit racing a concurrent commit (or an already-clean tree)
       // surfaces as a typed no_changes condition the server maps to 409,
       // instead of a generic git failure that surfaces as a 502.
-      const staged = await runGit(["diff", "--cached", "--quiet"], {
-        cwd: this.path,
-        allowFailure: true,
-      });
-      if (staged.exitCode === 0) {
-        throw new WorkspaceError("no_changes", "No changes to commit");
-      }
       const commitArgs = ["commit", "-m", options.message];
       if (options.noVerify) {
         commitArgs.push("--no-verify");
       }
-      await runGit(commitArgs, { cwd: this.path });
+
+      if (commitPaths === undefined) {
+        const staged = await runGit(["diff", "--cached", "--quiet"], {
+          cwd: this.path,
+          allowFailure: true,
+        });
+        if (staged.exitCode === 0) {
+          throw new WorkspaceError("no_changes", "No changes to commit");
+        }
+        await runGit(commitArgs, { cwd: this.path });
+      } else {
+        const tempDir = await createTempDir("bb-commit-index-");
+        const tempIndexEnv = {
+          GIT_INDEX_FILE: path.join(tempDir, "index"),
+        };
+        try {
+          await runGit(
+            headSha ? ["read-tree", headSha] : ["read-tree", "--empty"],
+            {
+              cwd: this.path,
+              env: tempIndexEnv,
+            },
+          );
+          await runGit(
+            ["--literal-pathspecs", "add", "-A", "--", ...commitPaths],
+            { cwd: this.path, env: tempIndexEnv },
+          );
+          const staged = await runGit(["diff", "--cached", "--quiet"], {
+            cwd: this.path,
+            env: tempIndexEnv,
+            allowFailure: true,
+          });
+          if (staged.exitCode === 0) {
+            throw new WorkspaceError("no_changes", "No changes to commit");
+          }
+          await runGit(commitArgs, { cwd: this.path, env: tempIndexEnv });
+          await runGit(["--literal-pathspecs", "reset", "--", ...commitPaths], {
+            cwd: this.path,
+          });
+        } finally {
+          await fs.rm(tempDir, { recursive: true, force: true });
+        }
+      }
       const commitSha = await revParse(this.path, "HEAD");
       const commitSubject = (
         await runGit(["log", "-1", "--pretty=%s"], { cwd: this.path })
@@ -1321,6 +1408,7 @@ export class Workspace {
 
   private async buildDiffSummary(args: {
     target: WorkspaceDiffTarget;
+    paths?: string[];
     maxDiffBytes?: number;
     maxFileListBytes?: number;
   }): Promise<DiffSummary> {
@@ -1329,6 +1417,7 @@ export class Workspace {
       mergeBaseRef,
     } = await this.readDiffArtifacts({
       target: args.target,
+      paths: args.paths,
       maxDiffBytes: args.maxDiffBytes,
       maxFileListBytes: args.maxFileListBytes,
     });
@@ -1957,9 +2046,7 @@ export class Workspace {
    * range/sha args for a diff target's TRACKED side. Returns `null` for branch
    * targets whose merge base cannot be resolved — those surface as no diff.
    */
-  private async resolveTrackedDiffRange(
-    target: WorkspaceDiffTarget,
-  ): Promise<{
+  private async resolveTrackedDiffRange(target: WorkspaceDiffTarget): Promise<{
     baseArgs: string[];
     rangeArgs: string[];
     usesUncommittedHead: boolean;

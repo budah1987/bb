@@ -18,15 +18,17 @@ import type {
   EnvironmentActionFailureDetails,
   SquashMergeActionResponse,
 } from "@bb/server-contract";
-import { environmentActionFailureDetailsSchema } from "@bb/server-contract";
 import { useDialogState } from "@/hooks/useDialogState";
-import type { ThreadGitActionDialogTarget } from "@/components/dialogs/ThreadGitActionDialog";
+import {
+  COMMIT_SELECTION_STALE_MESSAGE,
+  type ThreadGitActionDialogTarget,
+} from "@/components/dialogs/ThreadGitActionDialog";
 import {
   buildCommitFailureFollowUpInstruction,
   buildSquashMergeCommitFailureFollowUpInstruction,
   buildSquashMergeConflictFollowUpInstruction,
 } from "@/lib/thread-operation-prompts";
-import { BbHttpError } from "@/lib/sdk";
+import { toEnvironmentActionFailureDetails } from "@/lib/environment-action-failures";
 import { getMutationErrorMessage } from "@/lib/mutation-errors";
 import type {
   RequestEnvironmentActionMutationLike,
@@ -63,13 +65,20 @@ interface RunQueuedGitActionParams {
   toastId: string | number;
 }
 
+interface CommitThreadParams {
+  /** Repository-relative paths selected in the commit dialog. */
+  selectedPaths: string[];
+}
+
+interface RunCommitThreadParams
+  extends CommitThreadParams, RunQueuedGitActionParams {}
+
 interface SquashMergeThreadParams {
   mergeBaseBranch: string;
 }
 
 interface RunSquashMergeThreadParams
-  extends SquashMergeThreadParams,
-    RunQueuedGitActionParams {}
+  extends SquashMergeThreadParams, RunQueuedGitActionParams {}
 
 type AskAgentToFixGitAction = (params: AskAgentToFixGitActionParams) => void;
 
@@ -109,26 +118,6 @@ type GitActionSuccessResponse =
   | CommitActionResponse
   | SquashMergeActionResponse;
 
-function toEnvironmentActionFailureDetails(
-  error: unknown,
-): EnvironmentActionFailureDetails | undefined {
-  if (
-    !(error instanceof BbHttpError) ||
-    typeof error.body !== "object" ||
-    error.body === null
-  ) {
-    return undefined;
-  }
-  if (!("details" in error.body)) {
-    return undefined;
-  }
-
-  const result = environmentActionFailureDetailsSchema.safeParse(
-    error.body.details,
-  );
-  return result.success ? result.data : undefined;
-}
-
 function getEnvironmentActionFailureDetailMessage(
   details: EnvironmentActionFailureDetails,
 ): string | undefined {
@@ -141,6 +130,10 @@ function getEnvironmentActionFailureDetailMessage(
         : undefined;
     case "squash_merge_commit_failed":
       return details.errorMessage;
+    case "commit_selection_stale":
+      return COMMIT_SELECTION_STALE_MESSAGE;
+    case "squash_merge_dirty_worktree":
+      return "Commit this worktree before squash merging.";
     default:
       return undefined;
   }
@@ -370,9 +363,7 @@ export function useThreadGitActions({
       }
       if (hasUncommitted || hasUnmerged) {
         actions.push({
-          target: {
-            kind: hasUncommitted ? "commit_and_squash_merge" : "squash_merge",
-          },
+          target: { kind: "squash_merge" },
           label: "Squash merge",
         });
       }
@@ -450,7 +441,7 @@ export function useThreadGitActions({
   );
 
   const runCommitThread = useCallback(
-    async ({ toastId }: RunQueuedGitActionParams) => {
+    async ({ selectedPaths, toastId }: RunCommitThreadParams) => {
       const attachedEnvironmentId = thread?.environmentId;
       if (!thread || !attachedEnvironmentId) {
         appToast.dismiss(toastId);
@@ -462,6 +453,7 @@ export function useThreadGitActions({
         const response = await requestEnvironmentAction.mutateAsync({
           id: attachedEnvironmentId,
           action: "commit",
+          options: { paths: selectedPaths },
         });
         if (response.action !== "commit") {
           throw new Error("Expected commit action response.");
@@ -479,17 +471,26 @@ export function useThreadGitActions({
           threadId,
           toastId,
         });
+        // Rethrown so the commit dialog stays open on failure and can show the
+        // refreshed file list next to the error.
+        throw nextError;
       }
     },
     [handleAskAgentToFixGitAction, requestEnvironmentAction, thread],
   );
 
-  const handleCommitThread = useCallback(async () => {
-    if (!thread?.environmentId) {
-      return;
-    }
-    await enqueueGitAction({ action: "commit", run: runCommitThread });
-  }, [enqueueGitAction, runCommitThread, thread?.environmentId]);
+  const handleCommitThread = useCallback(
+    async ({ selectedPaths }: CommitThreadParams) => {
+      if (!thread?.environmentId) {
+        return;
+      }
+      await enqueueGitAction({
+        action: "commit",
+        run: async ({ toastId }) => runCommitThread({ selectedPaths, toastId }),
+      });
+    },
+    [enqueueGitAction, runCommitThread, thread?.environmentId],
+  );
 
   const runSquashMergeThread = useCallback(
     async ({ mergeBaseBranch, toastId }: RunSquashMergeThreadParams) => {
@@ -516,6 +517,14 @@ export function useThreadGitActions({
           toastId,
         });
       } catch (nextError) {
+        if (
+          toEnvironmentActionFailureDetails(nextError)?.kind ===
+          "squash_merge_dirty_worktree"
+        ) {
+          appToast.dismiss(toastId);
+          threadGitActionDialog.onOpen({ kind: "commit" });
+          return;
+        }
         showGitActionErrorToast({
           action: "squash_merge",
           error: nextError,
@@ -527,7 +536,12 @@ export function useThreadGitActions({
         });
       }
     },
-    [handleAskAgentToFixGitAction, requestEnvironmentAction, thread],
+    [
+      handleAskAgentToFixGitAction,
+      requestEnvironmentAction,
+      thread,
+      threadGitActionDialog,
+    ],
   );
 
   const handleSquashMergeThread = useCallback(

@@ -60,7 +60,6 @@ import {
 
 const COMMIT_FALLBACK_MESSAGE = "bb: automated commit";
 const SQUASH_MERGE_FALLBACK_MESSAGE = "bb: squash merge";
-const PRE_MERGE_COMMIT_MESSAGE = "bb: pre-merge commit";
 
 /** Caps for diffs sent to the inference model for commit message generation. */
 const AI_MAX_DIFF_BYTES = 32_000;
@@ -77,7 +76,7 @@ interface AssertSquashMergeTargetIsLocalArgs {
  * has no committed work) to a clean 409, instead of letting it surface as a
  * generic 502 git_command_failed.
  */
-async function mapNoChangesTo409<TResult>(
+async function mapWorkspaceMutationTo409<TResult>(
   conflictMessage: string,
   run: () => Promise<TResult>,
 ): Promise<TResult> {
@@ -86,6 +85,11 @@ async function mapNoChangesTo409<TResult>(
   } catch (error) {
     if (error instanceof ApiError && error.body.code === "no_changes") {
       throw new ApiError(409, "no_changes", conflictMessage);
+    }
+    if (error instanceof ApiError && error.body.code === "stale_selection") {
+      throw new ApiError(409, "stale_selection", error.body.message, {
+        details: { kind: "commit_selection_stale" },
+      });
     }
     throw error;
   }
@@ -703,6 +707,7 @@ export function registerEnvironmentRoutes(app: Hono, deps: AppDeps): void {
       case "commit": {
         const target = requireWorkspaceCommandTarget(environment);
         const { workspaceContext } = target;
+        const selectedPaths = payload.options?.paths;
 
         const [statusResult, diffResult] = await Promise.all([
           callEnvironmentWorkspaceStatus(deps, {
@@ -717,6 +722,7 @@ export function registerEnvironmentRoutes(app: Hono, deps: AppDeps): void {
               environmentId: target.environmentId,
               workspaceContext,
               target: { type: "uncommitted" },
+              paths: selectedPaths,
               maxDiffBytes: AI_MAX_DIFF_BYTES,
               maxFileListBytes: AI_MAX_FILE_LIST_BYTES,
             },
@@ -740,7 +746,7 @@ export function registerEnvironmentRoutes(app: Hono, deps: AppDeps): void {
         });
         const commitMessage = aiMessage ?? COMMIT_FALLBACK_MESSAGE;
 
-        const result = await mapNoChangesTo409(
+        const result = await mapWorkspaceMutationTo409(
           "No uncommitted changes to commit",
           () =>
             runLiveCommandAndWait(deps, {
@@ -751,6 +757,7 @@ export function registerEnvironmentRoutes(app: Hono, deps: AppDeps): void {
                 environmentId: target.environmentId,
                 workspaceContext,
                 message: commitMessage,
+                paths: selectedPaths,
               },
             }),
         );
@@ -782,6 +789,15 @@ export function registerEnvironmentRoutes(app: Hono, deps: AppDeps): void {
           );
         }
 
+        if (workspaceStatus.workingTree.hasUncommittedChanges) {
+          throw new ApiError(
+            409,
+            "dirty_worktree",
+            "Commit changes in this worktree before squash merging",
+            { details: { kind: "squash_merge_dirty_worktree" } },
+          );
+        }
+
         const targetBranchResult = await callHostRetryableOnlineRpc(deps, {
           hostId: environment.hostId,
           timeoutMs: COMMAND_TIMEOUT_MS,
@@ -796,19 +812,6 @@ export function registerEnvironmentRoutes(app: Hono, deps: AppDeps): void {
           selectedBranch: targetBranchResult.selectedBranch,
           targetBranch,
         });
-
-        if (workspaceStatus.workingTree.hasUncommittedChanges) {
-          await runLiveCommandAndWait(deps, {
-            hostId: target.hostId,
-            timeoutMs: COMMAND_TIMEOUT_MS,
-            command: {
-              type: "workspace.commit",
-              environmentId: target.environmentId,
-              workspaceContext,
-              message: PRE_MERGE_COMMIT_MESSAGE,
-            },
-          });
-        }
 
         const diffResult = await callHostRetryableOnlineRpc(deps, {
           hostId: target.hostId,
@@ -835,7 +838,7 @@ export function registerEnvironmentRoutes(app: Hono, deps: AppDeps): void {
         });
         const commitMessage = aiMessage ?? SQUASH_MERGE_FALLBACK_MESSAGE;
 
-        const result = await mapNoChangesTo409(
+        const result = await mapWorkspaceMutationTo409(
           `No changes to merge into ${targetBranch}`,
           () =>
             runLiveCommandAndWait(deps, {

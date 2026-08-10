@@ -15,6 +15,7 @@ import {
   provisioningTranscriptEntrySchema,
   rawDiffFileStatSchema,
   workspaceDiffTargetSchema,
+  workspaceCommitPathsSchema,
   workspaceStatusSchema,
   workspaceFolderNameSchema,
   gitHostPullRequestSchema,
@@ -36,7 +37,7 @@ import {
   providerCliStatusResponseSchema,
 } from "./local.js";
 
-export const HOST_DAEMON_PROTOCOL_VERSION = 80 as const;
+export const HOST_DAEMON_PROTOCOL_VERSION = 81 as const;
 export const githubAccountLoginSchema = z.string().trim().min(1).max(255);
 
 export {
@@ -1030,6 +1031,7 @@ const workspaceStatusCommandSchema = hostDaemonWorkspaceTargetSchema.extend({
 const workspaceDiffCommandSchema = hostDaemonWorkspaceTargetSchema.extend({
   type: z.literal("workspace.diff"),
   target: workspaceDiffTargetSchema,
+  paths: workspaceCommitPathsSchema.optional(),
   maxDiffBytes: z.number().int().positive(),
   maxFileListBytes: z.number().int().positive(),
 });
@@ -1105,6 +1107,7 @@ const workspaceCommitCommandSchema = hostDaemonWorkspaceTargetSchema
   .extend({
     type: z.literal("workspace.commit"),
     message: z.string().min(1),
+    paths: workspaceCommitPathsSchema.optional(),
   })
   .strict();
 
