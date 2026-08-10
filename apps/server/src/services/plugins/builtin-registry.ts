@@ -4,8 +4,8 @@ import { fileURLToPath } from "node:url";
 
 export interface BundledPluginDefinition {
   /**
-   * Directory name under `plugins/` and under the packaged builtin-plugins
-   * dir; also the `builtin:<name>` source name.
+   * Source directory name and packaged builtin-plugins directory name; also
+   * the `builtin:<name>` source name.
    */
   name: string;
   /** derivePluginId(packageName); declared statically so ids are reservable without manifest reads. */
@@ -29,8 +29,15 @@ interface ResolveBuiltinPluginRootPathArgs {
 
 export const BUILTIN_PLUGINS_DIRECTORY_NAME = "builtin-plugins";
 
-/** Every bundled plugin's source lives under `<repoRoot>/plugins/<name>`. */
+/** Bundled sources live under `plugins/`; T3 remains in its maintained example. */
 const REPO_PLUGINS_DIRECTORY_NAME = "plugins";
+const REPO_EXAMPLE_PLUGINS_DIRECTORY_NAME = "examples/plugins";
+
+function resolveRepoPluginsDirectoryName(name: string): string {
+  return name === "t3sidebar"
+    ? REPO_EXAMPLE_PLUGINS_DIRECTORY_NAME
+    : REPO_PLUGINS_DIRECTORY_NAME;
+}
 
 export const PLUGIN_CATALOG_CATEGORIES = [
   "Workflow management",
@@ -42,6 +49,12 @@ export const PLUGIN_CATALOG_CATEGORIES = [
 ] as const;
 
 export const BUILTIN_PLUGINS = [
+  {
+    name: "attention",
+    pluginId: "attention",
+    defaultEnabled: true,
+    category: "Agent interaction",
+  },
   {
     name: "ask-user-question",
     pluginId: "ask-user-question",
@@ -71,6 +84,12 @@ export const BUILTIN_PLUGINS = [
     pluginId: "custom-instructions",
     defaultEnabled: true,
     category: "Context & knowledge",
+  },
+  {
+    name: "design-canvas",
+    pluginId: "design-canvas",
+    defaultEnabled: true,
+    category: "Interface",
   },
   {
     name: "inline-vis",
@@ -144,6 +163,12 @@ export const OFFICIAL_PLUGINS = [
     defaultEnabled: true,
     category: "Workflow management",
   },
+  {
+    name: "t3sidebar",
+    pluginId: "t3sidebar",
+    defaultEnabled: true,
+    category: "Interface",
+  },
 ].map(
   (plugin): BundledPluginDefinition => ({
     ...plugin,
@@ -181,6 +206,7 @@ export function findBundledPlugin(
 export function resolveBuiltinPluginRootPathForModuleDir(
   args: ResolveBuiltinPluginRootPathArgs,
 ): string {
+  const repoPluginsDirectoryName = resolveRepoPluginsDirectoryName(args.name);
   const packagedCandidate = path.resolve(
     args.moduleDir,
     BUILTIN_PLUGINS_DIRECTORY_NAME,
@@ -192,7 +218,7 @@ export function resolveBuiltinPluginRootPathForModuleDir(
   const builtCheckoutCandidate = path.resolve(
     args.moduleDir,
     "../../..",
-    REPO_PLUGINS_DIRECTORY_NAME,
+    repoPluginsDirectoryName,
     args.name,
   );
   if (existsSync(builtCheckoutCandidate)) return builtCheckoutCandidate;
@@ -200,7 +226,7 @@ export function resolveBuiltinPluginRootPathForModuleDir(
   return path.resolve(
     args.moduleDir,
     "../../../../..",
-    REPO_PLUGINS_DIRECTORY_NAME,
+    repoPluginsDirectoryName,
     args.name,
   );
 }
