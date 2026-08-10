@@ -1,4 +1,6 @@
 import {
+  lazy,
+  Suspense,
   useCallback,
   useEffect,
   useMemo,
@@ -211,12 +213,10 @@ import {
   resolveRootComposeProviderRouting,
 } from "./root-compose-environment-selection";
 import { RootComposeMobileSessions } from "./RootComposeMobileSessions";
-import {
-  RootComposeProviderAuth,
-  useRootComposeProviderAuthLoginOpen,
-} from "@/components/provider-auth/RootComposeProviderAuth";
+import { useRootComposeProviderAuthLoginOpen } from "@/components/provider-auth/provider-auth-mobile-view-store";
 import { CommandCenterUsageRail } from "@/components/usage/CompactUsageLimits";
 import { RootComposeEmptyWelcome } from "./RootComposeEmptyWelcome";
+
 import { useThreadStorageViewer } from "@/components/secondary-panel/useThreadStorageViewer";
 import {
   useThreadFileTabs,
@@ -260,6 +260,12 @@ import {
 } from "@/components/commands/AppCommandProvider";
 import { useOptionalPaneContext } from "./thread-detail/PaneContext";
 import { RootComposePanelCommandHandlers } from "./RootComposePanelCommandHandlers";
+
+const RootComposeProviderAuth = lazy(() =>
+  import("@/components/provider-auth/RootComposeProviderAuth").then(
+    (module) => ({ default: module.RootComposeProviderAuth }),
+  ),
+);
 
 const ROOT_COMPOSE_ZEN_MODE_STORAGE_KEY = "bb.promptbox.zen-mode.root-compose";
 const ROOT_COMPOSE_SIDEBAR_ACTION_ALIGNED_TOP_PADDING_CLASS = "pt-14";
@@ -3848,7 +3854,9 @@ export function RootComposeView() {
           <>
             {/* Above Sessions and outside its filters. This also remains
                 visible before the first project exists. */}
-            <RootComposeProviderAuth />
+            <Suspense fallback={null}>
+              <RootComposeProviderAuth />
+            </Suspense>
             {providerAuthLoginOpen ? null : showEmptyWelcome ? (
               <RootComposeEmptyWelcome
                 onCompose={handleStartComposing}

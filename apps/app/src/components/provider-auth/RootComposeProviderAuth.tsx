@@ -10,16 +10,21 @@ import { useIsCompactViewport } from "@bb/shared-ui/hooks/use-compact-viewport";
 import { ProviderAuthLoginPanel } from "./ProviderAuthLoginPanel";
 import {
   clearProviderAuthAttempt,
-  closeProviderAuthMobileView,
-  openProviderAuthMobileView,
   type ProviderAuthLoginEntry,
 } from "./provider-auth-login-store";
+import {
+  closeProviderAuthMobileView,
+  openProviderAuthMobileView,
+  useRootComposeProviderAuthProvider,
+} from "./provider-auth-mobile-view-store";
 import {
   findProviderAuthStatus,
   selectCurrentProviderAuthSession,
   type ProviderAuthAttention,
 } from "./provider-auth-model";
 import { useProviderAuthSurface } from "./useProviderAuthSurface";
+
+export { useRootComposeProviderAuthLoginOpen } from "./provider-auth-mobile-view-store";
 
 interface MobileProviderAuthLoginView {
   entry: ProviderAuthLoginEntry;
@@ -37,7 +42,7 @@ interface MobileProviderAuthState {
 function useMobileProviderAuthState(): MobileProviderAuthState {
   const isCompactViewport = useIsCompactViewport();
   const { attention, hostId, login, snapshot } = useProviderAuthSurface();
-  const provider = login.mobileProvider;
+  const provider = useRootComposeProviderAuthProvider();
   const status =
     provider === null ? null : findProviderAuthStatus(snapshot, provider);
 
@@ -57,15 +62,6 @@ function useMobileProviderAuthState(): MobileProviderAuthState {
             status,
           },
   };
-}
-
-/**
- * True while the Command Center is showing a provider login instead of its
- * sessions and composer. Read by the root compose page so the login owns the
- * screen — a phone has no room for both.
- */
-export function useRootComposeProviderAuthLoginOpen(): boolean {
-  return useMobileProviderAuthState().loginView !== null;
 }
 
 /**

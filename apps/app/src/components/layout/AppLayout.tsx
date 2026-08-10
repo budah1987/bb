@@ -1,8 +1,10 @@
 import {
   type CSSProperties,
+  lazy,
   type MouseEvent as ReactMouseEvent,
   type Ref,
   type ReactNode,
+  Suspense,
 } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useAtom, useStore } from "jotai";
@@ -43,7 +45,6 @@ import { getThreadDisplayTitle } from "@/lib/thread-title";
 import { applyResizeCursor, clearResizeCursor } from "@/lib/resizeCursor";
 import { cn } from "@bb/shared-ui/lib/utils";
 import { ProjectPathDialog } from "@/components/dialogs/ProjectPathDialog";
-import { ProviderAuthHost } from "@/components/provider-auth/ProviderAuthHost";
 import { ProjectActionsMenu } from "@/components/project/ProjectActionsMenu";
 import { ProjectActionsProvider } from "@/components/project/ProjectActionsProvider";
 import {
@@ -64,6 +65,7 @@ import {
   shouldReserveMacosTrafficLights,
   shouldUseMacosDesktopChrome,
 } from "@/lib/bb-desktop";
+
 import { useDesktopWindowState } from "@/hooks/useDesktopWindowState";
 import {
   getLegacyProjectComposeRoutePath,
@@ -95,6 +97,12 @@ import { useSplitWorkspaceActive } from "@/hooks/useSplitWorkspaceActive";
 import { useStandaloneCompactPwa } from "@/hooks/useStandaloneCompactPwa";
 import { useAppSettingsRouteMemory } from "@/hooks/useAppSettingsRouteMemory";
 import { useSystemConfig } from "@/hooks/queries/system-queries";
+
+const ProviderAuthHost = lazy(() =>
+  import("@/components/provider-auth/ProviderAuthHost").then((module) => ({
+    default: module.ProviderAuthHost,
+  })),
+);
 
 const SIDEBAR_WIDTH_KEY = "bb.sidebar.width";
 const SIDEBAR_OPEN_KEY = "bb.sidebar.open";
@@ -879,7 +887,9 @@ export function AppLayout({ children }: AppLayoutProps) {
                         provider blocks work everywhere, and this must not be
                         dismissible or route-scoped. Compact viewports get the
                         Command Center surface instead. */}
-                    <ProviderAuthHost />
+                    <Suspense fallback={null}>
+                      <ProviderAuthHost />
+                    </Suspense>
                     {children}
                   </main>
                 </div>

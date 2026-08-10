@@ -5,6 +5,7 @@ import type {
 } from "@bb/host-daemon-contract";
 import { writeHostProviderAuthSnapshot } from "@/hooks/cache-owners/provider-auth-cache-owner";
 import { sdk } from "@/lib/sdk";
+import { resetProviderAuthMobileViewForTests } from "./provider-auth-mobile-view-store";
 
 export type ProviderAuthPendingRequest = "start" | "submit";
 
@@ -22,8 +23,6 @@ export interface ProviderAuthLoginEntry {
 export interface ProviderAuthLoginSnapshot {
   /** Provider whose desktop dialog is open, or null when none is. */
   dialogProvider: ProviderAuthKey | null;
-  /** Provider whose mobile Command Center login view is open. */
-  mobileProvider: ProviderAuthKey | null;
   entries: Readonly<Record<ProviderAuthKey, ProviderAuthLoginEntry>>;
 }
 
@@ -36,7 +35,6 @@ const EMPTY_ENTRY: ProviderAuthLoginEntry = {
 function initialSnapshot(): ProviderAuthLoginSnapshot {
   return {
     dialogProvider: null,
-    mobileProvider: null,
     entries: {
       claudeCode: EMPTY_ENTRY,
       codex: EMPTY_ENTRY,
@@ -100,14 +98,6 @@ export function openProviderAuthDialog(provider: ProviderAuthKey): void {
 
 export function closeProviderAuthDialog(): void {
   setSnapshot({ dialogProvider: null });
-}
-
-export function openProviderAuthMobileView(provider: ProviderAuthKey): void {
-  setSnapshot({ mobileProvider: provider });
-}
-
-export function closeProviderAuthMobileView(): void {
-  setSnapshot({ mobileProvider: null });
 }
 
 /** Drops the finished attempt so the provider can be signed in again cleanly. */
@@ -205,4 +195,5 @@ export function resetProviderAuthLoginStoreForTests(): void {
   snapshot = initialSnapshot();
   queryClient = null;
   listeners.clear();
+  resetProviderAuthMobileViewForTests();
 }

@@ -14,9 +14,9 @@ import { ProviderAuthLoginPanel } from "./ProviderAuthLoginPanel";
 import {
   clearProviderAuthAttempt,
   closeProviderAuthDialog,
-  closeProviderAuthMobileView,
   openProviderAuthDialog,
 } from "./provider-auth-login-store";
+import { closeProviderAuthMobileView } from "./provider-auth-mobile-view-store";
 import {
   findProviderAuthStatus,
   selectCurrentProviderAuthSession,
