@@ -5,16 +5,53 @@ import {
   type NewTabFileSearchProps,
   type OpenBrowserHandler,
   type OpenNotesHandler,
+  type OpenSimulatorHandler,
   type StartTerminalHandler,
 } from "./NewTabFileSearch";
+import { useEnvironmentSimulatorStatus } from "@/hooks/queries/environment-queries";
 
 type NewTabPageFileSearchProps = Omit<NewTabFileSearchProps, "idleActions">;
 
 export interface NewTabPageProps extends NewTabPageFileSearchProps {
   onOpenBrowser?: OpenBrowserHandler;
   onOpenNotes?: OpenNotesHandler;
+  onOpenSimulator?: OpenSimulatorHandler;
+  simulatorRunning?: boolean;
   onStartTerminal?: StartTerminalHandler;
   pluginActions?: readonly PluginPanelActionEntry[];
+}
+
+function SimulatorActions({
+  environmentId,
+  onOpenBrowser,
+  onOpenNotes,
+  onOpenSimulator,
+  onStartTerminal,
+  pluginActions,
+  simulatorRunning,
+}: Pick<
+  NewTabPageProps,
+  | "environmentId"
+  | "onOpenBrowser"
+  | "onOpenNotes"
+  | "onOpenSimulator"
+  | "onStartTerminal"
+  | "pluginActions"
+  | "simulatorRunning"
+>) {
+  const simulatorStatus = useEnvironmentSimulatorStatus(environmentId);
+  return (
+    <NewTabActions
+      onOpenBrowser={onOpenBrowser}
+      onOpenNotes={onOpenNotes}
+      onOpenSimulator={onOpenSimulator}
+      onStartTerminal={onStartTerminal}
+      pluginActions={pluginActions}
+      simulatorRunning={
+        simulatorRunning ?? simulatorStatus.data?.active != null
+      }
+    />
+  );
 }
 
 /**
@@ -30,9 +67,11 @@ export function NewTabPage({
   initialQuery,
   onOpenBrowser,
   onOpenNotes,
+  onOpenSimulator,
   onSelect,
   onStartTerminal,
   pluginActions,
+  simulatorRunning,
   projectId,
   recentItemsThreadId,
   showFileSearch,
@@ -46,12 +85,24 @@ export function NewTabPage({
         currentThreadId={currentThreadId}
         focusRequest={focusRequest}
         idleActions={
-          <NewTabActions
-            onOpenBrowser={onOpenBrowser}
-            onOpenNotes={onOpenNotes}
-            onStartTerminal={onStartTerminal}
-            pluginActions={pluginActions}
-          />
+          onOpenSimulator ? (
+            <SimulatorActions
+              environmentId={environmentId}
+              onOpenBrowser={onOpenBrowser}
+              onOpenNotes={onOpenNotes}
+              onOpenSimulator={onOpenSimulator}
+              onStartTerminal={onStartTerminal}
+              pluginActions={pluginActions}
+              simulatorRunning={simulatorRunning}
+            />
+          ) : (
+            <NewTabActions
+              onOpenBrowser={onOpenBrowser}
+              onOpenNotes={onOpenNotes}
+              onStartTerminal={onStartTerminal}
+              pluginActions={pluginActions}
+            />
+          )
         }
         initialQuery={initialQuery}
         onSelect={onSelect}

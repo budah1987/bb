@@ -1,0 +1,11 @@
+{
+  "run_number": 2,
+  "session_id": "5c128d41-ad4b-4ba1-a735-e6c476db6a2f",
+  "followup": "Sol accepts the plan review and resolves the open transport concern as follows: the host daemon exposes only an allowlisted MJPEG/config gateway; the UI reads MJPEG with fetch + `Authorization: Bearer <ephemeral lease>` and a streaming JPEG parser, never putting the token in a URL. Control gestures remain typed server/daemon API calls, so no client WebSocket is exposed. The gateway supports CORS preflight for Authorization, never logs the header, uses expiring viewer leases, and closes hidden-tab streams. Same-host uses the loopback gateway URL; enrolled remote hosts use the existing shared-port tunnel hostname. Please add a concise implementation-ready UX addendum for the Simulator tab and New Tab action: exact labels, information hierarchy, controls, states, pointer/keyboard behavior, responsive behavior, accessibility, and visual acceptance checks using BB's existing semantic tokens/components. Do not edit files. Keep the New Tab action as the only MVP entry point and retain the “Running” affix requirement.",
+  "effective_role": "plan_review",
+  "stage_id": "plan-review",
+  "route_reason": "Resume the single Plan Council Fable session for an implementation-ready UX addendum after Sol resolved the lease transport concern.",
+  "external_write_targets": [],
+  "executable": "/Users/amir/.local/share/claude/versions/2.1.226",
+  "writer_lock_token": null
+}

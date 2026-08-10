@@ -68,6 +68,7 @@ export interface NewTabFileSearchProps {
 export type OpenBrowserHandler = () => void;
 export type OpenNotesHandler = () => void;
 export type StartTerminalHandler = () => void;
+export type OpenSimulatorHandler = () => void;
 
 export interface NewTabActionsProps {
   /** Open a session-based side chat of the current thread in its own tab. */
@@ -79,6 +80,8 @@ export interface NewTabActionsProps {
    */
   onOpenNotes?: OpenNotesHandler;
   onStartTerminal?: StartTerminalHandler;
+  onOpenSimulator?: OpenSimulatorHandler;
+  simulatorRunning?: boolean;
   /** Plugin `threadPanelAction` rows, rendered after the built-in entries. */
   pluginActions?: readonly PluginPanelActionEntry[];
 }
@@ -156,6 +159,7 @@ interface NewTabActionTileProps {
   onActivate: () => void;
   onSelect: () => void;
   shortcut?: AppShortcutPresentation;
+  trailing?: ReactNode;
 }
 
 interface ShowMoreToggleProps {
@@ -185,6 +189,7 @@ const FILE_SEARCH_SOURCE_LABELS = {
 const OPEN_BROWSER_ENTRY_ID = "file-search-result-open-browser";
 const OPEN_NOTES_ENTRY_ID = "file-search-result-open-notes";
 const START_TERMINAL_ENTRY_ID = "file-search-result-start-terminal";
+const OPEN_SIMULATOR_ENTRY_ID = "file-search-result-open-simulator";
 
 const RECENT_ENTRY_ID_PREFIX = "file-search-result-recent";
 
@@ -338,6 +343,7 @@ function NewTabActionTile({
   onActivate,
   onSelect,
   shortcut,
+  trailing,
 }: NewTabActionTileProps) {
   return (
     <LauncherTile
@@ -356,10 +362,12 @@ function NewTabActionTile({
         />
       </span>
       <span className="min-w-0 flex-1 truncate text-foreground">{label}</span>
-      <AppCommandShortcutHint
-        shortcut={shortcut ?? null}
-        className="absolute right-2 top-1/2 -translate-y-1/2"
-      />
+      {trailing ?? (
+        <AppCommandShortcutHint
+          shortcut={shortcut ?? null}
+          className="absolute right-2 top-1/2 -translate-y-1/2"
+        />
+      )}
     </LauncherTile>
   );
 }
@@ -772,14 +780,17 @@ export function NewTabFileSearch({
 export function NewTabActions({
   onOpenBrowser,
   onOpenNotes,
+  onOpenSimulator,
   onStartTerminal,
   pluginActions,
+  simulatorRunning = false,
 }: NewTabActionsProps) {
   const terminalShortcut = useAppCommandShortcut("terminal.open");
   const showOpenBrowserEntry =
     onOpenBrowser !== undefined && isDesktopBrowserAvailable();
   const showOpenNotesEntry = onOpenNotes !== undefined;
   const showStartTerminalEntry = onStartTerminal !== undefined;
+  const showSimulatorEntry = onOpenSimulator !== undefined;
 
   const handleOpenBrowser = useCallback(() => {
     onOpenBrowser?.();
@@ -793,10 +804,15 @@ export function NewTabActions({
     onStartTerminal?.();
   }, [onStartTerminal]);
 
+  const handleOpenSimulator = useCallback(() => {
+    onOpenSimulator?.();
+  }, [onOpenSimulator]);
+
   const hasOpenActions =
     showOpenBrowserEntry ||
     showOpenNotesEntry ||
     showStartTerminalEntry ||
+    showSimulatorEntry ||
     (pluginActions !== undefined && pluginActions.length > 0);
 
   if (!hasOpenActions) {
@@ -840,6 +856,29 @@ export function NewTabActions({
               onActivate={() => undefined}
               onSelect={handleStartTerminal}
               shortcut={terminalShortcut ?? undefined}
+            />
+          ) : null}
+          {showSimulatorEntry ? (
+            <NewTabActionTile
+              id={OPEN_SIMULATOR_ENTRY_ID}
+              iconName="Smartphone"
+              label="Open simulator"
+              isActive={false}
+              onActivate={() => undefined}
+              onSelect={handleOpenSimulator}
+              trailing={
+                simulatorRunning ? (
+                  <LauncherRowTrailing
+                    isActive={false}
+                    idle={
+                      <span className="flex items-center gap-1.5">
+                        <span className="size-1.5 rounded-full bg-success" />
+                        Running
+                      </span>
+                    }
+                  />
+                ) : null
+              }
             />
           ) : null}
           {pluginActions?.map((action) => (

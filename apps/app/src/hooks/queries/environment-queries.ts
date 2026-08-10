@@ -11,6 +11,7 @@ import type {
   EnvironmentPullRequestResponse,
   EnvironmentStatusResponse,
   HostPathListResponse,
+  SimulatorStatusResponse,
   WorkspacePathListResponse,
 } from "@bb/server-contract";
 import type { EnvironmentDiffArgs } from "@bb/sdk/browser";
@@ -31,6 +32,7 @@ import {
   environmentPathsQueryKey,
   environmentQueryKey,
   environmentWorkspaceFilesQueryKey,
+  environmentSimulatorStatusQueryKey,
   environmentWorkStatusQueryKey,
 } from "./query-keys";
 import {
@@ -72,7 +74,6 @@ const MERGE_BASE_BRANCHES_LIMIT = 50;
 /** Staleness window for the environment diff TOC query. */
 const ENVIRONMENT_DIFF_STALE_MS = 5_000;
 const ENVIRONMENT_WORKSPACE_FILES_LIMIT = 10_000;
-
 function requireEnvironmentId(
   environmentId: string | null | undefined,
   hookName: string,
@@ -100,6 +101,26 @@ export function useEnvironment(
       }),
     enabled,
     staleTime: options?.staleTime,
+  });
+}
+
+export function useEnvironmentSimulatorStatus(
+  environmentId: string | null | undefined,
+  options?: QueryOptions,
+) {
+  const enabled = (options?.enabled ?? true) && Boolean(environmentId);
+  return useQuery<SimulatorStatusResponse>({
+    queryKey: environmentSimulatorStatusQueryKey(environmentId),
+    queryFn: () =>
+      sdk.environments.simulatorStatus({
+        environmentId: requireEnvironmentId(
+          environmentId,
+          "useEnvironmentSimulatorStatus",
+        ),
+      }),
+    enabled,
+    refetchOnMount: "always",
+    staleTime: 2_000,
   });
 }
 

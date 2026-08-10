@@ -29,6 +29,19 @@ message agents, or inspect projects, providers, and environments.
   copy from the source checkout. It uses gitignore pattern syntax. bb copies
   the matches before it runs `.bb-env-setup.sh`.
 
+## iOS Simulator
+
+- In the app, open the thread's right panel, choose New Tab, then select
+  **Open simulator**. The tab is singleton per environment; closing it leaves
+  the managed session running, while Stop ends the session.
+- Use `bb simulator list`, `attach [device-udid]`, `tap <x> <y>`,
+  `swipe <x1> <y1> <x2> <y2>`, `type <text>`, `button <name>`,
+  `rotate <orientation>`, `ax`, `screenshot --out <path>`, and `stop` for agent
+  control. Commands default to `BB_ENVIRONMENT_ID`; use `--environment <id>`
+  outside a thread.
+- Coordinates are normalized from 0 to 1. Run `bb guide simulators` for the
+  accepted button and orientation values.
+
 ## Remote Client
 
 - `bb-app client ssh-target set <server-origin> <ssh-target>` configures the
@@ -211,7 +224,12 @@ status|install` to inspect or install provider CLIs on a selected machine.
   CLI update state across every machine — the CLI counterpart of Settings →
   Updates. `bb updates apply [--machine <id-or-name>]` runs every available
   provider CLI install/update sequentially; update bb-app itself with the
-  printed upgrade command or the desktop relaunch.
+  printed upgrade command or the desktop relaunch. `bb updates from-bb
+--project <id> [--machine <id-or-name>]` starts the protected BBamir
+  upstream-update workspace used by Settings → Updates; it refuses a project
+  that is not named `BBamir`, requires one connected local checkout, pauses for
+  explicit conflict choices, and keeps the candidate isolated until checks
+  pass.
 - Use `bb project create --name <name> --root <path> --machine <id-or-name>`
   to bind a new project's local path to a connected enrolled machine, or use
   `--remote-url <url>` to clone a repository first. Use `--host` as an alias.

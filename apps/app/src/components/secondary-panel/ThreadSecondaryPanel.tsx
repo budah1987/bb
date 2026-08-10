@@ -318,6 +318,7 @@ function resolveActiveFixedPanel({
     case "host-file-preview":
     case "thread-storage-file-preview":
     case "browser":
+    case "simulator":
     case "terminal":
     case "new-tab":
     case "notes":

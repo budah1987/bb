@@ -68,6 +68,7 @@ import {
 import { BrowserTabDeck } from "@/components/secondary-panel/BrowserTabDeck";
 import type { BrowserAddressFocusRequest } from "@/components/secondary-panel/BrowserTabContent";
 import { NewTabPage } from "@/components/secondary-panel/NewTabPage";
+import { SimulatorTabContent } from "@/components/secondary-panel/SimulatorTabContent";
 import { EmptyStatePanel } from "@bb/shared-ui/empty-state";
 import { Icon } from "@bb/shared-ui/icon";
 import { PageShell } from "@/components/ui/page-shell.js";
@@ -2254,6 +2255,7 @@ export function RootComposeView() {
   const { threadPanelActions: rootPanelThreadPanelActions } = usePluginSlots();
   const {
     activePluginPanelTab,
+    activeSimulatorTab,
     activeHostFileEnvironmentId,
     activeHostFileLineRange,
     activeHostFilePath,
@@ -2518,6 +2520,10 @@ export function RootComposeView() {
   const handleOpenBrowser = useCallback(() => {
     openBrowserTabAndReveal();
   }, [openBrowserTabAndReveal]);
+  const handleOpenSimulator = useCallback(() => {
+    openTab({ kind: "simulator" });
+    openCompactDrawer();
+  }, [openCompactDrawer, openTab]);
   const handleBrowserAddressFocusRequestConsumed = useCallback(
     (request: BrowserAddressFocusRequest) => {
       setBrowserAddressFocusRequest((current) =>
@@ -2801,6 +2807,22 @@ export function RootComposeView() {
               onClose: () => closeTab(tab.id),
             };
           }
+          case "simulator":
+            return {
+              id: tab.id,
+              filename: "Simulator",
+              isActive: tab.id === activeFixedSecondaryTabId,
+              leadingVisual: (
+                <Icon
+                  name="Smartphone"
+                  className={COARSE_POINTER_COMPACT_ICON_SIZE_CLASS}
+                  aria-hidden
+                />
+              ),
+              statusLabel: null,
+              onSelect: () => handleActivateFileTab(tab.id),
+              onClose: () => closeTab(tab.id),
+            };
           case "terminal": {
             const session = terminalsById.get(tab.terminalId);
             return {
@@ -3178,10 +3200,18 @@ export function RootComposeView() {
         onSelect={handleSelectFileSearchResult}
         recentItemsThreadId={ROOT_COMPOSE_FIXED_PANEL_STATE_ID}
         onOpenBrowser={rootPanelThreadId ? handleOpenBrowser : undefined}
+        onOpenSimulator={
+          rootPanelEnvironmentId ? handleOpenSimulator : undefined
+        }
         onStartTerminal={
           canCreateRootTerminal ? handleStartTerminal : undefined
         }
         showFileSearch={!isProjectless}
+      />
+    ) : activeSimulatorTab ? (
+      <SimulatorTabContent
+        environmentId={activeSimulatorTab.environmentId}
+        isActive={isSecondaryPanelOpen}
       />
     ) : activeWorkspaceFilePath !== null &&
       activeWorkspaceFileEnvironmentId !== null ? (
