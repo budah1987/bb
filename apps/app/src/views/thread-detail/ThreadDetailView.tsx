@@ -61,6 +61,7 @@ import {
   type ProjectThreadSubsetFilters,
 } from "../../hooks/queries/thread-queries";
 import { isTransientReadError } from "@/hooks/queries/query-helpers";
+import { useProjectDisplayName } from "@/hooks/queries/sidebar-navigation-query";
 import { usePromptDraftStorage } from "@/hooks/usePromptDraftStorage";
 import { subscribeComposerFocusRequests } from "@/lib/composer-focus-requests";
 import { ThreadGitActionDialog } from "@/components/dialogs/ThreadGitActionDialog";
@@ -71,7 +72,10 @@ import {
   type ThreadActionsMenuResponsiveAction,
 } from "@/components/thread/ThreadActionsMenu";
 import { PluginThreadHeaderActions } from "@/components/plugin/PluginThreadHeaderActions";
-import { PluginThreadContextBar } from "@/components/plugin/PluginThreadContextBar";
+import {
+  PluginThreadContextBar,
+  useHasPluginThreadContextBar,
+} from "@/components/plugin/PluginThreadContextBar";
 import { ThreadWorkspaceOpenButton } from "@/components/thread/ThreadWorkspaceOpenButton";
 import {
   formatEnvironmentDisplay,
@@ -542,6 +546,10 @@ function ThreadDetailViewInternal(props: ThreadDetailViewInternalProps) {
       ? false
       : "always",
   });
+  const hasPluginThreadContextBar = useHasPluginThreadContextBar();
+  const projectDisplayName = useProjectDisplayName(
+    thread?.projectId ?? projectId,
+  );
   // Treat placeholder data (a full thread row primed from the sidebar list
   // cache) as resolved so switching to an uncached thread renders the shell
   // immediately instead of flashing a full-page "Loading..." while the
@@ -2503,6 +2511,14 @@ function ThreadDetailViewInternal(props: ThreadDetailViewInternalProps) {
             threadId={thread.id}
             projectId={thread.projectId}
           />
+        }
+        threadContext={
+          hasPluginThreadContextBar && projectDisplayName !== undefined
+            ? {
+                branchName: threadBranchName,
+                projectName: projectDisplayName,
+              }
+            : undefined
         }
         threadHeaderGitActions={gitActions.threadHeaderGitActions}
         threadTitle={threadTitle}

@@ -310,18 +310,6 @@ function ConductorWorkspaceContextBar({
       className="conductor-context-bar"
       data-compact={isCompactViewport || undefined}
     >
-      <div className="conductor-workspace-context">
-        <span className="min-w-0 truncate font-medium">
-          {isCompactViewport
-            ? workspace.title
-            : `${project.name} / ${workspace.title}`}
-        </span>
-        {workspace.branchName ? (
-          <span className="min-w-0 truncate text-muted-foreground">
-            {workspace.branchName}
-          </span>
-        ) : null}
-      </div>
       <nav
         ref={tabRailRef}
         className="conductor-tab-rail"

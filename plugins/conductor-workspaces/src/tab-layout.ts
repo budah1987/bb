@@ -1,6 +1,7 @@
 const DEFAULT_DESKTOP_TAB_COUNT = 5;
 const DEFAULT_COMPACT_TAB_COUNT = 2;
-const TAB_TARGET_WIDTH_PX = 112;
+const DESKTOP_TAB_TARGET_WIDTH_PX = 128;
+const COMPACT_TAB_TARGET_WIDTH_PX = 112;
 const RAIL_PADDING_PX = 12;
 const MORE_TRIGGER_WIDTH_PX = 56;
 const DESKTOP_NEW_CONVERSATION_WIDTH_PX = 100;
@@ -30,9 +31,12 @@ export function calculateVisibleTabCount({
     (compact
       ? COMPACT_NEW_CONVERSATION_WIDTH_PX
       : DESKTOP_NEW_CONVERSATION_WIDTH_PX);
+  const tabTargetWidth = compact
+    ? COMPACT_TAB_TARGET_WIDTH_PX
+    : DESKTOP_TAB_TARGET_WIDTH_PX;
   const capacityWithoutOverflow = Math.max(
     1,
-    Math.floor((railWidth - fixedWidth) / TAB_TARGET_WIDTH_PX),
+    Math.floor((railWidth - fixedWidth) / tabTargetWidth),
   );
   if (threadCount <= capacityWithoutOverflow) return threadCount;
 
@@ -41,7 +45,7 @@ export function calculateVisibleTabCount({
     Math.max(
       1,
       Math.floor(
-        (railWidth - fixedWidth - MORE_TRIGGER_WIDTH_PX) / TAB_TARGET_WIDTH_PX,
+        (railWidth - fixedWidth - MORE_TRIGGER_WIDTH_PX) / tabTargetWidth,
       ),
     ),
   );

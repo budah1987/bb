@@ -57,6 +57,33 @@ describe("ThreadDetailHeader", () => {
   // The header seam now belongs to AppPageHeader, so AppPageHeader.test.tsx
   // guards it for every header instead of this one call site.
 
+  it("shows project and branch context instead of a repeated conversation title", () => {
+    render(
+      <PaneContext.Provider value={PANE_CONTEXT}>
+        <ThreadDetailHeader
+          actionsMenu={null}
+          childPillLabel={null}
+          isSecondaryPanelOpen={false}
+          onOpenThreadGitAction={vi.fn()}
+          onToggleSecondaryPanel={vi.fn()}
+          threadContext={{
+            projectName: "bb",
+            branchName: "feature/conductor-tabs",
+          }}
+          threadHeaderGitActions={[]}
+          threadTitle="Conversation title"
+        />
+      </PaneContext.Provider>,
+    );
+
+    expect(screen.getByTitle("Project: bb")).not.toBeNull();
+    expect(screen.getByTitle("Branch: feature/conductor-tabs")).not.toBeNull();
+    expect(
+      screen.getByLabelText("Project: bb, Branch: feature/conductor-tabs"),
+    ).not.toBeNull();
+    expect(screen.queryByText("Conversation title")).toBeNull();
+  });
+
   it("leaves the open right-panel collapse control to the panel header", () => {
     render(
       <PaneContext.Provider value={PANE_CONTEXT}>
