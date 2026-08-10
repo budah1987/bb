@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { createFakePluginHost } from "@bb/plugin-sdk/testing";
 import plugin from "./server.js";
-import { ingestionCaseSchema } from "./contract.js";
+import { bootstrapOutputSchema, ingestionCaseSchema } from "./contract.js";
 
 describe("Ingestion Desk", () => {
   const hosts: Array<ReturnType<typeof createFakePluginHost>["harness"]> = [];
@@ -127,6 +127,18 @@ describe("Ingestion Desk", () => {
           baseBranch: { kind: "named", name: "main" },
         },
       },
+    });
+    await expect(
+      harness.runCli([
+        "submit-draft",
+        created.id,
+        "--markdown",
+        "# Plan",
+        "--json",
+      ]),
+    ).resolves.toMatchObject({
+      exitCode: 1,
+      stdout: expect.stringMatching(/changed Vault path/i),
     });
     const rejected = await harness.callAgentTool(
       "bb_ingestion_submit_draft",
@@ -299,6 +311,30 @@ describe("Ingestion Desk", () => {
     ).resolves.toMatchObject({
       projects: [{ id: "proj_vault", name: "Vault" }],
       cases: [{ title: "Shared document" }],
+    });
+  });
+
+  it("keeps captured source text out of queue summaries", async () => {
+    const harness = await createHarness();
+    await harness.callRpc("createCase", {
+      projectId: "proj_vault",
+      title: "Meeting transcript",
+      source: {
+        kind: "pasted",
+        label: "Transcript",
+        authority: "primary",
+        url: null,
+        content: "A captured meeting transcript.",
+      },
+    });
+
+    const bootstrap = bootstrapOutputSchema.parse(
+      await harness.callRpc("bootstrap", { projectId: "proj_vault" }),
+    );
+    expect(bootstrap.cases[0]?.sources[0]).toMatchObject({
+      content: null,
+      contentLength: 30,
+      description: "30 characters captured",
     });
   });
 });

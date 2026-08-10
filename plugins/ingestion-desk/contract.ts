@@ -30,14 +30,16 @@ export const ingestionDetailsSchema = z
   })
   .strict();
 
+const sourceShape = {
+  kind: sourceKindSchema,
+  label: z.string().trim().min(1).max(240),
+  authority: sourceAuthoritySchema.default("context"),
+  url: z.string().url().nullable().default(null),
+  content: z.string().max(1_000_000).nullable().default(null),
+};
+
 export const sourceInputSchema = z
-  .object({
-    kind: sourceKindSchema,
-    label: z.string().trim().min(1).max(240),
-    authority: sourceAuthoritySchema.default("context"),
-    url: z.string().url().nullable().default(null),
-    content: z.string().max(1_000_000).nullable().default(null),
-  })
+  .object(sourceShape)
   .strict()
   .superRefine((value, context) => {
     if (value.url === null && value.content === null) {
@@ -49,12 +51,29 @@ export const sourceInputSchema = z
     }
   });
 
-export const ingestionSourceSchema = sourceInputSchema.extend({
-  id: z.string().startsWith("ingsrc_"),
-  description: z.string(),
-  sha256: z.string().nullable(),
-  createdAt: z.string(),
-});
+export const ingestionSourceSchema = z
+  .object({
+    ...sourceShape,
+    id: z.string().startsWith("ingsrc_"),
+    description: z.string(),
+    contentLength: z.number().int().nonnegative().nullable(),
+    sha256: z.string().nullable(),
+    createdAt: z.string(),
+  })
+  .strict()
+  .superRefine((value, context) => {
+    if (
+      value.url === null &&
+      value.content === null &&
+      value.contentLength === null
+    ) {
+      context.addIssue({
+        code: "custom",
+        message: "A source requires a URL or captured content",
+        path: ["content"],
+      });
+    }
+  });
 
 export const provenanceSchema = z
   .object({
@@ -160,7 +179,7 @@ export const submitDraftInputSchema = z
   .object({
     caseId: z.string().startsWith("ing_"),
     markdown: z.string().trim().min(1).max(1_000_000),
-    outputs: z.array(outputSchema).max(100),
+    outputs: z.array(outputSchema).min(1).max(100),
   })
   .strict();
 

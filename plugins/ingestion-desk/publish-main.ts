@@ -10,12 +10,7 @@ export async function publishMain(
   bb: BbPluginApi,
   request: { environmentId: string; preserveLocalChanges: boolean },
 ): Promise<GitParity> {
-  const publishToMain: (input: {
-    environmentId: string;
-    preserveTargetChanges: boolean;
-  }) => ReturnType<BbPluginApi["sdk"]["environments"]["publishToMain"]> =
-    bb.sdk.environments.publishToMain;
-  const result = await publishToMain({
+  const result = await bb.sdk.environments.publishToMain({
     environmentId: request.environmentId,
     preserveTargetChanges: request.preserveLocalChanges,
   });

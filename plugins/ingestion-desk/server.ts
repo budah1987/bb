@@ -169,7 +169,7 @@ export default async function plugin(bb: BbPluginApi) {
   bb.rpc.register(ingestionRpcContract, {
     async bootstrap({ projectId }) {
       return {
-        cases: store.list(projectId),
+        cases: store.listSummaries(projectId),
         projects: await projectSummaries(bb),
       };
     },
@@ -294,22 +294,4 @@ export default async function plugin(bb: BbPluginApi) {
     instructions:
       "Use Ingestion Desk for meeting and document inputs. Submit drafts with bb_ingestion_submit_draft before publication.",
   }));
-
-  bb.events.on("thread.idle", async ({ thread, lastAssistantText }) => {
-    const caseItem = store.draftCaseForThread(thread.id);
-    if (caseItem === null || !lastAssistantText?.trim()) return;
-    try {
-      changed(
-        store.submitDraft(caseItem.id, {
-          markdown: lastAssistantText,
-          outputs: [],
-          threadId: thread.id,
-        }),
-      );
-    } catch (error) {
-      bb.log.warn(
-        `Could not capture ingestion draft: ${error instanceof Error ? error.message : String(error)}`,
-      );
-    }
-  });
 }

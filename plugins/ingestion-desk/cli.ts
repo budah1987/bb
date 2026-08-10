@@ -163,7 +163,7 @@ export function registerIngestionCli(args: {
           return { exitCode: 0, stdout: HELP };
         let result: unknown;
         if (command === "status")
-          result = args.store.list(option(argv, "project") ?? null);
+          result = args.store.listSummaries(option(argv, "project") ?? null);
         else if (command === "create")
           result = args.store.create({
             projectId: required(argv, "project"),

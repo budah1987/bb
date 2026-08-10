@@ -49,6 +49,7 @@ type SourceRow = {
   authority: string;
   url: string | null;
   content: string | null;
+  content_length: number | null;
   sha256: string | null;
   created_at: string;
 };
@@ -104,6 +105,10 @@ export const migrations = [
     created_at TEXT NOT NULL
   );
   CREATE INDEX IF NOT EXISTS ingestion_provenance_case_idx ON ingestion_provenance(case_id, created_at);`,
+  `ALTER TABLE ingestion_sources ADD COLUMN content_length INTEGER;
+  UPDATE ingestion_sources
+  SET content_length = length(content)
+  WHERE content IS NOT NULL;`,
 ];
 
 function now(): string {
@@ -117,12 +122,25 @@ function hash(content: string | null): string | null {
 }
 
 function sourceDescription(
-  source: Pick<IngestionSource, "kind" | "url" | "content">,
+  source: Pick<IngestionSource, "url" | "content" | "contentLength">,
 ): string {
   if (source.url !== null) return source.url;
-  return source.content === null
+  const contentLength = source.content?.length ?? source.contentLength;
+  return contentLength === null
     ? "No captured content"
-    : `${source.content.length.toLocaleString()} characters captured`;
+    : `${contentLength.toLocaleString()} characters captured`;
+}
+
+function groupByCaseId<Row extends { case_id: string }>(
+  rows: Row[],
+): Map<string, Row[]> {
+  const grouped = new Map<string, Row[]>();
+  for (const row of rows) {
+    const group = grouped.get(row.case_id);
+    if (group) group.push(row);
+    else grouped.set(row.case_id, [row]);
+  }
+  return grouped;
 }
 
 function parseJson(value: string, label: string): unknown {
@@ -144,35 +162,30 @@ export class IngestionStore {
       authority: row.authority,
       url: row.url,
       content: row.content,
+      contentLength: row.content_length,
       sha256: row.sha256,
       description: sourceDescription({
-        kind: row.kind as IngestionSource["kind"],
         url: row.url,
         content: row.content,
+        contentLength: row.content_length,
       }),
       createdAt: row.created_at,
     });
   }
 
-  private caseFromRow(row: CaseRow): IngestionCase {
-    const sources = this.db
-      .prepare<[string], SourceRow>(
-        "SELECT * FROM ingestion_sources WHERE case_id = ? ORDER BY created_at, id",
-      )
-      .all(row.id)
-      .map((source) => this.sourceFromRow(source));
-    const provenance = this.db
-      .prepare<[string], ProvenanceRow>(
-        "SELECT * FROM ingestion_provenance WHERE case_id = ? ORDER BY created_at, id",
-      )
-      .all(row.id)
-      .map((item) => ({
-        id: item.id,
-        kind: item.kind,
-        message: item.message,
-        sourceId: item.source_id,
-        createdAt: item.created_at,
-      }));
+  private caseFromRow(
+    row: CaseRow,
+    sourceRows: SourceRow[],
+    provenanceRows: ProvenanceRow[],
+  ): IngestionCase {
+    const sources = sourceRows.map((source) => this.sourceFromRow(source));
+    const provenance = provenanceRows.map((item) => ({
+      id: item.id,
+      kind: item.kind,
+      message: item.message,
+      sourceId: item.source_id,
+      createdAt: item.created_at,
+    }));
     const outputs =
       row.outputs_json === null ? [] : parseJson(row.outputs_json, "outputs");
     const details = ingestionDetailsSchema.parse(
@@ -213,10 +226,22 @@ export class IngestionStore {
   }
 
   get(caseId: string): IngestionCase {
-    return this.caseFromRow(this.row(caseId));
+    const sources = this.db
+      .prepare<
+        [string],
+        SourceRow
+      >("SELECT * FROM ingestion_sources WHERE case_id = ? ORDER BY created_at, id")
+      .all(caseId);
+    const provenance = this.db
+      .prepare<
+        [string],
+        ProvenanceRow
+      >("SELECT * FROM ingestion_provenance WHERE case_id = ? ORDER BY created_at, id")
+      .all(caseId);
+    return this.caseFromRow(this.row(caseId), sources, provenance);
   }
 
-  list(projectId: string | null): IngestionCase[] {
+  listSummaries(projectId: string | null): IngestionCase[] {
     const rows =
       projectId === null
         ? this.db
@@ -231,7 +256,43 @@ export class IngestionStore {
               CaseRow
             >("SELECT * FROM ingestion_cases WHERE project_id = ? ORDER BY updated_at DESC, id DESC")
             .all(projectId);
-    return rows.map((row) => this.caseFromRow(row));
+    const sourceRows =
+      projectId === null
+        ? this.db
+            .prepare<
+              [],
+              SourceRow
+            >("SELECT id, case_id, kind, label, authority, url, NULL AS content, content_length, sha256, created_at FROM ingestion_sources ORDER BY case_id, created_at, id")
+            .all()
+        : this.db
+            .prepare<
+              [string],
+              SourceRow
+            >("SELECT source.id, source.case_id, source.kind, source.label, source.authority, source.url, NULL AS content, source.content_length, source.sha256, source.created_at FROM ingestion_sources source JOIN ingestion_cases ingestion_case ON ingestion_case.id = source.case_id WHERE ingestion_case.project_id = ? ORDER BY source.case_id, source.created_at, source.id")
+            .all(projectId);
+    const provenanceRows =
+      projectId === null
+        ? this.db
+            .prepare<
+              [],
+              ProvenanceRow
+            >("SELECT * FROM ingestion_provenance ORDER BY case_id, created_at, id")
+            .all()
+        : this.db
+            .prepare<
+              [string],
+              ProvenanceRow
+            >("SELECT provenance.* FROM ingestion_provenance provenance JOIN ingestion_cases ingestion_case ON ingestion_case.id = provenance.case_id WHERE ingestion_case.project_id = ? ORDER BY provenance.case_id, provenance.created_at, provenance.id")
+            .all(projectId);
+    const sourcesByCaseId = groupByCaseId(sourceRows);
+    const provenanceByCaseId = groupByCaseId(provenanceRows);
+    return rows.map((row) =>
+      this.caseFromRow(
+        row,
+        sourcesByCaseId.get(row.id) ?? [],
+        provenanceByCaseId.get(row.id) ?? [],
+      ),
+    );
   }
 
   private record(
@@ -264,7 +325,7 @@ export class IngestionStore {
     try {
       this.db
         .prepare(
-          "INSERT INTO ingestion_sources (id, case_id, kind, label, authority, url, content, sha256, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+          "INSERT INTO ingestion_sources (id, case_id, kind, label, authority, url, content, content_length, sha256, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         )
         .run(
           source.id,
@@ -274,6 +335,7 @@ export class IngestionStore {
           source.authority,
           source.url,
           source.content,
+          source.content?.length ?? null,
           source.sha256,
           source.createdAt,
         );
@@ -404,6 +466,8 @@ export class IngestionStore {
     const existing = this.get(caseId);
     if (existing.status !== "drafting")
       throw new Error("This case is not drafting");
+    if (input.outputs.length === 0)
+      throw new Error("A draft requires at least one changed Vault path");
     if (
       input.threadId !== undefined &&
       existing.draft?.draftThreadId !== input.threadId
@@ -425,16 +489,6 @@ export class IngestionStore {
       this.record(caseId, "draft", "Draft is ready for review");
     })();
     return this.get(caseId);
-  }
-
-  draftCaseForThread(threadId: string): IngestionCase | null {
-    const row = this.db
-      .prepare<
-        [string],
-        CaseRow
-      >("SELECT * FROM ingestion_cases WHERE draft_thread_id = ? AND status = 'drafting'")
-      .get(threadId);
-    return row ? this.caseFromRow(row) : null;
   }
 
   markPublished(caseId: string, git: GitParity): IngestionCase {
