@@ -5,14 +5,12 @@ import type {
   UpdateBrowserAnnotationRequest,
 } from "@bb/server-contract";
 import { sdk } from "@/lib/sdk";
-import { threadAnnotationsQueryKeyPrefix } from "../queries/query-keys";
+import { invalidateCachedThreadAnnotations } from "../cache-owners/thread-annotations-cache-owner";
 
 function useInvalidateThreadAnnotations() {
   const queryClient = useQueryClient();
   return (threadId: string) =>
-    queryClient.invalidateQueries({
-      queryKey: threadAnnotationsQueryKeyPrefix(threadId),
-    });
+    invalidateCachedThreadAnnotations(queryClient, threadId);
 }
 
 export function useCreateThreadAnnotation() {

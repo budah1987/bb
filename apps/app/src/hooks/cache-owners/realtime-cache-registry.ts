@@ -79,7 +79,6 @@ import {
   systemConfigQueryKey,
   allSystemProvidersQueryKeyPrefix,
   threadDefaultExecutionOptionsQueryKey,
-  threadAnnotationsQueryKeyPrefix,
   threadQueryKey,
   threadNotesQueryKey,
   threadTabsQueryKey,
@@ -113,6 +112,7 @@ import {
   getThreadTimelineInvalidationQueryKeys,
   getThreadTimelineWindowInvalidationQueryKeys,
 } from "./cache-invalidation-groups";
+import { getThreadAnnotationInvalidationQueryKeys } from "./thread-annotations-cache-owner";
 
 interface CollectCachedThreadIdsForEnvironmentArgs {
   environmentId: string;
@@ -673,7 +673,7 @@ function dirtyThreadTabsQueries({
 function dirtyThreadAnnotationQueries({
   threadId,
 }: ThreadRealtimeDirtyContext): QueryKey[] {
-  return threadId ? [threadAnnotationsQueryKeyPrefix(threadId)] : [];
+  return threadId ? getThreadAnnotationInvalidationQueryKeys(threadId) : [];
 }
 
 function dirtyThreadNotesQueries({
