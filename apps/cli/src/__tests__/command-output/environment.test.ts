@@ -823,6 +823,71 @@ describe("bb environment command output", () => {
     });
   });
 
+  it("bb environment publish-to-main posts the direct publish action", async () => {
+    const post = vi.fn(async () => ({
+      ok: true,
+      action: "publish_to_main",
+      message: "Published branch to main and synchronized the local Vault",
+      sourceBranch: "meeting-ingestion/sku-coverage",
+      targetBranch: "main",
+      sourceCommitSha: "source-sha",
+      remoteTargetBeforeSha: "remote-before",
+      remoteTargetAfterSha: "source-sha",
+      localTargetBeforeSha: "local-before",
+      localTargetAfterSha: "source-sha",
+      preservedTargetChangesCommitSha: null,
+    }));
+    stubServerApi({ "v1.environments.:id.actions.$post": post });
+
+    await runCommand(
+      ["environment", "publish-to-main", "env-publish-main"],
+      register,
+    );
+
+    expect(post).toHaveBeenCalledWith({
+      param: { id: "env-publish-main" },
+      json: {
+        action: "publish_to_main",
+        options: { preserveTargetChanges: false },
+      },
+    });
+  });
+
+  it("bb environment publish-to-main passes --preserve-target-changes", async () => {
+    const post = vi.fn(async () => ({
+      ok: true,
+      action: "publish_to_main",
+      message: "Published branch to main and synchronized the local Vault",
+      sourceBranch: "meeting-ingestion/sku-coverage",
+      targetBranch: "main",
+      sourceCommitSha: "source-sha",
+      remoteTargetBeforeSha: "remote-before",
+      remoteTargetAfterSha: "source-sha",
+      localTargetBeforeSha: "local-before",
+      localTargetAfterSha: "source-sha",
+      preservedTargetChangesCommitSha: "preserved-sha",
+    }));
+    stubServerApi({ "v1.environments.:id.actions.$post": post });
+
+    await runCommand(
+      [
+        "environment",
+        "publish-to-main",
+        "env-publish-preserved",
+        "--preserve-target-changes",
+      ],
+      register,
+    );
+
+    expect(post).toHaveBeenCalledWith({
+      param: { id: "env-publish-preserved" },
+      json: {
+        action: "publish_to_main",
+        options: { preserveTargetChanges: true },
+      },
+    });
+  });
+
   it("bb environment update sets the merge base branch", async () => {
     const environment = fixtures.makeEnvironment({
       id: "env-update-1",

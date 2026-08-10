@@ -22,10 +22,16 @@ export type {
   DiffResult,
   FetchOptions,
   PullRequestActionOptions,
+  PublishCommittedBranchBlocked,
+  PublishCommittedBranchBlockedReason,
+  PublishCommittedBranchOptions,
+  PublishCommittedBranchResult,
+  PublishCommittedBranchSuccess,
   SquashMergeOptions,
   SquashMergeResult,
   StatusOptions,
 } from "./workspace.js";
+export { Workspace } from "./workspace.js";
 
 export { renameWorkspaceBranch, renameWorktreeFolder } from "./rename.js";
 export type {

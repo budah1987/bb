@@ -692,6 +692,17 @@ const SETTLED_RESPONSE_RESULT_FIXTURES: SettledResponseResultFixtures = {
     commitSubject: "Merge feature",
     merged: true,
   },
+  "workspace.publish_committed_branch": {
+    outcome: "published",
+    sourceBranch: "feature/publish",
+    targetBranch: "main",
+    sourceCommitSha: "abcdef123456",
+    remoteTargetBeforeSha: "123456abcdef",
+    remoteTargetAfterSha: "abcdef123456",
+    localTargetBeforeSha: "123456abcdef",
+    localTargetAfterSha: "abcdef123456",
+    preservedTargetChangesCommitSha: null,
+  },
   "workspace.rename": {
     target: "branch",
     branchName: "feature/renamed",
@@ -1228,9 +1239,9 @@ describe("host-daemon command schemas", () => {
   // Version 89 makes the ACP adapter mint turn-qualified fileChange item ids.
   // An enrolled daemon on an older build still emits session-scoped counters
   // that collide across resumed sessions, so it must update before it reports
-  // more file edits.
-  it("uses protocol version 89 for turn-qualified ACP fileChange item ids", () => {
-    expect(HOST_DAEMON_PROTOCOL_VERSION).toBe(89);
+  // more file edits. Versions 90 and 91 add direct publication payloads.
+  it("uses protocol version 91 for turn-qualified file changes and direct publishing", () => {
+    expect(HOST_DAEMON_PROTOCOL_VERSION).toBe(91);
   });
 
   it("binds Plan cancellation to a required turn id and typed result", () => {

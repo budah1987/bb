@@ -245,6 +245,124 @@ describe("public environment action regressions", () => {
     });
   });
 
+  it("publishes a managed branch directly to main through the host daemon", async () => {
+    await withTestHarness(async (harness) => {
+      const { host } = seedHostSession(harness.deps, {
+        id: "host-publish-to-main",
+      });
+      const { project } = seedProjectWithSource(harness.deps, {
+        hostId: host.id,
+      });
+      const environment = seedEnvironment(harness.deps, {
+        hostId: host.id,
+        projectId: project.id,
+        managed: true,
+        workspaceProvisionType: "managed-worktree",
+        path: "/tmp/publish-to-main",
+      });
+
+      const responsePromise = harness.app.request(
+        `/api/v1/environments/${environment.id}/actions`,
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            action: "publish_to_main",
+            options: { preserveTargetChanges: true },
+          }),
+        },
+      );
+      const command = await waitForQueuedCommand(
+        harness,
+        ({ command: queued }) =>
+          queued.type === "workspace.publish_committed_branch" &&
+          queued.environmentId === environment.id,
+      );
+      expect(command.command).toMatchObject({
+        targetBranch: "main",
+        preserveTargetChanges: true,
+      });
+      await reportQueuedCommandSuccess(harness, command, {
+        outcome: "published",
+        sourceBranch: "meeting-ingestion/sku-coverage",
+        targetBranch: "main",
+        sourceCommitSha: "source-sha",
+        remoteTargetBeforeSha: "remote-before",
+        remoteTargetAfterSha: "source-sha",
+        localTargetBeforeSha: "local-before",
+        localTargetAfterSha: "source-sha",
+        preservedTargetChangesCommitSha: "local-preservation-sha",
+      });
+
+      const response = await responsePromise;
+      expect(response.status).toBe(200);
+      await expect(readJson(response)).resolves.toMatchObject({
+        ok: true,
+        action: "publish_to_main",
+        sourceBranch: "meeting-ingestion/sku-coverage",
+        targetBranch: "main",
+        localTargetAfterSha: "source-sha",
+        preservedTargetChangesCommitSha: "local-preservation-sha",
+      });
+    });
+  });
+
+  it("returns structured publish blockers from the host daemon", async () => {
+    await withTestHarness(async (harness) => {
+      const { host } = seedHostSession(harness.deps, {
+        id: "host-publish-to-main-blocked",
+      });
+      const { project } = seedProjectWithSource(harness.deps, {
+        hostId: host.id,
+      });
+      const environment = seedEnvironment(harness.deps, {
+        hostId: host.id,
+        projectId: project.id,
+        managed: true,
+        workspaceProvisionType: "managed-worktree",
+        path: "/tmp/publish-to-main-blocked",
+      });
+
+      const responsePromise = harness.app.request(
+        `/api/v1/environments/${environment.id}/actions`,
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ action: "publish_to_main" }),
+        },
+      );
+      const command = await waitForQueuedCommand(
+        harness,
+        ({ command: queued }) =>
+          queued.type === "workspace.publish_committed_branch" &&
+          queued.environmentId === environment.id,
+      );
+      await reportQueuedCommandSuccess(harness, command, {
+        outcome: "blocked",
+        reason: "target_dirty",
+        sourceBranch: "meeting-ingestion/sku-coverage",
+        targetBranch: "main",
+        sourceCommitSha: "source-sha",
+        remoteTargetSha: "remote-sha",
+        localTargetSha: "local-sha",
+        conflictFiles: [],
+      });
+
+      const response = await responsePromise;
+      expect(response.status).toBe(409);
+      await expect(readJson(response)).resolves.toMatchObject({
+        code: "publish_to_main_blocked",
+        details: {
+          kind: "publish_to_main_blocked",
+          reason: "target_dirty",
+          targetBranch: "main",
+          remoteTargetSha: "remote-sha",
+          localTargetSha: "local-sha",
+        },
+      });
+    });
+  });
+
   it("rejects legacy environment action payloads that still send threadId", async () => {
     await withTestHarness(async (harness) => {
       const { host } = seedHostSession(harness.deps, {

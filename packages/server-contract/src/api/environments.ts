@@ -483,6 +483,7 @@ export type PullRequestMergeMethod = z.infer<
 export const environmentActionTypeSchema = z.enum([
   "commit",
   "squash_merge",
+  "publish_to_main",
   "pull_request_metadata",
   "pull_request_create",
   "pull_request_ready",
@@ -496,6 +497,14 @@ export const squashMergeOptionsSchema = z
   })
   .strict();
 export type SquashMergeOptions = z.infer<typeof squashMergeOptionsSchema>;
+
+export const publishToMainOptionsSchema = z
+  .object({
+    preserveTargetChanges: z.boolean().default(false),
+  })
+  .strict()
+  .default({ preserveTargetChanges: false });
+export type PublishToMainOptions = z.infer<typeof publishToMainOptionsSchema>;
 
 export const pullRequestMergeOptionsSchema = z
   .object({
@@ -546,6 +555,12 @@ export const environmentActionRequestSchema = z.discriminatedUnion("action", [
     .object({
       action: z.literal("squash_merge"),
       options: squashMergeOptionsSchema,
+    })
+    .strict(),
+  z
+    .object({
+      action: z.literal("publish_to_main"),
+      options: publishToMainOptionsSchema,
     })
     .strict(),
   z
@@ -602,6 +617,23 @@ export type SquashMergeActionResponse = z.infer<
   typeof squashMergeActionResponseSchema
 >;
 
+export const publishToMainActionResponseSchema = z.object({
+  ok: z.literal(true),
+  action: z.literal("publish_to_main"),
+  message: z.string().min(1),
+  sourceBranch: gitBranchNameSchema,
+  targetBranch: z.literal("main"),
+  sourceCommitSha: z.string().min(1),
+  remoteTargetBeforeSha: z.string().min(1),
+  remoteTargetAfterSha: z.string().min(1),
+  localTargetBeforeSha: z.string().min(1),
+  localTargetAfterSha: z.string().min(1),
+  preservedTargetChangesCommitSha: z.string().min(1).nullable(),
+});
+export type PublishToMainActionResponse = z.infer<
+  typeof publishToMainActionResponseSchema
+>;
+
 export const pullRequestMetadataActionResponseSchema = z.object({
   ok: z.literal(true),
   action: z.literal("pull_request_metadata"),
@@ -654,6 +686,7 @@ export type PullRequestDraftActionResponse = z.infer<
 export const environmentActionResponseSchema = z.discriminatedUnion("action", [
   commitActionResponseSchema,
   squashMergeActionResponseSchema,
+  publishToMainActionResponseSchema,
   pullRequestMetadataActionResponseSchema,
   pullRequestCreateActionResponseSchema,
   pullRequestReadyActionResponseSchema,
@@ -685,6 +718,26 @@ export const environmentActionFailureDetailsSchema = z.discriminatedUnion(
     }),
     z.object({
       kind: z.literal("squash_merge_dirty_worktree"),
+    }),
+    z.object({
+      kind: z.literal("publish_to_main_blocked"),
+      reason: z.enum([
+        "source_detached",
+        "source_dirty",
+        "target_checkout_missing",
+        "target_checkout_changed",
+        "target_dirty",
+        "target_diverged",
+        "target_merge_conflict",
+        "source_not_ahead",
+        "source_not_descendant",
+      ]),
+      sourceBranch: gitBranchNameSchema.nullable(),
+      targetBranch: z.literal("main"),
+      sourceCommitSha: z.string().min(1).nullable(),
+      remoteTargetSha: z.string().min(1).nullable(),
+      localTargetSha: z.string().min(1).nullable(),
+      conflictFiles: z.array(z.string().min(1)),
     }),
     z.object({
       kind: z.literal("workspace_unavailable"),

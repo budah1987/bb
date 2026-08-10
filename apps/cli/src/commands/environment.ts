@@ -1,6 +1,7 @@
 import { Command } from "commander";
 import type {
   CommitActionResponse,
+  PublishToMainActionResponse,
   SquashMergeActionResponse,
 } from "@bb/server-contract";
 import type {
@@ -20,6 +21,11 @@ import {
 interface EnvironmentCommitCommandOptions {
   json?: boolean;
   path?: string[];
+}
+
+interface EnvironmentPublishToMainCommandOptions {
+  json?: boolean;
+  preserveTargetChanges?: boolean;
 }
 
 interface EnvironmentShowCommandOptions {
@@ -880,6 +886,31 @@ export function registerEnvironmentCommands(
         if (outputJson(opts, result)) return;
         printEnvironmentGitOperationResult(result);
       }),
+    );
+
+  environment
+    .command("publish-to-main <id>")
+    .description("Publish a committed managed worktree branch directly to main")
+    .option(
+      "--preserve-target-changes",
+      "Commit local main changes, merge the ingestion branch, and publish both",
+    )
+    .option("--json", "Print machine-readable JSON output")
+    .action(
+      action(
+        async (id: string, opts: EnvironmentPublishToMainCommandOptions) => {
+          const result: PublishToMainActionResponse = await createCliBbSdk(
+            getUrl(),
+          ).environments.publishToMain({
+            environmentId: id,
+            preserveTargetChanges: opts.preserveTargetChanges,
+          });
+          if (outputJson(opts, result)) return;
+          console.log(`Published ${result.sourceBranch} to main`);
+          console.log(`Commit: ${result.sourceCommitSha}`);
+          console.log(`Local Vault: ${result.localTargetAfterSha}`);
+        },
+      ),
     );
 
   environment

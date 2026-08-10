@@ -1221,6 +1221,202 @@ describe("Workspace", () => {
     expect(targetBranchSubject).toBe("Initial commit");
   });
 
+  it("publishes a committed worktree branch to origin and fast-forwards the local target checkout", async () => {
+    const { primaryRepo, worktreePath } =
+      await createPrimaryAndFeatureWorktree();
+    await initBareRemoteFrom(primaryRepo);
+
+    const result = await new Workspace(
+      worktreePath,
+    ).publishCommittedBranchToTarget({
+      targetBranch: "main",
+    });
+
+    const remoteSha = await runGit(["rev-parse", "origin/main"], {
+      cwd: primaryRepo,
+    });
+    const localSha = await runGit(["rev-parse", "main"], {
+      cwd: primaryRepo,
+    });
+    const sourceSha = await runGit(["rev-parse", "HEAD"], {
+      cwd: worktreePath,
+    });
+
+    expect(result).toMatchObject({
+      outcome: "published",
+      sourceBranch: "feature",
+      targetBranch: "main",
+      sourceCommitSha: sourceSha.stdout.trim(),
+      remoteTargetAfterSha: remoteSha.stdout.trim(),
+      localTargetAfterSha: localSha.stdout.trim(),
+    });
+    expect(remoteSha.stdout.trim()).toBe(sourceSha.stdout.trim());
+    expect(localSha.stdout.trim()).toBe(sourceSha.stdout.trim());
+  });
+
+  it("blocks direct publication when the local target checkout is dirty", async () => {
+    const { primaryRepo, worktreePath } =
+      await createPrimaryAndFeatureWorktree();
+    await initBareRemoteFrom(primaryRepo);
+    await fs.writeFile(
+      path.join(primaryRepo, "local.txt"),
+      "local work\n",
+      "utf8",
+    );
+
+    await expect(
+      new Workspace(worktreePath).publishCommittedBranchToTarget({
+        targetBranch: "main",
+      }),
+    ).resolves.toMatchObject({
+      outcome: "blocked",
+      reason: "target_dirty",
+      sourceBranch: "feature",
+      targetBranch: "main",
+    });
+  });
+
+  it("blocks direct publication when the local target checkout diverges from origin", async () => {
+    const { primaryRepo, worktreePath } =
+      await createPrimaryAndFeatureWorktree();
+    const remotePath = await initBareRemoteFrom(primaryRepo);
+    const remoteCloneParent = await makeTempDir(
+      "bb-workspace-publish-remote-clone-",
+    );
+    const remoteClone = path.join(remoteCloneParent, "clone");
+    await runGit(["clone", remotePath, remoteClone], {
+      cwd: remoteCloneParent,
+    });
+    await runGit(["config", "user.name", "BB Tests"], { cwd: remoteClone });
+    await runGit(["config", "user.email", "bb@example.com"], {
+      cwd: remoteClone,
+    });
+    await fs.writeFile(
+      path.join(remoteClone, "remote.txt"),
+      "remote work\n",
+      "utf8",
+    );
+    await runGit(["add", "remote.txt"], { cwd: remoteClone });
+    await runGit(["commit", "-m", "Remote work"], { cwd: remoteClone });
+    await runGit(["push", "origin", "main"], { cwd: remoteClone });
+
+    await expect(
+      new Workspace(worktreePath).publishCommittedBranchToTarget({
+        targetBranch: "main",
+      }),
+    ).resolves.toMatchObject({
+      outcome: "blocked",
+      reason: "target_diverged",
+      sourceBranch: "feature",
+      targetBranch: "main",
+    });
+  });
+
+  it("preserves dirty local target changes and publishes them with the ingestion branch", async () => {
+    const { primaryRepo, worktreePath } =
+      await createPrimaryAndFeatureWorktree();
+    await initBareRemoteFrom(primaryRepo);
+    await fs.writeFile(
+      path.join(primaryRepo, "local.txt"),
+      "local Vault change\n",
+      "utf8",
+    );
+
+    const result = await new Workspace(
+      worktreePath,
+    ).publishCommittedBranchToTarget({
+      targetBranch: "main",
+      preserveTargetChanges: true,
+    });
+
+    expect(result).toMatchObject({
+      outcome: "published",
+      sourceBranch: "feature",
+      targetBranch: "main",
+    });
+    if (result.outcome !== "published") {
+      throw new Error("Expected the publish to complete");
+    }
+    expect(result.preservedTargetChangesCommitSha).not.toBeNull();
+    expect(result.localTargetAfterSha).toBe(result.remoteTargetAfterSha);
+    await expect(
+      fs.readFile(path.join(primaryRepo, "README.md"), "utf8"),
+    ).resolves.toBe("squash\n");
+    await expect(
+      fs.readFile(path.join(primaryRepo, "local.txt"), "utf8"),
+    ).resolves.toBe("local Vault change\n");
+  });
+
+  it("publishes a local target branch that is ahead of origin when preservation is enabled", async () => {
+    const { primaryRepo, worktreePath } =
+      await createPrimaryAndFeatureWorktree();
+    await initBareRemoteFrom(primaryRepo);
+    await fs.writeFile(
+      path.join(primaryRepo, "local-commit.txt"),
+      "committed local work\n",
+      "utf8",
+    );
+    await runGit(["add", "local-commit.txt"], { cwd: primaryRepo });
+    await runGit(["commit", "-m", "Local Vault commit"], {
+      cwd: primaryRepo,
+    });
+
+    const result = await new Workspace(
+      worktreePath,
+    ).publishCommittedBranchToTarget({
+      targetBranch: "main",
+      preserveTargetChanges: true,
+    });
+
+    expect(result).toMatchObject({
+      outcome: "published",
+      targetBranch: "main",
+    });
+    if (result.outcome !== "published") {
+      throw new Error("Expected the publish to complete");
+    }
+    expect(result.localTargetBeforeSha).not.toBe(result.remoteTargetBeforeSha);
+    await expect(
+      fs.readFile(path.join(primaryRepo, "local-commit.txt"), "utf8"),
+    ).resolves.toBe("committed local work\n");
+  });
+
+  it("preserves local target changes and returns merge conflicts without pushing", async () => {
+    const { primaryRepo, worktreePath } =
+      await createPrimaryAndFeatureWorktree();
+    await initBareRemoteFrom(primaryRepo);
+    const remoteBefore = (
+      await runGit(["rev-parse", "origin/main"], { cwd: primaryRepo })
+    ).stdout.trim();
+    await fs.writeFile(path.join(primaryRepo, "README.md"), "local\n", "utf8");
+
+    const result = await new Workspace(
+      worktreePath,
+    ).publishCommittedBranchToTarget({
+      targetBranch: "main",
+      preserveTargetChanges: true,
+    });
+
+    expect(result).toMatchObject({
+      outcome: "blocked",
+      reason: "target_merge_conflict",
+      conflictFiles: ["README.md"],
+    });
+    if (result.outcome !== "blocked") {
+      throw new Error("Expected a merge conflict");
+    }
+    expect(result.localTargetSha).not.toBe(remoteBefore);
+    await expect(
+      fs.readFile(path.join(primaryRepo, "README.md"), "utf8"),
+    ).resolves.toBe("local\n");
+    await expect(
+      runGit(["diff", "--quiet"], { cwd: primaryRepo }),
+    ).resolves.toMatchObject({ exitCode: 0 });
+    await expect(
+      runGit(["rev-parse", "origin/main"], { cwd: primaryRepo }),
+    ).resolves.toMatchObject({ stdout: `${remoteBefore}\n` });
+  });
+
   it("rejects git mutations for non-git directories", async () => {
     const folder = await makeTempDir("bb-workspace-nongit-");
     const workspace = new Workspace(folder);

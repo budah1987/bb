@@ -3,6 +3,7 @@ import {
   renameWorkspaceBranch,
   renameWorktreeFolder,
 } from "@bb/host-workspace";
+import { Workspace } from "@bb/host-workspace";
 import { ExpectedCommandDispatchError } from "../command-dispatch-support.js";
 import {
   type CommandDispatchOptions,
@@ -31,6 +32,24 @@ export async function squashMerge(
     commitSha: result.commitSha,
     commitSubject: result.commitSubject,
   };
+}
+
+export async function publishCommittedBranch(
+  command: CommandOf<"workspace.publish_committed_branch">,
+  options: CommandDispatchOptions,
+): Promise<HostDaemonCommandResult<"workspace.publish_committed_branch">> {
+  const entry = await requireResolvedWorkspaceForCommand({
+    dataDir: options.dataDir,
+    environmentId: command.environmentId,
+    requireGit: true,
+    requireManagedWorktree: true,
+    runtimeManager: options.runtimeManager,
+    workspaceContext: command.workspaceContext,
+  });
+  return new Workspace(entry.workspace.path).publishCommittedBranchToTarget({
+    targetBranch: command.targetBranch,
+    preserveTargetChanges: command.preserveTargetChanges,
+  });
 }
 
 export async function renameWorkspace(

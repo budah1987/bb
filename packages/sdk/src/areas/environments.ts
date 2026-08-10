@@ -10,6 +10,7 @@ import {
   pullRequestMetadataActionResponseSchema,
   pullRequestMergeActionResponseSchema,
   pullRequestReadyActionResponseSchema,
+  publishToMainActionResponseSchema,
   squashMergeActionResponseSchema,
   renameEnvironmentRequestSchema,
   updateEnvironmentRequestSchema,
@@ -46,6 +47,7 @@ import type {
   PullRequestDraftActionResponse,
   PullRequestMergeActionResponse,
   PullRequestReadyActionResponse,
+  PublishToMainActionResponse,
   RenameEnvironmentRequest,
   SquashMergeActionResponse,
   EnvironmentStatusQuery,
@@ -157,6 +159,10 @@ export interface EnvironmentSquashMergeArgs {
   mergeBaseBranch: string;
 }
 
+export interface EnvironmentPublishToMainArgs extends EnvironmentActionArgs {
+  preserveTargetChanges?: boolean;
+}
+
 export interface EnvironmentPullRequestMergeArgs {
   environmentId: string;
   method: PullRequestMergeMethod;
@@ -205,6 +211,7 @@ export type EnvironmentPathsResult = WorkspacePathListResponse;
 export type EnvironmentPullRequestResult = EnvironmentPullRequestResponse;
 export type EnvironmentRenameResult = Environment;
 export type EnvironmentSquashMergeResult = SquashMergeActionResponse;
+export type EnvironmentPublishToMainResult = PublishToMainActionResponse;
 export type EnvironmentStatusResult = EnvironmentStatusResponse;
 export type EnvironmentDockerProvenanceResult =
   EnvironmentDockerProvenanceResponse;
@@ -263,6 +270,9 @@ export interface EnvironmentsArea {
   squashMerge(
     args: EnvironmentSquashMergeArgs,
   ): Promise<EnvironmentSquashMergeResult>;
+  publishToMain(
+    args: EnvironmentPublishToMainArgs,
+  ): Promise<EnvironmentPublishToMainResult>;
   status(args: EnvironmentStatusArgs): Promise<EnvironmentStatusResult>;
   simulatorStatus(
     args: EnvironmentActionArgs,
@@ -579,6 +589,20 @@ export function createEnvironmentsArea(
         }),
       );
       return squashMergeActionResponseSchema.parse(body);
+    },
+    async publishToMain(input) {
+      const body = await transport.readJson(
+        transport.api.v1.environments[":id"].actions.$post({
+          param: { id: input.environmentId },
+          json: {
+            action: "publish_to_main",
+            options: {
+              preserveTargetChanges: input.preserveTargetChanges ?? false,
+            },
+          },
+        }),
+      );
+      return publishToMainActionResponseSchema.parse(body);
     },
     async status(input) {
       return transport.readJson(

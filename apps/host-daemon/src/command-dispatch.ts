@@ -76,7 +76,11 @@ import {
   submitTurn,
 } from "./command-handlers/thread.js";
 import { WorkspaceError } from "@bb/host-workspace";
-import { renameWorkspace, squashMerge } from "./command-handlers/workspace.js";
+import {
+  publishCommittedBranch,
+  renameWorkspace,
+  squashMerge,
+} from "./command-handlers/workspace.js";
 import {
   cloneProject,
   inspectProjectPath,
@@ -463,6 +467,7 @@ const commandHandlers: CommandHandlerMap = {
     });
   },
   "workspace.squash_merge": squashMerge,
+  "workspace.publish_committed_branch": publishCommittedBranch,
   "workspace.rename": renameWorkspace,
   "workspace.pull_request_action": async (command, options) => {
     const entry = await requireResolvedWorkspaceForCommand({

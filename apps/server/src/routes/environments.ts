@@ -1086,6 +1086,66 @@ export function registerEnvironmentRoutes(app: Hono, deps: AppDeps): void {
           commitSubject: result.commitSubject,
         });
       }
+      case "publish_to_main": {
+        if (
+          !environment.isGitRepo ||
+          environment.workspaceProvisionType !== "managed-worktree"
+        ) {
+          throw new ApiError(
+            409,
+            "invalid_request",
+            "Publishing to main requires a managed Git worktree",
+          );
+        }
+
+        const target = requireWorkspaceCommandTarget(environment);
+        const result = await runLiveCommandAndWait(deps, {
+          hostId: target.hostId,
+          timeoutMs: COMMAND_TIMEOUT_MS,
+          command: {
+            type: "workspace.publish_committed_branch",
+            environmentId: target.environmentId,
+            workspaceContext: target.workspaceContext,
+            targetBranch: "main",
+            preserveTargetChanges: payload.options.preserveTargetChanges,
+          },
+        });
+
+        if (result.outcome === "blocked") {
+          throw new ApiError(
+            409,
+            "publish_to_main_blocked",
+            `Cannot publish to main: ${result.reason.replaceAll("_", " ")}`,
+            {
+              details: {
+                kind: "publish_to_main_blocked",
+                reason: result.reason,
+                sourceBranch: result.sourceBranch,
+                targetBranch: "main",
+                sourceCommitSha: result.sourceCommitSha,
+                remoteTargetSha: result.remoteTargetSha,
+                localTargetSha: result.localTargetSha,
+                conflictFiles: result.conflictFiles,
+              },
+            },
+          );
+        }
+
+        return context.json({
+          ok: true,
+          action: "publish_to_main",
+          message: "Published branch to main and synchronized the local Vault",
+          sourceBranch: result.sourceBranch,
+          targetBranch: "main",
+          sourceCommitSha: result.sourceCommitSha,
+          remoteTargetBeforeSha: result.remoteTargetBeforeSha,
+          remoteTargetAfterSha: result.remoteTargetAfterSha,
+          localTargetBeforeSha: result.localTargetBeforeSha,
+          localTargetAfterSha: result.localTargetAfterSha,
+          preservedTargetChangesCommitSha:
+            result.preservedTargetChangesCommitSha,
+        });
+      }
       case "pull_request_ready": {
         if (!environment.isGitRepo) {
           throw new ApiError(

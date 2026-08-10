@@ -120,6 +120,9 @@ Making your repo work with bb:
     --merge-base-branch <branch>          Target branch (required)
                                            Blocks until this worktree is clean
 
+  bb environment publish-to-main <id>     Publish a committed worktree to main
+    --preserve-target-changes              Preserve local main changes before publishing
+
   bb environment archive-threads <id>     Archive all threads in an environment
 
   bb environment pull-request show <id>   Inspect a pull request

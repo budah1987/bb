@@ -94,6 +94,14 @@ const commandResultOwners: CommandResultOwnerRegistry = {
       });
     },
   },
+  "workspace.publish_committed_branch": {
+    applySideEffects: ({ deps, command, report }) => {
+      notifyWorkspaceMutationResult(deps, {
+        environmentId: command.environmentId,
+        ok: report.ok,
+      });
+    },
+  },
   "workspace.pull_request_action": {
     applySideEffects: ({ deps, command, report }) => {
       notifyWorkspaceMutationResult(deps, {

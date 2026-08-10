@@ -41,7 +41,7 @@ import {
   providerCliStatusResponseSchema,
 } from "./local.js";
 
-export const HOST_DAEMON_PROTOCOL_VERSION = 89 as const;
+export const HOST_DAEMON_PROTOCOL_VERSION = 91 as const;
 export const githubAccountLoginSchema = z.string().trim().min(1).max(255);
 
 export {
@@ -1312,6 +1312,15 @@ const workspaceSquashMergeCommandSchema = hostDaemonWorkspaceTargetSchema
   })
   .strict();
 
+const workspacePublishCommittedBranchCommandSchema =
+  hostDaemonWorkspaceTargetSchema
+    .extend({
+      type: z.literal("workspace.publish_committed_branch"),
+      targetBranch: gitBranchNameSchema,
+      preserveTargetChanges: z.boolean().default(false),
+    })
+    .strict();
+
 const workspaceRenameCommandSchema = z.discriminatedUnion("target", [
   hostDaemonWorkspaceTargetSchema
     .extend({
@@ -1725,6 +1734,47 @@ const workspaceCommitResultSchema = z.object({
 const workspaceSquashMergeResultSchema = workspaceCommitResultSchema.extend({
   merged: z.boolean(),
 });
+const workspacePublishCommittedBranchBlockedReasonSchema = z.enum([
+  "source_detached",
+  "source_dirty",
+  "target_checkout_missing",
+  "target_checkout_changed",
+  "target_dirty",
+  "target_diverged",
+  "target_merge_conflict",
+  "source_not_ahead",
+  "source_not_descendant",
+]);
+const workspacePublishCommittedBranchResultSchema = z.discriminatedUnion(
+  "outcome",
+  [
+    z
+      .object({
+        outcome: z.literal("published"),
+        sourceBranch: gitBranchNameSchema,
+        targetBranch: gitBranchNameSchema,
+        sourceCommitSha: z.string().min(1),
+        remoteTargetBeforeSha: z.string().min(1),
+        remoteTargetAfterSha: z.string().min(1),
+        localTargetBeforeSha: z.string().min(1),
+        localTargetAfterSha: z.string().min(1),
+        preservedTargetChangesCommitSha: z.string().min(1).nullable(),
+      })
+      .strict(),
+    z
+      .object({
+        outcome: z.literal("blocked"),
+        reason: workspacePublishCommittedBranchBlockedReasonSchema,
+        sourceBranch: gitBranchNameSchema.nullable(),
+        targetBranch: gitBranchNameSchema,
+        sourceCommitSha: z.string().min(1).nullable(),
+        remoteTargetSha: z.string().min(1).nullable(),
+        localTargetSha: z.string().min(1).nullable(),
+        conflictFiles: z.array(z.string().min(1)),
+      })
+      .strict(),
+  ],
+);
 const workspaceRenameResultSchema = z.discriminatedUnion("target", [
   z.object({ target: z.literal("branch"), branchName: gitBranchNameSchema }),
   z.object({ target: z.literal("folder"), path: z.string().min(1) }),
@@ -2153,6 +2203,15 @@ export const hostDaemonCommandRegistry = {
     type: "workspace.squash_merge",
     schema: workspaceSquashMergeCommandSchema,
     resultSchema: workspaceSquashMergeResultSchema,
+    transport: "settled",
+    retryable: false,
+    flushEventsBeforeResult: false,
+    envLane: "write",
+  }),
+  "workspace.publish_committed_branch": defineHostDaemonCommandDescriptor({
+    type: "workspace.publish_committed_branch",
+    schema: workspacePublishCommittedBranchCommandSchema,
+    resultSchema: workspacePublishCommittedBranchResultSchema,
     transport: "settled",
     retryable: false,
     flushEventsBeforeResult: false,

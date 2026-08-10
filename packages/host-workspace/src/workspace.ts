@@ -94,6 +94,49 @@ export interface SquashMergeResult {
   targetBranch: string;
 }
 
+export type PublishCommittedBranchBlockedReason =
+  | "source_detached"
+  | "source_dirty"
+  | "target_checkout_missing"
+  | "target_checkout_changed"
+  | "target_dirty"
+  | "target_diverged"
+  | "target_merge_conflict"
+  | "source_not_ahead"
+  | "source_not_descendant";
+
+export interface PublishCommittedBranchOptions {
+  targetBranch: string;
+  preserveTargetChanges?: boolean;
+}
+
+export interface PublishCommittedBranchSuccess {
+  outcome: "published";
+  sourceBranch: string;
+  targetBranch: string;
+  sourceCommitSha: string;
+  remoteTargetBeforeSha: string;
+  remoteTargetAfterSha: string;
+  localTargetBeforeSha: string;
+  localTargetAfterSha: string;
+  preservedTargetChangesCommitSha: string | null;
+}
+
+export interface PublishCommittedBranchBlocked {
+  outcome: "blocked";
+  reason: PublishCommittedBranchBlockedReason;
+  sourceBranch: string | null;
+  targetBranch: string;
+  sourceCommitSha: string | null;
+  remoteTargetSha: string | null;
+  localTargetSha: string | null;
+  conflictFiles: string[];
+}
+
+export type PublishCommittedBranchResult =
+  | PublishCommittedBranchSuccess
+  | PublishCommittedBranchBlocked;
+
 export type PullRequestActionOptions = GitHostPullRequestAction;
 
 type DiffSummary = {
@@ -1330,6 +1373,232 @@ export class Workspace {
         );
       }
     }
+  }
+
+  /**
+   * Publish the current managed-worktree branch straight to an already checked
+   * out target branch. The target checkout is the user-visible local checkout,
+   * so it must match origin and be clean by default. `preserveTargetChanges`
+   * checkpoints local target changes and accepts target commits ahead of origin.
+   */
+  async publishCommittedBranchToTarget(
+    options: PublishCommittedBranchOptions,
+  ): Promise<PublishCommittedBranchResult> {
+    await ensureGitRepo(this.path);
+
+    const sourceBranch = await this.currentBranch;
+    if (!sourceBranch) {
+      return {
+        outcome: "blocked",
+        reason: "source_detached",
+        sourceBranch: null,
+        targetBranch: options.targetBranch,
+        sourceCommitSha: null,
+        remoteTargetSha: null,
+        localTargetSha: null,
+        conflictFiles: [],
+      };
+    }
+
+    const targetPath = await this.findWorktreePathForBranch(
+      options.targetBranch,
+    );
+    if (!targetPath) {
+      return {
+        outcome: "blocked",
+        reason: "target_checkout_missing",
+        sourceBranch,
+        targetBranch: options.targetBranch,
+        sourceCommitSha: await this.getHeadSha(),
+        remoteTargetSha: null,
+        localTargetSha: null,
+        conflictFiles: [],
+      };
+    }
+
+    return withCheckoutMutationLocks([this.path, targetPath], async () => {
+      await runGit(["fetch", "origin", options.targetBranch], {
+        cwd: this.path,
+      });
+
+      const sourceCommitSha = await revParse(this.path, "HEAD");
+      const localTargetSha = await revParse(targetPath, "HEAD");
+      const remoteTargetRef = `refs/remotes/origin/${options.targetBranch}`;
+      const remoteTargetSha = await revParse(this.path, remoteTargetRef);
+      const blocked = (
+        reason: PublishCommittedBranchBlockedReason,
+        args: {
+          localTargetSha?: string;
+          conflictFiles?: string[];
+        } = {},
+      ): PublishCommittedBranchBlocked => ({
+        outcome: "blocked",
+        reason,
+        sourceBranch,
+        targetBranch: options.targetBranch,
+        sourceCommitSha,
+        remoteTargetSha,
+        localTargetSha: args.localTargetSha ?? localTargetSha,
+        conflictFiles: args.conflictFiles ?? [],
+      });
+
+      if ((await getCurrentBranch(targetPath)) !== options.targetBranch) {
+        return blocked("target_checkout_changed");
+      }
+
+      if (await hasUncommittedChanges(this.path)) {
+        return blocked("source_dirty");
+      }
+
+      const targetIncludesRemote = await runGit(
+        ["merge-base", "--is-ancestor", remoteTargetSha, localTargetSha],
+        { cwd: targetPath, allowFailure: true },
+      );
+      if (targetIncludesRemote.exitCode !== 0) {
+        return blocked("target_diverged");
+      }
+
+      const targetHasChanges = await hasUncommittedChanges(targetPath);
+      if (targetHasChanges && !options.preserveTargetChanges) {
+        return blocked("target_dirty");
+      }
+      if (
+        !options.preserveTargetChanges &&
+        localTargetSha !== remoteTargetSha
+      ) {
+        return blocked("target_diverged");
+      }
+
+      const isTargetAncestor = await runGit(
+        ["merge-base", "--is-ancestor", remoteTargetSha, sourceCommitSha],
+        { cwd: this.path, allowFailure: true },
+      );
+      if (isTargetAncestor.exitCode !== 0) {
+        return blocked("source_not_descendant");
+      }
+
+      if (sourceCommitSha === remoteTargetSha) {
+        return blocked("source_not_ahead");
+      }
+
+      let targetCommitSha = localTargetSha;
+      let preservedTargetChangesCommitSha: string | null = null;
+      if (targetHasChanges) {
+        await runGit(["add", "-A"], { cwd: targetPath });
+        await runGit(
+          [
+            "commit",
+            "--no-verify",
+            "-m",
+            "bb: preserve local Vault changes before publishing",
+          ],
+          { cwd: targetPath },
+        );
+        targetCommitSha = await revParse(targetPath, "HEAD");
+        preservedTargetChangesCommitSha = targetCommitSha;
+      }
+
+      // Keep the clean path in the same order as the original publication:
+      // publish the managed branch first, then fast-forward the local target.
+      if (targetCommitSha === remoteTargetSha) {
+        await runGit(
+          [
+            "push",
+            `--force-with-lease=refs/heads/${options.targetBranch}:${remoteTargetSha}`,
+            "origin",
+            `${sourceBranch}:refs/heads/${options.targetBranch}`,
+          ],
+          { cwd: this.path },
+        );
+        await runGit(["merge", "--ff-only", sourceCommitSha], {
+          cwd: targetPath,
+        });
+        return {
+          outcome: "published",
+          sourceBranch,
+          targetBranch: options.targetBranch,
+          sourceCommitSha,
+          remoteTargetBeforeSha: remoteTargetSha,
+          remoteTargetAfterSha: sourceCommitSha,
+          localTargetBeforeSha: localTargetSha,
+          localTargetAfterSha: await revParse(targetPath, "HEAD"),
+          preservedTargetChangesCommitSha,
+        };
+      }
+
+      if (targetCommitSha !== sourceCommitSha) {
+        const sourceIsTargetAncestor = await runGit(
+          ["merge-base", "--is-ancestor", sourceCommitSha, targetCommitSha],
+          { cwd: targetPath, allowFailure: true },
+        );
+        const targetIsSourceAncestor = await runGit(
+          ["merge-base", "--is-ancestor", targetCommitSha, sourceCommitSha],
+          { cwd: targetPath, allowFailure: true },
+        );
+        if (sourceIsTargetAncestor.exitCode !== 0) {
+          if (targetIsSourceAncestor.exitCode === 0) {
+            await runGit(["merge", "--ff-only", sourceCommitSha], {
+              cwd: targetPath,
+            });
+            targetCommitSha = sourceCommitSha;
+          } else {
+            const merge = await runGit(
+              ["merge", "--no-ff", "--no-commit", sourceCommitSha],
+              { cwd: targetPath, allowFailure: true },
+            );
+            if (merge.exitCode !== 0) {
+              const conflicts = await runGit(
+                ["diff", "--name-only", "--diff-filter=U"],
+                { cwd: targetPath },
+              );
+              await runGit(["merge", "--abort"], {
+                cwd: targetPath,
+                allowFailure: true,
+              });
+              return blocked("target_merge_conflict", {
+                localTargetSha: await revParse(targetPath, "HEAD"),
+                conflictFiles: conflicts.stdout
+                  .split("\n")
+                  .map((entry) => entry.trim())
+                  .filter(Boolean),
+              });
+            }
+            await runGit(
+              [
+                "commit",
+                "--no-verify",
+                "-m",
+                `bb: publish ${sourceBranch} to ${options.targetBranch}`,
+              ],
+              { cwd: targetPath },
+            );
+            targetCommitSha = await revParse(targetPath, "HEAD");
+          }
+        }
+      }
+
+      await runGit(
+        [
+          "push",
+          `--force-with-lease=refs/heads/${options.targetBranch}:${remoteTargetSha}`,
+          "origin",
+          `${targetCommitSha}:refs/heads/${options.targetBranch}`,
+        ],
+        { cwd: this.path },
+      );
+
+      return {
+        outcome: "published",
+        sourceBranch,
+        targetBranch: options.targetBranch,
+        sourceCommitSha,
+        remoteTargetBeforeSha: remoteTargetSha,
+        remoteTargetAfterSha: targetCommitSha,
+        localTargetBeforeSha: localTargetSha,
+        localTargetAfterSha: await revParse(targetPath, "HEAD"),
+        preservedTargetChangesCommitSha,
+      };
+    });
   }
 
   private async resolveSquashMergeTarget(

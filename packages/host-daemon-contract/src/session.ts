@@ -473,6 +473,7 @@ const hostDaemonOnlineRpcResponseSuccessSchema = z.discriminatedUnion(
     commandRpcResponseSuccessSchemaFor("environment.destroy"),
     commandRpcResponseSuccessSchemaFor("workspace.commit"),
     commandRpcResponseSuccessSchemaFor("workspace.squash_merge"),
+    commandRpcResponseSuccessSchemaFor("workspace.publish_committed_branch"),
     commandRpcResponseSuccessSchemaFor("workspace.rename"),
     commandRpcResponseSuccessSchemaFor("workspace.pull_request_action"),
     commandRpcResponseSuccessSchemaFor("workspace.pull_request_create"),

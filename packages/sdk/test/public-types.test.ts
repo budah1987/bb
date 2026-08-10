@@ -254,6 +254,7 @@ type ExpectedEnvironmentsKey =
   | "markPullRequestReady"
   | "mergePullRequest"
   | "paths"
+  | "publishToMain"
   | "previews"
   | "pullRequest"
   | "rename"
