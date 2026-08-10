@@ -20,6 +20,7 @@ import {
   resetPluginSlotStoreForTest,
   setPluginSlotRegistrations,
 } from "@/lib/plugin-slots";
+import { browserAnnotationStore } from "@/lib/browser-annotations";
 
 const syncMocks = vi.hoisted(() => ({
   scheduleLocalThreadTabsMigration: vi.fn(),
@@ -90,6 +91,43 @@ afterEach(() => {
 });
 
 describe("useThreadFileTabs terminal pruning", () => {
+  it("focuses the browser tab that owns a selected annotation", () => {
+    const threadId = "annotation-tab-focus";
+    const { result } = renderThreadHook(() =>
+      useThreadFileTabs({
+        panelStateId: threadId,
+        syncThreadId: threadId,
+        environmentId: "env_1",
+        storageFiles: undefined,
+        terminalSessions: undefined,
+      }),
+    );
+
+    act(() => {
+      result.current.openTab({ kind: "browser", url: "https://one.test" });
+      result.current.openTab({ kind: "browser", url: "https://two.test" });
+    });
+    const [firstTab, secondTab] = result.current.browserTabs;
+    if (firstTab === undefined || secondTab === undefined) {
+      throw new Error("expected two browser tabs");
+    }
+    act(() => result.current.activateTab(firstTab.id));
+    const draft = browserAnnotationStore.addDraft(threadId, {
+      tabId: secondTab.id,
+      selector: "main",
+      url: secondTab.url,
+      viewport: { width: 1200, height: 800 },
+      rectangle: { x: 0, y: 0, width: 100, height: 40 },
+      comment: "Focus this tab.",
+    });
+
+    act(() =>
+      browserAnnotationStore.selectDraft(threadId, secondTab.id, draft.id),
+    );
+
+    expect(result.current.activeBrowserTab?.id).toBe(secondTab.id);
+  });
+
   it("keeps root-compose file tabs local", () => {
     const { result } = renderThreadHook(() =>
       useThreadFileTabs({

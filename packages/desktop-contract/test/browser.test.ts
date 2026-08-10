@@ -2,6 +2,9 @@ import { describe, expect, it } from "vitest";
 import {
   BB_DESKTOP_BROWSER_MAX_URL_LENGTH,
   bbDesktopBrowserAttachRequestSchema,
+  bbDesktopBrowserAnnotationDraftSchema,
+  bbDesktopBrowserSetAnnotationModeRequestSchema,
+  bbDesktopBrowserSyncAnnotationsRequestSchema,
   bbDesktopBrowserSetBoundsRequestSchema,
   bbDesktopBrowserStateSchema,
   clampBbDesktopBrowserViewBounds,
@@ -121,6 +124,49 @@ describe("desktop browser IPC schemas", () => {
         url: longUrl,
         bounds: { x: 0, y: 0, width: 800, height: 600 },
         visible: true,
+      }).success,
+    ).toBe(false);
+  });
+
+  it("validates annotation mode commands and structured drafts", () => {
+    expect(
+      bbDesktopBrowserSetAnnotationModeRequestSchema.safeParse({
+        tabId: "browser:abc",
+        enabled: true,
+      }).success,
+    ).toBe(true);
+    expect(
+      bbDesktopBrowserSyncAnnotationsRequestSchema.safeParse({
+        tabId: "browser:abc",
+        annotations: [
+          {
+            id: "annotation-1",
+            number: 1,
+            selector: "main > button",
+            comment: "Use the primary button style here.",
+            rectangle: { x: 32, y: 80, width: 140, height: 40 },
+          },
+        ],
+      }).success,
+    ).toBe(true);
+    expect(
+      bbDesktopBrowserAnnotationDraftSchema.safeParse({
+        tabId: "browser:abc",
+        selector: "main > button:nth-of-type(2)",
+        url: "http://localhost:3000/settings",
+        viewport: { width: 1440, height: 900 },
+        rectangle: { x: 32, y: 80, width: 140, height: 40 },
+        comment: "Use the primary button style here.",
+      }).success,
+    ).toBe(true);
+    expect(
+      bbDesktopBrowserAnnotationDraftSchema.safeParse({
+        tabId: "browser:abc",
+        selector: "button",
+        url: "http://localhost:3000",
+        viewport: { width: 1440, height: 900 },
+        rectangle: { x: 0, y: 0, width: 10, height: 10 },
+        comment: "   ",
       }).success,
     ).toBe(false);
   });

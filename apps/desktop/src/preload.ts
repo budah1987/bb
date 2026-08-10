@@ -2,6 +2,7 @@ import { contextBridge, ipcRenderer, webFrame } from "electron";
 import { appCommandIdSchema } from "@bb/domain";
 import {
   bbDesktopBrowserOpenTabRequestSchema,
+  bbDesktopBrowserAnnotationDraftSchema,
   bbDesktopBrowserScopedOpenTabRequestSchema,
   bbDesktopBrowserSnapshotSchema,
   bbDesktopBrowserStateSchema,
@@ -11,6 +12,7 @@ import {
   type BbDesktopAppCommandHandler,
   type BbDesktopBrowserApi,
   type BbDesktopBrowserOpenTabHandler,
+  type BbDesktopBrowserAnnotationDraftHandler,
   type BbDesktopBrowserScopedOpenTabHandler,
   type BbDesktopBrowserSnapshotHandler,
   type BbDesktopBrowserStateHandler,
@@ -34,6 +36,8 @@ import {
 } from "./desktop-update-ipc.js";
 import {
   BB_DESKTOP_BROWSER_ATTACH_CHANNEL,
+  BB_DESKTOP_BROWSER_FOCUS_ANNOTATION_CHANNEL,
+  BB_DESKTOP_BROWSER_ANNOTATION_DRAFT_CHANNEL,
   BB_DESKTOP_BROWSER_DETACH_CHANNEL,
   BB_DESKTOP_BROWSER_GO_BACK_CHANNEL,
   BB_DESKTOP_BROWSER_GO_FORWARD_CHANNEL,
@@ -42,10 +46,12 @@ import {
   BB_DESKTOP_BROWSER_RELOAD_CHANNEL,
   BB_DESKTOP_BROWSER_SCOPED_OPEN_TAB_CHANNEL,
   BB_DESKTOP_BROWSER_SET_BOUNDS_CHANNEL,
+  BB_DESKTOP_BROWSER_SET_ANNOTATION_MODE_CHANNEL,
   BB_DESKTOP_BROWSER_SET_VISIBLE_CHANNEL,
   BB_DESKTOP_BROWSER_SNAPSHOT_CHANNEL,
   BB_DESKTOP_BROWSER_STATE_CHANNEL,
   BB_DESKTOP_BROWSER_STOP_CHANNEL,
+  BB_DESKTOP_BROWSER_SYNC_ANNOTATIONS_CHANNEL,
 } from "./desktop-browser-ipc.js";
 import {
   BB_DESKTOP_APP_COMMAND_CHANNEL,
@@ -159,6 +165,8 @@ const browserOpenTabListeners = new Set<BbDesktopBrowserOpenTabHandler>();
 const browserScopedOpenTabListeners =
   new Set<BbDesktopBrowserScopedOpenTabHandler>();
 const browserSnapshotListeners = new Set<BbDesktopBrowserSnapshotHandler>();
+const browserAnnotationDraftListeners =
+  new Set<BbDesktopBrowserAnnotationDraftHandler>();
 const closeWindowRequestListeners =
   new Set<BbDesktopCloseWindowRequestHandler>();
 const openNewTabListeners = new Set<BbDesktopOpenNewTabHandler>();
@@ -238,6 +246,21 @@ const bbBrowserApi: BbDesktopBrowserApi = {
     browserSnapshotListeners.add(listener);
     return () => {
       browserSnapshotListeners.delete(listener);
+    };
+  },
+  setAnnotationMode(request): void {
+    ipcRenderer.send(BB_DESKTOP_BROWSER_SET_ANNOTATION_MODE_CHANNEL, request);
+  },
+  focusAnnotation(request): void {
+    ipcRenderer.send(BB_DESKTOP_BROWSER_FOCUS_ANNOTATION_CHANNEL, request);
+  },
+  syncAnnotations(request): void {
+    ipcRenderer.send(BB_DESKTOP_BROWSER_SYNC_ANNOTATIONS_CHANNEL, request);
+  },
+  onAnnotationDraft(listener): BbDesktopBrowserUnsubscribe {
+    browserAnnotationDraftListeners.add(listener);
+    return () => {
+      browserAnnotationDraftListeners.delete(listener);
     };
   },
 };
@@ -393,6 +416,19 @@ ipcRenderer.on(
       return;
     }
     for (const listener of browserSnapshotListeners) {
+      listener(parsed.data);
+    }
+  },
+);
+
+ipcRenderer.on(
+  BB_DESKTOP_BROWSER_ANNOTATION_DRAFT_CHANNEL,
+  (_event, payload: unknown) => {
+    const parsed = bbDesktopBrowserAnnotationDraftSchema.safeParse(payload);
+    if (!parsed.success) {
+      return;
+    }
+    for (const listener of browserAnnotationDraftListeners) {
       listener(parsed.data);
     }
   },

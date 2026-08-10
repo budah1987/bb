@@ -3,6 +3,7 @@ import {
   index,
   integer,
   primaryKey,
+  real,
   sqliteTable,
   text,
   uniqueIndex,
@@ -601,6 +602,48 @@ export const threadTabs = sqliteTable("thread_tabs", {
   revision: integer("revision").notNull(),
   updatedAt: integer("updated_at").notNull(),
 });
+
+export const browserAnnotations = sqliteTable(
+  "browser_annotations",
+  {
+    id: text("id").primaryKey(),
+    threadId: text("thread_id")
+      .notNull()
+      .references(() => threads.id, { onDelete: "cascade" }),
+    environmentId: text("environment_id").references(() => environments.id, {
+      onDelete: "set null",
+    }),
+    browserTabId: text("browser_tab_id").notNull(),
+    url: text("url").notNull(),
+    selector: text("selector").notNull(),
+    viewportWidth: real("viewport_width").notNull(),
+    viewportHeight: real("viewport_height").notNull(),
+    rectangleX: real("rectangle_x").notNull(),
+    rectangleY: real("rectangle_y").notNull(),
+    rectangleWidth: real("rectangle_width").notNull(),
+    rectangleHeight: real("rectangle_height").notNull(),
+    comment: text("comment").notNull(),
+    status: text("status")
+      .$type<"open" | "sent" | "resolved">()
+      .notNull()
+      .default("open"),
+    revision: integer("revision").notNull().default(1),
+    createdAt: integer("created_at").notNull(),
+    updatedAt: integer("updated_at").notNull(),
+  },
+  (table) => [
+    index("browser_annotations_thread_status_updated_idx").on(
+      table.threadId,
+      table.status,
+      table.updatedAt,
+    ),
+    index("browser_annotations_thread_tab_updated_idx").on(
+      table.threadId,
+      table.browserTabId,
+      table.updatedAt,
+    ),
+  ],
+);
 
 // One row per thread backing the right rail's Notes tab. Holds two values with
 // deliberately different lifecycles: `scratchpad` is user-authored and never

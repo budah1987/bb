@@ -35,6 +35,7 @@ import type {
   WorkspaceFileTabState,
 } from "@/lib/file-preview";
 import { useRecordThreadRecentItem } from "./threadRecentItems";
+import { subscribeBrowserAnnotationSelection } from "@/lib/browser-annotations";
 import type {
   SecondaryPanelTabReorderHandler,
   SecondaryPanelTabReorderRequest,
@@ -267,6 +268,17 @@ export function useThreadFileTabs({
   const resolvedEnvironmentId = isPanelStateResolved
     ? environmentId
     : undefined;
+
+  useEffect(
+    () =>
+      subscribeBrowserAnnotationSelection((selection) => {
+        if (selection.threadId !== syncThreadId) return;
+        updateFixedPanelTabsState((state) =>
+          activateSecondaryPanelTabInState(state, selection.tabId),
+        );
+      }),
+    [syncThreadId, updateFixedPanelTabsState],
+  );
 
   useEffect(() => {
     if (!resolvedFileOwnerThreadId) return;

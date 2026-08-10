@@ -425,6 +425,10 @@ or artifacts, validation performed, and blockers.
   paragraph describing where the thread stands, ending in the next step. It
   costs an inference call, so a recap that already covers every event in the
   thread is returned unchanged unless you pass `--force`.
+- Use `bb thread annotations list <thread-id> --status open` to inspect browser
+  feedback. Use `add`, `update`, `delete`, and `clear` for the same records the
+  app review rail uses. Updates and deletes require the listed revision, which
+  prevents one agent from silently overwriting another agent's edit.
 
 For review or fix pipelines, get the environment ID from
 `bb thread show <thread-id> --json`, then spawn the follow-up with

@@ -111,6 +111,7 @@ interface FakeWebContentsEventMap {
   "will-redirect": FakeWillRedirectListener;
   "did-start-loading": FakeVoidWebContentsListener;
   "did-stop-loading": FakeVoidWebContentsListener;
+  "did-finish-load": FakeVoidWebContentsListener;
   "did-navigate": FakeDidNavigateListener;
   "did-navigate-in-page": FakeDidNavigateInPageListener;
   "did-start-navigation": FakeVoidWebContentsListener;
@@ -258,6 +259,7 @@ const electronMock = vi.hoisted(() => {
     public historyEntries: Array<{ title: string; url: string }> = [];
     public readonly id: number;
     public readonly loadURLCalls: string[] = [];
+    public readonly isolatedWorldScripts: string[] = [];
     public readonly pendingCaptureResolvers: Array<
       (image: FakeNativeImage) => void
     > = [];
@@ -268,6 +270,7 @@ const electronMock = vi.hoisted(() => {
       "will-redirect": [],
       "did-start-loading": [],
       "did-stop-loading": [],
+      "did-finish-load": [],
       "did-navigate": [],
       "did-navigate-in-page": [],
       "did-start-navigation": [],
@@ -331,6 +334,14 @@ const electronMock = vi.hoisted(() => {
       this.url = url;
       this.loadURLCalls.push(url);
       return Promise.resolve();
+    }
+
+    executeJavaScriptInIsolatedWorld(
+      _worldId: number,
+      scripts: Array<{ code: string }>,
+    ): Promise<unknown> {
+      this.isolatedWorldScripts.push(...scripts.map((script) => script.code));
+      return new Promise(() => {});
     }
 
     on<TEventName extends keyof FakeWebContentsEventMap>(
@@ -1884,6 +1895,83 @@ describe("DesktopBrowserViewManager", () => {
       request: { tabId: "browser:a", visible: true },
     });
     expect(view.webContents.focusCalls).toBe(2);
+  });
+
+  it("installs and removes the isolated annotation controller", () => {
+    const manager = createDesktopBrowserViewManager({
+      partition: "persist:test",
+    });
+    const hostWindow = new FakeHostWindow({
+      contentBounds: { width: 700, height: 450 },
+      webContentsId: 75,
+    });
+    attachBrowserTab({
+      manager,
+      hostWindow,
+      tabId: "browser:a",
+      url: "http://localhost:3000/",
+    });
+    const view = requireFakeView(0);
+
+    manager.setAnnotationMode({
+      hostWindow,
+      request: { tabId: "browser:a", enabled: true },
+    });
+    manager.setAnnotationMode({
+      hostWindow,
+      request: { tabId: "browser:a", enabled: false },
+    });
+
+    expect(view.webContents.isolatedWorldScripts[0]).toContain(
+      "data-bb-annotation-ui",
+    );
+    expect(view.webContents.isolatedWorldScripts.at(-1)).toContain(
+      "controller.dispose()",
+    );
+  });
+
+  it("stores server annotations while disabled and restores their native markers", () => {
+    const manager = createDesktopBrowserViewManager({
+      partition: "persist:test",
+    });
+    const hostWindow = new FakeHostWindow({
+      contentBounds: { width: 700, height: 450 },
+      webContentsId: 76,
+    });
+    attachBrowserTab({
+      manager,
+      hostWindow,
+      tabId: "browser:a",
+      url: "http://localhost:3000/",
+    });
+    const view = requireFakeView(0);
+
+    manager.syncAnnotations({
+      hostWindow,
+      request: {
+        tabId: "browser:a",
+        annotations: [
+          {
+            id: "annotation-1",
+            number: 1,
+            selector: "main",
+            comment: "Increase spacing.",
+            rectangle: { x: 20, y: 30, width: 160, height: 44 },
+          },
+        ],
+      },
+    });
+    expect(view.webContents.isolatedWorldScripts).toHaveLength(0);
+
+    manager.setAnnotationMode({
+      hostWindow,
+      request: { tabId: "browser:a", enabled: true },
+    });
+
+    expect(view.webContents.isolatedWorldScripts).toHaveLength(2);
+    expect(view.webContents.isolatedWorldScripts[1]).toContain(
+      '"id":"annotation-1"',
+    );
   });
 
   it("allows clipboard-sanitized-write but denies clipboard-read and device permissions", () => {

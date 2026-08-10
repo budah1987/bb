@@ -47,6 +47,7 @@ import type {
   PathPreviewAndFilePath,
   PathThreadAndFilePath,
   PathThreadAndQueuedMessage,
+  PathThreadAndAnnotation,
   PathTerminal,
 } from "./common.js";
 import type {
@@ -244,6 +245,23 @@ import type {
   UpdateThreadTabsRequest,
 } from "./api/thread-tabs.js";
 import { updateThreadTabsRequestSchema } from "./api/thread-tabs.js";
+import type {
+  BrowserAnnotation,
+  BrowserAnnotationListQuery,
+  BrowserAnnotationListResponse,
+  ClearBrowserAnnotationsRequest,
+  ClearBrowserAnnotationsResponse,
+  CreateBrowserAnnotationRequest,
+  DeleteBrowserAnnotationQuery,
+  UpdateBrowserAnnotationRequest,
+} from "./api/browser-annotations.js";
+import {
+  browserAnnotationListQuerySchema,
+  clearBrowserAnnotationsRequestSchema,
+  createBrowserAnnotationRequestSchema,
+  deleteBrowserAnnotationQuerySchema,
+  updateBrowserAnnotationRequestSchema,
+} from "./api/browser-annotations.js";
 import type {
   GenerateThreadRecapRequest,
   ThreadNotesResponse,
@@ -1291,6 +1309,54 @@ export const publicApiRoutes = {
         jsonResponse<ThreadTabsResponse>(),
         jsonResponse<ApiError>({ status: 409 }),
       ],
+    }),
+    annotations: defineRoute({
+      path: "/threads/:id/annotations",
+      method: "get",
+      request: optionalQueryRequest<PathId, BrowserAnnotationListQuery>(
+        browserAnnotationListQuerySchema,
+      ),
+      response: jsonResponse<BrowserAnnotationListResponse>(),
+    }),
+    createAnnotation: defineRoute({
+      path: "/threads/:id/annotations",
+      method: "post",
+      request: jsonRequest<PathId, CreateBrowserAnnotationRequest>(
+        createBrowserAnnotationRequestSchema,
+      ),
+      response: jsonResponse<BrowserAnnotation>(),
+    }),
+    updateAnnotation: defineRoute({
+      path: "/threads/:id/annotations/:annotationId",
+      method: "patch",
+      request: jsonRequest<
+        PathThreadAndAnnotation,
+        UpdateBrowserAnnotationRequest
+      >(updateBrowserAnnotationRequestSchema),
+      response: [
+        jsonResponse<BrowserAnnotation>(),
+        jsonResponse<ApiError>({ status: 409 }),
+      ],
+    }),
+    deleteAnnotation: defineRoute({
+      path: "/threads/:id/annotations/:annotationId",
+      method: "delete",
+      request: queryRequest<
+        PathThreadAndAnnotation,
+        DeleteBrowserAnnotationQuery
+      >(deleteBrowserAnnotationQuerySchema),
+      response: [
+        jsonResponse<{ ok: true }>(),
+        jsonResponse<ApiError>({ status: 409 }),
+      ],
+    }),
+    clearAnnotations: defineRoute({
+      path: "/threads/:id/annotations/clear",
+      method: "post",
+      request: jsonRequest<PathId, ClearBrowserAnnotationsRequest>(
+        clearBrowserAnnotationsRequestSchema,
+      ),
+      response: jsonResponse<ClearBrowserAnnotationsResponse>(),
     }),
     notes: defineRoute({
       path: "/threads/:id/notes",

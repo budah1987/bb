@@ -4,7 +4,9 @@ import {
   type BbDesktopBrowserAttachRequest,
   type BbDesktopBrowserNavigateRequest,
   type BbDesktopBrowserSetBoundsRequest,
+  type BbDesktopBrowserSetAnnotationModeRequest,
   type BbDesktopBrowserSetVisibleRequest,
+  type BbDesktopBrowserSyncAnnotationsRequest,
 } from "@bb/desktop-contract";
 import {
   BB_DESKTOP_BROWSER_ATTACH_CHANNEL,
@@ -14,8 +16,10 @@ import {
   BB_DESKTOP_BROWSER_NAVIGATE_CHANNEL,
   BB_DESKTOP_BROWSER_RELOAD_CHANNEL,
   BB_DESKTOP_BROWSER_SET_BOUNDS_CHANNEL,
+  BB_DESKTOP_BROWSER_SET_ANNOTATION_MODE_CHANNEL,
   BB_DESKTOP_BROWSER_SET_VISIBLE_CHANNEL,
   BB_DESKTOP_BROWSER_STOP_CHANNEL,
+  BB_DESKTOP_BROWSER_SYNC_ANNOTATIONS_CHANNEL,
 } from "../src/desktop-browser-ipc.js";
 import { registerDesktopBrowserIpc } from "../src/desktop-browser-main-ipc.js";
 import type { DesktopBrowserViewManager } from "../src/desktop-browser-view.js";
@@ -61,9 +65,18 @@ vi.mock("electron", () => ({
 
 type AttachCall = Parameters<DesktopBrowserViewManager["attach"]>[0];
 type DetachCall = Parameters<DesktopBrowserViewManager["detach"]>[0];
+type FocusAnnotationCall = Parameters<
+  DesktopBrowserViewManager["focusAnnotation"]
+>[0];
 type NavigateCall = Parameters<DesktopBrowserViewManager["navigate"]>[0];
 type SetBoundsCall = Parameters<DesktopBrowserViewManager["setBounds"]>[0];
+type SetAnnotationModeCall = Parameters<
+  DesktopBrowserViewManager["setAnnotationMode"]
+>[0];
 type SetVisibleCall = Parameters<DesktopBrowserViewManager["setVisible"]>[0];
+type SyncAnnotationsCall = Parameters<
+  DesktopBrowserViewManager["syncAnnotations"]
+>[0];
 type TabCommandCall = Parameters<DesktopBrowserViewManager["reload"]>[0];
 type WindowResizeCall = Parameters<
   DesktopBrowserViewManager["beginWindowResize"]
@@ -94,14 +107,21 @@ class RecordingDesktopBrowserViewManager implements DesktopBrowserViewManager {
   public readonly destroyAllCalls: string[] = [];
   public readonly detachCalls: DetachCall[] = [];
   public readonly endWindowResizeCalls: WindowResizeCall[] = [];
+  public readonly focusAnnotationCalls: FocusAnnotationCall[] = [];
   public readonly goBackCalls: TabCommandCall[] = [];
   public readonly goForwardCalls: TabCommandCall[] = [];
   public readonly navigateCalls: NavigateCall[] = [];
   public readonly releaseWindowCalls: number[] = [];
   public readonly reloadCalls: TabCommandCall[] = [];
   public readonly setBoundsCalls: SetBoundsCall[] = [];
+  public readonly setAnnotationModeCalls: SetAnnotationModeCall[] = [];
   public readonly setVisibleCalls: SetVisibleCall[] = [];
   public readonly stopCalls: TabCommandCall[] = [];
+  public readonly syncAnnotationsCalls: SyncAnnotationsCall[] = [];
+
+  setAnnotationMode(args: SetAnnotationModeCall): void {
+    this.setAnnotationModeCalls.push(args);
+  }
 
   attach(args: AttachCall): void {
     this.attachCalls.push(args);
@@ -121,6 +141,10 @@ class RecordingDesktopBrowserViewManager implements DesktopBrowserViewManager {
 
   endWindowResize(hostWindow: WindowResizeCall): void {
     this.endWindowResizeCalls.push(hostWindow);
+  }
+
+  focusAnnotation(args: FocusAnnotationCall): void {
+    this.focusAnnotationCalls.push(args);
   }
 
   goBack(args: TabCommandCall): void {
@@ -153,6 +177,10 @@ class RecordingDesktopBrowserViewManager implements DesktopBrowserViewManager {
 
   stop(args: TabCommandCall): void {
     this.stopCalls.push(args);
+  }
+
+  syncAnnotations(args: SyncAnnotationsCall): void {
+    this.syncAnnotationsCalls.push(args);
   }
 }
 
@@ -207,6 +235,22 @@ describe("registerDesktopBrowserIpc", () => {
       tabId: "browser:a",
       url: "https://example.com/",
     };
+    const annotationModeRequest: BbDesktopBrowserSetAnnotationModeRequest = {
+      tabId: "browser:a",
+      enabled: true,
+    };
+    const syncAnnotationsRequest: BbDesktopBrowserSyncAnnotationsRequest = {
+      tabId: "browser:a",
+      annotations: [
+        {
+          id: "annotation-1",
+          number: 1,
+          selector: "main",
+          comment: "Increase spacing.",
+          rectangle: { x: 12, y: 20, width: 200, height: 80 },
+        },
+      ],
+    };
 
     sendBrowserIpc({
       channel: BB_DESKTOP_BROWSER_ATTACH_CHANNEL,
@@ -228,12 +272,28 @@ describe("registerDesktopBrowserIpc", () => {
       payload: { tabId: "browser:a" },
       sender: renderer.sender,
     });
+    sendBrowserIpc({
+      channel: BB_DESKTOP_BROWSER_SET_ANNOTATION_MODE_CHANNEL,
+      payload: annotationModeRequest,
+      sender: renderer.sender,
+    });
+    sendBrowserIpc({
+      channel: BB_DESKTOP_BROWSER_SYNC_ANNOTATIONS_CHANNEL,
+      payload: syncAnnotationsRequest,
+      sender: renderer.sender,
+    });
 
     expect(manager.attachCalls).toHaveLength(1);
     expect(manager.attachCalls[0]?.hostWindow).toBe(renderer.hostWindow);
     expect(manager.attachCalls[0]?.request).toEqual(attachRequest);
     expect(manager.navigateCalls).toHaveLength(1);
     expect(manager.navigateCalls[0]?.hostWindow).toBe(renderer.hostWindow);
+    expect(manager.setAnnotationModeCalls).toEqual([
+      { hostWindow: renderer.hostWindow, request: annotationModeRequest },
+    ]);
+    expect(manager.syncAnnotationsCalls).toEqual([
+      { hostWindow: renderer.hostWindow, request: syncAnnotationsRequest },
+    ]);
     expect(manager.navigateCalls[0]?.request).toEqual(navigateRequest);
     expect(manager.reloadCalls).toEqual([
       { hostWindow: renderer.hostWindow, tabId: "browser:a" },

@@ -389,6 +389,7 @@ const threadSectionsMigrationWhen = 1782252763916;
 const threadSectionsRepairMigrationWhen = 1784257485616;
 const queuedMessageGroupingMigrationWhen = 1782273194188;
 const pendingInteractionsMigrationWhen = 1783626227375;
+const durableTerminalMigrationWhen = 1786371006800;
 const permissionModesMigrationWhen = 1784311522462;
 const branchLocalThreadTabsMigrationWhen = 1783633750817;
 const eventLargeValuesPreOptimizationHash =
@@ -3839,7 +3840,7 @@ describe("migrate", () => {
         .prepare<DeleteMigrationParameters>(
           "DELETE FROM __drizzle_migrations WHERE created_at >= ?",
         )
-        .run(latestMigrationWhen);
+        .run(durableTerminalMigrationWhen);
       db.$client
         .prepare("DROP INDEX terminal_sessions_host_supervision_idx")
         .run();

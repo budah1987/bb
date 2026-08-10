@@ -22,6 +22,7 @@ export const THREAD_CHANGE_KINDS = [
   "tabs-changed",
   "terminals-changed",
   "notes-changed",
+  "annotations-changed",
 ] as const;
 export type ThreadChangeKind = (typeof THREAD_CHANGE_KINDS)[number];
 
