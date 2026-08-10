@@ -52,6 +52,23 @@ export async function publishCommittedBranch(
   });
 }
 
+export async function updateFromTarget(
+  command: CommandOf<"workspace.update_from_target">,
+  options: CommandDispatchOptions,
+): Promise<HostDaemonCommandResult<"workspace.update_from_target">> {
+  const entry = await requireResolvedWorkspaceForCommand({
+    dataDir: options.dataDir,
+    environmentId: command.environmentId,
+    requireGit: true,
+    requireManagedWorktree: true,
+    runtimeManager: options.runtimeManager,
+    workspaceContext: command.workspaceContext,
+  });
+  return new Workspace(entry.workspace.path).updateFromTarget({
+    targetBranch: command.targetBranch,
+  });
+}
+
 export async function renameWorkspace(
   command: CommandOf<"workspace.rename">,
   options: CommandDispatchOptions,

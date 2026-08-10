@@ -255,6 +255,7 @@ type ExpectedEnvironmentsKey =
   | "mergePullRequest"
   | "paths"
   | "publishToMain"
+  | "updateFromMain"
   | "previews"
   | "pullRequest"
   | "rename"
@@ -328,6 +329,7 @@ type ExpectedProjectsKey =
   | "files"
   | "get"
   | "list"
+  | "manager"
   | "paths"
   | "promptHistory"
   | "reorder"
@@ -336,6 +338,7 @@ type ExpectedProjectsKey =
 
 type ExpectedProjectSourcesKey = "add" | "delete" | "update";
 type ExpectedProjectAttachmentsKey = "copy" | "read" | "upload";
+type ExpectedProjectManagerKey = "run" | "settings" | "show";
 
 type ExpectedProvidersKey = "list" | "models";
 
@@ -520,6 +523,9 @@ describe("SDK public type entrypoints", () => {
     expectTypeOf<
       keyof RootBbSdk["projects"]["attachments"]
     >().toEqualTypeOf<ExpectedProjectAttachmentsKey>();
+    expectTypeOf<
+      keyof RootBbSdk["projects"]["manager"]
+    >().toEqualTypeOf<ExpectedProjectManagerKey>();
     expectTypeOf<
       keyof RootBbSdk["projects"]["sources"]
     >().toEqualTypeOf<ExpectedProjectSourcesKey>();

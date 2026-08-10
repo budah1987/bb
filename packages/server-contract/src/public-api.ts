@@ -137,6 +137,7 @@ import type {
   ProjectFileContentQuery,
   ProjectFilesQuery,
   ProjectListQuery,
+  ProjectManagerSettings,
   ProjectPathsQuery,
   ProjectResponse,
   ProjectSkillsQuery,
@@ -229,6 +230,8 @@ import type {
   UpdateHostRequest,
   UpdateHostPermissionCeilingRequest,
   UpdateProjectRequest,
+  UpdateProjectManagerSettingsRequest,
+  RunProjectManagerRequest,
   UpdateProjectSourceRequest,
   UpdateThreadRequest,
   UpdateQueuedMessageRequest,
@@ -348,6 +351,8 @@ import {
   updateThreadSectionRequestSchema,
   updateTerminalRequestSchema,
   updateProjectRequestSchema,
+  updateProjectManagerSettingsRequestSchema,
+  runProjectManagerRequestSchema,
   updateProjectSourceRequestSchema,
   updateThreadRequestSchema,
 } from "./api-types.js";
@@ -419,6 +424,28 @@ export const publicApiRoutes = {
         projectDefaultExecutionOptionsQuerySchema,
       ),
       response: jsonResponse<ProjectExecutionDefaults | null>(),
+    }),
+    managerShow: defineRoute({
+      path: "/projects/:id/manager",
+      method: "get",
+      request: noRequest<PathProjectId>(),
+      response: jsonResponse<ProjectManagerSettings>(),
+    }),
+    managerSettings: defineRoute({
+      path: "/projects/:id/manager/settings",
+      method: "patch",
+      request: jsonRequest<PathProjectId, UpdateProjectManagerSettingsRequest>(
+        updateProjectManagerSettingsRequestSchema,
+      ),
+      response: jsonResponse<ProjectManagerSettings>(),
+    }),
+    managerRun: defineRoute({
+      path: "/projects/:id/manager/run",
+      method: "post",
+      request: jsonRequest<PathProjectId, RunProjectManagerRequest>(
+        runProjectManagerRequestSchema,
+      ),
+      response: jsonResponse<ThreadResponse>({ status: 201 }),
     }),
     promptHistory: defineRoute({
       path: "/projects/:id/prompt-history",

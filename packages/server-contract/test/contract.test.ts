@@ -334,6 +334,24 @@ describe("environment workspace response contract", () => {
     ).toBe(false);
   });
 
+  it("types a busy workspace update error", () => {
+    expect(
+      contract.environmentActionApiErrorSchema.parse({
+        code: "environment_busy",
+        message:
+          "Stop active conversations in this workspace before updating from main",
+        details: {
+          kind: "workspace_busy",
+          action: "update_from_main",
+          reason: "active_threads",
+        },
+      }),
+    ).toMatchObject({
+      code: "environment_busy",
+      details: { kind: "workspace_busy", reason: "active_threads" },
+    });
+  });
+
   it("uses explicit diff outcomes instead of nullable parallel fields", () => {
     expect(
       contract.environmentDiffResponseSchema.safeParse({
@@ -963,6 +981,13 @@ describe("server-contract canonical schemas", () => {
 
     expect(
       environmentActionRequestSchema.parse({
+        action: "update_from_main",
+        options: {},
+      }),
+    ).toEqual({ action: "update_from_main", options: {} });
+
+    expect(
+      environmentActionRequestSchema.parse({
         action: "pull_request_create",
         options: {
           baseBranch: "main",
@@ -1119,6 +1144,37 @@ describe("server-contract canonical schemas", () => {
     ).toEqual({
       rows: [],
     });
+  });
+
+  it("validates repository manager settings and optional run focus", () => {
+    expect(
+      contract.projectManagerSettingsSchema.parse({
+        enabled: true,
+        providerId: "codex",
+        model: "gpt-5.4-mini",
+        reasoningLevel: "medium",
+        serviceTier: "default",
+        permissionMode: "auto",
+      }),
+    ).toMatchObject({ enabled: true, providerId: "codex" });
+    expect(contract.runProjectManagerRequestSchema.parse({})).toEqual({});
+    expect(() =>
+      contract.updateProjectManagerSettingsRequestSchema.parse({}),
+    ).toThrow("At least one field must be provided");
+    expect(
+      contract.updateProjectManagerSettingsRequestSchema.parse({
+        providerId: "  codex  ",
+        model: "  gpt-5.4-mini  ",
+      }),
+    ).toEqual({ providerId: "codex", model: "gpt-5.4-mini" });
+    expect(() =>
+      contract.updateProjectManagerSettingsRequestSchema.parse({
+        providerId: "   ",
+      }),
+    ).toThrow();
+    expect(() =>
+      contract.updateProjectManagerSettingsRequestSchema.parse({ model: "\t" }),
+    ).toThrow();
   });
 
   it("normalizes the deprecated writable alias without widening readonly", () => {

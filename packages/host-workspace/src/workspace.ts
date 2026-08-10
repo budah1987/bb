@@ -137,6 +137,40 @@ export type PublishCommittedBranchResult =
   | PublishCommittedBranchSuccess
   | PublishCommittedBranchBlocked;
 
+export type UpdateFromTargetBlockedReason =
+  | "source_detached"
+  | "source_dirty"
+  | "source_is_target"
+  | "rebase_conflict";
+
+export interface UpdateFromTargetOptions {
+  targetBranch: string;
+}
+
+export interface UpdateFromTargetSuccess {
+  outcome: "updated" | "already_current";
+  sourceBranch: string;
+  targetBranch: string;
+  previousSha: string;
+  currentSha: string;
+  targetSha: string;
+  rebasedCommitCount: number;
+}
+
+export interface UpdateFromTargetBlocked {
+  outcome: "blocked";
+  reason: UpdateFromTargetBlockedReason;
+  sourceBranch: string | null;
+  targetBranch: string;
+  previousSha: string | null;
+  targetSha: string | null;
+  conflictFiles: string[];
+}
+
+export type UpdateFromTargetResult =
+  | UpdateFromTargetSuccess
+  | UpdateFromTargetBlocked;
+
 export type PullRequestActionOptions = GitHostPullRequestAction;
 
 type DiffSummary = {
@@ -1597,6 +1631,121 @@ export class Workspace {
         localTargetBeforeSha: localTargetSha,
         localTargetAfterSha: await revParse(targetPath, "HEAD"),
         preservedTargetChangesCommitSha,
+      };
+    });
+  }
+
+  /**
+   * Fetch the target branch and rebase this clean workspace onto its remote
+   * tip. A failed rebase is always aborted, so the workspace returns to the
+   * exact commit it had before the operation.
+   */
+  async updateFromTarget(
+    options: UpdateFromTargetOptions,
+  ): Promise<UpdateFromTargetResult> {
+    await ensureGitRepo(this.path);
+    return this.withMutation(async () => {
+      const sourceBranch = await this.currentBranch;
+      if (!sourceBranch) {
+        return {
+          outcome: "blocked",
+          reason: "source_detached",
+          sourceBranch: null,
+          targetBranch: options.targetBranch,
+          previousSha: null,
+          targetSha: null,
+          conflictFiles: [],
+        };
+      }
+
+      const previousSha = await revParse(this.path, "HEAD");
+      const blocked = (
+        reason: UpdateFromTargetBlockedReason,
+        args: { targetSha?: string; conflictFiles?: string[] } = {},
+      ): UpdateFromTargetBlocked => ({
+        outcome: "blocked",
+        reason,
+        sourceBranch,
+        targetBranch: options.targetBranch,
+        previousSha,
+        targetSha: args.targetSha ?? null,
+        conflictFiles: args.conflictFiles ?? [],
+      });
+
+      if (sourceBranch === options.targetBranch) {
+        return blocked("source_is_target");
+      }
+      if (await hasUncommittedChanges(this.path)) {
+        return blocked("source_dirty");
+      }
+
+      await runGit(["fetch", "origin", options.targetBranch], {
+        cwd: this.path,
+      });
+      const targetRef = `refs/remotes/origin/${options.targetBranch}`;
+      const targetSha = await revParse(this.path, targetRef);
+      const targetIsAncestor = await runGit(
+        ["merge-base", "--is-ancestor", targetSha, previousSha],
+        { cwd: this.path, allowFailure: true },
+      );
+      const rebasedCommitCount = Number.parseInt(
+        (
+          await runGit(
+            ["rev-list", "--count", `${targetSha}..${previousSha}`],
+            {
+              cwd: this.path,
+            },
+          )
+        ).stdout.trim(),
+        10,
+      );
+
+      if (targetIsAncestor.exitCode === 0) {
+        return {
+          outcome: "already_current",
+          sourceBranch,
+          targetBranch: options.targetBranch,
+          previousSha,
+          currentSha: previousSha,
+          targetSha,
+          rebasedCommitCount,
+        };
+      }
+
+      const rebase = await runGit(["rebase", targetRef], {
+        cwd: this.path,
+        allowFailure: true,
+      });
+      if (rebase.exitCode !== 0) {
+        const conflicts = await runGit(
+          ["diff", "--name-only", "--diff-filter=U"],
+          { cwd: this.path },
+        );
+        await runGit(["rebase", "--abort"], {
+          cwd: this.path,
+          allowFailure: true,
+        });
+        const conflictFiles = conflicts.stdout
+          .split("\n")
+          .map((entry) => entry.trim())
+          .filter(Boolean);
+        if (conflictFiles.length > 0) {
+          return blocked("rebase_conflict", { targetSha, conflictFiles });
+        }
+        throw new WorkspaceError(
+          "git_command_failed",
+          "Could not rebase the workspace onto the target branch",
+        );
+      }
+
+      return {
+        outcome: "updated",
+        sourceBranch,
+        targetBranch: options.targetBranch,
+        previousSha,
+        currentSha: await revParse(this.path, "HEAD"),
+        targetSha,
+        rebasedCommitCount,
       };
     });
   }

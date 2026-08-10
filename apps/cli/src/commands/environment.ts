@@ -2,6 +2,7 @@ import { Command } from "commander";
 import type {
   CommitActionResponse,
   PublishToMainActionResponse,
+  UpdateFromMainActionResponse,
   SquashMergeActionResponse,
 } from "@bb/server-contract";
 import type {
@@ -911,6 +912,25 @@ export function registerEnvironmentCommands(
           console.log(`Local Vault: ${result.localTargetAfterSha}`);
         },
       ),
+    );
+
+  environment
+    .command("update-from-main <id>")
+    .description("Rebase a clean managed worktree onto the latest origin/main")
+    .option("--json", "Print machine-readable JSON output")
+    .action(
+      action(async (id: string, opts: { json?: boolean }) => {
+        const result: UpdateFromMainActionResponse = await createCliBbSdk(
+          getUrl(),
+        ).environments.updateFromMain({ environmentId: id });
+        if (outputJson(opts, result)) return;
+        if (result.outcome === "already_current") {
+          console.log(`${result.sourceBranch} already includes origin/main`);
+          return;
+        }
+        console.log(`Updated ${result.sourceBranch} from origin/main`);
+        console.log(`Commit: ${result.currentSha}`);
+      }),
     );
 
   environment

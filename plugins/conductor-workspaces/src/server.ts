@@ -77,6 +77,29 @@ const githubCatalogSchema = z.object({
   repositories: z.array(githubRepositorySchema),
 });
 
+const managerSettingsSchema = z.object({
+  enabled: z.boolean(),
+  providerId: z.string().min(1),
+  model: z.string().min(1),
+  reasoningLevel: z.enum([
+    "none",
+    "low",
+    "medium",
+    "high",
+    "xhigh",
+    "ultracode",
+    "max",
+    "ultra",
+  ]),
+  serviceTier: z.enum(["default", "fast"]),
+  permissionMode: z.enum(["accept-edits", "auto", "full"]),
+});
+
+const updateWorkspaceFromMainResultSchema = z.object({
+  message: z.string().min(1),
+  outcome: z.enum(["updated", "already_current"]),
+});
+
 export const conductorRpcContract = defineRpcContract({
   readWorkspaceRenameDetails: {
     input: z.object({ environmentId: z.string().min(1) }),
@@ -137,6 +160,28 @@ export const conductorRpcContract = defineRpcContract({
       projectId: z.string().min(1),
     }),
     output: z.object({ accountLogin: z.string().min(1).nullable() }),
+  },
+  readProjectManager: {
+    input: z.object({ projectId: z.string().min(1) }),
+    output: managerSettingsSchema,
+  },
+  updateProjectManager: {
+    input: z.object({
+      projectId: z.string().min(1),
+      settings: managerSettingsSchema,
+    }),
+    output: managerSettingsSchema,
+  },
+  runProjectManager: {
+    input: z.object({
+      projectId: z.string().min(1),
+      prompt: z.string().trim().min(1).optional(),
+    }),
+    output: z.object({ threadId: z.string().min(1) }),
+  },
+  updateWorkspaceFromMain: {
+    input: z.object({ environmentId: z.string().min(1) }),
+    output: updateWorkspaceFromMainResultSchema,
   },
 });
 
@@ -331,6 +376,25 @@ export default function plugin(bb: BbPluginApi) {
         githubAccountLogin: accountLogin,
       });
       return { accountLogin: project.githubAccountLogin };
+    },
+    async readProjectManager({ projectId }) {
+      return bb.sdk.projects.manager.show({ projectId });
+    },
+    async updateProjectManager({ projectId, settings }) {
+      return bb.sdk.projects.manager.settings({ projectId, ...settings });
+    },
+    async runProjectManager({ projectId, prompt }) {
+      const thread = await bb.sdk.projects.manager.run({
+        projectId,
+        ...(prompt ? { prompt } : {}),
+      });
+      return { threadId: thread.id };
+    },
+    async updateWorkspaceFromMain({ environmentId }) {
+      const result = updateWorkspaceFromMainResultSchema.parse(
+        await bb.sdk.environments.updateFromMain({ environmentId }),
+      );
+      return { message: result.message, outcome: result.outcome };
     },
   });
 }

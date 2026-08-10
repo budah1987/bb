@@ -10,6 +10,9 @@ import {
   projectSourceSchema,
   promptHistoryEntrySchema,
   threadListEntrySchema,
+  permissionModeSchema,
+  reasoningLevelSchema,
+  serviceTierSchema,
 } from "@bb/domain";
 import { githubAccountLoginSchema } from "@bb/host-daemon-contract";
 import {
@@ -241,6 +244,38 @@ export type ProjectAttachmentContentQuery = z.infer<
 export const projectDefaultExecutionOptionsQuerySchema = z.object({});
 export type ProjectDefaultExecutionOptionsQuery = z.infer<
   typeof projectDefaultExecutionOptionsQuerySchema
+>;
+
+export const projectManagerSettingsSchema = z
+  .object({
+    enabled: z.boolean(),
+    providerId: z.string().trim().min(1),
+    model: z.string().trim().min(1),
+    reasoningLevel: reasoningLevelSchema,
+    serviceTier: serviceTierSchema,
+    permissionMode: permissionModeSchema,
+  })
+  .strict();
+export type ProjectManagerSettings = z.infer<
+  typeof projectManagerSettingsSchema
+>;
+
+export const updateProjectManagerSettingsRequestSchema =
+  projectManagerSettingsSchema
+    .partial()
+    .refine(
+      (value) => Object.keys(value).length > 0,
+      "At least one field must be provided",
+    );
+export type UpdateProjectManagerSettingsRequest = z.infer<
+  typeof updateProjectManagerSettingsRequestSchema
+>;
+
+export const runProjectManagerRequestSchema = z
+  .object({ prompt: z.string().trim().min(1).optional() })
+  .strict();
+export type RunProjectManagerRequest = z.infer<
+  typeof runProjectManagerRequestSchema
 >;
 
 export const promptHistoryQuerySchema = z

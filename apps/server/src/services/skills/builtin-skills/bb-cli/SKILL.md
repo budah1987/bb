@@ -287,6 +287,10 @@ status|install` to inspect or install provider CLIs on a selected machine.
   (`--host` alias) or `--environment <id>`, but not both. An environment uses
   its owning machine and workspace; an explicit machine uses that machine's
   project source; omitting both intentionally uses the primary machine source.
+- Use `bb project manager show <project-id>` to inspect manager settings.
+  Use `bb project manager run <project-id> [--prompt <focus>]` to create a
+  visible root briefing thread. Change the agent with
+  `bb project manager settings <project-id>`.
   `bb project content --json` returns UTF-8 text or base64 binary content with
   an explicit `contentEncoding`.
 - Use `bb project attachment upload <project-id> --client-file <path>` when the
@@ -322,6 +326,9 @@ environment pull-request show <id>`. Diff commands require an explicit target
   `--preserve-target-changes` only after the user approves preservation. BB
   commits safe local changes, integrates the source branch, and stops on a
   conflict.
+- `bb environment update-from-main <id>` fetches `origin/main` and rebases a
+  clean managed worktree onto it. BB aborts the rebase and reports conflicting
+  files when the update conflicts.
 - The official Ingestion Desk plugin exposes `bb ingestion`. Use `status`,
   `show`, `create`, and `source add` to manage source cases. Use `draft` to
   start an isolated Vault worktree. Use `publish` only after review. Pass

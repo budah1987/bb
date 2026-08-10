@@ -35,6 +35,21 @@ A project maps to a code repository. All threads belong to a project.
   bb project delete <id>                  Delete project and all threads
     --yes                                 Skip confirmation
 
+Repository manager:
+
+  bb project manager show <id>            Show manager settings
+  bb project manager run <id>             Start a manager briefing thread
+    --prompt <text>                       Add a briefing focus
+  bb project manager settings <id>        Update manager settings
+    --enable | --disable                  Allow or block manual runs
+    --provider <id> --model <id>          Select the agent
+    --reasoning <level>                   Select its reasoning level
+    --service-tier <tier>                 Select its service tier
+    --permission-mode <mode>              Select its permission mode
+
+  Each run creates a visible root thread in the project's default workspace.
+  The server supplies the repository briefing prompt and safe defaults.
+
 Discovery:
 
   bb project github-accounts                List authenticated GitHub accounts

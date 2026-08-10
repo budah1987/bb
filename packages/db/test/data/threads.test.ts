@@ -10,6 +10,7 @@ import {
   getThread,
   getThreadExecutionOverride,
   hasActiveThreadAttention,
+  hasBusyThreadInEnvironment,
   setThreadExecutionOverride,
   hasPendingThreadShutdownInEnvironment,
   listHostThreadIds,
@@ -1396,6 +1397,70 @@ describe("threads", () => {
         environmentId: otherEnvironment.id,
       }),
     ).toBe(false);
+  });
+
+  it("detects only threads that can still write to an environment", () => {
+    const { db, project, host } = setup();
+    const environment = createEnvironment(db, noopNotifier, {
+      projectId: project.id,
+      hostId: host.id,
+      path: "/tmp/thread-busy-environment",
+      workspaceProvisionType: "managed-worktree",
+      status: "ready",
+    });
+    createThread(db, noopNotifier, {
+      projectId: project.id,
+      environmentId: environment.id,
+      providerId: "codex",
+      status: "idle",
+    });
+    createThread(db, noopNotifier, {
+      projectId: project.id,
+      environmentId: environment.id,
+      providerId: "codex",
+      status: "error",
+    });
+    expect(
+      hasBusyThreadInEnvironment(db, { environmentId: environment.id }),
+    ).toBe(false);
+
+    const startingThread = createThread(db, noopNotifier, {
+      projectId: project.id,
+      environmentId: environment.id,
+      providerId: "codex",
+      status: "starting",
+    });
+    expect(
+      hasBusyThreadInEnvironment(db, { environmentId: environment.id }),
+    ).toBe(true);
+    markThreadDeleted(db, noopNotifier, { threadId: startingThread.id });
+    expect(
+      hasBusyThreadInEnvironment(db, { environmentId: environment.id }),
+    ).toBe(false);
+
+    const activeThread = createThread(db, noopNotifier, {
+      projectId: project.id,
+      environmentId: environment.id,
+      providerId: "codex",
+      status: "active",
+    });
+    expect(
+      hasBusyThreadInEnvironment(db, { environmentId: environment.id }),
+    ).toBe(true);
+    markThreadDeleted(db, noopNotifier, { threadId: activeThread.id });
+    expect(
+      hasBusyThreadInEnvironment(db, { environmentId: environment.id }),
+    ).toBe(false);
+
+    createThread(db, noopNotifier, {
+      projectId: project.id,
+      environmentId: environment.id,
+      providerId: "codex",
+      status: "stopping",
+    });
+    expect(
+      hasBusyThreadInEnvironment(db, { environmentId: environment.id }),
+    ).toBe(true);
   });
 
   it("lists every host thread id including archived, deleted, and destroyed-environment threads", () => {

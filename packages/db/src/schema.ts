@@ -148,6 +148,19 @@ export const projectExecutionDefaults = sqliteTable(
   ],
 );
 
+export const projectManagerSettings = sqliteTable("project_manager_settings", {
+  projectId: text("project_id")
+    .primaryKey()
+    .references(() => projects.id, { onDelete: "cascade" }),
+  enabled: integer("enabled", { mode: "boolean" }).notNull(),
+  providerId: text("provider_id").notNull(),
+  model: text("model").notNull(),
+  reasoningLevel: text("reasoning_level").$type<ReasoningLevel>().notNull(),
+  serviceTier: text("service_tier").$type<ServiceTier>().notNull(),
+  permissionMode: text("permission_mode").$type<PermissionMode>().notNull(),
+  updatedAt: integer("updated_at").notNull(),
+});
+
 export const systemExperiments = sqliteTable("system_experiments", {
   id: text("id").primaryKey(),
   claudeCodeMockCliTraffic: integer("claude_code_mock_cli_traffic", {

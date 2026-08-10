@@ -2429,6 +2429,60 @@ declare const projectBranchesResponseSchema: z$1.ZodObject<{
     defaultWorktreeBaseBranch: z$1.ZodNullable<z$1.ZodString>;
 }, z$1.core.$strip>;
 type ProjectBranchesResponse = z$1.infer<typeof projectBranchesResponseSchema>;
+declare const projectManagerSettingsSchema: z$1.ZodObject<{
+    enabled: z$1.ZodBoolean;
+    providerId: z$1.ZodString;
+    model: z$1.ZodString;
+    reasoningLevel: z$1.ZodEnum<{
+        none: "none";
+        low: "low";
+        medium: "medium";
+        high: "high";
+        xhigh: "xhigh";
+        ultracode: "ultracode";
+        max: "max";
+        ultra: "ultra";
+    }>;
+    serviceTier: z$1.ZodEnum<{
+        default: "default";
+        fast: "fast";
+    }>;
+    permissionMode: z$1.ZodEnum<{
+        auto: "auto";
+        "accept-edits": "accept-edits";
+        full: "full";
+    }>;
+}, z$1.core.$strict>;
+type ProjectManagerSettings = z$1.infer<typeof projectManagerSettingsSchema>;
+declare const updateProjectManagerSettingsRequestSchema: z$1.ZodObject<{
+    enabled: z$1.ZodOptional<z$1.ZodBoolean>;
+    providerId: z$1.ZodOptional<z$1.ZodString>;
+    model: z$1.ZodOptional<z$1.ZodString>;
+    reasoningLevel: z$1.ZodOptional<z$1.ZodEnum<{
+        none: "none";
+        low: "low";
+        medium: "medium";
+        high: "high";
+        xhigh: "xhigh";
+        ultracode: "ultracode";
+        max: "max";
+        ultra: "ultra";
+    }>>;
+    serviceTier: z$1.ZodOptional<z$1.ZodEnum<{
+        default: "default";
+        fast: "fast";
+    }>>;
+    permissionMode: z$1.ZodOptional<z$1.ZodEnum<{
+        auto: "auto";
+        "accept-edits": "accept-edits";
+        full: "full";
+    }>>;
+}, z$1.core.$strict>;
+type UpdateProjectManagerSettingsRequest = z$1.infer<typeof updateProjectManagerSettingsRequestSchema>;
+declare const runProjectManagerRequestSchema: z$1.ZodObject<{
+    prompt: z$1.ZodOptional<z$1.ZodString>;
+}, z$1.core.$strict>;
+type RunProjectManagerRequest = z$1.infer<typeof runProjectManagerRequestSchema>;
 declare const promptHistoryQuerySchema: z$1.ZodObject<{
     limit: z$1.ZodOptional<z$1.ZodString>;
 }, z$1.core.$strip>;
@@ -3127,8 +3181,8 @@ declare const environmentDiffFileResponseSchema: z$1.ZodObject<{
     path: z$1.ZodString;
     content: z$1.ZodString;
     contentEncoding: z$1.ZodEnum<{
-        base64: "base64";
         utf8: "utf8";
+        base64: "base64";
     }>;
     mimeType: z$1.ZodOptional<z$1.ZodString>;
     sizeBytes: z$1.ZodNumber;
@@ -3176,6 +3230,22 @@ declare const publishToMainActionResponseSchema: z$1.ZodObject<{
     preservedTargetChangesCommitSha: z$1.ZodNullable<z$1.ZodString>;
 }, z$1.core.$strip>;
 type PublishToMainActionResponse = z$1.infer<typeof publishToMainActionResponseSchema>;
+declare const updateFromMainActionResponseSchema: z$1.ZodObject<{
+    ok: z$1.ZodLiteral<true>;
+    action: z$1.ZodLiteral<"update_from_main">;
+    message: z$1.ZodString;
+    outcome: z$1.ZodEnum<{
+        updated: "updated";
+        already_current: "already_current";
+    }>;
+    sourceBranch: z$1.ZodString;
+    targetBranch: z$1.ZodLiteral<"main">;
+    previousSha: z$1.ZodString;
+    currentSha: z$1.ZodString;
+    targetSha: z$1.ZodString;
+    rebasedCommitCount: z$1.ZodNumber;
+}, z$1.core.$strip>;
+type UpdateFromMainActionResponse = z$1.infer<typeof updateFromMainActionResponseSchema>;
 declare const pullRequestMetadataActionResponseSchema: z$1.ZodObject<{
     ok: z$1.ZodLiteral<true>;
     action: z$1.ZodLiteral<"pull_request_metadata">;
@@ -3994,8 +4064,8 @@ declare const hostDaemonCommandRegistry: {
         }, z$1.core.$strict>], "kind">>;
         disallowedTools: z$1.ZodOptional<z$1.ZodArray<z$1.ZodString>>;
         instructionMode: z$1.ZodEnum<{
-            replace: "replace";
             append: "append";
+            replace: "replace";
         }>;
         type: z$1.ZodLiteral<"thread.start">;
         requestId: z$1.ZodString;
@@ -4483,8 +4553,8 @@ declare const hostDaemonCommandRegistry: {
                 }>;
             }, z$1.core.$strip>;
             instructionMode: z$1.ZodEnum<{
-                replace: "replace";
                 append: "append";
+                replace: "replace";
             }>;
             projectId: z$1.ZodString;
             providerId: z$1.ZodString;
@@ -4779,8 +4849,8 @@ declare const hostDaemonCommandRegistry: {
                 }>;
             }, z$1.core.$strip>;
             instructionMode: z$1.ZodEnum<{
-                replace: "replace";
                 append: "append";
+                replace: "replace";
             }>;
             projectId: z$1.ZodString;
             providerId: z$1.ZodString;
@@ -5177,6 +5247,43 @@ declare const hostDaemonCommandRegistry: {
         sourceCommitSha: z$1.ZodNullable<z$1.ZodString>;
         remoteTargetSha: z$1.ZodNullable<z$1.ZodString>;
         localTargetSha: z$1.ZodNullable<z$1.ZodString>;
+        conflictFiles: z$1.ZodArray<z$1.ZodString>;
+    }, z$1.core.$strict>], "outcome">, "settled", false>;
+    "workspace.update_from_target": HostDaemonCommandDescriptor<"workspace.update_from_target", z$1.ZodObject<{
+        environmentId: z$1.ZodString;
+        workspaceContext: z$1.ZodObject<{
+            workspacePath: z$1.ZodString;
+            workspaceProvisionType: z$1.ZodEnum<{
+                unmanaged: "unmanaged";
+                "managed-worktree": "managed-worktree";
+                personal: "personal";
+            }>;
+        }, z$1.core.$strip>;
+        type: z$1.ZodLiteral<"workspace.update_from_target">;
+        targetBranch: z$1.ZodString;
+    }, z$1.core.$strict>, z$1.ZodDiscriminatedUnion<[z$1.ZodObject<{
+        outcome: z$1.ZodEnum<{
+            updated: "updated";
+            already_current: "already_current";
+        }>;
+        sourceBranch: z$1.ZodString;
+        targetBranch: z$1.ZodString;
+        previousSha: z$1.ZodString;
+        currentSha: z$1.ZodString;
+        targetSha: z$1.ZodString;
+        rebasedCommitCount: z$1.ZodNumber;
+    }, z$1.core.$strict>, z$1.ZodObject<{
+        outcome: z$1.ZodLiteral<"blocked">;
+        reason: z$1.ZodEnum<{
+            source_detached: "source_detached";
+            source_dirty: "source_dirty";
+            source_is_target: "source_is_target";
+            rebase_conflict: "rebase_conflict";
+        }>;
+        sourceBranch: z$1.ZodNullable<z$1.ZodString>;
+        targetBranch: z$1.ZodString;
+        previousSha: z$1.ZodNullable<z$1.ZodString>;
+        targetSha: z$1.ZodNullable<z$1.ZodString>;
         conflictFiles: z$1.ZodArray<z$1.ZodString>;
     }, z$1.core.$strict>], "outcome">, "settled", false>;
     "workspace.rename": HostDaemonCommandDescriptor<"workspace.rename", z$1.ZodDiscriminatedUnion<[z$1.ZodObject<{
@@ -6106,9 +6213,9 @@ declare const hostDaemonCommandRegistry: {
         executablePath: z$1.ZodNullable<z$1.ZodString>;
         installed: z$1.ZodBoolean;
         installSource: z$1.ZodEnum<{
+            external: "external";
             notInstalled: "notInstalled";
             npmGlobal: "npmGlobal";
-            external: "external";
         }>;
         currentVersion: z$1.ZodNullable<z$1.ZodString>;
         latestVersion: z$1.ZodNullable<z$1.ZodString>;
@@ -6215,13 +6322,13 @@ declare const hostDaemonCommandRegistry: {
                 claudeCode: "claudeCode";
             }>;
             phase: z$1.ZodEnum<{
+                failed: "failed";
                 starting: "starting";
                 waitingForUser: "waitingForUser";
                 waitingForCode: "waitingForCode";
                 verifying: "verifying";
                 succeeded: "succeeded";
                 recoveryRequired: "recoveryRequired";
-                failed: "failed";
             }>;
             oauthUrl: z$1.ZodNullable<z$1.ZodString>;
             userCode: z$1.ZodNullable<z$1.ZodString>;
@@ -6265,13 +6372,13 @@ declare const hostDaemonCommandRegistry: {
                 claudeCode: "claudeCode";
             }>;
             phase: z$1.ZodEnum<{
+                failed: "failed";
                 starting: "starting";
                 waitingForUser: "waitingForUser";
                 waitingForCode: "waitingForCode";
                 verifying: "verifying";
                 succeeded: "succeeded";
                 recoveryRequired: "recoveryRequired";
-                failed: "failed";
             }>;
             oauthUrl: z$1.ZodNullable<z$1.ZodString>;
             userCode: z$1.ZodNullable<z$1.ZodString>;
@@ -6313,13 +6420,13 @@ declare const hostDaemonCommandRegistry: {
                 claudeCode: "claudeCode";
             }>;
             phase: z$1.ZodEnum<{
+                failed: "failed";
                 starting: "starting";
                 waitingForUser: "waitingForUser";
                 waitingForCode: "waitingForCode";
                 verifying: "verifying";
                 succeeded: "succeeded";
                 recoveryRequired: "recoveryRequired";
-                failed: "failed";
             }>;
             oauthUrl: z$1.ZodNullable<z$1.ZodString>;
             userCode: z$1.ZodNullable<z$1.ZodString>;
@@ -6425,13 +6532,13 @@ declare const hostDaemonCommandRegistry: {
         outcome: z$1.ZodLiteral<"unavailable">;
         failure: z$1.ZodObject<{
             code: z$1.ZodEnum<{
-                unknown: "unknown";
                 path_not_found: "path_not_found";
                 not_git_repo: "not_git_repo";
                 not_worktree: "not_worktree";
                 workspace_type_mismatch: "workspace_type_mismatch";
                 permission_denied: "permission_denied";
                 unknown_environment: "unknown_environment";
+                unknown: "unknown";
             }>;
             workspacePath: z$1.ZodString;
             message: z$1.ZodString;
@@ -6597,13 +6704,13 @@ declare const hostDaemonCommandRegistry: {
         outcome: z$1.ZodLiteral<"unavailable">;
         failure: z$1.ZodObject<{
             code: z$1.ZodEnum<{
-                unknown: "unknown";
                 path_not_found: "path_not_found";
                 not_git_repo: "not_git_repo";
                 not_worktree: "not_worktree";
                 workspace_type_mismatch: "workspace_type_mismatch";
                 permission_denied: "permission_denied";
                 unknown_environment: "unknown_environment";
+                unknown: "unknown";
             }>;
             workspacePath: z$1.ZodString;
             message: z$1.ZodString;
@@ -6659,13 +6766,13 @@ declare const hostDaemonCommandRegistry: {
         outcome: z$1.ZodLiteral<"unavailable">;
         failure: z$1.ZodObject<{
             code: z$1.ZodEnum<{
-                unknown: "unknown";
                 path_not_found: "path_not_found";
                 not_git_repo: "not_git_repo";
                 not_worktree: "not_worktree";
                 workspace_type_mismatch: "workspace_type_mismatch";
                 permission_denied: "permission_denied";
                 unknown_environment: "unknown_environment";
+                unknown: "unknown";
             }>;
             workspacePath: z$1.ZodString;
             message: z$1.ZodString;
@@ -6707,13 +6814,13 @@ declare const hostDaemonCommandRegistry: {
         outcome: z$1.ZodLiteral<"unavailable">;
         failure: z$1.ZodObject<{
             code: z$1.ZodEnum<{
-                unknown: "unknown";
                 path_not_found: "path_not_found";
                 not_git_repo: "not_git_repo";
                 not_worktree: "not_worktree";
                 workspace_type_mismatch: "workspace_type_mismatch";
                 permission_denied: "permission_denied";
                 unknown_environment: "unknown_environment";
+                unknown: "unknown";
             }>;
             workspacePath: z$1.ZodString;
             message: z$1.ZodString;
@@ -6832,9 +6939,9 @@ declare const providerCliStatusResponseSchema: z$1.ZodRecord<z$1.ZodEnum<{
     executablePath: z$1.ZodNullable<z$1.ZodString>;
     installed: z$1.ZodBoolean;
     installSource: z$1.ZodEnum<{
+        external: "external";
         notInstalled: "notInstalled";
         npmGlobal: "npmGlobal";
-        external: "external";
     }>;
     currentVersion: z$1.ZodNullable<z$1.ZodString>;
     latestVersion: z$1.ZodNullable<z$1.ZodString>;
@@ -6940,13 +7047,13 @@ declare const providerAuthSnapshotSchema: z$1.ZodObject<{
             claudeCode: "claudeCode";
         }>;
         phase: z$1.ZodEnum<{
+            failed: "failed";
             starting: "starting";
             waitingForUser: "waitingForUser";
             waitingForCode: "waitingForCode";
             verifying: "verifying";
             succeeded: "succeeded";
             recoveryRequired: "recoveryRequired";
-            failed: "failed";
         }>;
         oauthUrl: z$1.ZodNullable<z$1.ZodString>;
         userCode: z$1.ZodNullable<z$1.ZodString>;
@@ -7078,8 +7185,8 @@ declare const pluginApplyUpdateResultSchema: z$1.ZodObject<{
         display: z$1.ZodString;
     }, z$1.core.$strip>>;
     outcome: z$1.ZodEnum<{
-        current: "current";
         updated: "updated";
+        current: "current";
         "rolled-back": "rolled-back";
     }>;
     detail: z$1.ZodOptional<z$1.ZodString>;
@@ -12543,6 +12650,7 @@ interface EnvironmentSquashMergeArgs {
 interface EnvironmentPublishToMainArgs extends EnvironmentActionArgs {
     preserveTargetChanges?: boolean;
 }
+type EnvironmentUpdateFromMainArgs = EnvironmentActionArgs;
 interface EnvironmentPullRequestMergeArgs {
     environmentId: string;
     method: PullRequestMergeMethod;
@@ -12583,6 +12691,7 @@ type EnvironmentPullRequestResult = EnvironmentPullRequestResponse;
 type EnvironmentRenameResult = Environment;
 type EnvironmentSquashMergeResult = SquashMergeActionResponse;
 type EnvironmentPublishToMainResult = PublishToMainActionResponse;
+type EnvironmentUpdateFromMainResult = UpdateFromMainActionResponse;
 type EnvironmentStatusResult = EnvironmentStatusResponse;
 type EnvironmentDockerProvenanceResult = EnvironmentDockerProvenanceResponse;
 type EnvironmentDockerActivityResult = EnvironmentDockerActivityResponse;
@@ -12617,6 +12726,7 @@ interface EnvironmentsArea {
     paths(args: EnvironmentPathsArgs): Promise<EnvironmentPathsResult>;
     squashMerge(args: EnvironmentSquashMergeArgs): Promise<EnvironmentSquashMergeResult>;
     publishToMain(args: EnvironmentPublishToMainArgs): Promise<EnvironmentPublishToMainResult>;
+    updateFromMain(args: EnvironmentUpdateFromMainArgs): Promise<EnvironmentUpdateFromMainResult>;
     status(args: EnvironmentStatusArgs): Promise<EnvironmentStatusResult>;
     simulatorStatus(args: EnvironmentActionArgs): Promise<EnvironmentSimulatorStatusResult>;
     simulatorAttach(args: EnvironmentSimulatorAttachArgs): Promise<EnvironmentSimulatorAttachResult>;
@@ -12856,6 +12966,16 @@ interface ProjectDefaultExecutionOptionsArgs {
     projectId: string;
     signal?: AbortSignal;
 }
+interface ProjectManagerShowArgs {
+    projectId: string;
+    signal?: AbortSignal;
+}
+interface ProjectManagerSettingsArgs extends UpdateProjectManagerSettingsRequest {
+    projectId: string;
+}
+interface ProjectManagerRunArgs extends RunProjectManagerRequest {
+    projectId: string;
+}
 interface ProjectAttachmentFileLike {
     arrayBuffer(): Promise<ArrayBuffer>;
     readonly name: string;
@@ -12949,6 +13069,11 @@ interface ProjectsArea {
     files(args: ProjectFilesArgs): Promise<ProjectFilesResult>;
     get(args: ProjectGetArgs): Promise<ProjectGetResult>;
     list(args?: ProjectListArgs): Promise<ProjectListResult>;
+    manager: {
+        show(args: ProjectManagerShowArgs): Promise<ProjectManagerSettings>;
+        settings(args: ProjectManagerSettingsArgs): Promise<ProjectManagerSettings>;
+        run(args: ProjectManagerRunArgs): Promise<ThreadResponse>;
+    };
     paths(args: ProjectPathsArgs): Promise<ProjectPathsResult>;
     promptHistory(args: ProjectPromptHistoryArgs): Promise<ProjectPromptHistoryResult>;
     reorder(args: ProjectReorderArgs): Promise<ProjectReorderResult>;

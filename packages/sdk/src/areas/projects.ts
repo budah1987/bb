@@ -12,6 +12,10 @@ import type {
   ProjectWithThreadsResponse,
   ProjectListQuery,
   ProjectPathsQuery,
+  ProjectManagerSettings,
+  UpdateProjectManagerSettingsRequest,
+  RunProjectManagerRequest,
+  ThreadResponse,
   PromptHistoryResponse,
   PromptHistoryQuery,
   ReorderProjectRequest,
@@ -94,6 +98,19 @@ export interface ProjectBranchesArgs extends ProjectBranchesQuery {
 export interface ProjectDefaultExecutionOptionsArgs {
   projectId: string;
   signal?: AbortSignal;
+}
+
+export interface ProjectManagerShowArgs {
+  projectId: string;
+  signal?: AbortSignal;
+}
+
+export interface ProjectManagerSettingsArgs extends UpdateProjectManagerSettingsRequest {
+  projectId: string;
+}
+
+export interface ProjectManagerRunArgs extends RunProjectManagerRequest {
+  projectId: string;
 }
 
 export interface ProjectAttachmentFileLike {
@@ -213,6 +230,11 @@ export interface ProjectsArea {
   files(args: ProjectFilesArgs): Promise<ProjectFilesResult>;
   get(args: ProjectGetArgs): Promise<ProjectGetResult>;
   list(args?: ProjectListArgs): Promise<ProjectListResult>;
+  manager: {
+    show(args: ProjectManagerShowArgs): Promise<ProjectManagerSettings>;
+    settings(args: ProjectManagerSettingsArgs): Promise<ProjectManagerSettings>;
+    run(args: ProjectManagerRunArgs): Promise<ThreadResponse>;
+  };
   paths(args: ProjectPathsArgs): Promise<ProjectPathsResult>;
   promptHistory(
     args: ProjectPromptHistoryArgs,
@@ -519,6 +541,34 @@ export function createProjectsArea(args: CreateSdkAreaArgs): ProjectsArea {
           ...signalRequestArgs(signal),
         ),
       );
+    },
+    manager: {
+      async show(input) {
+        return transport.readJson(
+          transport.api.v1.projects[":id"].manager.$get(
+            { param: { id: input.projectId } },
+            ...signalRequestArgs(input.signal),
+          ),
+        );
+      },
+      async settings(input) {
+        const { projectId, ...json } = input;
+        return transport.readJson(
+          transport.api.v1.projects[":id"].manager.settings.$patch({
+            param: { id: projectId },
+            json,
+          }),
+        );
+      },
+      async run(input) {
+        const { projectId, ...json } = input;
+        return transport.readJson(
+          transport.api.v1.projects[":id"].manager.run.$post({
+            param: { id: projectId },
+            json,
+          }),
+        );
+      },
     },
     async paths(input) {
       const { projectId, signal, ...query } = input;
