@@ -73,6 +73,7 @@ import { AppCommandShortcutPill } from "@/components/commands/AppCommandShortcut
 import { useThreadTitleDisplayText } from "@/components/thread/ThreadTitleMentions";
 import { pluginIconName } from "@/components/plugin/PluginIcon";
 import { usePluginThreadRowStatus } from "@/lib/plugin-thread-row-status";
+import { useArchivingThreadIds } from "@/components/thread/ThreadActionsProvider";
 
 interface ThreadRowBaseOptions {
   depth: number;
@@ -477,6 +478,8 @@ function ThreadRowComponent({
   displayTitle,
   accessibleTitle,
 }: ThreadRowProps) {
+  const archivingThreadIds = useArchivingThreadIds();
+  const isArchiving = archivingThreadIds.has(thread.id);
   const [isDropdownActionsOpen, setIsDropdownActionsOpen] = useState(false);
   const [isContextActionsOpen, setIsContextActionsOpen] = useState(false);
   const setConversationCollapsed = useSetAtom(
@@ -587,7 +590,7 @@ function ThreadRowComponent({
     SIDEBAR_HOVER_ACTIONS_ROW_CLASS,
     "group/thread-row",
     SIDEBAR_ROW_BASE_CLASS,
-    LIST_HOVER_TRANSITION,
+    !isArchiving && LIST_HOVER_TRANSITION,
     parentOptions?.stickyLevel === undefined && "relative",
     options.isCompact
       ? COARSE_POINTER_COMPACT_ROW_HEIGHT_CLASS
@@ -601,6 +604,8 @@ function ThreadRowComponent({
     !showActive && splitIndicator.isOpenInSplit && "bg-sidebar-accent/50",
     !showActive && "has-[[data-state=open]]:bg-sidebar-accent",
     rowDragBindings && !rowDragBindings.disabled && "select-none",
+    isArchiving &&
+      "pointer-events-none !h-0 -translate-y-1 overflow-hidden opacity-0 transition-[height,opacity,transform] duration-250 ease-[cubic-bezier(0.22,1,0.36,1)]",
   );
   const rowStyle = getThreadRowStyle(options.depth);
   const isActionsOpen = isDropdownActionsOpen || isContextActionsOpen;
