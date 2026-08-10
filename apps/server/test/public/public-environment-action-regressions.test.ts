@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { getEnvironment } from "@bb/db";
+import { getEnvironment, getThread } from "@bb/db";
 import type { GitHostPullRequest } from "@bb/domain";
+import { environmentArchiveThreadsResponseSchema } from "@bb/server-contract";
 import { readJson } from "../helpers/json.js";
 import {
+  listQueuedEnvironmentCommands,
   reportQueuedCommandSuccess,
   waitForQueuedCommand,
 } from "../helpers/commands.js";
@@ -10,6 +12,7 @@ import {
   seedEnvironment,
   seedHostSession,
   seedProjectWithSource,
+  seedThread,
 } from "../helpers/seed.js";
 import { withTestHarness } from "../helpers/test-app.js";
 
@@ -35,6 +38,68 @@ function rawPullRequest(
 }
 
 describe("public environment action regressions", () => {
+  it("archives every conversation in an unmanaged environment", async () => {
+    await withTestHarness(async (harness) => {
+      const { host } = seedHostSession(harness.deps, {
+        id: "host-unmanaged-environment-archive",
+      });
+      const { project } = seedProjectWithSource(harness.deps, {
+        hostId: host.id,
+      });
+      const environment = seedEnvironment(harness.deps, {
+        hostId: host.id,
+        projectId: project.id,
+        path: "/tmp/unmanaged-environment-archive",
+        workspaceProvisionType: "unmanaged",
+      });
+      const idleThread = seedThread(harness.deps, {
+        environmentId: environment.id,
+        projectId: project.id,
+      });
+      const activeThread = seedThread(harness.deps, {
+        environmentId: environment.id,
+        projectId: project.id,
+        status: "active",
+      });
+
+      const response = await harness.app.request(
+        `/api/v1/environments/${environment.id}/archive-threads`,
+        { method: "POST" },
+      );
+
+      expect(response.status).toBe(200);
+      const archiveResult = environmentArchiveThreadsResponseSchema.parse(
+        await readJson(response),
+      );
+      expect(archiveResult.archivedThreadIds).toHaveLength(2);
+      expect(archiveResult.archivedThreadIds).toEqual(
+        expect.arrayContaining([idleThread.id, activeThread.id]),
+      );
+      expect(getThread(harness.db, idleThread.id)?.archivedAt).not.toBeNull();
+      expect(getThread(harness.db, activeThread.id)?.archivedAt).not.toBeNull();
+
+      const stopCommand = await waitForQueuedCommand(
+        harness,
+        ({ command }) =>
+          command.type === "thread.stop" &&
+          command.threadId === activeThread.id,
+      );
+      await reportQueuedCommandSuccess(harness, stopCommand, {});
+
+      expect(getEnvironment(harness.db, environment.id)).toMatchObject({
+        status: "ready",
+        workspaceProvisionType: "unmanaged",
+      });
+      expect(
+        listQueuedEnvironmentCommands(
+          harness,
+          "environment.destroy",
+          environment.id,
+        ),
+      ).toHaveLength(0);
+    });
+  });
+
   it("persists a GitHub account and scopes PR lookups to it", async () => {
     await withTestHarness(async (harness) => {
       const { host } = seedHostSession(harness.deps, {

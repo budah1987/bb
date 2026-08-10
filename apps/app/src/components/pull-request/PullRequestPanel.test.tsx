@@ -75,6 +75,7 @@ function renderPanel(
   const onArchive = vi.fn();
   render(
     <PullRequestPanel
+      archiveErrorMessage={null}
       baseBranchOptions={["main", "release"]}
       defaultBaseBranch="main"
       githubAccounts={[
@@ -249,12 +250,40 @@ describe("PullRequestPanel", () => {
     ).toHaveProperty("disabled", true);
   });
 
-  it("offers workspace archive after merge", () => {
+  it("shows a merged summary without review or mergeability signals", () => {
     const { onArchive } = renderPanel({
       outcome: "available",
-      pullRequest: pullRequest({ state: "merged", attention: "merged" }),
+      pullRequest: pullRequest({
+        state: "merged",
+        attention: "merged",
+        review: { state: "none", reviewRequestCount: 0 },
+        mergeability: {
+          state: "unknown",
+          mergeStateStatus: "UNKNOWN",
+          mergeable: "UNKNOWN",
+        },
+      }),
     });
 
+    expect(screen.getByText("Merged")).toBeTruthy();
+    expect(screen.queryByText("No review")).toBeNull();
+    expect(screen.queryByText("Mergeability unknown")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Archive workspace" }));
+    expect(onArchive).toHaveBeenCalledOnce();
+  });
+
+  it("keeps archive available after a failure", () => {
+    const { onArchive } = renderPanel(
+      {
+        outcome: "available",
+        pullRequest: pullRequest({ state: "merged", attention: "merged" }),
+      },
+      { archiveErrorMessage: "The server could not archive this workspace." },
+    );
+
+    expect(screen.getByRole("alert").textContent).toContain(
+      "The server could not archive this workspace.",
+    );
     fireEvent.click(screen.getByRole("button", { name: "Archive workspace" }));
     expect(onArchive).toHaveBeenCalledOnce();
   });

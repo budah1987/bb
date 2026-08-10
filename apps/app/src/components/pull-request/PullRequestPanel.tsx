@@ -62,6 +62,7 @@ export interface PullRequestMetadataSuggestion {
 }
 
 export interface PullRequestPanelProps {
+  archiveErrorMessage: string | null;
   baseBranchOptions: readonly string[];
   defaultBaseBranch: string;
   isActionPending: boolean;
@@ -582,6 +583,7 @@ function CreatePullRequestForm({
 }
 
 function PullRequestActions({
+  archiveErrorMessage,
   isActionPending,
   onArchive,
   onConvertToDraft,
@@ -591,6 +593,7 @@ function PullRequestActions({
 }: Pick<
   PullRequestPanelProps,
   | "isActionPending"
+  | "archiveErrorMessage"
   | "onArchive"
   | "onConvertToDraft"
   | "onMarkReady"
@@ -598,16 +601,27 @@ function PullRequestActions({
 > & { pullRequest: ThreadPullRequest }) {
   if (pullRequest.state === "merged" || pullRequest.state === "closed") {
     return (
-      <Button
-        type="button"
-        variant="outline"
-        className="min-h-11 w-full active:scale-[0.96] motion-reduce:transition-none"
-        disabled={isActionPending}
-        onClick={onArchive}
-      >
-        <Icon name="Archive" className="size-4" aria-hidden="true" />
-        {isActionPending ? "Archiving…" : "Archive workspace"}
-      </Button>
+      <div className="grid gap-3">
+        {archiveErrorMessage ? (
+          <div
+            role="alert"
+            className="rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive"
+          >
+            <p className="font-medium">Couldn’t archive workspace</p>
+            <p className="mt-0.5 text-xs leading-5">{archiveErrorMessage}</p>
+          </div>
+        ) : null}
+        <Button
+          type="button"
+          variant="outline"
+          className="min-h-11 w-full active:scale-[0.96] motion-reduce:transition-none"
+          disabled={isActionPending}
+          onClick={onArchive}
+        >
+          <Icon name="Archive" className="size-4" aria-hidden="true" />
+          {isActionPending ? "Archiving…" : "Archive workspace"}
+        </Button>
+      </div>
     );
   }
   if (pullRequest.state === "draft") {
@@ -674,6 +688,7 @@ function PullRequestActions({
 }
 
 function PullRequestDetails({
+  archiveErrorMessage,
   githubAccounts,
   isGithubAccountLoading,
   isActionPending,
@@ -689,6 +704,7 @@ function PullRequestDetails({
 }: Pick<
   PullRequestPanelProps,
   | "isActionPending"
+  | "archiveErrorMessage"
   | "githubAccounts"
   | "isGithubAccountLoading"
   | "onArchive"
@@ -700,14 +716,34 @@ function PullRequestDetails({
   | "onRefresh"
   | "selectedGithubAccountLogin"
 > & { pullRequest: ThreadPullRequest }) {
-  const signals = useMemo(
-    () => [
-      getPullRequestChecksDisplay(pullRequest),
+  const signals = useMemo(() => {
+    const checks = getPullRequestChecksDisplay(pullRequest);
+    if (pullRequest.state === "merged") {
+      return [
+        {
+          label: "Merged",
+          icon: "GitMerge" as const,
+          className: "text-success",
+        },
+        checks,
+      ];
+    }
+    if (pullRequest.state === "closed") {
+      return [
+        {
+          label: "Closed without merge",
+          icon: "CircleX" as const,
+          className: "text-muted-foreground",
+        },
+        checks,
+      ];
+    }
+    return [
+      checks,
       getPullRequestReviewDisplay(pullRequest),
       getPullRequestMergeabilityDisplay(pullRequest),
-    ],
-    [pullRequest],
-  );
+    ];
+  }, [pullRequest]);
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
       <div className="min-h-0 flex-1 overflow-y-auto pb-4">
@@ -802,6 +838,7 @@ function PullRequestDetails({
 
       <footer className="shrink-0 border-t border-border bg-sidebar px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-3">
         <PullRequestActions
+          archiveErrorMessage={archiveErrorMessage}
           isActionPending={isActionPending}
           onArchive={onArchive}
           onConvertToDraft={onConvertToDraft}
