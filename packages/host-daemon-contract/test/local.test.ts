@@ -8,6 +8,7 @@ import {
   providerCliInstallEventSchema,
   providerCliInstallRequestSchema,
   providerCliStatusResponseSchema,
+  providerAuthSubmitCodeRequestSchema,
   statusResponseSchema,
 } from "../src/index.js";
 
@@ -21,6 +22,18 @@ describe("hostPlatformSchema", () => {
   it("rejects other strings", () => {
     expect(() => hostPlatformSchema.parse("win32")).toThrow();
     expect(() => hostPlatformSchema.parse("")).toThrow();
+  });
+});
+
+describe("providerAuthSubmitCodeRequestSchema", () => {
+  it("preserves the one-time code exactly", () => {
+    const code = "  exact-code  ";
+    expect(
+      providerAuthSubmitCodeRequestSchema.parse({
+        sessionId: "session-1",
+        code,
+      }).code,
+    ).toBe(code);
   });
 });
 

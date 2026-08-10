@@ -262,9 +262,9 @@ declare const hostSchema: z$1.ZodObject<{
         disconnected: "disconnected";
     }>;
     maxPermissionMode: z$1.ZodEnum<{
-        full: "full";
         auto: "auto";
         "accept-edits": "accept-edits";
+        full: "full";
     }>;
     lastSeenAt: z$1.ZodNullable<z$1.ZodNumber>;
     lastRejectedProtocolVersion: z$1.ZodNullable<z$1.ZodNumber>;
@@ -510,9 +510,9 @@ declare const serviceTierSchema: z$1.ZodEnum<{
 }>;
 type ServiceTier = z$1.infer<typeof serviceTierSchema>;
 declare const permissionModeSchema: z$1.ZodEnum<{
-    full: "full";
     auto: "auto";
     "accept-edits": "accept-edits";
+    full: "full";
 }>;
 type PermissionMode = z$1.infer<typeof permissionModeSchema>;
 declare const promptInputSchema: z$1.ZodDiscriminatedUnion<[z$1.ZodObject<{
@@ -615,9 +615,9 @@ declare const resolvedThreadExecutionOptionsSchema: z$1.ZodObject<{
         ultra: "ultra";
     }>;
     permissionMode: z$1.ZodEnum<{
-        full: "full";
         auto: "auto";
         "accept-edits": "accept-edits";
+        full: "full";
     }>;
     source: z$1.ZodEnum<{
         "client/thread/start": "client/thread/start";
@@ -644,9 +644,9 @@ declare const projectExecutionDefaultsSchema: z$1.ZodObject<{
         ultra: "ultra";
     }>;
     permissionMode: z$1.ZodEnum<{
-        full: "full";
         auto: "auto";
         "accept-edits": "accept-edits";
+        full: "full";
     }>;
 }, z$1.core.$strip>;
 type ProjectExecutionDefaults = z$1.infer<typeof projectExecutionDefaultsSchema>;
@@ -1759,9 +1759,9 @@ declare const threadEventSchema: z$1.ZodPipe<z$1.ZodUnknown, z$1.ZodUnion<readon
         }>;
         permissionMode: z$1.ZodEnum<{
             readonly: "readonly";
-            full: "full";
             auto: "auto";
             "accept-edits": "accept-edits";
+            full: "full";
             "workspace-write": "workspace-write";
         }>;
     }, z$1.core.$strip>;
@@ -1964,9 +1964,9 @@ declare const providerInfoSchema: z$1.ZodObject<{
         supportsUserQuestion: z$1.ZodBoolean;
         supportsFork: z$1.ZodBoolean;
         supportedPermissionModes: z$1.ZodArray<z$1.ZodEnum<{
-            full: "full";
             auto: "auto";
             "accept-edits": "accept-edits";
+            full: "full";
         }>>;
     }, z$1.core.$strip>;
     composerActions: z$1.ZodArray<z$1.ZodDiscriminatedUnion<[z$1.ZodObject<{
@@ -2031,8 +2031,8 @@ type ThreadEventRow = {
 declare const threadStatusSchema: z$1.ZodEnum<{
     error: "error";
     active: "active";
-    starting: "starting";
     idle: "idle";
+    starting: "starting";
     stopping: "stopping";
 }>;
 type ThreadStatus = z$1.infer<typeof threadStatusSchema>;
@@ -2147,9 +2147,9 @@ declare const threadQueuedMessageSchema: z$1.ZodObject<{
         ultra: "ultra";
     }>;
     permissionMode: z$1.ZodEnum<{
-        full: "full";
         auto: "auto";
         "accept-edits": "accept-edits";
+        full: "full";
     }>;
     serviceTier: z$1.ZodEnum<{
         default: "default";
@@ -5259,6 +5259,150 @@ declare const hostDaemonCommandRegistry: {
             message: z$1.ZodString;
         }, z$1.core.$strip>], "type">>;
     }, z$1.core.$strict>, "onlineRpc", false>;
+    "provider_auth.status": HostDaemonCommandDescriptor<"provider_auth.status", z$1.ZodObject<{
+        type: z$1.ZodLiteral<"provider_auth.status">;
+    }, z$1.core.$strict>, z$1.ZodObject<{
+        statuses: z$1.ZodRecord<z$1.ZodEnum<{
+            codex: "codex";
+            claudeCode: "claudeCode";
+        }>, z$1.ZodObject<{
+            provider: z$1.ZodEnum<{
+                codex: "codex";
+                claudeCode: "claudeCode";
+            }>;
+            displayName: z$1.ZodString;
+            state: z$1.ZodEnum<{
+                unknown: "unknown";
+                loggedIn: "loggedIn";
+                loggedOut: "loggedOut";
+                unavailable: "unavailable";
+            }>;
+            authMethod: z$1.ZodNullable<z$1.ZodString>;
+            accountEmail: z$1.ZodNullable<z$1.ZodString>;
+            organizationName: z$1.ZodNullable<z$1.ZodString>;
+            message: z$1.ZodNullable<z$1.ZodString>;
+        }, z$1.core.$strict>>;
+        sessions: z$1.ZodArray<z$1.ZodObject<{
+            sessionId: z$1.ZodString;
+            provider: z$1.ZodEnum<{
+                codex: "codex";
+                claudeCode: "claudeCode";
+            }>;
+            phase: z$1.ZodEnum<{
+                failed: "failed";
+                starting: "starting";
+                waitingForUser: "waitingForUser";
+                waitingForCode: "waitingForCode";
+                verifying: "verifying";
+                succeeded: "succeeded";
+                recoveryRequired: "recoveryRequired";
+            }>;
+            oauthUrl: z$1.ZodNullable<z$1.ZodString>;
+            userCode: z$1.ZodNullable<z$1.ZodString>;
+            codeInputRequired: z$1.ZodBoolean;
+            message: z$1.ZodNullable<z$1.ZodString>;
+            recoveryCommand: z$1.ZodNullable<z$1.ZodString>;
+            startedAt: z$1.ZodNumber;
+        }, z$1.core.$strict>>;
+    }, z$1.core.$strict>, "onlineRpc", true>;
+    "provider_auth.start": HostDaemonCommandDescriptor<"provider_auth.start", z$1.ZodObject<{
+        provider: z$1.ZodEnum<{
+            codex: "codex";
+            claudeCode: "claudeCode";
+        }>;
+        type: z$1.ZodLiteral<"provider_auth.start">;
+    }, z$1.core.$strict>, z$1.ZodObject<{
+        statuses: z$1.ZodRecord<z$1.ZodEnum<{
+            codex: "codex";
+            claudeCode: "claudeCode";
+        }>, z$1.ZodObject<{
+            provider: z$1.ZodEnum<{
+                codex: "codex";
+                claudeCode: "claudeCode";
+            }>;
+            displayName: z$1.ZodString;
+            state: z$1.ZodEnum<{
+                unknown: "unknown";
+                loggedIn: "loggedIn";
+                loggedOut: "loggedOut";
+                unavailable: "unavailable";
+            }>;
+            authMethod: z$1.ZodNullable<z$1.ZodString>;
+            accountEmail: z$1.ZodNullable<z$1.ZodString>;
+            organizationName: z$1.ZodNullable<z$1.ZodString>;
+            message: z$1.ZodNullable<z$1.ZodString>;
+        }, z$1.core.$strict>>;
+        sessions: z$1.ZodArray<z$1.ZodObject<{
+            sessionId: z$1.ZodString;
+            provider: z$1.ZodEnum<{
+                codex: "codex";
+                claudeCode: "claudeCode";
+            }>;
+            phase: z$1.ZodEnum<{
+                failed: "failed";
+                starting: "starting";
+                waitingForUser: "waitingForUser";
+                waitingForCode: "waitingForCode";
+                verifying: "verifying";
+                succeeded: "succeeded";
+                recoveryRequired: "recoveryRequired";
+            }>;
+            oauthUrl: z$1.ZodNullable<z$1.ZodString>;
+            userCode: z$1.ZodNullable<z$1.ZodString>;
+            codeInputRequired: z$1.ZodBoolean;
+            message: z$1.ZodNullable<z$1.ZodString>;
+            recoveryCommand: z$1.ZodNullable<z$1.ZodString>;
+            startedAt: z$1.ZodNumber;
+        }, z$1.core.$strict>>;
+    }, z$1.core.$strict>, "onlineRpc", false>;
+    "provider_auth.submit_code": HostDaemonCommandDescriptor<"provider_auth.submit_code", z$1.ZodObject<{
+        sessionId: z$1.ZodString;
+        code: z$1.ZodString;
+        type: z$1.ZodLiteral<"provider_auth.submit_code">;
+    }, z$1.core.$strict>, z$1.ZodObject<{
+        statuses: z$1.ZodRecord<z$1.ZodEnum<{
+            codex: "codex";
+            claudeCode: "claudeCode";
+        }>, z$1.ZodObject<{
+            provider: z$1.ZodEnum<{
+                codex: "codex";
+                claudeCode: "claudeCode";
+            }>;
+            displayName: z$1.ZodString;
+            state: z$1.ZodEnum<{
+                unknown: "unknown";
+                loggedIn: "loggedIn";
+                loggedOut: "loggedOut";
+                unavailable: "unavailable";
+            }>;
+            authMethod: z$1.ZodNullable<z$1.ZodString>;
+            accountEmail: z$1.ZodNullable<z$1.ZodString>;
+            organizationName: z$1.ZodNullable<z$1.ZodString>;
+            message: z$1.ZodNullable<z$1.ZodString>;
+        }, z$1.core.$strict>>;
+        sessions: z$1.ZodArray<z$1.ZodObject<{
+            sessionId: z$1.ZodString;
+            provider: z$1.ZodEnum<{
+                codex: "codex";
+                claudeCode: "claudeCode";
+            }>;
+            phase: z$1.ZodEnum<{
+                failed: "failed";
+                starting: "starting";
+                waitingForUser: "waitingForUser";
+                waitingForCode: "waitingForCode";
+                verifying: "verifying";
+                succeeded: "succeeded";
+                recoveryRequired: "recoveryRequired";
+            }>;
+            oauthUrl: z$1.ZodNullable<z$1.ZodString>;
+            userCode: z$1.ZodNullable<z$1.ZodString>;
+            codeInputRequired: z$1.ZodBoolean;
+            message: z$1.ZodNullable<z$1.ZodString>;
+            recoveryCommand: z$1.ZodNullable<z$1.ZodString>;
+            startedAt: z$1.ZodNumber;
+        }, z$1.core.$strict>>;
+    }, z$1.core.$strict>, "onlineRpc", false>;
     "workspace.status": HostDaemonCommandDescriptor<"workspace.status", z$1.ZodObject<{
         environmentId: z$1.ZodString;
         workspaceContext: z$1.ZodObject<{
@@ -5720,6 +5864,63 @@ declare const providerCliInstallEventSchema: z$1.ZodDiscriminatedUnion<[z$1.ZodO
     message: z$1.ZodString;
 }, z$1.core.$strip>], "type">;
 type ProviderCliInstallEvent = z$1.infer<typeof providerCliInstallEventSchema>;
+declare const providerAuthSnapshotSchema: z$1.ZodObject<{
+    statuses: z$1.ZodRecord<z$1.ZodEnum<{
+        codex: "codex";
+        claudeCode: "claudeCode";
+    }>, z$1.ZodObject<{
+        provider: z$1.ZodEnum<{
+            codex: "codex";
+            claudeCode: "claudeCode";
+        }>;
+        displayName: z$1.ZodString;
+        state: z$1.ZodEnum<{
+            unknown: "unknown";
+            loggedIn: "loggedIn";
+            loggedOut: "loggedOut";
+            unavailable: "unavailable";
+        }>;
+        authMethod: z$1.ZodNullable<z$1.ZodString>;
+        accountEmail: z$1.ZodNullable<z$1.ZodString>;
+        organizationName: z$1.ZodNullable<z$1.ZodString>;
+        message: z$1.ZodNullable<z$1.ZodString>;
+    }, z$1.core.$strict>>;
+    sessions: z$1.ZodArray<z$1.ZodObject<{
+        sessionId: z$1.ZodString;
+        provider: z$1.ZodEnum<{
+            codex: "codex";
+            claudeCode: "claudeCode";
+        }>;
+        phase: z$1.ZodEnum<{
+            failed: "failed";
+            starting: "starting";
+            waitingForUser: "waitingForUser";
+            waitingForCode: "waitingForCode";
+            verifying: "verifying";
+            succeeded: "succeeded";
+            recoveryRequired: "recoveryRequired";
+        }>;
+        oauthUrl: z$1.ZodNullable<z$1.ZodString>;
+        userCode: z$1.ZodNullable<z$1.ZodString>;
+        codeInputRequired: z$1.ZodBoolean;
+        message: z$1.ZodNullable<z$1.ZodString>;
+        recoveryCommand: z$1.ZodNullable<z$1.ZodString>;
+        startedAt: z$1.ZodNumber;
+    }, z$1.core.$strict>>;
+}, z$1.core.$strict>;
+type ProviderAuthSnapshot = z$1.infer<typeof providerAuthSnapshotSchema>;
+declare const providerAuthStartRequestSchema: z$1.ZodObject<{
+    provider: z$1.ZodEnum<{
+        codex: "codex";
+        claudeCode: "claudeCode";
+    }>;
+}, z$1.core.$strict>;
+type ProviderAuthStartRequest = z$1.infer<typeof providerAuthStartRequestSchema>;
+declare const providerAuthSubmitCodeRequestSchema: z$1.ZodObject<{
+    sessionId: z$1.ZodString;
+    code: z$1.ZodString;
+}, z$1.core.$strict>;
+type ProviderAuthSubmitCodeRequest = z$1.infer<typeof providerAuthSubmitCodeRequestSchema>;
 
 declare const updateEnvironmentRequestSchema: z$1.ZodObject<{
     githubAccountLogin: z$1.ZodOptional<z$1.ZodNullable<z$1.ZodString>>;
@@ -6499,6 +6700,9 @@ type HostPickFolderResponse = PickFolderResponse;
 type HostProviderCliStatusResponse = ProviderCliStatusResponse;
 type HostProviderCliInstallRequest = ProviderCliInstallRequest;
 type HostProviderCliInstallEvent = ProviderCliInstallEvent;
+type HostProviderAuthSnapshot = ProviderAuthSnapshot;
+type HostProviderAuthStartRequest = ProviderAuthStartRequest;
+type HostProviderAuthSubmitCodeRequest = ProviderAuthSubmitCodeRequest;
 
 declare const pluginUpdateCheckEntrySchema: z$1.ZodObject<{
     id: z$1.ZodString;
@@ -12039,6 +12243,12 @@ interface HostPickFolderArgs extends HostPickFolderRequest {
 interface HostProviderCliInstallArgs extends HostProviderCliInstallRequest {
     hostId: string;
 }
+interface HostProviderAuthStartArgs extends HostProviderAuthStartRequest {
+    hostId: string;
+}
+interface HostProviderAuthSubmitCodeArgs extends HostProviderAuthSubmitCodeRequest {
+    hostId: string;
+}
 interface HostListArgs {
     signal?: AbortSignal;
 }
@@ -12054,6 +12264,7 @@ type HostListResult = Host[];
 type HostPathsExistResult = HostPathsExistResponse;
 type HostPickFolderResult = HostPickFolderResponse;
 type HostProviderCliStatusResult = HostProviderCliStatusResponse;
+type HostProviderAuthResult = HostProviderAuthSnapshot;
 type HostRetryUpdateResult = HostRetryUpdateResponse;
 type HostUpdateResult = Host;
 interface HostsArea {
@@ -12067,6 +12278,9 @@ interface HostsArea {
     pathsExist(args: HostPathsExistArgs): Promise<HostPathsExistResult>;
     pickFolder(args: HostPickFolderArgs): Promise<HostPickFolderResult>;
     providerCliStatus(args: HostGetArgs): Promise<HostProviderCliStatusResult>;
+    providerAuthStatus(args: HostGetArgs): Promise<HostProviderAuthResult>;
+    startProviderAuth(args: HostProviderAuthStartArgs): Promise<HostProviderAuthResult>;
+    submitProviderAuthCode(args: HostProviderAuthSubmitCodeArgs): Promise<HostProviderAuthResult>;
     retryUpdate(args: HostRetryUpdateArgs): Promise<HostRetryUpdateResult>;
     update(args: HostUpdateArgs): Promise<HostUpdateResult>;
 }

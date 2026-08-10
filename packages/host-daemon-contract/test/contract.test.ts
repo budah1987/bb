@@ -166,11 +166,38 @@ const WORKSPACE_DIFF_AVAILABLE_RESULT: JsonObject = {
   },
 };
 
+const PROVIDER_AUTH_SNAPSHOT_RESULT = {
+  statuses: {
+    claudeCode: {
+      provider: "claudeCode",
+      displayName: "Claude Code",
+      state: "loggedOut",
+      authMethod: null,
+      accountEmail: null,
+      organizationName: null,
+      message: null,
+    },
+    codex: {
+      provider: "codex",
+      displayName: "Codex",
+      state: "loggedIn",
+      authMethod: "chatgpt",
+      accountEmail: "person@example.com",
+      organizationName: null,
+      message: null,
+    },
+  },
+  sessions: [],
+} satisfies JsonObject;
+
 const ONLINE_RPC_RESPONSE_RESULT_FIXTURES: OnlineRpcResponseResultFixtures = {
   "connect-tunnel.ensure-identity": {
     label: "sawyer-air",
     baseDomain: "getbb.app",
   },
+  "provider_auth.status": PROVIDER_AUTH_SNAPSHOT_RESULT,
+  "provider_auth.start": PROVIDER_AUTH_SNAPSHOT_RESULT,
+  "provider_auth.submit_code": PROVIDER_AUTH_SNAPSHOT_RESULT,
   "simulator.status": {
     supported: true,
     message: null,
@@ -1133,11 +1160,10 @@ describe("host-daemon local schemas", () => {
 });
 
 describe("host-daemon command schemas", () => {
-  // Version 81 includes live workspace metadata refresh and scopes GitHub PR
-  // commands to an authenticated account. Older daemons do not support the
-  // added messages and fields, so the bump forces an update.
-  it("uses protocol version 81 for account-scoped GitHub workflows", () => {
-    expect(HOST_DAEMON_PROTOCOL_VERSION).toBe(81);
+  // Version 82 combines provider authentication with the version 81 host
+  // contract. Older daemons do not support the added authentication messages.
+  it("uses protocol version 82 for provider authentication", () => {
+    expect(HOST_DAEMON_PROTOCOL_VERSION).toBe(82);
   });
 
   it("binds Plan cancellation to a required turn id and typed result", () => {

@@ -20,6 +20,7 @@ const project = {
   kind: "standard" as const,
   name: "BBamir",
   gitRemoteUrl: "https://github.com/budah1987/bb.git",
+  githubAccountLogin: null,
   createdAt: 0,
   updatedAt: 0,
   sources: [

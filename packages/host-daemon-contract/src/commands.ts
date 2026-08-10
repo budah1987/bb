@@ -32,12 +32,15 @@ import {
   pathsExistRequestSchema,
   pathsExistResponseSchema,
   pickFolderResponseSchema,
+  providerAuthSnapshotSchema,
+  providerAuthStartRequestSchema,
+  providerAuthSubmitCodeRequestSchema,
   providerCliInstallEventSchema,
   providerCliInstallRequestSchema,
   providerCliStatusResponseSchema,
 } from "./local.js";
 
-export const HOST_DAEMON_PROTOCOL_VERSION = 81 as const;
+export const HOST_DAEMON_PROTOCOL_VERSION = 82 as const;
 export const githubAccountLoginSchema = z.string().trim().min(1).max(255);
 
 export {
@@ -1794,6 +1797,18 @@ const providerCliInstallResultSchema = z
   })
   .strict();
 
+const providerAuthStatusCommandSchema = z
+  .object({ type: z.literal("provider_auth.status") })
+  .strict();
+
+const providerAuthStartCommandSchema = providerAuthStartRequestSchema
+  .extend({ type: z.literal("provider_auth.start") })
+  .strict();
+
+const providerAuthSubmitCodeCommandSchema = providerAuthSubmitCodeRequestSchema
+  .extend({ type: z.literal("provider_auth.submit_code") })
+  .strict();
+
 type HostDaemonCommandTransport = "settled" | "onlineRpc";
 export type HostDaemonCommandEnvironmentLane = "read" | "write";
 type HostDaemonFlushEventsBeforeResult = boolean | "when-initiated";
@@ -2374,6 +2389,33 @@ export const hostDaemonCommandRegistry = {
     type: "provider_cli.install",
     schema: providerCliInstallCommandSchema,
     resultSchema: providerCliInstallResultSchema,
+    transport: "onlineRpc",
+    retryable: false,
+    flushEventsBeforeResult: false,
+    envLane: null,
+  }),
+  "provider_auth.status": defineHostDaemonCommandDescriptor({
+    type: "provider_auth.status",
+    schema: providerAuthStatusCommandSchema,
+    resultSchema: providerAuthSnapshotSchema,
+    transport: "onlineRpc",
+    retryable: true,
+    flushEventsBeforeResult: false,
+    envLane: null,
+  }),
+  "provider_auth.start": defineHostDaemonCommandDescriptor({
+    type: "provider_auth.start",
+    schema: providerAuthStartCommandSchema,
+    resultSchema: providerAuthSnapshotSchema,
+    transport: "onlineRpc",
+    retryable: false,
+    flushEventsBeforeResult: false,
+    envLane: null,
+  }),
+  "provider_auth.submit_code": defineHostDaemonCommandDescriptor({
+    type: "provider_auth.submit_code",
+    schema: providerAuthSubmitCodeCommandSchema,
+    resultSchema: providerAuthSnapshotSchema,
     transport: "onlineRpc",
     retryable: false,
     flushEventsBeforeResult: false,

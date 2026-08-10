@@ -118,6 +118,9 @@ import type {
   HostProviderCliInstallEvent,
   HostProviderCliInstallRequest,
   HostProviderCliStatusResponse,
+  HostProviderAuthSnapshot,
+  HostProviderAuthStartRequest,
+  HostProviderAuthSubmitCodeRequest,
   HostRetryUpdateResponse,
   ProjectAttachmentContentQuery,
   ProjectAttachmentUploadForm,
@@ -277,6 +280,8 @@ import {
   hostPickFolderRequestSchema,
   hostPathsExistRequestSchema,
   hostProviderCliInstallRequestSchema,
+  hostProviderAuthStartRequestSchema,
+  hostProviderAuthSubmitCodeRequestSchema,
   projectAttachmentContentQuerySchema,
   projectBranchesQuerySchema,
   projectCommandsQuerySchema,
@@ -708,6 +713,28 @@ export const publicApiRoutes = {
         hostProviderCliInstallRequestSchema,
       ),
       response: textResponse<HostProviderCliInstallEvent>(),
+    }),
+    providerAuthStatus: defineRoute({
+      path: "/hosts/:id/provider-auth",
+      method: "get",
+      request: noRequest<PathId>(),
+      response: jsonResponse<HostProviderAuthSnapshot>(),
+    }),
+    providerAuthStart: defineRoute({
+      path: "/hosts/:id/provider-auth/start",
+      method: "post",
+      request: jsonRequest<PathId, HostProviderAuthStartRequest>(
+        hostProviderAuthStartRequestSchema,
+      ),
+      response: jsonResponse<HostProviderAuthSnapshot>(),
+    }),
+    providerAuthSubmitCode: defineRoute({
+      path: "/hosts/:id/provider-auth/submit-code",
+      method: "post",
+      request: jsonRequest<PathId, HostProviderAuthSubmitCodeRequest>(
+        hostProviderAuthSubmitCodeRequestSchema,
+      ),
+      response: jsonResponse<HostProviderAuthSnapshot>(),
     }),
   },
 

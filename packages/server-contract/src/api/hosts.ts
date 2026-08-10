@@ -7,12 +7,18 @@ import {
   providerCliInstallEventSchema,
   providerCliInstallRequestSchema,
   providerCliStatusResponseSchema,
+  providerAuthSnapshotSchema,
+  providerAuthStartRequestSchema,
+  providerAuthSubmitCodeRequestSchema,
   type PathsExistRequest,
   type PathsExistResponse,
   type PickFolderResponse,
   type ProviderCliInstallEvent,
   type ProviderCliInstallRequest,
   type ProviderCliStatusResponse,
+  type ProviderAuthSnapshot,
+  type ProviderAuthStartRequest,
+  type ProviderAuthSubmitCodeRequest,
 } from "@bb/host-daemon-contract";
 
 /**
@@ -128,3 +134,14 @@ export type HostProviderCliInstallRequest = ProviderCliInstallRequest;
 
 export const hostProviderCliInstallEventSchema = providerCliInstallEventSchema;
 export type HostProviderCliInstallEvent = ProviderCliInstallEvent;
+
+export const hostProviderAuthSnapshotSchema = providerAuthSnapshotSchema;
+export type HostProviderAuthSnapshot = ProviderAuthSnapshot;
+
+export const hostProviderAuthStartRequestSchema =
+  providerAuthStartRequestSchema;
+export type HostProviderAuthStartRequest = ProviderAuthStartRequest;
+
+export const hostProviderAuthSubmitCodeRequestSchema =
+  providerAuthSubmitCodeRequestSchema;
+export type HostProviderAuthSubmitCodeRequest = ProviderAuthSubmitCodeRequest;

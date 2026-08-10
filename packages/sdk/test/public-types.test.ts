@@ -287,8 +287,11 @@ type ExpectedHostsKey =
   | "list"
   | "pathsExist"
   | "pickFolder"
+  | "providerAuthStatus"
   | "providerCliStatus"
   | "retryUpdate"
+  | "startProviderAuth"
+  | "submitProviderAuthCode"
   | "update";
 
 type ExpectedPluginsKey =

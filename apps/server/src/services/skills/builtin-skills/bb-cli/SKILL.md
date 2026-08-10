@@ -301,6 +301,12 @@ environment pull-request show <id>`. Diff commands require an explicit target
   (alias `--host`) or `--environment <id>` to inspect the machine where work
   will run; the selectors cannot be combined. With neither selector they
   intentionally inspect the primary machine.
+- Check subscription login with `bb provider auth status --json`. Start login
+  with `bb provider auth login <claude|codex>`. Claude asks for its one-time
+  code and forwards it unchanged. Codex shows its ChatGPT device code and
+  waits for completion. Both commands accept the same machine selectors.
+  Never request a provider password, Mac password, keychain password, or API
+  key. Use `--no-wait` when another agent will poll the status.
 - Known ACP agents can appear automatically when their CLI is installed on the
   host; for example `opencode`, `omp`, Grok Build's `grok` CLI, or Hermes'
   `hermes` CLI on PATH appears as provider `acp-opencode`, `acp-omp`,

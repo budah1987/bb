@@ -1,8 +1,10 @@
 import {
   type CSSProperties,
+  lazy,
   type MouseEvent as ReactMouseEvent,
   type Ref,
   type ReactNode,
+  Suspense,
 } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useAtom, useStore } from "jotai";
@@ -63,6 +65,7 @@ import {
   shouldReserveMacosTrafficLights,
   shouldUseMacosDesktopChrome,
 } from "@/lib/bb-desktop";
+
 import { useDesktopWindowState } from "@/hooks/useDesktopWindowState";
 import {
   getLegacyProjectComposeRoutePath,
@@ -94,6 +97,12 @@ import { useSplitWorkspaceActive } from "@/hooks/useSplitWorkspaceActive";
 import { useStandaloneCompactPwa } from "@/hooks/useStandaloneCompactPwa";
 import { useAppSettingsRouteMemory } from "@/hooks/useAppSettingsRouteMemory";
 import { useSystemConfig } from "@/hooks/queries/system-queries";
+
+const ProviderAuthHost = lazy(() =>
+  import("@/components/provider-auth/ProviderAuthHost").then((module) => ({
+    default: module.ProviderAuthHost,
+  })),
+);
 
 const SIDEBAR_WIDTH_KEY = "bb.sidebar.width";
 const SIDEBAR_OPEN_KEY = "bb.sidebar.open";
@@ -874,6 +883,13 @@ export function AppLayout({ children }: AppLayoutProps) {
                     />
                   ) : null}
                   <main className="flex min-h-0 flex-1 flex-col p-4 md:p-5">
+                    {/* Above the routed page, not inside it: a signed-out
+                        provider blocks work everywhere, and this must not be
+                        dismissible or route-scoped. Compact viewports get the
+                        Command Center surface instead. */}
+                    <Suspense fallback={null}>
+                      <ProviderAuthHost />
+                    </Suspense>
                     {children}
                   </main>
                 </div>
