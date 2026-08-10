@@ -5,6 +5,7 @@ import {
   useEffect,
   useMemo,
   useRef,
+  useState,
   type ReactNode,
 } from "react";
 import { useSetAtom } from "jotai";
@@ -42,12 +43,14 @@ import {
   ThreadDeleteDialog,
   type ThreadDeleteDialogTarget,
 } from "@/components/dialogs/ThreadDeleteDialog";
-import { ArchivedThreadToastTitle } from "@/components/thread/ArchivedThreadToastTitle";
 import { destroyPersistedBrowserViewsForThread } from "@/components/secondary-panel/browserViewVisibilityCoordinator";
 import { getThreadReadToggleAction } from "@/components/sidebar/threadReadState";
 import { getRootComposeRoutePath, getThreadRoutePath } from "@/lib/route-paths";
 import { getDesktopBrowserApi } from "@/lib/bb-desktop";
+import { useIsCompactViewport } from "@bb/shared-ui/hooks/use-compact-viewport";
 import { resolveThreadDeleteNavigationTarget } from "./thread-delete-navigation";
+
+const ARCHIVE_ROW_TRANSITION_MS = 250;
 
 export interface ThreadActionsContextValue {
   archiveThreadAndChildren: (thread: Thread) => void;
@@ -61,6 +64,14 @@ export interface ThreadActionsContextValue {
 const ThreadActionsContext = createContext<ThreadActionsContextValue | null>(
   null,
 );
+const EMPTY_ARCHIVING_THREAD_IDS: ReadonlySet<string> = new Set();
+const ThreadArchiveTransitionContext = createContext<ReadonlySet<string>>(
+  EMPTY_ARCHIVING_THREAD_IDS,
+);
+
+export function useArchivingThreadIds(): ReadonlySet<string> {
+  return useContext(ThreadArchiveTransitionContext);
+}
 
 export function useThreadActions(): ThreadActionsContextValue {
   const value = useContext(ThreadActionsContext);
@@ -91,6 +102,7 @@ export function ThreadActionsProvider({
   children,
 }: ThreadActionsProviderProps) {
   const navigate = useNavigate();
+  const isCompactViewport = useIsCompactViewport();
   const { threadId: viewedThreadId } = useRouteState();
   // Read the currently-viewed thread live inside async mutation callbacks: a
   // pane's stale-prune (deleted/archived thread) can move the URL between a
@@ -110,6 +122,11 @@ export function ThreadActionsProvider({
   const deleteThread = useDeleteThread();
   const updateThread = useUpdateThread();
   const threadActionContextAbortRef = useRef<AbortController | null>(null);
+  const archiveTransitionTimeoutsRef = useRef(new Map<string, number>());
+  const archivingThreadIdsRef = useRef(new Set<string>());
+  const [archivingThreadIds, setArchivingThreadIds] = useState<
+    ReadonlySet<string>
+  >(() => new Set());
   // Destructure `.mutate` so useCallback deps see stable references across
   // renders. Depending on the full mutation objects would churn callback
   // identities on every isPending flip and force every useThreadActions()
@@ -131,11 +148,28 @@ export function ThreadActionsProvider({
   const { onClose: closeDeleteDialog, onOpen: openDeleteDialog } = deleteDialog;
 
   useEffect(() => {
+    const archiveTransitionTimeouts = archiveTransitionTimeoutsRef.current;
     return () => {
       threadActionContextAbortRef.current?.abort();
       threadActionContextAbortRef.current = null;
+      for (const timeoutId of archiveTransitionTimeouts.values()) {
+        window.clearTimeout(timeoutId);
+      }
+      archiveTransitionTimeouts.clear();
     };
   }, []);
+
+  const setThreadArchiving = useCallback(
+    (threadId: string, isArchiving: boolean) => {
+      if (isArchiving) {
+        archivingThreadIdsRef.current.add(threadId);
+      } else {
+        archivingThreadIdsRef.current.delete(threadId);
+      }
+      setArchivingThreadIds(new Set(archivingThreadIdsRef.current));
+    },
+    [],
+  );
 
   const navigateAwayIfViewing = useCallback(
     (thread: Thread, fallbackThread?: Thread) => {
@@ -329,58 +363,82 @@ export function ThreadActionsProvider({
 
   const archiveThreadAndChildrenAction = useCallback(
     (thread: Thread) => {
-      archiveThreadAndChildrenMutate(
-        { id: thread.id },
-        {
-          onSuccess: (response) => {
-            const navigateAwayIfArchived = () => {
-              const viewed = viewedThreadIdRef.current;
-              if (viewed && response.archivedThreadIds.includes(viewed)) {
-                navigate(getRootComposeRoutePath());
+      if (archivingThreadIdsRef.current.has(thread.id)) return;
+
+      const runArchive = () => {
+        archiveTransitionTimeoutsRef.current.delete(thread.id);
+        archiveThreadAndChildrenMutate(
+          { id: thread.id },
+          {
+            onSuccess: (response) => {
+              setThreadArchiving(thread.id, false);
+              if (isCompactViewport) {
+                const navigateAwayIfArchived = () => {
+                  const viewed = viewedThreadIdRef.current;
+                  if (viewed && response.archivedThreadIds.includes(viewed)) {
+                    navigate(getRootComposeRoutePath());
+                  }
+                };
+                syncNavigationAfterClose(
+                  closePanesForThreads(response.archivedThreadIds),
+                  navigateAwayIfArchived,
+                );
               }
-            };
-            // Close any split panes showing archived threads and sync the URL
-            // to the surviving focused pane; only navigate the window away
-            // when nothing closed and the viewed thread was archived.
-            syncNavigationAfterClose(
-              closePanesForThreads(response.archivedThreadIds),
-              navigateAwayIfArchived,
-            );
-            const toastId = `thread-archived-${thread.id}`;
-            appToast.success(
-              <ArchivedThreadToastTitle
-                archivedThreadCount={response.archivedThreadIds.length}
-                threadTitle={getThreadDisplayTitle(thread)}
-                onOpenThread={() => {
-                  navigate(
-                    getThreadRoutePath({
-                      projectId: thread.projectId,
-                      threadId: thread.id,
-                    }),
-                  );
-                  appToast.dismiss(toastId);
-                }}
-              />,
-              { id: toastId },
-            );
+              const toastId = `thread-archived-${thread.id}`;
+              appToast.success("Conversation archived", {
+                action: {
+                  label: "Undo",
+                  onClick: () => {
+                    for (const threadId of response.archivedThreadIds) {
+                      unarchiveMutate({ id: threadId });
+                    }
+                  },
+                },
+                cancel: {
+                  label: "Close",
+                  onClick: () => undefined,
+                },
+                className: "bb-archive-toast",
+                duration: 6000,
+                id: toastId,
+              });
+            },
+            onError: (error) => {
+              setThreadArchiving(thread.id, false);
+              appToast.error(
+                getMutationErrorMessage({
+                  error,
+                  fallbackMessage: "Failed to archive thread and children",
+                  lifecycleOperation: "archive_thread",
+                }),
+              );
+            },
           },
-          onError: (error) => {
-            appToast.error(
-              getMutationErrorMessage({
-                error,
-                fallbackMessage: "Failed to archive thread and children",
-                lifecycleOperation: "archive_thread",
-              }),
-            );
-          },
-        },
+        );
+      };
+
+      const reduceMotion = window.matchMedia(
+        "(prefers-reduced-motion: reduce)",
+      ).matches;
+      if (isCompactViewport || reduceMotion) {
+        runArchive();
+        return;
+      }
+
+      setThreadArchiving(thread.id, true);
+      archiveTransitionTimeoutsRef.current.set(
+        thread.id,
+        window.setTimeout(runArchive, ARCHIVE_ROW_TRANSITION_MS),
       );
     },
     [
       archiveThreadAndChildrenMutate,
       closePanesForThreads,
+      isCompactViewport,
       navigate,
+      setThreadArchiving,
       syncNavigationAfterClose,
+      unarchiveMutate,
     ],
   );
 
@@ -444,20 +502,22 @@ export function ThreadActionsProvider({
   );
 
   return (
-    <ThreadActionsContext.Provider value={value}>
-      {children}
-      <ThreadRenameDialog
-        target={renameDialog.target}
-        pending={updateThread.isPending}
-        onOpenChange={renameDialog.onOpenChange}
-        onRename={submitRename}
-      />
-      <ThreadDeleteDialog
-        target={deleteDialog.target}
-        pending={deleteThread.isPending}
-        onOpenChange={deleteDialog.onOpenChange}
-        onDelete={confirmDelete}
-      />
-    </ThreadActionsContext.Provider>
+    <ThreadArchiveTransitionContext.Provider value={archivingThreadIds}>
+      <ThreadActionsContext.Provider value={value}>
+        {children}
+        <ThreadRenameDialog
+          target={renameDialog.target}
+          pending={updateThread.isPending}
+          onOpenChange={renameDialog.onOpenChange}
+          onRename={submitRename}
+        />
+        <ThreadDeleteDialog
+          target={deleteDialog.target}
+          pending={deleteThread.isPending}
+          onOpenChange={deleteDialog.onOpenChange}
+          onDelete={confirmDelete}
+        />
+      </ThreadActionsContext.Provider>
+    </ThreadArchiveTransitionContext.Provider>
   );
 }

@@ -606,6 +606,21 @@
     border-radius: var(--radius-md);
   }
 
+  [data-sonner-toast].bb-app-toast.bb-archive-toast {
+    transition-duration: 250ms;
+    transition-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  [data-sonner-toast].bb-app-toast.bb-archive-toast[data-removed="true"] {
+    transition-duration: 350ms;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    [data-sonner-toast].bb-app-toast.bb-archive-toast {
+      transition: none;
+    }
+  }
+
   /*
    * Opt out of the global thin scrollbar for horizontally-scrolling strips
    * (e.g. the secondary-panel tab strip) where the scrollbar would clutter a
