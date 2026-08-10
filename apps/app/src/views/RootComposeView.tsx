@@ -211,6 +211,7 @@ import {
 } from "./root-compose-environment-selection";
 import { RootComposeMobileSessions } from "./RootComposeMobileSessions";
 import { RootComposeEmptyWelcome } from "./RootComposeEmptyWelcome";
+import { CommandCenterUsageRail } from "@/components/usage/CompactUsageLimits";
 import { useThreadStorageViewer } from "@/components/secondary-panel/useThreadStorageViewer";
 import {
   useThreadFileTabs,
@@ -3786,6 +3787,7 @@ export function RootComposeView() {
             onPanelChange: handleSecondaryPanelChange,
           }}
         >
+          <CommandCenterUsageRail />
           {showEmptyWelcome ? (
             <RootComposeEmptyWelcome
               onCompose={handleStartComposing}
