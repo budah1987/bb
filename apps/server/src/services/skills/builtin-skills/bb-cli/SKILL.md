@@ -316,6 +316,16 @@ environment pull-request show <id>`. Diff commands require an explicit target
 - `bb environment commit <id>` commits every change in that worktree. Repeat
   `--path <path>` to commit only selected changed files. `squash-merge` uses
   existing branch commits and requires a clean worktree.
+- `bb environment publish-to-main <id>` publishes a committed managed worktree
+  branch directly to `main`, then fast-forwards the local target checkout. It stops when that
+  checkout is dirty or diverges from `origin/main`. Pass
+  `--preserve-target-changes` only after the user approves preservation. BB
+  commits safe local changes, integrates the source branch, and stops on a
+  conflict.
+- The official Ingestion Desk plugin exposes `bb ingestion`. Use `status`,
+  `show`, `create`, and `source add` to manage source cases. Use `draft` to
+  start an isolated Vault worktree. Use `publish` only after review. Pass
+  `--preserve-local-changes` only after the user approves preservation.
 - Spawned child threads inherit permission from explicit flags, then the
   parent thread's last execution, then project defaults.
 - Public permission modes are `accept-edits`, `auto`, and `full`.

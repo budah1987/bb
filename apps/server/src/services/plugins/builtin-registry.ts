@@ -132,6 +132,12 @@ export const OFFICIAL_PLUGINS = [
     defaultEnabled: true,
     category: "Workflow management",
   },
+  {
+    name: "ingestion-desk",
+    pluginId: "ingestion-desk",
+    defaultEnabled: true,
+    category: "Context & knowledge",
+  },
 ].map(
   (plugin): BundledPluginDefinition => ({
     ...plugin,

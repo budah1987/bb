@@ -1,0 +1,44 @@
+{
+  "name": "bb-plugin-ingestion-desk",
+  "version": "0.1.0",
+  "description": "Review and publish meeting and document ingestions into a BB vault.",
+  "private": true,
+  "license": "MIT",
+  "type": "module",
+  "engines": {
+    "bb": ">=0.0",
+    "bbPluginSdk": "^0.4.1"
+  },
+  "bb": {
+    "name": "Ingestion Desk",
+    "description": "Review meeting and document sources before publishing approved Vault changes.",
+    "branding": {
+      "icon": "Inbox"
+    },
+    "server": "./server.ts",
+    "app": "./app.tsx"
+  },
+  "scripts": {
+    "build": "node --conditions=source --import tsx ../../scripts/build-official-plugins.mjs ingestion-desk",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run --config vitest.config.ts"
+  },
+  "dependencies": {
+    "@bb/plugin-sdk": "workspace:*",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "zod": "4.3.6"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@types/better-sqlite3": "^7.6.12",
+    "better-sqlite3": "12.10.0",
+    "@testing-library/react": "^16.3.2",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "jsdom": "^29.0.1",
+    "typescript": "npm:@typescript/typescript6@^6.0.2",
+    "typescript-7": "npm:typescript@^7.0.2",
+    "vitest": "^4.1.1"
+  }
+}

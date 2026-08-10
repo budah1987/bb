@@ -138,6 +138,27 @@ label-link/name change, active-thread change, or project-prefix change invalidat
 outstanding cursor; restart without `--cursor` instead of accepting a mixed
 snapshot.
 
+The Ingestion Desk plugin is an opt-in official plugin bundled with the app:
+`bb plugin install ingestion-desk`. It reviews meeting notes, transcripts,
+Google Drive links, and pasted Granola notes before it changes a Vault:
+
+  bb ingestion status [--project <id>] [--json]
+  bb ingestion create --project <id> --title <title> --kind <kind>
+                      --label <label> (--content <text> | --url <url>) [--json]
+  bb ingestion source add <case-id> --kind <kind> --label <label>
+                          (--content <text> | --url <url>) [--json]
+  bb ingestion show <case-id> [--json]
+  bb ingestion draft <case-id> [--json]
+  bb ingestion submit-draft <case-id> --markdown <text>
+                            [--output <path:summary>]... [--json]
+  bb ingestion publish <case-id> [--preserve-local-changes] [--json]
+
+Drafting uses an isolated managed worktree based on `main`. Publishing commits
+approved changes, updates GitHub `main`, and synchronizes the local Vault.
+Publication stops when local Vault changes need review. The explicit
+`--preserve-local-changes` option preserves safe local changes before it
+publishes the ingestion changes. Merge conflicts still stop publication.
+
 The builtin Secrets plugin provides a secure credential form and guarded
 dotenv reconciliation:
 
@@ -152,8 +173,8 @@ added/updated/unchanged counts.
   bb plugin search <query>       Search BB's official plugins (bundled with
                                  the app)
   bb plugin install <entry>      Install a bundled official plugin by name
-                                 (github, docs, memory, tasks), a local
-                                 path, builtin:<name>,
+                                 (github, docs, memory, tasks,
+                                 ingestion-desk), a local path, builtin:<name>,
                                  git:<url>@<ref>, or
                                  npm:<package>[@<version|tag|range>]
                                  (npm: needs npm on PATH; installs prompt —
@@ -211,12 +232,13 @@ added/updated/unchanged counts.
 
 BB Official plugins
 
-BB's official plugins — GitHub, Docs, Memory, and Tasks — ship bundled inside
-the app itself. They appear in Extensions → Plugins → Browse
+BB's official plugins — GitHub, Docs, Memory, Tasks, and Ingestion Desk — ship
+bundled inside the app itself. They appear in Extensions → Plugins → Browse
 and install with one click from the local bundled copy: no network, no
 download, no separate release. Install from the CLI by bare name
 (`bb plugin install github`, `bb plugin install docs`, `bb plugin install
-memory`, or `bb plugin install tasks`). Installed official plugins are pinned
+memory`, `bb plugin install tasks`, or `bb plugin install ingestion-desk`).
+Installed official plugins are pinned
 to the bundled copy and update automatically when the BB app updates.
 
 For direct git:/npm: installs, updates are manual: `bb plugin outdated`

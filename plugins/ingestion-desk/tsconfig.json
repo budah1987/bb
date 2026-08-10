@@ -1,0 +1,18 @@
+{
+  "compilerOptions": {
+    "strict": true,
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "jsx": "react-jsx",
+    "noEmit": true,
+    "skipLibCheck": true,
+    "types": ["node", "vitest/globals"],
+    "paths": {
+      "@bb/plugin-sdk": [
+        "../../packages/plugin-sdk/bundled-types/bb-plugin-sdk.d.ts"
+      ]
+    }
+  },
+  "include": ["**/*.ts", "**/*.tsx"]
+}
