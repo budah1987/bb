@@ -79,6 +79,12 @@ export const BUILTIN_PLUGINS = [
     category: "Interface",
   },
   {
+    name: "ingestion-desk",
+    pluginId: "ingestion-desk",
+    defaultEnabled: true,
+    category: "Context & knowledge",
+  },
+  {
     name: "provider-retry",
     pluginId: "provider-retry",
     defaultEnabled: false,
@@ -137,12 +143,6 @@ export const OFFICIAL_PLUGINS = [
     pluginId: "tasks",
     defaultEnabled: true,
     category: "Workflow management",
-  },
-  {
-    name: "ingestion-desk",
-    pluginId: "ingestion-desk",
-    defaultEnabled: true,
-    category: "Context & knowledge",
   },
 ].map(
   (plugin): BundledPluginDefinition => ({
