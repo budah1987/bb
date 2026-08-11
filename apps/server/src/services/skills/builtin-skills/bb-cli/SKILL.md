@@ -184,6 +184,15 @@ message agents, or inspect projects, providers, and environments.
 - `bb skill cli-skills-status` reports per machine whether the installed copy is
   `installed`, `outdated`, `missing`, or `unknown` (disconnected or unreachable).
 
+## Spaces
+
+- Use `bb space list --json` to inspect Spaces and their project membership.
+- Create a Space with `bb space create --name <name> --icon <icon> --color <color>`.
+- Update all Space appearance fields with `bb space edit <id> --name <name> --icon <icon> --color <color>`.
+- Move one project with `bb space move-project <space-id> <project-id>`.
+- Delete a Space with `bb space delete <id>`. Use `--move-projects-to <id>` when it contains projects.
+- Run `bb guide spaces` for accepted icon and color values.
+
 ## Spawning Threads
 
 - Use `bb thread spawn --project <project-id> --prompt "..."` to create another

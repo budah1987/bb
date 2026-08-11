@@ -12,6 +12,18 @@ export const THREAD_JUMP_APP_COMMAND_IDS = [
   "thread.jump.9",
 ] as const;
 
+export const SPACE_JUMP_APP_COMMAND_IDS = [
+  "space.jump.1",
+  "space.jump.2",
+  "space.jump.3",
+  "space.jump.4",
+  "space.jump.5",
+  "space.jump.6",
+  "space.jump.7",
+  "space.jump.8",
+  "space.jump.9",
+] as const;
+
 export const QUESTION_SELECT_APP_COMMAND_IDS = [
   "question.select.1",
   "question.select.2",
@@ -41,6 +53,7 @@ export const APP_COMMAND_IDS = [
   "thread.previous",
   "thread.next",
   ...THREAD_JUMP_APP_COMMAND_IDS,
+  ...SPACE_JUMP_APP_COMMAND_IDS,
   "pane.focus.previous",
   "pane.focus.next",
   ...PANE_FOCUS_APP_COMMAND_IDS,

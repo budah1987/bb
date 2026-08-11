@@ -73,6 +73,7 @@ function makeSidebarNavigation(
 ): SidebarBootstrapResponse {
   return {
     sections: [],
+    spaces: [],
     projects: [
       {
         id: "project-1",

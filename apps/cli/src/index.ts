@@ -14,6 +14,7 @@ import { registerTerminalCommands } from "./commands/terminal.js";
 import { registerSettingsCommands } from "./commands/settings.js";
 import { registerSimulatorCommands } from "./commands/simulator.js";
 import { registerSkillCommands } from "./commands/skill.js";
+import { registerSpaceCommands } from "./commands/space.js";
 import { registerThemeCommands } from "./commands/theme.js";
 import { registerThreadCommands } from "./commands/thread/index.js";
 import { registerUpdatesCommands } from "./commands/updates.js";
@@ -98,6 +99,7 @@ registerFileCommands(program, getUrl);
 registerThemeCommands(program, getUrl);
 registerPluginCommands(program, getUrl);
 registerSkillCommands(program, getUrl, getContext);
+registerSpaceCommands(program, getUrl);
 registerGuideCommand(program);
 registerVoiceCommands(program, getUrl);
 

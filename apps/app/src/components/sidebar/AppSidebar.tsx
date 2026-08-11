@@ -1,6 +1,18 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  lazy,
+  Suspense,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { cn } from "@bb/shared-ui/lib/utils";
-import { THREAD_JUMP_APP_COMMAND_IDS } from "@bb/domain";
+import {
+  DEFAULT_SPACE_ID,
+  SPACE_JUMP_APP_COMMAND_IDS,
+  THREAD_JUMP_APP_COMMAND_IDS,
+} from "@bb/domain";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useStore } from "jotai";
 import { Icon } from "@bb/shared-ui/icon";
@@ -66,8 +78,44 @@ import {
 import { splitLayoutAtom } from "@/lib/split-layout/atoms";
 import type { SplitLayout } from "@/lib/split-layout";
 import { SidebarUsageLimits } from "@/components/usage/CompactUsageLimits";
+import { useSidebarNavigation } from "@/hooks/queries/sidebar-navigation-query";
+import { useMoveProjectToSpace } from "@/hooks/mutations/space-mutations";
+import { SpaceActionsProvider } from "./SpaceActionsContext";
+import { getSpaceSidebarStyle, SpaceDock } from "./SpaceSidebar";
+import type { SpaceEditorState } from "./SpaceEditor";
+import {
+  deserializeSplitLayout,
+  serializeSplitLayout,
+} from "@/lib/split-layout/persistence";
+import { appToast } from "@/components/ui/app-toast.js";
 
 const NEW_THREAD_PANE_CONTENT = { kind: "new-thread" } as const;
+const SpaceEditor = lazy(() => import("./SpaceEditor"));
+const ACTIVE_SPACE_STORAGE_KEY = "bb.spaces.active";
+const SPACE_VIEW_STORAGE_PREFIX = "bb.spaces.view.";
+
+interface StoredSpaceView {
+  layout: string | null;
+  route: string;
+}
+
+function readStoredSpaceView(spaceId: string): StoredSpaceView | null {
+  try {
+    const raw = sessionStorage.getItem(
+      `${SPACE_VIEW_STORAGE_PREFIX}${spaceId}`,
+    );
+    if (!raw) return null;
+    const parsed: unknown = JSON.parse(raw);
+    if (typeof parsed !== "object" || parsed === null) return null;
+    const value = parsed as Record<string, unknown>;
+    if (typeof value.route !== "string" || !value.route.startsWith("/"))
+      return null;
+    if (value.layout !== null && typeof value.layout !== "string") return null;
+    return { route: value.route, layout: value.layout };
+  } catch {
+    return null;
+  }
+}
 
 const BUG_REPORT_NEW_ISSUE_URL = "https://github.com/get-bb/bb/issues/new";
 const SIDEBAR_FOOTER_ACTION_CLASS = cn(
@@ -180,6 +228,135 @@ export function AppSidebar({
   );
   const isAppCommandModifierHeld = useIsAppCommandModifierHeld();
   const settingsShortcut = useAppCommandShortcut("settings.open");
+  const sidebarNavigation = useSidebarNavigation().data;
+  const spaces = useMemo(
+    () => sidebarNavigation?.spaces ?? [],
+    [sidebarNavigation?.spaces],
+  );
+  const [activeSpaceId, setActiveSpaceId] = useState(() =>
+    typeof localStorage === "undefined"
+      ? DEFAULT_SPACE_ID
+      : (localStorage.getItem(ACTIVE_SPACE_STORAGE_KEY) ?? DEFAULT_SPACE_ID),
+  );
+  const [spaceEditor, setSpaceEditor] = useState<SpaceEditorState>(null);
+  const moveProjectMutation = useMoveProjectToSpace();
+  const activeSpace =
+    spaces.find((space) => space.id === activeSpaceId) ?? spaces[0];
+  const effectiveActiveSpaceId = activeSpace?.id ?? activeSpaceId;
+  const activeSpaceProjectIds = useMemo(
+    () => new Set(activeSpace?.projectIds ?? []),
+    [activeSpace?.projectIds],
+  );
+  const wheelLockUntilRef = useRef(0);
+
+  const setActiveSpaceOnly = useCallback((spaceId: string) => {
+    setActiveSpaceId(spaceId);
+    localStorage.setItem(ACTIVE_SPACE_STORAGE_KEY, spaceId);
+  }, []);
+
+  const switchSpace = useCallback(
+    (spaceId: string): boolean => {
+      if (!spaces.some((space) => space.id === spaceId)) return false;
+      if (spaceId === effectiveActiveSpaceId) return true;
+      const currentLayout = store.get(splitLayoutAtom);
+      const currentView: StoredSpaceView = {
+        route: `${location.pathname}${location.search}${location.hash}`,
+        layout: currentLayout ? serializeSplitLayout(currentLayout) : null,
+      };
+      sessionStorage.setItem(
+        `${SPACE_VIEW_STORAGE_PREFIX}${effectiveActiveSpaceId}`,
+        JSON.stringify(currentView),
+      );
+      setSpaceEditor(null);
+      setActiveSpaceOnly(spaceId);
+      const destination = readStoredSpaceView(spaceId);
+      store.set(
+        splitLayoutAtom,
+        destination?.layout ? deserializeSplitLayout(destination.layout) : null,
+      );
+      void navigate(destination?.route ?? getRootComposeRoutePath());
+      return true;
+    },
+    [
+      effectiveActiveSpaceId,
+      location,
+      navigate,
+      setActiveSpaceOnly,
+      setSpaceEditor,
+      spaces,
+      store,
+    ],
+  );
+
+  const activateSpaceShortcut = useCallback(
+    (index: number): boolean => {
+      const space = spaces[index];
+      return space ? switchSpace(space.id) : false;
+    },
+    [spaces, switchSpace],
+  );
+
+  useIndexedAppCommandHandlers(
+    SPACE_JUMP_APP_COMMAND_IDS,
+    activateSpaceShortcut,
+  );
+
+  const handleSpaceWheel = useCallback(
+    (event: React.WheelEvent<HTMLDivElement>) => {
+      const delta =
+        Math.abs(event.deltaY) >= Math.abs(event.deltaX)
+          ? event.deltaY
+          : event.deltaX;
+      if (!event.shiftKey || Math.abs(delta) < 12 || spaces.length < 2) return;
+      const now = Date.now();
+      if (now < wheelLockUntilRef.current) return;
+      event.preventDefault();
+      wheelLockUntilRef.current = now + 350;
+      const currentIndex = Math.max(
+        0,
+        spaces.findIndex((space) => space.id === effectiveActiveSpaceId),
+      );
+      const direction = delta > 0 ? 1 : -1;
+      const nextIndex =
+        (currentIndex + direction + spaces.length) % spaces.length;
+      const nextSpace = spaces[nextIndex];
+      if (nextSpace) switchSpace(nextSpace.id);
+    },
+    [effectiveActiveSpaceId, spaces, switchSpace],
+  );
+
+  const moveProject = useCallback(
+    (projectId: string, spaceId: string) => {
+      const sourceSpace = spaces.find((space) =>
+        space.projectIds.includes(projectId),
+      );
+      const destination = spaces.find((space) => space.id === spaceId);
+      if (!destination || sourceSpace?.id === destination.id) return;
+      moveProjectMutation.mutate(
+        { projectId, spaceId },
+        {
+          onSuccess: () => {
+            setActiveSpaceOnly(spaceId);
+            appToast.success(`Moved project to ${destination.name}`, {
+              action: sourceSpace
+                ? {
+                    label: "Undo",
+                    onClick: () => {
+                      moveProjectMutation.mutate({
+                        projectId,
+                        spaceId: sourceSpace.id,
+                      });
+                      setActiveSpaceOnly(sourceSpace.id);
+                    },
+                  }
+                : undefined,
+            });
+          },
+        },
+      );
+    },
+    [moveProjectMutation, setActiveSpaceOnly, spaces],
+  );
 
   const openSidebarForThreadSearch = useCallback(() => {
     if (isCompactViewport) {
@@ -311,6 +488,7 @@ export function AppSidebar({
 
   const builtInThreadList = (
     <ProjectList
+      activeSpaceProjectIds={activeSpaceProjectIds}
       onNewProject={
         quickCreateProject.isAvailable
           ? quickCreateProject.openCreateDialog
@@ -330,10 +508,20 @@ export function AppSidebar({
   );
 
   return (
-    <SidebarThreadShortcutKeysContext.Provider value={threadShortcutKeysById}>
-      <Sidebar ref={sidebarRef} onKeyDown={threadSearch.onKeyDown}>
-        {showTopReserve ? (
-          /* Top reserve that keeps the sidebar's content (New Thread / New
+    <SpaceActionsProvider
+      value={{ activeSpaceId: effectiveActiveSpaceId, moveProject, spaces }}
+    >
+      <SidebarThreadShortcutKeysContext.Provider value={threadShortcutKeysById}>
+        <Sidebar
+          ref={sidebarRef}
+          onKeyDown={threadSearch.onKeyDown}
+          onWheel={handleSpaceWheel}
+          style={
+            activeSpace ? getSpaceSidebarStyle(activeSpace.color) : undefined
+          }
+        >
+          {showTopReserve ? (
+            /* Top reserve that keeps the sidebar's content (New Thread / New
              Projects) anchored below the title-bar chrome, mirroring
              the page-header height on the content side. The sidebar toggle is
              pinned at the app's top-left for every chrome (see AppLayout's
@@ -346,134 +534,159 @@ export function AppSidebar({
              of the pinned toggle/traffic lights on the left and the resize
              handle on the right; they opt out of the desktop drag region so
              clicks register. */
-          <div
-            data-testid="app-sidebar-top-reserve-row"
-            className={cn(
-              CHROME_ROW_CLASS,
-              "shrink-0 justify-end px-2",
-              usesDesktopChrome && MACOS_WINDOW_DRAG_CLASS,
-            )}
-          >
-            <SidebarHistoryNavigationControls
-              onNavigate={closeOnMobile}
+            <div
+              data-testid="app-sidebar-top-reserve-row"
               className={cn(
-                "group-data-[collapsible=icon]:hidden",
-                usesDesktopChrome && MACOS_CHROME_CONTROL_NO_DRAG_CLASS,
+                CHROME_ROW_CLASS,
+                "shrink-0 justify-end px-2",
+                usesDesktopChrome && MACOS_WINDOW_DRAG_CLASS,
               )}
+            >
+              <SidebarHistoryNavigationControls
+                onNavigate={closeOnMobile}
+                className={cn(
+                  "group-data-[collapsible=icon]:hidden",
+                  usesDesktopChrome && MACOS_CHROME_CONTROL_NO_DRAG_CLASS,
+                )}
+              />
+            </div>
+          ) : null}
+          <div
+            data-testid="app-sidebar-primary-actions"
+            className="shrink-0 px-2 py-2 group-data-[collapsible=icon]:hidden"
+          >
+            <ProjectListActionButtons
+              splitEnabled={threadSplitsEnabled}
+              newThreadSplit={newThreadSplit}
+              onNewChat={handleNewChat}
+              threadSearch={{
+                activeDescendantId: threadSearch.activeDescendantId,
+                inputRef: threadSearch.inputRef,
+                isActive: threadSearch.isActive,
+                onActivate: threadSearch.onActivate,
+                onClose: threadSearch.onClose,
+                onQueryChange: threadSearch.onQueryChange,
+                query: threadSearch.query,
+              }}
             />
           </div>
-        ) : null}
-        <div
-          data-testid="app-sidebar-primary-actions"
-          className="shrink-0 px-2 py-2 group-data-[collapsible=icon]:hidden"
-        >
-          <ProjectListActionButtons
-            splitEnabled={threadSplitsEnabled}
-            newThreadSplit={newThreadSplit}
-            onNewChat={handleNewChat}
-            threadSearch={{
-              activeDescendantId: threadSearch.activeDescendantId,
-              inputRef: threadSearch.inputRef,
-              isActive: threadSearch.isActive,
-              onActivate: threadSearch.onActivate,
-              onClose: threadSearch.onClose,
-              onQueryChange: threadSearch.onQueryChange,
-              query: threadSearch.query,
-            }}
+          <MobileCommandCenterSidebarAction
+            isActive={isRootView}
+            onSelect={handleCommandCenter}
           />
-        </div>
-        <MobileCommandCenterSidebarAction
-          isActive={isRootView}
-          onSelect={handleCommandCenter}
-        />
-        <PluginNavSidebarItems
-          onNavigate={closeOnMobile}
-          splitEnabled={threadSplitsEnabled}
-          toolsRoutePath={toolsRoutePath}
-        />
-        <SidebarContent>
-          {threadListProvider ? (
-            <PluginThreadList
-              slot={threadListProvider}
-              builtInFallback={builtInThreadList}
-              searchQuery={threadSearch.query}
-              onNavigate={threadSearch.onExternalThreadOpen}
-            />
-          ) : (
-            builtInThreadList
-          )}
-        </SidebarContent>
-        <SidebarUsageLimits />
-        <SidebarFooter className="relative">
-          <OverflowFade placement="above" tone="sidebar" size="sm" />
-          {/* The footer holds a variable number of plugin action buttons, so a
-           * narrowed sidebar plus several plugins can no longer fit the action
-           * row and the update chips on one line. `flex-wrap-reverse` plus the
-           * flexible spacer below handles both layouts without measuring:
-           * while everything fits, the spacer stretches and pushes the chips to
-           * the right of a single row; once it doesn't, the chips wrap onto
-           * their own line, which wrap-reverse renders above the actions, and
-           * they sit flush left because the spacer stays behind on the action
-           * line. */}
-          <SidebarMenu className="flex-row flex-wrap-reverse items-center gap-1">
-            <SidebarMenuItem className="min-w-0">
-              <SidebarMenuButton
-                asChild
-                aria-label={
-                  settingsShortcut
-                    ? `Settings (${settingsShortcut.label})`
-                    : "Settings"
-                }
-                aria-keyshortcuts={settingsShortcut?.ariaKeyshortcuts}
-                tooltip={{
-                  children: settingsShortcut
-                    ? `Settings (${settingsShortcut.label})`
-                    : "Settings",
-                  hidden: false,
-                  side: "top",
-                }}
-                className={SIDEBAR_FOOTER_ACTION_CLASS}
-              >
-                <Link to={settingsRoutePath} onClick={closeOnMobile}>
-                  <Icon name="Settings" />
-                  <span className="sr-only">Settings</span>
-                </Link>
-              </SidebarMenuButton>
-            </SidebarMenuItem>
-            <PluginSidebarFooterActions onNavigate={closeOnMobile} />
-            <SidebarMenuItem className="min-w-0">
-              <SidebarMenuButton
-                className={SIDEBAR_FOOTER_ACTION_CLASS}
-                tooltip={{
-                  children: "Report a bug",
-                  hidden: false,
-                  side: "top",
-                }}
-                aria-label="Report a bug"
-                onClick={() => {
-                  closeOnMobile();
-                  openUrlInExternalBrowser(BUG_REPORT_NEW_ISSUE_URL);
-                }}
-              >
-                <Icon name="Bug" />
-                <span className="sr-only">Report a bug</span>
-              </SidebarMenuButton>
-            </SidebarMenuItem>
-            <li aria-hidden="true" className="min-w-0 flex-1" />
-            <SidebarUpdatesBadge onNavigate={closeOnMobile} />
-          </SidebarMenu>
-        </SidebarFooter>
-        <div
-          data-testid="app-sidebar-resize-handle"
-          className={cn(
-            "absolute -right-1.5 top-0 z-30 hidden h-full w-3 cursor-col-resize md:block",
-            "before:absolute before:inset-y-0 before:left-1/2 before:w-px before:-translate-x-1/2 before:bg-transparent before:transition-colors hover:before:bg-sidebar-border",
-            "group-data-[collapsible=icon]:hidden",
-            isResizing && "before:bg-sidebar-border",
-          )}
-          onMouseDown={onResizeMouseDown}
-        />
-      </Sidebar>
-    </SidebarThreadShortcutKeysContext.Provider>
+          <PluginNavSidebarItems
+            onNavigate={closeOnMobile}
+            splitEnabled={threadSplitsEnabled}
+            toolsRoutePath={toolsRoutePath}
+          />
+          <SidebarContent>
+            {spaceEditor ? (
+              <Suspense fallback={null}>
+                <SpaceEditor
+                  key={
+                    spaceEditor.kind === "edit"
+                      ? `edit:${spaceEditor.space.id}`
+                      : "create"
+                  }
+                  editor={spaceEditor}
+                  spaces={spaces}
+                  onCancel={() => setSpaceEditor(null)}
+                  onSaved={(spaceId) => {
+                    if (spaceId) setActiveSpaceOnly(spaceId);
+                    setSpaceEditor(null);
+                  }}
+                />
+              </Suspense>
+            ) : threadListProvider ? (
+              <PluginThreadList
+                slot={threadListProvider}
+                builtInFallback={builtInThreadList}
+                searchQuery={threadSearch.query}
+                onNavigate={threadSearch.onExternalThreadOpen}
+              />
+            ) : (
+              builtInThreadList
+            )}
+          </SidebarContent>
+          <SpaceDock
+            activeSpaceId={effectiveActiveSpaceId}
+            spaces={spaces}
+            onSelect={switchSpace}
+            onNew={() => setSpaceEditor({ kind: "create" })}
+            onEdit={(space) => setSpaceEditor({ kind: "edit", space })}
+          />
+          <SidebarUsageLimits />
+          <SidebarFooter className="relative">
+            <OverflowFade placement="above" tone="sidebar" size="sm" />
+            {/* The footer holds a variable number of plugin action buttons, so a
+             * narrowed sidebar plus several plugins can no longer fit the action
+             * row and the update chips on one line. `flex-wrap-reverse` plus the
+             * flexible spacer below handles both layouts without measuring:
+             * while everything fits, the spacer stretches and pushes the chips to
+             * the right of a single row; once it doesn't, the chips wrap onto
+             * their own line, which wrap-reverse renders above the actions, and
+             * they sit flush left because the spacer stays behind on the action
+             * line. */}
+            <SidebarMenu className="flex-row flex-wrap-reverse items-center gap-1">
+              <SidebarMenuItem className="min-w-0">
+                <SidebarMenuButton
+                  asChild
+                  aria-label={
+                    settingsShortcut
+                      ? `Settings (${settingsShortcut.label})`
+                      : "Settings"
+                  }
+                  aria-keyshortcuts={settingsShortcut?.ariaKeyshortcuts}
+                  tooltip={{
+                    children: settingsShortcut
+                      ? `Settings (${settingsShortcut.label})`
+                      : "Settings",
+                    hidden: false,
+                    side: "top",
+                  }}
+                  className={SIDEBAR_FOOTER_ACTION_CLASS}
+                >
+                  <Link to={settingsRoutePath} onClick={closeOnMobile}>
+                    <Icon name="Settings" />
+                    <span className="sr-only">Settings</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+              <PluginSidebarFooterActions onNavigate={closeOnMobile} />
+              <SidebarMenuItem className="min-w-0">
+                <SidebarMenuButton
+                  className={SIDEBAR_FOOTER_ACTION_CLASS}
+                  tooltip={{
+                    children: "Report a bug",
+                    hidden: false,
+                    side: "top",
+                  }}
+                  aria-label="Report a bug"
+                  onClick={() => {
+                    closeOnMobile();
+                    openUrlInExternalBrowser(BUG_REPORT_NEW_ISSUE_URL);
+                  }}
+                >
+                  <Icon name="Bug" />
+                  <span className="sr-only">Report a bug</span>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+              <li aria-hidden="true" className="min-w-0 flex-1" />
+              <SidebarUpdatesBadge onNavigate={closeOnMobile} />
+            </SidebarMenu>
+          </SidebarFooter>
+          <div
+            data-testid="app-sidebar-resize-handle"
+            className={cn(
+              "absolute -right-1.5 top-0 z-30 hidden h-full w-3 cursor-col-resize md:block",
+              "before:absolute before:inset-y-0 before:left-1/2 before:w-px before:-translate-x-1/2 before:bg-transparent before:transition-colors hover:before:bg-sidebar-border",
+              "group-data-[collapsible=icon]:hidden",
+              isResizing && "before:bg-sidebar-border",
+            )}
+            onMouseDown={onResizeMouseDown}
+          />
+        </Sidebar>
+      </SidebarThreadShortcutKeysContext.Provider>
+    </SpaceActionsProvider>
   );
 }

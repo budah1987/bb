@@ -1406,7 +1406,7 @@ function stageExistingDurableTerminalColumns(
 
   const migration = requireExpectedAppliedMigration(
     readExpectedAppliedMigrations(migrationsFolder),
-    "0092_flat_lady_mastermind",
+    "0092_repository_operations_dev_servers",
   );
   if (readAppliedMigrationCreatedAts(db).has(migration.createdAt)) {
     return null;

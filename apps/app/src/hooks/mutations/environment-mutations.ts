@@ -52,6 +52,11 @@ export function useRequestEnvironmentAction() {
             environmentId: id,
             mergeBaseBranch: request.options.mergeBaseBranch,
           });
+        case "publish_to_main":
+          return sdk.environments.publishToMain({
+            environmentId: id,
+            preserveTargetChanges: request.options.preserveTargetChanges,
+          });
         case "pull_request_metadata":
           return sdk.environments.generatePullRequestMetadata({
             environmentId: id,

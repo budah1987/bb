@@ -1,6 +1,7 @@
 import {
   QUESTION_SELECT_APP_COMMAND_IDS,
   PANE_FOCUS_APP_COMMAND_IDS,
+  SPACE_JUMP_APP_COMMAND_IDS,
   THREAD_JUMP_APP_COMMAND_IDS,
   type AppCommandId,
 } from "@bb/domain";
@@ -25,6 +26,16 @@ function command(
 }
 
 export const APP_COMMAND_GROUPS: readonly AppCommandGroup[] = [
+  {
+    label: "Spaces",
+    commands: SPACE_JUMP_APP_COMMAND_IDS.map((id, index) =>
+      command(
+        id,
+        `Open Space ${index + 1}`,
+        `Open sidebar Space ${index + 1}.`,
+      ),
+    ),
+  },
   {
     label: "Threads",
     commands: [

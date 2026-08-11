@@ -128,6 +128,7 @@ const CACHE_OWNER_QUERY_KEY_IMPORTS: CacheOwnerQueryKeyImportRegistry = {
     "projectsQueryKey",
     "sidebarNavigationQueryKey",
   ],
+  "hooks/cache-owners/space-cache-owner.ts": ["sidebarNavigationQueryKey"],
   "hooks/cache-owners/query-cache.ts": [
     "ARCHIVED_THREADS_LIST_KIND",
     "ArchivedThreadsListFilters",

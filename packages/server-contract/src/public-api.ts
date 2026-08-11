@@ -240,6 +240,11 @@ import type {
   UpdateProjectRequest,
   UpdateProjectManagerSettingsRequest,
   RunProjectManagerRequest,
+  CreateSpaceRequest,
+  DeleteSpaceRequest,
+  DeleteSpaceResponse,
+  SpaceResponse,
+  UpdateSpaceRequest,
   UpdateProjectSourceRequest,
   UpdateThreadRequest,
   UpdateQueuedMessageRequest,
@@ -366,6 +371,9 @@ import {
   updateProjectManagerSettingsRequestSchema,
   runProjectManagerRequestSchema,
   updateProjectSourceRequestSchema,
+  createSpaceRequestSchema,
+  deleteSpaceRequestSchema,
+  updateSpaceRequestSchema,
   updateThreadRequestSchema,
 } from "./api-types.js";
 import type { ApiError } from "./errors.js";
@@ -376,6 +384,44 @@ type PathThreadInteractionId = {
 };
 
 export const publicApiRoutes = {
+  spaces: {
+    list: defineRoute({
+      path: "/spaces",
+      method: "get",
+      request: noRequest(),
+      response: jsonResponse<SpaceResponse[]>(),
+    }),
+    create: defineRoute({
+      path: "/spaces",
+      method: "post",
+      request: jsonRequest<EmptyInput, CreateSpaceRequest>(
+        createSpaceRequestSchema,
+      ),
+      response: jsonResponse<SpaceResponse>({ status: 201 }),
+    }),
+    update: defineRoute({
+      path: "/spaces/:id",
+      method: "patch",
+      request: jsonRequest<PathId, UpdateSpaceRequest>(
+        updateSpaceRequestSchema,
+      ),
+      response: jsonResponse<SpaceResponse>(),
+    }),
+    delete: defineRoute({
+      path: "/spaces/:id",
+      method: "delete",
+      request: jsonRequest<PathId, DeleteSpaceRequest>(
+        deleteSpaceRequestSchema,
+      ),
+      response: jsonResponse<DeleteSpaceResponse>(),
+    }),
+    moveProject: defineRoute({
+      path: "/spaces/:id/projects/:projectId",
+      method: "patch",
+      request: noRequest<{ param: { id: string; projectId: string } }>(),
+      response: jsonResponse<SpaceResponse>(),
+    }),
+  },
   projects: {
     list: defineRoute({
       path: "/projects",
