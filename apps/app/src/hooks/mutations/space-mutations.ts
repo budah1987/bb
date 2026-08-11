@@ -5,12 +5,11 @@ import type {
   UpdateSpaceRequest,
 } from "@bb/server-contract";
 import { sdk } from "@/lib/sdk";
-import { sidebarNavigationQueryKey } from "../queries/sidebar-navigation-query";
+import { invalidateSpaceQueries } from "../cache-owners/space-cache-owner";
 
 function useInvalidateSpaces() {
   const queryClient = useQueryClient();
-  return () =>
-    queryClient.invalidateQueries({ queryKey: sidebarNavigationQueryKey() });
+  return () => invalidateSpaceQueries({ queryClient });
 }
 
 export function useCreateSpace() {
