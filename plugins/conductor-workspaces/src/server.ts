@@ -77,7 +77,54 @@ const githubCatalogSchema = z.object({
   repositories: z.array(githubRepositorySchema),
 });
 
+const managerSettingsSchema = z.object({
+  enabled: z.boolean(),
+  providerId: z.string().min(1),
+  model: z.string().min(1),
+  reasoningLevel: z.enum([
+    "none",
+    "low",
+    "medium",
+    "high",
+    "xhigh",
+    "ultracode",
+    "max",
+    "ultra",
+  ]),
+  serviceTier: z.enum(["default", "fast"]),
+  permissionMode: z.enum(["accept-edits", "auto", "full"]),
+});
+
+const updateWorkspaceFromMainResultSchema = z.object({
+  message: z.string().min(1),
+  outcome: z.enum(["updated", "already_current"]),
+});
+
+const workspaceGitSummarySchema = z.object({
+  environmentId: z.string().min(1),
+  workspacePath: z.string().min(1).nullable(),
+  gitAvailable: z.boolean(),
+  aheadCount: z.number().int().nonnegative(),
+  behindCount: z.number().int().nonnegative(),
+  changedFiles: z.number().int().nonnegative(),
+});
+
+interface WorkspaceGitSummary {
+  environmentId: string;
+  workspacePath: string | null;
+  gitAvailable: boolean;
+  aheadCount: number;
+  behindCount: number;
+  changedFiles: number;
+}
+
 export const conductorRpcContract = defineRpcContract({
+  readWorkspaceGitSummaries: {
+    input: z.object({
+      environmentIds: z.array(z.string().min(1)).max(50),
+    }),
+    output: z.object({ summaries: z.array(workspaceGitSummarySchema) }),
+  },
   readWorkspaceRenameDetails: {
     input: z.object({ environmentId: z.string().min(1) }),
     output: z.object({
@@ -138,6 +185,28 @@ export const conductorRpcContract = defineRpcContract({
     }),
     output: z.object({ accountLogin: z.string().min(1).nullable() }),
   },
+  readProjectManager: {
+    input: z.object({ projectId: z.string().min(1) }),
+    output: managerSettingsSchema,
+  },
+  updateProjectManager: {
+    input: z.object({
+      projectId: z.string().min(1),
+      settings: managerSettingsSchema,
+    }),
+    output: managerSettingsSchema,
+  },
+  runProjectManager: {
+    input: z.object({
+      projectId: z.string().min(1),
+      prompt: z.string().trim().min(1).optional(),
+    }),
+    output: z.object({ threadId: z.string().min(1) }),
+  },
+  updateWorkspaceFromMain: {
+    input: z.object({ environmentId: z.string().min(1) }),
+    output: updateWorkspaceFromMainResultSchema,
+  },
 });
 
 interface LegacyWorkspaceRow {
@@ -177,6 +246,52 @@ export default function plugin(bb: BbPluginApi) {
   bb.storage.migrate(db, migrations);
 
   bb.rpc.register(conductorRpcContract, {
+    async readWorkspaceGitSummaries({ environmentIds }) {
+      const summaries = await Promise.all(
+        [...new Set(environmentIds)].map(
+          async (environmentId): Promise<WorkspaceGitSummary | null> => {
+            try {
+              const environment = await bb.sdk.environments.get({
+                environmentId,
+              });
+              const mergeBaseBranch =
+                environment.mergeBaseBranch ??
+                environment.baseBranch ??
+                environment.defaultBranch;
+              const status = await bb.sdk.environments.status({
+                environmentId,
+                ...(mergeBaseBranch ? { mergeBaseBranch } : {}),
+              });
+              if (status.outcome !== "available") {
+                return {
+                  environmentId,
+                  workspacePath: environment.path,
+                  gitAvailable: false,
+                  aheadCount: 0,
+                  behindCount: 0,
+                  changedFiles: 0,
+                };
+              }
+              return {
+                environmentId,
+                workspacePath: environment.path,
+                gitAvailable: true,
+                aheadCount: status.workspace.mergeBase?.aheadCount ?? 0,
+                behindCount: status.workspace.mergeBase?.behindCount ?? 0,
+                changedFiles: status.workspace.workingTree.files.length,
+              };
+            } catch {
+              return null;
+            }
+          },
+        ),
+      );
+      return {
+        summaries: summaries.filter(
+          (summary): summary is WorkspaceGitSummary => summary !== null,
+        ),
+      };
+    },
     async readWorkspaceRenameDetails({ environmentId }) {
       const environment = await bb.sdk.environments.get({ environmentId });
       return {
@@ -331,6 +446,25 @@ export default function plugin(bb: BbPluginApi) {
         githubAccountLogin: accountLogin,
       });
       return { accountLogin: project.githubAccountLogin };
+    },
+    async readProjectManager({ projectId }) {
+      return bb.sdk.projects.manager.show({ projectId });
+    },
+    async updateProjectManager({ projectId, settings }) {
+      return bb.sdk.projects.manager.settings({ projectId, ...settings });
+    },
+    async runProjectManager({ projectId, prompt }) {
+      const thread = await bb.sdk.projects.manager.run({
+        projectId,
+        ...(prompt ? { prompt } : {}),
+      });
+      return { threadId: thread.id };
+    },
+    async updateWorkspaceFromMain({ environmentId }) {
+      const result = updateWorkspaceFromMainResultSchema.parse(
+        await bb.sdk.environments.updateFromMain({ environmentId }),
+      );
+      return { message: result.message, outcome: result.outcome };
     },
   });
 }

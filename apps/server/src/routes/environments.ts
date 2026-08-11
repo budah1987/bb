@@ -1,5 +1,6 @@
 import path from "node:path";
 import {
+  hasBusyThreadInEnvironment,
   recordEnvironmentWorkspaceRename,
   updateEnvironmentMetadata,
 } from "@bb/db";
@@ -1144,6 +1145,84 @@ export function registerEnvironmentRoutes(app: Hono, deps: AppDeps): void {
           localTargetAfterSha: result.localTargetAfterSha,
           preservedTargetChangesCommitSha:
             result.preservedTargetChangesCommitSha,
+        });
+      }
+      case "update_from_main": {
+        if (
+          !environment.isGitRepo ||
+          environment.workspaceProvisionType !== "managed-worktree"
+        ) {
+          throw new ApiError(
+            409,
+            "invalid_request",
+            "Updating from main requires a managed Git worktree",
+          );
+        }
+
+        if (
+          hasBusyThreadInEnvironment(deps.db, {
+            environmentId: environment.id,
+          })
+        ) {
+          throw new ApiError(
+            409,
+            "environment_busy",
+            "Stop active conversations in this workspace before updating from main",
+            {
+              details: {
+                kind: "workspace_busy",
+                action: "update_from_main",
+                reason: "active_threads",
+              },
+            },
+          );
+        }
+
+        const target = requireWorkspaceCommandTarget(environment);
+        const result = await runLiveCommandAndWait(deps, {
+          hostId: target.hostId,
+          timeoutMs: COMMAND_TIMEOUT_MS,
+          command: {
+            type: "workspace.update_from_target",
+            environmentId: target.environmentId,
+            workspaceContext: target.workspaceContext,
+            targetBranch: "main",
+          },
+        });
+
+        if (result.outcome === "blocked") {
+          throw new ApiError(
+            409,
+            "update_from_main_blocked",
+            `Cannot update from main: ${result.reason.replaceAll("_", " ")}`,
+            {
+              details: {
+                kind: "update_from_main_blocked",
+                reason: result.reason,
+                sourceBranch: result.sourceBranch,
+                targetBranch: "main",
+                previousSha: result.previousSha,
+                targetSha: result.targetSha,
+                conflictFiles: result.conflictFiles,
+              },
+            },
+          );
+        }
+
+        return context.json({
+          ok: true,
+          action: "update_from_main",
+          message:
+            result.outcome === "already_current"
+              ? "Workspace already includes the latest main changes"
+              : "Rebased workspace onto the latest main changes",
+          outcome: result.outcome,
+          sourceBranch: result.sourceBranch,
+          targetBranch: "main",
+          previousSha: result.previousSha,
+          currentSha: result.currentSha,
+          targetSha: result.targetSha,
+          rebasedCommitCount: result.rebasedCommitCount,
         });
       }
       case "pull_request_ready": {

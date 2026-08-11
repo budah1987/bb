@@ -54,6 +54,8 @@ function makeTerminalSession(overrides: Record<string, JsonValue> = {}) {
     environmentId: "env_test",
     hostId: "host_test",
     title: "Terminal 1",
+    launchCommand: null,
+    restartPolicy: "never",
     initialCwd: "/workspace",
     cols: 100,
     rows: 30,
@@ -104,6 +106,107 @@ function createFetchQueue(
 }
 
 describe("@bb/sdk", () => {
+  it("maps browser annotation lifecycle requests", async () => {
+    const annotation = {
+      id: "annotation-1",
+      threadId: "thread-1",
+      environmentId: null,
+      browserTabId: "browser-1",
+      url: "http://localhost:3000",
+      selector: "main",
+      viewport: { width: 1200, height: 800 },
+      rectangle: { x: 0, y: 0, width: 1200, height: 800 },
+      comment: "Reduce the spacing.",
+      status: "open",
+      revision: 1,
+      createdAt: "2026-08-10T00:00:00.000Z",
+      updatedAt: "2026-08-10T00:00:00.000Z",
+    } as const;
+    const queue = createFetchQueue([
+      { body: { annotations: [annotation] } },
+      { body: annotation },
+      { body: { ...annotation, revision: 2, status: "resolved" } },
+      { body: { ok: true } },
+      { body: { deleted: 1 } },
+    ]);
+    const sdk = createBbSdk({
+      transport: createHttpTransport({
+        baseUrl: "http://bb.test",
+        fetch: queue.fetch,
+        runtime: "node",
+      }),
+    });
+
+    await sdk.threads.annotations.list({
+      threadId: "thread-1",
+      browserTabId: "browser-1",
+      status: "open",
+    });
+    await sdk.threads.annotations.create({
+      threadId: "thread-1",
+      environmentId: null,
+      browserTabId: "browser-1",
+      url: annotation.url,
+      selector: annotation.selector,
+      viewport: annotation.viewport,
+      rectangle: annotation.rectangle,
+      comment: annotation.comment,
+      status: "open",
+    });
+    await sdk.threads.annotations.update({
+      threadId: "thread-1",
+      annotationId: "annotation-1",
+      expectedRevision: 1,
+      status: "resolved",
+    });
+    await sdk.threads.annotations.delete({
+      threadId: "thread-1",
+      annotationId: "annotation-1",
+      expectedRevision: 2,
+    });
+    await sdk.threads.annotations.clear({
+      threadId: "thread-1",
+      browserTabId: "browser-1",
+      ids: null,
+    });
+
+    expect(queue.requests).toEqual([
+      {
+        bodyText: undefined,
+        method: "GET",
+        url: "http://bb.test/api/v1/threads/thread-1/annotations?browserTabId=browser-1&status=open",
+      },
+      {
+        bodyText: JSON.stringify({
+          environmentId: null,
+          browserTabId: "browser-1",
+          url: annotation.url,
+          selector: annotation.selector,
+          viewport: annotation.viewport,
+          rectangle: annotation.rectangle,
+          comment: annotation.comment,
+          status: "open",
+        }),
+        method: "POST",
+        url: "http://bb.test/api/v1/threads/thread-1/annotations",
+      },
+      {
+        bodyText: JSON.stringify({ expectedRevision: 1, status: "resolved" }),
+        method: "PATCH",
+        url: "http://bb.test/api/v1/threads/thread-1/annotations/annotation-1",
+      },
+      {
+        bodyText: undefined,
+        method: "DELETE",
+        url: "http://bb.test/api/v1/threads/thread-1/annotations/annotation-1?expectedRevision=2",
+      },
+      {
+        bodyText: JSON.stringify({ browserTabId: "browser-1", ids: null }),
+        method: "POST",
+        url: "http://bb.test/api/v1/threads/thread-1/annotations/clear",
+      },
+    ]);
+  });
   it("routes typed simulator status, attach, and control requests", async () => {
     const queue = createFetchQueue([
       {
@@ -173,6 +276,57 @@ describe("@bb/sdk", () => {
         }),
         method: "POST",
         url: "http://bb.test/api/v1/environments/env_remote/simulator/control",
+      },
+    ]);
+  });
+
+  it("maps repository manager show, settings, and run requests", async () => {
+    const settings = {
+      enabled: true,
+      providerId: "codex",
+      model: "gpt-5.4-mini",
+      reasoningLevel: "medium",
+      serviceTier: "default",
+      permissionMode: "auto",
+    } as const;
+    const queue = createFetchQueue([
+      { body: settings },
+      { body: { ...settings, enabled: false } },
+      { body: { id: "thread_manager" } },
+    ]);
+    const sdk = createBbSdk({
+      transport: createHttpTransport({
+        baseUrl: "http://bb.test",
+        fetch: queue.fetch,
+        runtime: "node",
+      }),
+    });
+
+    await sdk.projects.manager.show({ projectId: "project_1" });
+    await sdk.projects.manager.settings({
+      projectId: "project_1",
+      enabled: false,
+    });
+    await sdk.projects.manager.run({
+      projectId: "project_1",
+      prompt: "Review release risk",
+    });
+
+    expect(queue.requests).toEqual([
+      {
+        bodyText: undefined,
+        method: "GET",
+        url: "http://bb.test/api/v1/projects/project_1/manager",
+      },
+      {
+        bodyText: JSON.stringify({ enabled: false }),
+        method: "PATCH",
+        url: "http://bb.test/api/v1/projects/project_1/manager/settings",
+      },
+      {
+        bodyText: JSON.stringify({ prompt: "Review release risk" }),
+        method: "POST",
+        url: "http://bb.test/api/v1/projects/project_1/manager/run",
       },
     ]);
   });
@@ -907,6 +1061,50 @@ describe("@bb/sdk", () => {
         bodyText: JSON.stringify({}),
         method: "POST",
         url: "http://bb.test/api/v1/terminals/term_old/restart",
+      },
+    ]);
+  });
+
+  it("creates a supervised named command terminal", async () => {
+    const queue = createFetchQueue([
+      {
+        body: makeTerminalSession({
+          launchCommand: "pnpm dev",
+          restartPolicy: "until_stopped",
+          title: "Web dev server",
+        }),
+        status: 201,
+      },
+    ]);
+    const sdk = createBbSdk({
+      transport: createHttpTransport({
+        baseUrl: "http://bb.test",
+        fetch: queue.fetch,
+        runtime: "node",
+      }),
+    });
+
+    await sdk.terminals.create({
+      cols: 80,
+      restartPolicy: "until_stopped",
+      rows: 24,
+      scope: { kind: "thread", threadId: "thr_remote" },
+      start: { mode: "command", command: "pnpm dev" },
+      title: "Web dev server",
+    });
+
+    expect(queue.requests).toEqual([
+      {
+        bodyText: JSON.stringify({
+          cols: 80,
+          rows: 24,
+          restartPolicy: "until_stopped",
+          start: { mode: "command", command: "pnpm dev" },
+          target: { kind: "thread", threadId: "thr_remote" },
+          title: "Web dev server",
+        }),
+        method: "POST",
+        url: "http://bb.test/api/v1/terminals",
       },
     ]);
   });

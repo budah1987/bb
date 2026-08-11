@@ -23,6 +23,8 @@ function makeTerminalSession(overrides: Record<string, unknown> = {}) {
     environmentId: "env-1",
     hostId: "host-1",
     title: "Terminal 1",
+    launchCommand: null,
+    restartPolicy: "never",
     initialCwd: "/tmp/workspace",
     cols: 100,
     rows: 30,
@@ -126,6 +128,7 @@ describe("bb terminal command output", () => {
         json: {
           cols: 80,
           rows: 24,
+          restartPolicy: undefined,
           title: undefined,
           start: { mode: "command", command: "echo hi" },
           target,
@@ -133,6 +136,35 @@ describe("bb terminal command output", () => {
       });
     },
   );
+
+  it("creates a supervised named command terminal", async () => {
+    const create = vi.fn(async () => makeTerminalSession());
+    stubServerApi({ "v1.terminals.$post": create });
+
+    await runCommand(
+      [
+        "terminal",
+        "create",
+        "--thread",
+        "thr-1",
+        "--title",
+        "Web dev server",
+        "--command",
+        "pnpm dev",
+        "--restart-policy",
+        "until-stopped",
+      ],
+      register,
+    );
+
+    expect(create).toHaveBeenCalledWith({
+      json: expect.objectContaining({
+        restartPolicy: "until_stopped",
+        start: { mode: "command", command: "pnpm dev" },
+        title: "Web dev server",
+      }),
+    });
+  });
 
   it("creates a machine terminal at host home with an explicit host ID", async () => {
     const hosts = vi.fn(async () => [makeHost()]);
@@ -154,6 +186,7 @@ describe("bb terminal command output", () => {
       json: {
         cols: 80,
         rows: 24,
+        restartPolicy: undefined,
         title: undefined,
         start: { mode: "shell" },
         target: { kind: "host_path", hostId: "host-1", cwd: null },

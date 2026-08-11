@@ -81,6 +81,58 @@ afterEach(() => {
 });
 
 describe("ConductorSidebar", () => {
+  it("shows live Git and pull request details on workspace cards", async () => {
+    renderSlot(
+      sidebar,
+      {
+        activeThreadId: null,
+        activeProjectId: null,
+        isCompactViewport: false,
+        onNavigate: () => undefined,
+        searchQuery: "",
+      },
+      {
+        sidebarThreads: {
+          status: "ready",
+          projects: [{ id: "project-1", name: "BB", isPersonal: false }],
+          threads: [thread("Repo conversation")],
+        },
+        sidebarPullRequests: {
+          "Repo conversation": {
+            number: 82,
+            title: "Restore workspace Git details",
+            url: "https://github.com/budah1987/bb/pull/82",
+            state: "open",
+            attention: "ready_to_merge",
+          },
+        },
+        rpc: {
+          readWorkspaceGitSummaries: () => ({
+            summaries: [
+              {
+                environmentId: "environment-1",
+                workspacePath: "/worktrees/sidebar",
+                gitAvailable: true,
+                aheadCount: 2,
+                behindCount: 1,
+                changedFiles: 4,
+              },
+            ],
+          }),
+          readReconciliation: () => ({
+            legacyWorkspaces: [],
+            recordedSignature: null,
+          }),
+          recordReconciliation: () => ({ recorded: false }),
+        },
+      },
+    );
+
+    expect(
+      await screen.findByText("feature/sidebar · ↑2 ↓1 · 4 changes · PR #82 ✓"),
+    ).toBeDefined();
+  });
+
   it("shows one-off threads with live attention states and native navigation", async () => {
     let navigated = 0;
     const rendered = renderSlot(
@@ -366,7 +418,7 @@ describe("ConductorSidebar", () => {
     });
   });
 
-  it("keeps conversation actions on workspace rows without worktree actions", async () => {
+  it("shows safe workspace actions on local checkouts without worktree renames", async () => {
     const rendered = renderSlot(
       sidebar,
       {
@@ -394,6 +446,18 @@ describe("ConductorSidebar", () => {
           ],
         },
         rpc: {
+          readWorkspaceGitSummaries: () => ({
+            summaries: [
+              {
+                environmentId: "environment-branch",
+                workspacePath: "/repos/ghost",
+                gitAvailable: true,
+                aheadCount: 0,
+                behindCount: 0,
+                changedFiles: 0,
+              },
+            ],
+          }),
           readReconciliation: () => ({
             legacyWorkspaces: [],
             recordedSignature: null,
@@ -409,16 +473,33 @@ describe("ConductorSidebar", () => {
       }),
     );
     expect(
+      await screen.findByRole("menuitem", { name: "Open workspace" }),
+    ).toBeDefined();
+    expect(
+      screen.getByRole("menuitem", { name: "Open in split" }),
+    ).toBeDefined();
+    expect(
+      screen.getByRole("menuitem", { name: "New conversation" }),
+    ).toBeDefined();
+    expect(screen.getByRole("menuitem", { name: "Copy path" })).toBeDefined();
+    expect(
+      screen.getByRole("menuitem", { name: "Rename sidebar label…" }),
+    ).toBeDefined();
+    expect(
+      screen.getByRole("menuitem", { name: "Archive workspace" }),
+    ).toBeDefined();
+    expect(
       screen.queryByRole("menuitem", { name: /Rename branch/u }),
     ).toBeNull();
-    fireEvent.click(
-      await screen.findByRole("menuitem", { name: "Mark as read" }),
-    );
+    expect(
+      screen.queryByRole("menuitem", { name: /Rename folder/u }),
+    ).toBeNull();
+    fireEvent.click(screen.getByRole("menuitem", { name: "Open in split" }));
 
     expect(rendered.sidebarActionCalls).toContainEqual({
-      method: "setRead",
+      method: "open",
       threadId: "Branch workspace",
-      read: true,
+      options: { split: true },
     });
   });
 

@@ -6,6 +6,7 @@ import { registerThreadDataRoutes } from "./data.js";
 import { registerThreadInteractionRoutes } from "./interactions.js";
 import { registerThreadNotesRoutes } from "./notes.js";
 import { registerThreadTabRoutes } from "./tabs.js";
+import { registerThreadAnnotationRoutes } from "./annotations.js";
 
 export function registerThreadRoutes(app: Hono, deps: AppDeps): void {
   registerThreadBaseRoutes(app, deps);
@@ -13,5 +14,6 @@ export function registerThreadRoutes(app: Hono, deps: AppDeps): void {
   registerThreadDataRoutes(app, deps);
   registerThreadInteractionRoutes(app, deps);
   registerThreadTabRoutes(app, deps);
+  registerThreadAnnotationRoutes(app, deps);
   registerThreadNotesRoutes(app, deps);
 }

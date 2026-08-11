@@ -50,7 +50,9 @@ export function loadProjectCustomizations(): ProjectCustomizations {
   if (typeof window === "undefined") return {};
   try {
     return sanitizeProjectCustomizations(
-      JSON.parse(window.localStorage.getItem(PROJECT_CUSTOMIZATIONS_KEY) ?? "{}"),
+      JSON.parse(
+        window.localStorage.getItem(PROJECT_CUSTOMIZATIONS_KEY) ?? "{}",
+      ),
     );
   } catch {
     return {};

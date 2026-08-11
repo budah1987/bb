@@ -251,6 +251,8 @@ function makeTerminalSession(
     environmentId: null,
     hostId: "host_1",
     title: "Terminal",
+    launchCommand: null,
+    restartPolicy: "never",
     initialCwd: "/repo",
     cols: 100,
     rows: 30,

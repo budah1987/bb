@@ -22,6 +22,7 @@ List and create require exactly one explicit scope:
   bb terminal create --machine <id-or-name> [--cwd <path>]
     --host <id-or-name>                   Alias for --machine
     --title <title>                       Display title
+    --restart-policy <policy>             `never` or `until-stopped`; named commands only
     --cols <n>                            Initial terminal columns
     --rows <n>                            Initial terminal rows
     --attach                              Attach after creating
@@ -38,7 +39,7 @@ All other operations need only the terminal ID:
     --stdin                               Read bytes from stdin instead of --text
   bb terminal resize <terminal-id> --cols <n> --rows <n>
   bb terminal rename <terminal-id> <title>
-  bb terminal restart <terminal-id>       Atomically replaces it with a shell; does not replay the original command
+  bb terminal restart <terminal-id>       Replay a saved command, or replace a shell
   bb terminal close <terminal-id> [--if-clean]
 
   bb terminal output <terminal-id>
@@ -57,8 +58,16 @@ All other operations need only the terminal ID:
 
 For a dev server, prefer:
 
-  bb terminal create --thread <thread-id> --title "pnpm dev" --command "pnpm dev"
+  bb terminal create --thread <thread-id> --title "pnpm dev" --command "pnpm dev" --restart-policy until-stopped
   bb terminal wait <terminal-id> --contains "Local:" --timeout 120
 
 Do not run long-lived servers as one-off foreground commands when the user will
 need to inspect logs, refresh the page, or stop the process later.
+
+Named command terminals use the app setting `devServerRestartPolicy` when
+`--restart-policy` is omitted. Its default is `until_stopped`, so bb restores
+the command after an unexpected exit, app restart, or daemon restart. Failed
+restores retry with a bounded delay. `bb terminal stop` prevents another
+restore. Turning the app setting off disarms existing saved restore intent,
+while leaving running commands active. Ordinary shell terminals never restart
+automatically.

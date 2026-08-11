@@ -15,6 +15,7 @@ import {
   createNoopDesktopBrowserApi,
 } from "@/test/bb-desktop-test-utils";
 import { POINTER_COARSE_QUERY } from "@bb/shared-ui/hooks/use-pointer-coarse";
+import { createQueryClientTestHarness } from "@/test/queryClientTestHarness";
 import { BrowserTabDeck } from "./BrowserTabDeck";
 import { resetBrowserViewPersistence } from "./browserViewVisibilityCoordinator";
 
@@ -125,6 +126,7 @@ function renderBrowserDeck({
   url?: string;
 }) {
   const tab = makeBrowserTab("tab-url", url);
+  const { wrapper } = createQueryClientTestHarness();
   return render(
     <BrowserTabDeck
       browserTabs={[tab]}
@@ -134,6 +136,7 @@ function renderBrowserDeck({
       threadId="thread-1"
       onUpdate={() => {}}
     />,
+    { wrapper },
   );
 }
 
@@ -309,6 +312,7 @@ describe("BrowserTabDeck native browser first-show ordering", () => {
       .mockImplementation(() => {});
     const tab = makeBrowserTab("tab-url", "");
 
+    const { wrapper } = createQueryClientTestHarness();
     render(
       <BrowserTabDeck
         browserTabs={[tab]}
@@ -319,6 +323,7 @@ describe("BrowserTabDeck native browser first-show ordering", () => {
         threadId="thread-1"
         onUpdate={() => {}}
       />,
+      { wrapper },
     );
 
     expect(screen.getByLabelText("Address and search bar")).toBeTruthy();

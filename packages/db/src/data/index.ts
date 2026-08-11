@@ -61,6 +61,14 @@ export type {
   ListProjectExecutionDefaultsByProjectIdsArgs,
   UpsertProjectExecutionDefaultsArgs,
 } from "./project-execution-defaults.js";
+export {
+  getProjectManagerSettings,
+  upsertProjectManagerSettings,
+} from "./project-manager-settings.js";
+export type {
+  StoredProjectManagerSettings,
+  UpsertProjectManagerSettingsArgs,
+} from "./project-manager-settings.js";
 
 export {
   createProjectSource,
@@ -86,6 +94,7 @@ export {
   getThread,
   getThreadExecutionOverride,
   hasActiveThreadAttention,
+  hasBusyThreadInEnvironment,
   setThreadExecutionOverride,
   hasLiveThreadAtHostPath,
   hasNonTerminalThreadInEnvironment,
@@ -181,6 +190,21 @@ export type {
   StoredThreadNotes,
   ThreadRecapTriggerCounts,
 } from "./thread-notes.js";
+export {
+  createBrowserAnnotation,
+  deleteBrowserAnnotation,
+  deleteBrowserAnnotations,
+  getBrowserAnnotation,
+  listBrowserAnnotations,
+  updateBrowserAnnotation,
+} from "./browser-annotations.js";
+export type {
+  BrowserAnnotationStatus,
+  BrowserAnnotationWriteResult,
+  CreateBrowserAnnotationInput,
+  StoredBrowserAnnotation,
+  UpdateBrowserAnnotationInput,
+} from "./browser-annotations.js";
 export { getExperiments, setExperiments } from "./experiments.js";
 export {
   deleteInstalledPlugin,
@@ -424,11 +448,14 @@ export type {
 
 export {
   createTerminalSession,
+  disableAllTerminalSupervision,
+  getDesiredTerminalSessionBySupervisionId,
   getTerminalSession,
   getTerminalSessionForThread,
   getThreadlessTerminalSessionForEnvironment,
   listTerminalSessionsByEnvironment,
   listTerminalSessionsByThread,
+  listDesiredTerminalSessionsByHost,
   listThreadlessTerminalSessionsByEnvironment,
   listVisibleTerminalSessions,
   listVisibleTerminalSessionsByThread,
@@ -443,6 +470,7 @@ export {
   markTerminalSessionUserInputById,
   markThreadlessTerminalSessionUserInput,
   markThreadTerminalSessionsExited,
+  setTerminalSupervisionDesired,
   updateTerminalSessionSize,
   updateTerminalSessionSizeById,
   updateTerminalSessionTitle,
@@ -452,6 +480,8 @@ export {
 } from "./terminal-sessions.js";
 export type {
   CreateTerminalSessionInput,
+  DisableAllTerminalSupervisionArgs,
+  SetTerminalSupervisionDesiredArgs,
   GetTerminalSessionArgs,
   GetTerminalSessionForThreadArgs,
   GetThreadlessTerminalSessionForEnvironmentArgs,

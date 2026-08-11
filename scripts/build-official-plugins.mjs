@@ -5,11 +5,16 @@ import {
   buildPluginServer,
   resolvePluginBuildToolchain,
 } from "../packages/plugin-build/src/index.ts";
-import { OFFICIAL_PLUGINS } from "../apps/server/src/services/plugins/builtin-registry.ts";
+import {
+  BUNDLED_PLUGINS,
+  OFFICIAL_PLUGINS,
+  resolveBuiltinPluginRootPath,
+} from "../apps/server/src/services/plugins/builtin-registry.ts";
 
 const repositoryRoot = resolve(import.meta.dirname, "..");
 // Derived from the registry, so a new store-only plugin needs no edit here.
 const officialNames = OFFICIAL_PLUGINS.map((plugin) => plugin.name);
+const bundledNames = BUNDLED_PLUGINS.map((plugin) => plugin.name);
 
 const requested = process.argv.slice(2);
 const selected =
@@ -23,9 +28,9 @@ const toolchain = await resolvePluginBuildToolchain(
 );
 
 for (const plugin of selected) {
-  if (!officialNames.includes(plugin)) {
+  if (!bundledNames.includes(plugin)) {
     throw new Error(
-      `unknown official plugin ${JSON.stringify(plugin)}; expected ${officialNames.join(", ")}, or all`,
+      `unknown bundled plugin ${JSON.stringify(plugin)}; expected ${bundledNames.join(", ")}, or all`,
     );
   }
 }
@@ -41,7 +46,7 @@ if (typeof bbPackage.version !== "string") {
 }
 
 for (const plugin of selected) {
-  const rootDirectory = resolve(repositoryRoot, "plugins", plugin);
+  const rootDirectory = resolveBuiltinPluginRootPath(plugin);
   await rm(resolve(rootDirectory, "dist"), { recursive: true, force: true });
 
   const server = await buildPluginServer(

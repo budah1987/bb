@@ -255,6 +255,7 @@ type ExpectedEnvironmentsKey =
   | "mergePullRequest"
   | "paths"
   | "publishToMain"
+  | "updateFromMain"
   | "previews"
   | "pullRequest"
   | "rename"
@@ -328,6 +329,7 @@ type ExpectedProjectsKey =
   | "files"
   | "get"
   | "list"
+  | "manager"
   | "paths"
   | "promptHistory"
   | "reorder"
@@ -336,6 +338,7 @@ type ExpectedProjectsKey =
 
 type ExpectedProjectSourcesKey = "add" | "delete" | "update";
 type ExpectedProjectAttachmentsKey = "copy" | "read" | "upload";
+type ExpectedProjectManagerKey = "run" | "settings" | "show";
 
 type ExpectedProvidersKey = "list" | "models";
 
@@ -366,6 +369,7 @@ type ExpectedThemeKey = "catalog" | "get" | "set";
 type ExpectedThreadSectionsKey = "create" | "delete" | "list" | "update";
 
 type ExpectedThreadsKey =
+  | "annotations"
   | "archive"
   | "archiveAll"
   | "cancelPlan"
@@ -423,6 +427,12 @@ type ExpectedThreadQueuedMessagesKey =
   | "update";
 type ExpectedThreadTabsKey = "get" | "update";
 type ExpectedThreadNotesKey = "generateRecap" | "get" | "setScratchpad";
+type ExpectedThreadAnnotationsKey =
+  | "clear"
+  | "create"
+  | "delete"
+  | "list"
+  | "update";
 type ExpectedTerminalsKey =
   | "close"
   | "create"
@@ -521,6 +531,9 @@ describe("SDK public type entrypoints", () => {
       keyof RootBbSdk["projects"]["attachments"]
     >().toEqualTypeOf<ExpectedProjectAttachmentsKey>();
     expectTypeOf<
+      keyof RootBbSdk["projects"]["manager"]
+    >().toEqualTypeOf<ExpectedProjectManagerKey>();
+    expectTypeOf<
       keyof RootBbSdk["projects"]["sources"]
     >().toEqualTypeOf<ExpectedProjectSourcesKey>();
     expectTypeOf<
@@ -557,5 +570,8 @@ describe("SDK public type entrypoints", () => {
     expectTypeOf<
       keyof RootBbSdk["threads"]["notes"]
     >().toEqualTypeOf<ExpectedThreadNotesKey>();
+    expectTypeOf<
+      keyof RootBbSdk["threads"]["annotations"]
+    >().toEqualTypeOf<ExpectedThreadAnnotationsKey>();
   });
 });

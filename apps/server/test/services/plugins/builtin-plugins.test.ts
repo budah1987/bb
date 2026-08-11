@@ -187,7 +187,13 @@ describe("builtin plugin reconciliation", () => {
 
   it("keeps official plugins bundled but out of the auto-install builtins", () => {
     const optionalNames = OFFICIAL_PLUGINS.map((plugin) => plugin.name);
-    expect(optionalNames).toEqual(["github", "docs", "memory", "tasks"]);
+    expect(optionalNames).toEqual([
+      "github",
+      "docs",
+      "memory",
+      "tasks",
+      "t3sidebar",
+    ]);
     for (const name of optionalNames) {
       expect(BUILTIN_PLUGINS.map((plugin) => plugin.name)).not.toContain(name);
     }
@@ -196,13 +202,16 @@ describe("builtin plugin reconciliation", () => {
 
   it("gives every builtin plugin a deliberate settings icon", async () => {
     const expectedIcons = new Map([
+      ["attention", "Bell"],
       ["ask-user-question", "MessageQuestion"],
       ["automations", "Clock"],
       ["connect", "Smartphone"],
       ["conductor-workspaces", "PanelsTopLeft"],
       ["custom-instructions", "EditFile"],
+      ["design-canvas", "Palette"],
       ["ingestion-desk", "Inbox"],
       ["inline-vis", "AppWindow"],
+      ["md-editor", "FileText"],
       ["provider-retry", "ArrowReloadHorizontal"],
       ["secrets", "Lock"],
       ["side-chat", "SideChat"],

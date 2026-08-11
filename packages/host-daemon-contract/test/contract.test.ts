@@ -703,6 +703,15 @@ const SETTLED_RESPONSE_RESULT_FIXTURES: SettledResponseResultFixtures = {
     localTargetAfterSha: "abcdef123456",
     preservedTargetChangesCommitSha: null,
   },
+  "workspace.update_from_target": {
+    outcome: "updated",
+    sourceBranch: "feature/update",
+    targetBranch: "main",
+    previousSha: "123456abcdef",
+    currentSha: "abcdef123456",
+    targetSha: "fedcba654321",
+    rebasedCommitCount: 2,
+  },
   "workspace.rename": {
     target: "branch",
     branchName: "feature/renamed",
@@ -1241,7 +1250,7 @@ describe("host-daemon command schemas", () => {
   // that collide across resumed sessions, so it must update before it reports
   // more file edits. Versions 90 and 91 add direct publication payloads.
   it("uses protocol version 91 for turn-qualified file changes and direct publishing", () => {
-    expect(HOST_DAEMON_PROTOCOL_VERSION).toBe(91);
+    expect(HOST_DAEMON_PROTOCOL_VERSION).toBe(92);
   });
 
   it("binds Plan cancellation to a required turn id and typed result", () => {
@@ -2727,6 +2736,19 @@ describe("host-daemon command schemas", () => {
         },
         targetBranch: "main lock",
         commitMessage: "Merge branch",
+      }).success,
+    ).toBe(false);
+
+    expect(
+      hostDaemonCommandSchema.safeParse({
+        type: "workspace.update_from_target",
+        environmentId: "env_123",
+        environmentStatus: "ready",
+        workspaceContext: {
+          workspacePath: "/tmp/workspace",
+          workspaceProvisionType: "managed-worktree",
+        },
+        targetBranch: "main lock",
       }).success,
     ).toBe(false);
   });

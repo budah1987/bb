@@ -3,6 +3,9 @@ import {
   bbDesktopBrowserAttachRequestSchema,
   bbDesktopBrowserNavigateRequestSchema,
   bbDesktopBrowserSetBoundsRequestSchema,
+  bbDesktopBrowserFocusAnnotationRequestSchema,
+  bbDesktopBrowserSetAnnotationModeRequestSchema,
+  bbDesktopBrowserSyncAnnotationsRequestSchema,
   bbDesktopBrowserSetVisibleRequestSchema,
   bbDesktopBrowserTabRefSchema,
 } from "@bb/desktop-contract";
@@ -11,11 +14,14 @@ import {
   BB_DESKTOP_BROWSER_DETACH_CHANNEL,
   BB_DESKTOP_BROWSER_GO_BACK_CHANNEL,
   BB_DESKTOP_BROWSER_GO_FORWARD_CHANNEL,
+  BB_DESKTOP_BROWSER_FOCUS_ANNOTATION_CHANNEL,
   BB_DESKTOP_BROWSER_NAVIGATE_CHANNEL,
   BB_DESKTOP_BROWSER_RELOAD_CHANNEL,
+  BB_DESKTOP_BROWSER_SET_ANNOTATION_MODE_CHANNEL,
   BB_DESKTOP_BROWSER_SET_BOUNDS_CHANNEL,
   BB_DESKTOP_BROWSER_SET_VISIBLE_CHANNEL,
   BB_DESKTOP_BROWSER_STOP_CHANNEL,
+  BB_DESKTOP_BROWSER_SYNC_ANNOTATIONS_CHANNEL,
 } from "./desktop-browser-ipc.js";
 import type { DesktopBrowserViewManager } from "./desktop-browser-view.js";
 
@@ -109,6 +115,46 @@ export function registerDesktopBrowserIpc(
         return;
       }
       manager.setVisible({ hostWindow, request: parsed.data });
+    },
+  );
+
+  ipcMain.on(
+    BB_DESKTOP_BROWSER_SET_ANNOTATION_MODE_CHANNEL,
+    (event, payload: unknown) => {
+      const hostWindow = hostWindowFromBrowserIpcEvent(event);
+      if (hostWindow === null) {
+        return;
+      }
+      const parsed =
+        bbDesktopBrowserSetAnnotationModeRequestSchema.safeParse(payload);
+      if (!parsed.success) {
+        return;
+      }
+      manager.setAnnotationMode({ hostWindow, request: parsed.data });
+    },
+  );
+
+  ipcMain.on(
+    BB_DESKTOP_BROWSER_FOCUS_ANNOTATION_CHANNEL,
+    (event, payload: unknown) => {
+      const hostWindow = hostWindowFromBrowserIpcEvent(event);
+      if (hostWindow === null) return;
+      const parsed =
+        bbDesktopBrowserFocusAnnotationRequestSchema.safeParse(payload);
+      if (!parsed.success) return;
+      manager.focusAnnotation({ hostWindow, request: parsed.data });
+    },
+  );
+
+  ipcMain.on(
+    BB_DESKTOP_BROWSER_SYNC_ANNOTATIONS_CHANNEL,
+    (event, payload: unknown) => {
+      const hostWindow = hostWindowFromBrowserIpcEvent(event);
+      if (hostWindow === null) return;
+      const parsed =
+        bbDesktopBrowserSyncAnnotationsRequestSchema.safeParse(payload);
+      if (!parsed.success) return;
+      manager.syncAnnotations({ hostWindow, request: parsed.data });
     },
   );
 

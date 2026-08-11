@@ -11,6 +11,7 @@ import {
   pullRequestMergeActionResponseSchema,
   pullRequestReadyActionResponseSchema,
   publishToMainActionResponseSchema,
+  updateFromMainActionResponseSchema,
   squashMergeActionResponseSchema,
   renameEnvironmentRequestSchema,
   updateEnvironmentRequestSchema,
@@ -48,6 +49,7 @@ import type {
   PullRequestMergeActionResponse,
   PullRequestReadyActionResponse,
   PublishToMainActionResponse,
+  UpdateFromMainActionResponse,
   RenameEnvironmentRequest,
   SquashMergeActionResponse,
   EnvironmentStatusQuery,
@@ -163,6 +165,8 @@ export interface EnvironmentPublishToMainArgs extends EnvironmentActionArgs {
   preserveTargetChanges?: boolean;
 }
 
+export type EnvironmentUpdateFromMainArgs = EnvironmentActionArgs;
+
 export interface EnvironmentPullRequestMergeArgs {
   environmentId: string;
   method: PullRequestMergeMethod;
@@ -212,6 +216,7 @@ export type EnvironmentPullRequestResult = EnvironmentPullRequestResponse;
 export type EnvironmentRenameResult = Environment;
 export type EnvironmentSquashMergeResult = SquashMergeActionResponse;
 export type EnvironmentPublishToMainResult = PublishToMainActionResponse;
+export type EnvironmentUpdateFromMainResult = UpdateFromMainActionResponse;
 export type EnvironmentStatusResult = EnvironmentStatusResponse;
 export type EnvironmentDockerProvenanceResult =
   EnvironmentDockerProvenanceResponse;
@@ -273,6 +278,9 @@ export interface EnvironmentsArea {
   publishToMain(
     args: EnvironmentPublishToMainArgs,
   ): Promise<EnvironmentPublishToMainResult>;
+  updateFromMain(
+    args: EnvironmentUpdateFromMainArgs,
+  ): Promise<EnvironmentUpdateFromMainResult>;
   status(args: EnvironmentStatusArgs): Promise<EnvironmentStatusResult>;
   simulatorStatus(
     args: EnvironmentActionArgs,
@@ -603,6 +611,18 @@ export function createEnvironmentsArea(
         }),
       );
       return publishToMainActionResponseSchema.parse(body);
+    },
+    async updateFromMain(input) {
+      const body = await transport.readJson(
+        transport.api.v1.environments[":id"].actions.$post({
+          param: { id: input.environmentId },
+          json: {
+            action: "update_from_main",
+            options: {},
+          },
+        }),
+      );
+      return updateFromMainActionResponseSchema.parse(body);
     },
     async status(input) {
       return transport.readJson(

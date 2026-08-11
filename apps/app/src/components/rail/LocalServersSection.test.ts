@@ -5,6 +5,7 @@ import {
   isNamedLocalServerTerminal,
   isPathInsideEnvironment,
 } from "@/lib/local-server-status";
+import { acquireTerminalOperationLock } from "./LocalServersSection";
 
 function terminal(overrides: Partial<TerminalSession> = {}): TerminalSession {
   return {
@@ -16,8 +17,10 @@ function terminal(overrides: Partial<TerminalSession> = {}): TerminalSession {
     hostId: "host_1",
     id: "term_1",
     initialCwd: "/worktrees/feature/apps/web",
+    launchCommand: "pnpm dev",
     lastUserInputAt: null,
     rows: 24,
+    restartPolicy: "until_stopped",
     status: "running",
     threadId: null,
     title: "Web dev server",
@@ -27,6 +30,24 @@ function terminal(overrides: Partial<TerminalSession> = {}): TerminalSession {
 }
 
 describe("local server rail state", () => {
+  it("rejects overlapping terminal operations", () => {
+    const lock = { current: null };
+
+    expect(
+      acquireTerminalOperationLock(lock, {
+        kind: "restart",
+        terminalId: "term_1",
+      }),
+    ).toBe(true);
+    expect(
+      acquireTerminalOperationLock(lock, {
+        kind: "stop",
+        terminalId: "term_2",
+      }),
+    ).toBe(false);
+    expect(lock.current).toEqual({ kind: "restart", terminalId: "term_1" });
+  });
+
   it("accepts the environment root and its subdirectories", () => {
     expect(
       isPathInsideEnvironment("/worktrees/feature", "/worktrees/feature/"),
@@ -55,6 +76,11 @@ describe("local server rail state", () => {
     expect(
       isNamedLocalServerTerminal(
         terminal({ status: "exited", title: "API dev server" }),
+      ),
+    ).toBe(false);
+    expect(
+      isNamedLocalServerTerminal(
+        terminal({ launchCommand: null, title: "API dev server" }),
       ),
     ).toBe(false);
   });

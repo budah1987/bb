@@ -78,6 +78,7 @@ import {
 import { WorkspaceError } from "@bb/host-workspace";
 import {
   publishCommittedBranch,
+  updateFromTarget,
   renameWorkspace,
   squashMerge,
 } from "./command-handlers/workspace.js";
@@ -468,6 +469,7 @@ const commandHandlers: CommandHandlerMap = {
   },
   "workspace.squash_merge": squashMerge,
   "workspace.publish_committed_branch": publishCommittedBranch,
+  "workspace.update_from_target": updateFromTarget,
   "workspace.rename": renameWorkspace,
   "workspace.pull_request_action": async (command, options) => {
     const entry = await requireResolvedWorkspaceForCommand({

@@ -3,6 +3,7 @@ import type { AppCommandId } from "@bb/domain";
 import type {
   BbDesktopApi,
   BbDesktopBrowserOpenTabRequest,
+  BbDesktopBrowserAnnotationDraft,
   BbDesktopBrowserScopedOpenTabRequest,
   BbDesktopBrowserSnapshot,
   BbDesktopBrowserState,
@@ -17,7 +18,9 @@ import {
 } from "../src/desktop-update-ipc.js";
 import {
   BB_DESKTOP_BROWSER_ATTACH_CHANNEL,
+  BB_DESKTOP_BROWSER_ANNOTATION_DRAFT_CHANNEL,
   BB_DESKTOP_BROWSER_DETACH_CHANNEL,
+  BB_DESKTOP_BROWSER_FOCUS_ANNOTATION_CHANNEL,
   BB_DESKTOP_BROWSER_GO_BACK_CHANNEL,
   BB_DESKTOP_BROWSER_GO_FORWARD_CHANNEL,
   BB_DESKTOP_BROWSER_NAVIGATE_CHANNEL,
@@ -25,10 +28,12 @@ import {
   BB_DESKTOP_BROWSER_RELOAD_CHANNEL,
   BB_DESKTOP_BROWSER_SCOPED_OPEN_TAB_CHANNEL,
   BB_DESKTOP_BROWSER_SET_BOUNDS_CHANNEL,
+  BB_DESKTOP_BROWSER_SET_ANNOTATION_MODE_CHANNEL,
   BB_DESKTOP_BROWSER_SET_VISIBLE_CHANNEL,
   BB_DESKTOP_BROWSER_SNAPSHOT_CHANNEL,
   BB_DESKTOP_BROWSER_STATE_CHANNEL,
   BB_DESKTOP_BROWSER_STOP_CHANNEL,
+  BB_DESKTOP_BROWSER_SYNC_ANNOTATIONS_CHANNEL,
 } from "../src/desktop-browser-ipc.js";
 import {
   BB_DESKTOP_APP_COMMAND_CHANNEL,
@@ -215,21 +220,41 @@ describe("desktop preload browser API", () => {
       tabId: "browser:a",
       visible: false,
     };
+    const focusAnnotationRequest = {
+      tabId: "browser:a",
+      rectangle: { x: 20, y: 30, width: 160, height: 44 },
+    };
+    const syncAnnotationsRequest = {
+      tabId: "browser:a",
+      annotations: [
+        {
+          id: "annotation-1",
+          number: 1,
+          selector: "main",
+          comment: "Increase spacing.",
+          rectangle: { x: 20, y: 30, width: 160, height: 44 },
+        },
+      ],
+    };
 
     expect(Object.keys(api.browser).sort()).toEqual([
       "attach",
       "detach",
+      "focusAnnotation",
       "goBack",
       "goForward",
       "navigate",
+      "onAnnotationDraft",
       "onOpenTab",
       "onScopedOpenTab",
       "onSnapshot",
       "onState",
       "reload",
+      "setAnnotationMode",
       "setBounds",
       "setVisible",
       "stop",
+      "syncAnnotations",
     ]);
     expect(api.browser).not.toHaveProperty("send");
     expect(api.browser).not.toHaveProperty("invoke");
@@ -243,6 +268,9 @@ describe("desktop preload browser API", () => {
     api.browser.stop("browser:a");
     api.browser.setBounds(boundsRequest);
     api.browser.setVisible(visibleRequest);
+    api.browser.setAnnotationMode?.({ tabId: "browser:a", enabled: true });
+    api.browser.focusAnnotation?.(focusAnnotationRequest);
+    api.browser.syncAnnotations?.(syncAnnotationsRequest);
     api.setTheme("dark");
     await api.checkForUpdates();
     await expect(api.getWindowState?.()).resolves.toEqual({
@@ -284,6 +312,18 @@ describe("desktop preload browser API", () => {
         channel: BB_DESKTOP_BROWSER_SET_VISIBLE_CHANNEL,
         payload: visibleRequest,
       },
+      {
+        channel: BB_DESKTOP_BROWSER_SET_ANNOTATION_MODE_CHANNEL,
+        payload: { tabId: "browser:a", enabled: true },
+      },
+      {
+        channel: BB_DESKTOP_BROWSER_FOCUS_ANNOTATION_CHANNEL,
+        payload: focusAnnotationRequest,
+      },
+      {
+        channel: BB_DESKTOP_BROWSER_SYNC_ANNOTATIONS_CHANNEL,
+        payload: syncAnnotationsRequest,
+      },
       { channel: BB_DESKTOP_SET_THEME_CHANNEL, payload: "dark" },
     ]);
     expect(electronMock.invokeCalls).toContain(BB_DESKTOP_GET_INFO_CHANNEL);
@@ -304,6 +344,7 @@ describe("desktop preload browser API", () => {
     const openTabs: BbDesktopBrowserOpenTabRequest[] = [];
     const scopedOpenTabs: BbDesktopBrowserScopedOpenTabRequest[] = [];
     const snapshots: BbDesktopBrowserSnapshot[] = [];
+    const annotationDrafts: BbDesktopBrowserAnnotationDraft[] = [];
     let closeWindowRequestCount = 0;
     let openNewTabCount = 0;
     const appCommands: AppCommandId[] = [];
@@ -328,6 +369,14 @@ describe("desktop preload browser API", () => {
       tabId: "browser:a",
       dataUrl: null,
     };
+    const annotationDraft: BbDesktopBrowserAnnotationDraft = {
+      tabId: "browser:a",
+      selector: "main > button",
+      url: "https://example.com/",
+      viewport: { width: 1200, height: 800 },
+      rectangle: { x: 20, y: 30, width: 160, height: 44 },
+      comment: "Increase the spacing.",
+    };
 
     api.browser.onState((nextState) => {
       states.push(nextState);
@@ -340,6 +389,9 @@ describe("desktop preload browser API", () => {
     });
     api.browser.onSnapshot?.((nextSnapshot) => {
       snapshots.push(nextSnapshot);
+    });
+    api.browser.onAnnotationDraft?.((draft) => {
+      annotationDrafts.push(draft);
     });
     api.onOpenNewTab?.(() => {
       openNewTabCount += 1;
@@ -372,6 +424,10 @@ describe("desktop preload browser API", () => {
       payload: { tabId: "browser:a", dataUrl: 42 },
     });
     emitIpcPayload({
+      channel: BB_DESKTOP_BROWSER_ANNOTATION_DRAFT_CHANNEL,
+      payload: { ...annotationDraft, comment: "" },
+    });
+    emitIpcPayload({
       channel: BB_DESKTOP_WINDOW_STATE_CHANGED_CHANNEL,
       payload: { isFullScreen: false, extra: true },
     });
@@ -390,6 +446,10 @@ describe("desktop preload browser API", () => {
     emitIpcPayload({
       channel: BB_DESKTOP_BROWSER_SNAPSHOT_CHANNEL,
       payload: snapshot,
+    });
+    emitIpcPayload({
+      channel: BB_DESKTOP_BROWSER_ANNOTATION_DRAFT_CHANNEL,
+      payload: annotationDraft,
     });
     emitIpcPayload({
       channel: BB_DESKTOP_WINDOW_STATE_CHANGED_CHANNEL,
@@ -416,6 +476,7 @@ describe("desktop preload browser API", () => {
     expect(openTabs).toEqual([openTab]);
     expect(scopedOpenTabs).toEqual([scopedOpenTab]);
     expect(snapshots).toEqual([snapshot]);
+    expect(annotationDrafts).toEqual([annotationDraft]);
     expect(windowStates).toEqual([{ isFullScreen: true }]);
     expect(closeWindowRequestCount).toBe(1);
     expect(openNewTabCount).toBe(1);

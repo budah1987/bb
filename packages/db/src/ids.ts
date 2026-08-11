@@ -64,6 +64,10 @@ export function createPendingInteractionId(): string {
   return createId("pint");
 }
 
+export function createBrowserAnnotationId(): string {
+  return createId("ann");
+}
+
 export function createHostDaemonSessionId(): string {
   return createId("hses");
 }

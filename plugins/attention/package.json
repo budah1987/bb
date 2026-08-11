@@ -1,0 +1,38 @@
+{
+  "name": "bb-plugin-attention",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Desktop and mobile notifications for agents that need attention.",
+  "engines": {
+    "bb": ">=0.36",
+    "bbPluginSdk": "^0.4.1"
+  },
+  "bb": {
+    "name": "BB Attention",
+    "description": "Desktop and mobile notifications for agents that have completed or need input, with an Option+L attention queue.",
+    "branding": {
+      "icon": "Bell"
+    },
+    "server": "./server.ts",
+    "app": "./app.tsx"
+  },
+  "scripts": {
+    "build": "node --conditions=source --import tsx ../../scripts/build-official-plugins.mjs attention",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@bb/plugin-sdk": "workspace:*",
+    "@bb/shared-ui": "workspace:*",
+    "react": "^19.0.0",
+    "web-push": "^3.6.7",
+    "zod": "4.3.6"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@types/react": "^19.0.0",
+    "@types/web-push": "^3.6.4",
+    "typescript": "npm:@typescript/typescript6@^6.0.2",
+    "typescript-7": "npm:typescript@^7.0.2"
+  }
+}

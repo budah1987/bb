@@ -484,6 +484,7 @@ export const environmentActionTypeSchema = z.enum([
   "commit",
   "squash_merge",
   "publish_to_main",
+  "update_from_main",
   "pull_request_metadata",
   "pull_request_create",
   "pull_request_ready",
@@ -505,6 +506,9 @@ export const publishToMainOptionsSchema = z
   .strict()
   .default({ preserveTargetChanges: false });
 export type PublishToMainOptions = z.infer<typeof publishToMainOptionsSchema>;
+
+export const updateFromMainOptionsSchema = z.object({}).strict().default({});
+export type UpdateFromMainOptions = z.infer<typeof updateFromMainOptionsSchema>;
 
 export const pullRequestMergeOptionsSchema = z
   .object({
@@ -561,6 +565,12 @@ export const environmentActionRequestSchema = z.discriminatedUnion("action", [
     .object({
       action: z.literal("publish_to_main"),
       options: publishToMainOptionsSchema,
+    })
+    .strict(),
+  z
+    .object({
+      action: z.literal("update_from_main"),
+      options: updateFromMainOptionsSchema,
     })
     .strict(),
   z
@@ -634,6 +644,22 @@ export type PublishToMainActionResponse = z.infer<
   typeof publishToMainActionResponseSchema
 >;
 
+export const updateFromMainActionResponseSchema = z.object({
+  ok: z.literal(true),
+  action: z.literal("update_from_main"),
+  message: z.string().min(1),
+  outcome: z.enum(["updated", "already_current"]),
+  sourceBranch: gitBranchNameSchema,
+  targetBranch: z.literal("main"),
+  previousSha: z.string().min(1),
+  currentSha: z.string().min(1),
+  targetSha: z.string().min(1),
+  rebasedCommitCount: z.number().int().nonnegative(),
+});
+export type UpdateFromMainActionResponse = z.infer<
+  typeof updateFromMainActionResponseSchema
+>;
+
 export const pullRequestMetadataActionResponseSchema = z.object({
   ok: z.literal(true),
   action: z.literal("pull_request_metadata"),
@@ -687,6 +713,7 @@ export const environmentActionResponseSchema = z.discriminatedUnion("action", [
   commitActionResponseSchema,
   squashMergeActionResponseSchema,
   publishToMainActionResponseSchema,
+  updateFromMainActionResponseSchema,
   pullRequestMetadataActionResponseSchema,
   pullRequestCreateActionResponseSchema,
   pullRequestReadyActionResponseSchema,
@@ -738,6 +765,25 @@ export const environmentActionFailureDetailsSchema = z.discriminatedUnion(
       remoteTargetSha: z.string().min(1).nullable(),
       localTargetSha: z.string().min(1).nullable(),
       conflictFiles: z.array(z.string().min(1)),
+    }),
+    z.object({
+      kind: z.literal("update_from_main_blocked"),
+      reason: z.enum([
+        "source_detached",
+        "source_dirty",
+        "source_is_target",
+        "rebase_conflict",
+      ]),
+      sourceBranch: gitBranchNameSchema.nullable(),
+      targetBranch: z.literal("main"),
+      previousSha: z.string().min(1).nullable(),
+      targetSha: z.string().min(1).nullable(),
+      conflictFiles: z.array(z.string().min(1)),
+    }),
+    z.object({
+      kind: z.literal("workspace_busy"),
+      action: z.literal("update_from_main"),
+      reason: z.literal("active_threads"),
     }),
     z.object({
       kind: z.literal("workspace_unavailable"),

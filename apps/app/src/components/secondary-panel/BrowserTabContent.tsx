@@ -29,6 +29,10 @@ import {
   resolveBrowserAddressInput,
 } from "@/lib/browser-url";
 import { useBrowserHistory } from "@/lib/browser-history";
+import {
+  browserAnnotationStore,
+  useBrowserAnnotations,
+} from "@/lib/browser-annotations";
 import { BROWSER_VIEW_BOUNDS_SYNC_EVENT } from "@/lib/browser-view-bounds-sync";
 import { useIsBrowserDimmingModalOpen } from "@/hooks/useBrowserDimmingModal";
 import { usePointerCoarse } from "@bb/shared-ui/hooks/use-pointer-coarse";
@@ -90,14 +94,25 @@ interface BrowserChromeProps {
   onOpenExternal: () => void;
   locationShortcut: AppShortcutPresentation | null;
   reloadShortcut: AppShortcutPresentation | null;
+  annotationsActive: boolean;
+  annotationsCount: number;
+  annotationsSupported: boolean;
+  onToggleAnnotations: () => void;
 }
 
 interface NavButtonProps {
-  icon: "ChevronLeft" | "ChevronRight" | "RotateCcw" | "X" | "ExternalLink";
+  icon:
+    | "ChevronLeft"
+    | "ChevronRight"
+    | "RotateCcw"
+    | "X"
+    | "ExternalLink"
+    | "MessageSquarePlus";
   label: string;
   disabled?: boolean;
   onClick: () => void;
   shortcut?: AppShortcutPresentation | null;
+  pressed?: boolean;
 }
 
 interface BrowserViewBoundsFromElementArgs {
@@ -212,6 +227,7 @@ function NavButton({
   disabled,
   onClick,
   shortcut,
+  pressed,
 }: NavButtonProps) {
   const accessibleLabel = shortcut ? `${label} (${shortcut.label})` : label;
   return (
@@ -221,8 +237,10 @@ function NavButton({
       disabled={disabled}
       aria-label={accessibleLabel}
       aria-keyshortcuts={shortcut?.ariaKeyshortcuts}
+      aria-pressed={pressed}
       className={cn(
-        "flex shrink-0 items-center justify-center transition-colors hover:bg-state-hover hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-40",
+        "flex !size-10 shrink-0 items-center justify-center rounded-md transition-[scale,background-color,color] duration-150 ease-out hover:bg-state-hover hover:text-foreground active:scale-[0.96] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-40 motion-reduce:transition-none",
+        pressed && "bg-accent text-accent-foreground",
         COARSE_POINTER_HEADER_ICON_BUTTON_CLASS,
         CHROME_SUBTLE_ICON_BUTTON_FOREGROUND_CLASS,
       )}
@@ -248,6 +266,10 @@ function BrowserChrome({
   onOpenExternal,
   locationShortcut,
   reloadShortcut,
+  annotationsActive,
+  annotationsCount,
+  annotationsSupported,
+  onToggleAnnotations,
 }: BrowserChromeProps) {
   const isLoading = state?.isLoading ?? false;
   const security = getBrowserUrlSecurity(currentUrl);
@@ -334,6 +356,7 @@ function BrowserChrome({
               aria-keyshortcuts={locationShortcut?.ariaKeyshortcuts}
               autoComplete="off"
               spellCheck={false}
+              required
               className={cn(
                 "min-w-0 flex-1 bg-transparent font-mono text-foreground outline-none placeholder:font-sans placeholder:text-muted-foreground",
                 COARSE_POINTER_TEXT_SM_CLASS,
@@ -342,15 +365,34 @@ function BrowserChrome({
           </div>
         </form>
         <NavButton
+          icon="MessageSquarePlus"
+          label={
+            annotationsCount > 0
+              ? `Annotate page, ${annotationsCount} drafts`
+              : "Annotate page"
+          }
+          disabled={!annotationsSupported || currentUrl.length === 0}
+          pressed={annotationsActive}
+          onClick={onToggleAnnotations}
+        />
+        <NavButton
           icon="ExternalLink"
           label="Open in external browser"
           disabled={currentUrl.length === 0}
           onClick={onOpenExternal}
         />
         {isLoading ? (
-          <span className="absolute inset-x-0 bottom-0 h-0.5 overflow-hidden">
-            <span className="block h-full w-1/3 animate-pulse bg-ring/70 motion-reduce:animate-none" />
-          </span>
+          <>
+            <span className="sr-only" role="status" aria-live="polite">
+              Page loading
+            </span>
+            <span
+              aria-hidden="true"
+              className="absolute inset-x-0 bottom-0 h-0.5 overflow-hidden"
+            >
+              <span className="block h-full w-1/3 animate-pulse bg-ring/70 motion-reduce:animate-none" />
+            </span>
+          </>
         ) : null}
       </div>
     </div>
@@ -392,7 +434,10 @@ function BrowserPageLoadError({
     : "The browser could not load this page. Try reloading or opening it externally.";
 
   return (
-    <div className="flex h-full flex-col items-center justify-center px-6 text-center">
+    <div
+      className="flex h-full flex-col items-center justify-center px-6 text-center"
+      role="alert"
+    >
       <div className="flex w-full max-w-sm flex-col items-center gap-3">
         <span className="flex size-11 items-center justify-center rounded-lg border border-border bg-surface-recessed text-muted-foreground">
           <Icon name="Globe" className="size-6" aria-hidden />
@@ -412,7 +457,7 @@ function BrowserPageLoadError({
           <button
             type="button"
             onClick={onRetry}
-            className="inline-flex h-8 items-center gap-1.5 rounded-md border border-border bg-background px-2.5 text-xs font-medium text-foreground transition-colors hover:bg-state-hover"
+            className="inline-flex min-h-10 items-center gap-1.5 rounded-md border border-border bg-background px-3 text-xs font-medium text-foreground transition-[scale,background-color] duration-150 ease-out hover:bg-state-hover active:scale-[0.96] motion-reduce:transition-none"
           >
             <Icon name="RotateCcw" className="size-3.5" aria-hidden />
             Reload
@@ -420,7 +465,7 @@ function BrowserPageLoadError({
           <button
             type="button"
             onClick={onOpenExternal}
-            className="inline-flex h-8 items-center gap-1.5 rounded-md px-2.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-state-hover hover:text-foreground"
+            className="inline-flex min-h-10 items-center gap-1.5 rounded-md px-3 text-xs font-medium text-muted-foreground transition-[scale,background-color,color] duration-150 ease-out hover:bg-state-hover hover:text-foreground active:scale-[0.96] motion-reduce:transition-none"
           >
             <Icon name="ExternalLink" className="size-3.5" aria-hidden />
             Open externally
@@ -464,6 +509,14 @@ export function BrowserTabContent({
   const [currentUrl, setCurrentUrl] = useState(initialUrl);
   const [addressDraft, setAddressDraft] = useState(initialUrl);
   const [isEditing, setIsEditing] = useState(false);
+  const [annotationsActive, setAnnotationsActive] = useState(false);
+  const {
+    drafts: annotationDrafts,
+    selectedId: selectedAnnotationId,
+    selectDraft: selectAnnotationDraft,
+  } = useBrowserAnnotations(threadId, tabId);
+  const annotationModeEnabled =
+    annotationsActive || selectedAnnotationId !== null;
   // Bitmap stand-in pushed by the desktop main process while the native view
   // is hidden during a native window resize; null outside resize bursts.
   const [resizeSnapshotUrl, setResizeSnapshotUrl] = useState<string | null>(
@@ -607,10 +660,17 @@ export function BrowserTabContent({
       }
       setResizeSnapshotUrl(snapshot.dataUrl);
     });
+    const unsubscribeAnnotationDraft = desktopBrowser.onAnnotationDraft?.(
+      (draft) => {
+        if (draft.tabId !== tabId) return;
+        browserAnnotationStore.addDraft(threadId, draft, environmentId);
+      },
+    );
 
     return () => {
       unsubscribe();
       unsubscribeSnapshot?.();
+      unsubscribeAnnotationDraft?.();
       // The native view survives this unmount. Only explicit tab close/thread
       // deletion owns detach; unmount just disconnects this component's state
       // listener and forgets any stale visibility ownership.
@@ -682,6 +742,55 @@ export function BrowserTabContent({
     !hasPageLoadError &&
     isBrowserViewAttached &&
     !isBrowserDimmingModalOpen;
+  useEffect(() => {
+    if (desktopBrowser?.setAnnotationMode === undefined) return;
+    desktopBrowser.setAnnotationMode({
+      tabId,
+      enabled: annotationModeEnabled && isViewVisible,
+    });
+    return () => {
+      desktopBrowser.setAnnotationMode?.({ tabId, enabled: false });
+    };
+  }, [annotationModeEnabled, desktopBrowser, isViewVisible, tabId]);
+  useEffect(() => {
+    if (desktopBrowser?.syncAnnotations === undefined) return;
+    const openAnnotations = annotationDrafts
+      .filter((draft) => draft.status === "open")
+      .slice(0, 50)
+      .map((draft, index) => ({
+        id: draft.id,
+        number: index + 1,
+        selector: draft.selector,
+        comment: draft.comment,
+        rectangle: draft.rectangle,
+      }));
+    desktopBrowser.syncAnnotations({ tabId, annotations: openAnnotations });
+  }, [annotationDrafts, desktopBrowser, tabId]);
+  useEffect(() => {
+    if (
+      !annotationModeEnabled ||
+      !isViewVisible ||
+      selectedAnnotationId === null ||
+      desktopBrowser?.focusAnnotation === undefined
+    ) {
+      return;
+    }
+    const selected = annotationDrafts.find(
+      (draft) => draft.id === selectedAnnotationId,
+    );
+    if (selected === undefined) return;
+    desktopBrowser.focusAnnotation({
+      tabId,
+      rectangle: selected.rectangle,
+    });
+  }, [
+    annotationDrafts,
+    annotationModeEnabled,
+    desktopBrowser,
+    isViewVisible,
+    selectedAnnotationId,
+    tabId,
+  ]);
   // A layout effect (pre-paint) declares visibility so showing/hiding lands in
   // the same frame as the DOM tab swap — no flash. Ordering across tabs (hide
   // the previously-visible view BEFORE showing this one) and bounds-before-show
@@ -817,6 +926,22 @@ export function BrowserTabContent({
         onOpenExternal={handleOpenExternal}
         locationShortcut={locationShortcut}
         reloadShortcut={reloadShortcut}
+        annotationsActive={annotationModeEnabled}
+        annotationsCount={
+          annotationDrafts.filter((draft) => draft.status === "open").length
+        }
+        annotationsSupported={
+          desktopBrowser.setAnnotationMode !== undefined &&
+          desktopBrowser.onAnnotationDraft !== undefined
+        }
+        onToggleAnnotations={() => {
+          if (annotationModeEnabled) {
+            setAnnotationsActive(false);
+            selectAnnotationDraft(null);
+            return;
+          }
+          setAnnotationsActive(true);
+        }}
       />
       <div ref={contentRef} className="relative min-h-0 flex-1">
         {hasPageLoadError ? (

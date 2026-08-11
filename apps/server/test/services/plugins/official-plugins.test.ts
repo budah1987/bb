@@ -86,20 +86,24 @@ describe("official plugin registry invariants", () => {
 
   it("assigns every bundled plugin to one curated store category", () => {
     const expectedCategories = {
+      attention: "Agent interaction",
       "ask-user-question": "Agent interaction",
       automations: "Workflow management",
       connect: "Host access",
       "conductor-workspaces": "Interface",
       "custom-instructions": "Context & knowledge",
+      "design-canvas": "Interface",
       docs: "Context & knowledge",
       github: "Developer tools",
       "ingestion-desk": "Context & knowledge",
       "inline-vis": "Interface",
+      "md-editor": "Interface",
       memory: "Context & knowledge",
       "provider-retry": "Agent interaction",
       secrets: "Developer tools",
       "side-chat": "Agent interaction",
       tasks: "Workflow management",
+      t3sidebar: "Interface",
       workflows: "Workflow management",
     };
 

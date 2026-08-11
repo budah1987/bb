@@ -141,6 +141,25 @@ Inspecting:
   next; it is written by `recap`, never by `set`. A recap that already reflects
   every event in the thread is returned unchanged unless you pass `--force`.
 
+  bb thread annotations list [id]          List browser annotations
+    --tab <id>                             Filter by browser tab
+    --status <status>                      Filter by open, sent, or resolved
+    --json                                 Print machine-readable JSON output
+
+  bb thread annotations add <comment> [id] Create a browser annotation
+    --tab <id> --url <url> --selector <css>
+    --viewport <width,height> --rect <x,y,width,height>
+
+  bb thread annotations update <annotation-id> [id]
+    --revision <number>                    Prevent a concurrent overwrite
+    --comment <text> --status <status>
+
+  bb thread annotations delete <annotation-id> [id] --revision <number>
+  bb thread annotations clear [id] [--tab <id>] [--annotation <id...>]
+
+  Annotation updates and deletes require the latest revision. Read it with
+  `annotations list` before each write.
+
   bb thread wait <id>                      Wait for a thread status or event (defaults to --status idle)
     --status <status>                      Wait for this status
     --event <type>                         Wait for this event type

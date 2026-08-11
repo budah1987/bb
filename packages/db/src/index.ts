@@ -19,6 +19,7 @@ export {
   createHostDaemonSessionId,
   createHostId,
   createPendingInteractionId,
+  createBrowserAnnotationId,
   createProjectId,
   createPromptHistoryEntryId,
   createProjectSourceId,

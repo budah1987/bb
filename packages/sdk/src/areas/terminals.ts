@@ -63,6 +63,7 @@ export interface TerminalListArgs {
 export interface TerminalCreateArgs {
   cols: number;
   rows: number;
+  restartPolicy?: CreateTerminalRequest["restartPolicy"];
   scope: TerminalCreateScope;
   start?: CreateTerminalRequest["start"];
   title?: string;
@@ -121,11 +122,11 @@ export interface TerminalsArea {
   output(args: TerminalOutputArgs): Promise<TerminalOutputResult>;
   rename(args: TerminalRenameArgs): Promise<TerminalRenameResult>;
   /**
-   * Replace a terminal with a shell at the same scope, size, and title.
+   * Replace a terminal at the same scope, size, and title.
    * The server serializes concurrent restarts and opens the replacement before
    * closing the old session, so a failed open leaves the old terminal running.
-   * The original command is not replayed because terminal sessions do not
-   * persist launch commands. The replacement has a new terminal ID.
+   * Named command terminals replay their saved command. Shell terminals open
+   * a new shell. The replacement has a new terminal ID.
    */
   restart(args: TerminalRestartArgs): Promise<TerminalRestartResult>;
   resize(args: TerminalResizeArgs): Promise<TerminalResizeResult>;
@@ -220,6 +221,7 @@ export function createTerminalsArea(args: CreateSdkAreaArgs): TerminalsArea {
         json: {
           cols: input.cols,
           rows: input.rows,
+          restartPolicy: input.restartPolicy,
           start: input.start,
           target: terminalCreateTarget(input.scope),
           title: input.title,

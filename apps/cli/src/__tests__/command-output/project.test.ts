@@ -43,6 +43,54 @@ describe("bb project command output", () => {
     expect(help).toContain("Alias for --machine");
   });
 
+  it("runs a repository manager briefing with a user focus", async () => {
+    const post = vi.fn(async () => ({ id: "thread_manager" }));
+    stubServerApi({ "v1.projects.:id.manager.run.$post": post });
+
+    await runCommand(
+      ["project", "manager", "run", "project_1", "--prompt", "Review CI"],
+      register,
+    );
+
+    expect(post).toHaveBeenCalledWith({
+      param: { id: "project_1" },
+      json: { prompt: "Review CI" },
+    });
+    expect(collectLogLines(vi.mocked(console.log))).toEqual([
+      "Repository manager thread started: thread_manager",
+    ]);
+  });
+
+  it("updates typed repository manager settings", async () => {
+    const patch = vi.fn(async () => ({
+      enabled: false,
+      providerId: "codex",
+      model: "gpt-5.4-mini",
+      reasoningLevel: "high",
+      serviceTier: "default",
+      permissionMode: "auto",
+    }));
+    stubServerApi({ "v1.projects.:id.manager.settings.$patch": patch });
+
+    await runCommand(
+      [
+        "project",
+        "manager",
+        "settings",
+        "project_1",
+        "--disable",
+        "--reasoning",
+        "high",
+      ],
+      register,
+    );
+
+    expect(patch).toHaveBeenCalledWith({
+      param: { id: "project_1" },
+      json: { enabled: false, reasoningLevel: "high" },
+    });
+  });
+
   it("lists authenticated GitHub accounts and the active default", async () => {
     const get = vi.fn(async () => ({
       accounts: [

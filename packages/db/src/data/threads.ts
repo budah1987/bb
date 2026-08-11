@@ -597,10 +597,20 @@ export interface HasNonTerminalThreadInEnvironmentArgs {
   environmentId: string;
 }
 
+export interface HasBusyThreadInEnvironmentArgs {
+  environmentId: string;
+}
+
 const NON_TERMINAL_THREAD_STATUSES: readonly ThreadStatus[] = [
   "starting",
   "idle",
   "active",
+];
+
+const BUSY_THREAD_STATUSES: readonly ThreadStatus[] = [
+  "starting",
+  "active",
+  "stopping",
 ];
 
 interface StatusTransition {
@@ -1397,6 +1407,26 @@ export function hasNonTerminalThreadInEnvironment(
       and(
         eq(threads.environmentId, args.environmentId),
         inArray(threads.status, [...NON_TERMINAL_THREAD_STATUSES]),
+        isNull(threads.deletedAt),
+      ),
+    )
+    .get();
+
+  return row !== undefined;
+}
+
+/** Whether an agent can still write to the environment's workspace. */
+export function hasBusyThreadInEnvironment(
+  db: DbConnection,
+  args: HasBusyThreadInEnvironmentArgs,
+): boolean {
+  const row = db
+    .select({ id: threads.id })
+    .from(threads)
+    .where(
+      and(
+        eq(threads.environmentId, args.environmentId),
+        inArray(threads.status, [...BUSY_THREAD_STATUSES]),
         isNull(threads.deletedAt),
       ),
     )

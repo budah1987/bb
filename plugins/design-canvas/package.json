@@ -1,0 +1,36 @@
+{
+  "name": "bb-plugin-design-canvas",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Render durable Paper and MagicPath previews inside BB messages.",
+  "engines": {
+    "bb": ">=0.36",
+    "bbPluginSdk": "^0.4.1"
+  },
+  "bb": {
+    "name": "Design Preview",
+    "description": "Render durable Paper and MagicPath previews directly in BB messages on desktop and mobile.",
+    "branding": {
+      "icon": "Palette"
+    },
+    "server": "./server.ts",
+    "app": "./app.tsx"
+  },
+  "scripts": {
+    "build": "node --conditions=source --import tsx ../../scripts/build-official-plugins.mjs design-canvas",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@bb/plugin-sdk": "workspace:*",
+    "@bb/shared-ui": "workspace:*",
+    "react": "^19.0.0",
+    "zod": "4.3.6"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@types/react": "^19.0.0",
+    "typescript": "npm:@typescript/typescript6@^6.0.2",
+    "typescript-7": "npm:typescript@^7.0.2"
+  }
+}

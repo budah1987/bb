@@ -46,11 +46,11 @@ export const RAIL_PLACEHOLDER_CLASS =
 
 /**
  * Every interactive rail element shares one shape: a full-width, `rounded-lg`
- * target with `px-2 py-1` and a raised hover fill. Section headers and rows are
- * the same grammar at different emphases.
+ * target with a 40px minimum hit area, `px-2 py-1`, and a raised hover fill.
+ * Section headers and rows use the same grammar at different emphases.
  */
 export const RAIL_INTERACTIVE_CLASS =
-  "flex w-full min-w-0 items-center gap-2 rounded-lg px-2 py-1 text-left outline-none hover:bg-state-hover focus-visible:bg-state-hover focus-visible:ring-1 focus-visible:ring-ring";
+  "flex min-h-10 w-full min-w-0 items-center gap-2 rounded-lg px-2 py-1 text-left outline-none hover:bg-state-hover focus-visible:bg-state-hover focus-visible:ring-1 focus-visible:ring-ring";
 
 /** Body inset for a section, sized so content lines up under its header label. */
 export const RAIL_SECTION_BODY_CLASS = "px-2 pb-1";

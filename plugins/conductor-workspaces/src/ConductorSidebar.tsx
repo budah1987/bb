@@ -26,8 +26,11 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import {
   experimental_useSidebarThreadActions as useSidebarThreadActions,
+  experimental_useSidebarThreadPullRequest as useSidebarThreadPullRequest,
   experimental_useSidebarThreads as useSidebarThreads,
+  useBbNavigate,
   useRpc,
+  type PluginSidebarPullRequest,
   type PluginSidebarThread,
   type PluginThreadListProps,
 } from "@bb/plugin-sdk/app";
@@ -99,6 +102,7 @@ import {
   type ProjectIconTarget,
   type ProjectRenameTarget,
 } from "./ProjectCustomizationDialogs";
+import { openRepositoryDetails } from "./RepositoryDetailsPane";
 
 type RenameScope = "display" | "branch" | "folder";
 
@@ -112,6 +116,67 @@ interface RenameTarget {
 interface ArchiveTarget {
   environmentId: string;
   workspaceTitle: string;
+}
+
+interface WorkspaceGitSummary {
+  environmentId: string;
+  workspacePath: string | null;
+  gitAvailable: boolean;
+  aheadCount: number;
+  behindCount: number;
+  changedFiles: number;
+}
+
+function pullRequestLabel(pullRequest: PluginSidebarPullRequest): string {
+  const detail = (() => {
+    switch (pullRequest.attention) {
+      case "ready_to_merge":
+      case "merged":
+        return "✓";
+      case "checks_failed":
+        return "Checks failed";
+      case "checks_pending":
+        return "Checks pending";
+      case "changes_requested":
+        return "Changes requested";
+      case "review_requested":
+        return "Review requested";
+      case "conflicts":
+        return "Conflicts";
+      case "blocked":
+        return "Blocked";
+      case "draft":
+        return "Draft";
+      case "closed":
+        return "Closed";
+      case "none":
+        return null;
+    }
+  })();
+  return [`PR #${pullRequest.number}`, detail].filter(Boolean).join(" ");
+}
+
+function workspaceGitLabel(
+  summary: WorkspaceGitSummary | null,
+  pullRequest: PluginSidebarPullRequest | null,
+): string | null {
+  const parts: string[] = [];
+  if (summary?.gitAvailable) {
+    const divergence = [
+      summary.aheadCount > 0 ? `↑${summary.aheadCount}` : null,
+      summary.behindCount > 0 ? `↓${summary.behindCount}` : null,
+    ]
+      .filter(Boolean)
+      .join(" ");
+    if (divergence) parts.push(divergence);
+    parts.push(
+      summary.changedFiles === 0
+        ? "Clean"
+        : `${summary.changedFiles} change${summary.changedFiles === 1 ? "" : "s"}`,
+    );
+  }
+  if (pullRequest) parts.push(pullRequestLabel(pullRequest));
+  return parts.length > 0 ? parts.join(" · ") : null;
 }
 
 interface GithubAccountOption {
@@ -265,8 +330,7 @@ function AddRepositoryDialog({
               </p>
             ) : filteredRepositories.length === 0 ? (
               <p className="px-3 py-5 text-xs text-muted-foreground">
-                No repositories are visible to any authenticated GitHub
-                account.
+                No repositories are visible to any authenticated GitHub account.
               </p>
             ) : (
               filteredRepositories.map((repository) => (
@@ -630,6 +694,7 @@ function SectionHeader({
 
 function WorkspaceRow({
   workspace,
+  gitSummary,
   activeThreadId,
   archivePending,
   dragDisabled,
@@ -639,12 +704,14 @@ function WorkspaceRow({
   jumpShortcut,
   showJumpShortcut,
   onOpen,
+  onCreateConversation,
   onRequestArchive,
   onRequestRename,
   onSetRead,
   onSetFocused,
 }: {
   workspace: ConductorWorkspace;
+  gitSummary: WorkspaceGitSummary | null;
   activeThreadId: string | null;
   archivePending: boolean;
   dragDisabled: boolean;
@@ -653,13 +720,17 @@ function WorkspaceRow({
   shortcutEnabled: boolean;
   jumpShortcut: { ariaKeyshortcuts: string; label: string } | null;
   showJumpShortcut: boolean;
-  onOpen: (threadId: string) => void;
+  onOpen: (threadId: string, options?: { split?: boolean }) => void;
+  onCreateConversation: (workspace: ConductorWorkspace) => void;
   onRequestArchive: (workspace: ConductorWorkspace) => void;
   onRequestRename: (workspace: ConductorWorkspace, scope: RenameScope) => void;
   onSetRead: (workspace: ConductorWorkspace, read: boolean) => void;
   onSetFocused: (workspace: ConductorWorkspace, focused: boolean) => void;
 }) {
   const target = pickWorkspaceThread(workspace, activeThreadId);
+  const pullRequestState = useSidebarThreadPullRequest(target?.id ?? "");
+  const pullRequest = pullRequestState.pullRequest;
+  const gitLabel = workspaceGitLabel(gitSummary, pullRequest);
   const isActive = workspace.threads.some(
     (thread) => thread.id === activeThreadId,
   );
@@ -728,8 +799,13 @@ function WorkspaceRow({
           }
         >
           <span className="min-w-0 flex-1 truncate">
-            {workspace.branchName ??
-              `${workspace.threads.length} conversation${workspace.threads.length === 1 ? "" : "s"}`}
+            {[
+              workspace.branchName ??
+                `${workspace.threads.length} conversation${workspace.threads.length === 1 ? "" : "s"}`,
+              gitLabel,
+            ]
+              .filter(Boolean)
+              .join(" · ")}
           </span>
         </span>
       </span>
@@ -761,6 +837,23 @@ function WorkspaceRow({
     <ContextMenu>
       <ContextMenuTrigger asChild>{sortableRow}</ContextMenuTrigger>
       <ContextMenuContent aria-label={`${workspace.title} actions`}>
+        <ContextMenuItem onSelect={() => target && onOpen(target.id)}>
+          <Icon name="ArrowRight" aria-hidden />
+          Open workspace
+        </ContextMenuItem>
+        <ContextMenuItem
+          onSelect={() => target && onOpen(target.id, { split: true })}
+        >
+          <Icon name="Columns2" aria-hidden />
+          Open in split
+        </ContextMenuItem>
+        {workspace.environmentId ? (
+          <ContextMenuItem onSelect={() => onCreateConversation(workspace)}>
+            <Icon name="MessageSquarePlus" aria-hidden />
+            New conversation
+          </ContextMenuItem>
+        ) : null}
+        <ContextMenuSeparator />
         <ContextMenuItem
           onSelect={() => onSetRead(workspace, !isExplicitlyRead)}
         >
@@ -772,27 +865,52 @@ function WorkspaceRow({
           <Icon name={focused ? "PinOff" : "Pin"} aria-hidden />
           {focused ? "Remove from Focus" : "Add to Focus"}
         </ContextMenuItem>
-        {isWorktree && workspace.environmentId ? (
+        {workspace.environmentId ? (
           <>
             <ContextMenuSeparator />
+            <ContextMenuItem
+              disabled={!gitSummary?.workspacePath}
+              onSelect={() => {
+                if (gitSummary?.workspacePath) {
+                  void navigator.clipboard.writeText(gitSummary.workspacePath);
+                }
+              }}
+            >
+              <Icon name="Copy" aria-hidden />
+              Copy path
+            </ContextMenuItem>
             <ContextMenuItem
               onSelect={() => onRequestRename(workspace, "display")}
             >
               <Icon name="Edit" aria-hidden />
               Rename sidebar label…
             </ContextMenuItem>
-            <ContextMenuItem
-              onSelect={() => onRequestRename(workspace, "branch")}
-            >
-              <Icon name="GitBranch" aria-hidden />
-              Rename branch…
-            </ContextMenuItem>
-            <ContextMenuItem
-              onSelect={() => onRequestRename(workspace, "folder")}
-            >
-              <Icon name="Folder" aria-hidden />
-              Rename folder…
-            </ContextMenuItem>
+            {isWorktree ? (
+              <>
+                <ContextMenuItem
+                  onSelect={() => onRequestRename(workspace, "branch")}
+                >
+                  <Icon name="GitBranch" aria-hidden />
+                  Rename branch…
+                </ContextMenuItem>
+                <ContextMenuItem
+                  onSelect={() => onRequestRename(workspace, "folder")}
+                >
+                  <Icon name="Folder" aria-hidden />
+                  Rename folder…
+                </ContextMenuItem>
+              </>
+            ) : null}
+            {pullRequest ? (
+              <ContextMenuItem
+                onSelect={() =>
+                  window.open(pullRequest.url, "_blank", "noopener,noreferrer")
+                }
+              >
+                <Icon name="GitPullRequest" aria-hidden />
+                Open pull request
+              </ContextMenuItem>
+            ) : null}
             <ContextMenuSeparator />
             <ContextMenuItem
               disabled={archivePending}
@@ -883,6 +1001,7 @@ function ProjectDragPreview({
 
 function ProjectSection({
   project,
+  gitSummaries,
   customization,
   githubAccountLogin,
   githubAccounts,
@@ -897,17 +1016,20 @@ function ProjectSection({
   showJumpShortcuts,
   onToggle,
   onCreate,
+  onCreateConversation,
   onOpen,
   onRequestArchive,
   onRequestRename,
   onSetRead,
   onSetFocused,
   onRequestRenameProject,
+  onOpenDetails,
   onRequestChangeIcon,
   onRequestGithubCatalog,
   onSetGithubAccount,
 }: {
   project: ConductorProject;
+  gitSummaries: ReadonlyMap<string, WorkspaceGitSummary>;
   customization: ProjectCustomization | undefined;
   githubAccountLogin: string | null;
   githubAccounts: readonly GithubAccountOption[];
@@ -925,12 +1047,14 @@ function ProjectSection({
   showJumpShortcuts: boolean;
   onToggle: () => void;
   onCreate: () => void;
-  onOpen: (threadId: string) => void;
+  onCreateConversation: (workspace: ConductorWorkspace) => void;
+  onOpen: (threadId: string, options?: { split?: boolean }) => void;
   onRequestArchive: (workspace: ConductorWorkspace) => void;
   onRequestRename: (workspace: ConductorWorkspace, scope: RenameScope) => void;
   onSetRead: (workspace: ConductorWorkspace, read: boolean) => void;
   onSetFocused: (workspace: ConductorWorkspace, focused: boolean) => void;
   onRequestRenameProject: () => void;
+  onOpenDetails: () => void;
   onRequestChangeIcon: () => void;
   onRequestGithubCatalog: () => void;
   onSetGithubAccount: (accountLogin: string | null) => void;
@@ -1008,6 +1132,11 @@ function ProjectSection({
           </div>
         </ContextMenuTrigger>
         <ContextMenuContent aria-label={`${projectLabel} actions`}>
+          <ContextMenuItem onSelect={onOpenDetails}>
+            <Icon name="Info" aria-hidden />
+            Details
+          </ContextMenuItem>
+          <ContextMenuSeparator />
           <ContextMenuItem onSelect={onRequestRenameProject}>
             <Icon name="Edit" aria-hidden />
             Rename…
@@ -1062,6 +1191,11 @@ function ProjectSection({
               <WorkspaceRow
                 key={workspace.key}
                 workspace={workspace}
+                gitSummary={
+                  workspace.environmentId
+                    ? (gitSummaries.get(workspace.environmentId) ?? null)
+                    : null
+                }
                 activeThreadId={activeThreadId}
                 archivePending={archivePending}
                 dragDisabled={
@@ -1072,6 +1206,7 @@ function ProjectSection({
                 shortcutEnabled={!collapsed}
                 jumpShortcut={jumpShortcuts.get(workspace.key) ?? null}
                 showJumpShortcut={showJumpShortcuts}
+                onCreateConversation={onCreateConversation}
                 onOpen={onOpen}
                 onRequestArchive={onRequestArchive}
                 onRequestRename={onRequestRename}
@@ -1088,12 +1223,14 @@ function ProjectSection({
 
 function FocusSection({
   workspaces,
+  gitSummaries,
   activeThreadId,
   archivePending,
   collapsed,
   jumpShortcuts,
   showJumpShortcuts,
   onToggle,
+  onCreateConversation,
   onOpen,
   onRequestArchive,
   onRequestRename,
@@ -1101,6 +1238,7 @@ function FocusSection({
   onSetFocused,
 }: {
   workspaces: readonly ConductorWorkspace[];
+  gitSummaries: ReadonlyMap<string, WorkspaceGitSummary>;
   activeThreadId: string | null;
   archivePending: boolean;
   collapsed: boolean;
@@ -1110,7 +1248,8 @@ function FocusSection({
   >;
   showJumpShortcuts: boolean;
   onToggle: () => void;
-  onOpen: (threadId: string) => void;
+  onCreateConversation: (workspace: ConductorWorkspace) => void;
+  onOpen: (threadId: string, options?: { split?: boolean }) => void;
   onRequestArchive: (workspace: ConductorWorkspace) => void;
   onRequestRename: (workspace: ConductorWorkspace, scope: RenameScope) => void;
   onSetRead: (workspace: ConductorWorkspace, read: boolean) => void;
@@ -1144,6 +1283,11 @@ function FocusSection({
               <WorkspaceRow
                 key={workspace.key}
                 workspace={workspace}
+                gitSummary={
+                  workspace.environmentId
+                    ? (gitSummaries.get(workspace.environmentId) ?? null)
+                    : null
+                }
                 activeThreadId={activeThreadId}
                 archivePending={archivePending}
                 dragDisabled
@@ -1152,6 +1296,7 @@ function FocusSection({
                 shortcutEnabled={!collapsed}
                 jumpShortcut={jumpShortcuts.get(workspace.key) ?? null}
                 showJumpShortcut={showJumpShortcuts}
+                onCreateConversation={onCreateConversation}
                 onOpen={onOpen}
                 onRequestArchive={onRequestArchive}
                 onRequestRename={onRequestRename}
@@ -1174,6 +1319,7 @@ export function ConductorSidebar({
 }: PluginThreadListProps) {
   const state = useSidebarThreads();
   const actions = useSidebarThreadActions();
+  const navigate = useBbNavigate();
   const rpc = useRpc<typeof conductorRpcContract>();
   const { isLoading, legacyWorkspaces, record } = useReconciliation();
   const [collapsedSections, setCollapsedSections] = useState(
@@ -1206,6 +1352,9 @@ export function ConductorSidebar({
   const [projectAccountOverrides, setProjectAccountOverrides] = useState<
     Readonly<Record<string, string | null>>
   >({});
+  const [gitSummaries, setGitSummaries] = useState<
+    ReadonlyMap<string, WorkspaceGitSummary>
+  >(() => new Map());
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
     useSensor(KeyboardSensor, {
@@ -1357,6 +1506,46 @@ export function ConductorSidebar({
         : [],
     ),
   ];
+  const visibleEnvironmentSignature = [
+    ...new Set(
+      visibleWorkspaces.flatMap((workspace) =>
+        workspace.environmentId ? [workspace.environmentId] : [],
+      ),
+    ),
+  ]
+    .sort()
+    .slice(0, 50)
+    .join("\u0000");
+
+  useEffect(() => {
+    if (!visibleEnvironmentSignature) {
+      setGitSummaries(new Map());
+      return;
+    }
+    let cancelled = false;
+    const environmentIds = visibleEnvironmentSignature.split("\u0000");
+    const refresh = async () => {
+      const result = await rpc.call("readWorkspaceGitSummaries", {
+        environmentIds,
+      });
+      if (cancelled) return;
+      setGitSummaries(
+        new Map(
+          result.summaries.map((summary) => [summary.environmentId, summary]),
+        ),
+      );
+    };
+    void refresh().catch(() => undefined);
+    const interval = window.setInterval(() => {
+      if (document.visibilityState === "visible") {
+        void refresh().catch(() => undefined);
+      }
+    }, 30_000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+    };
+  }, [rpc, visibleEnvironmentSignature]);
   // Digit assignments mirror the jump handler below: 1–8 in visible order and
   // 9 for the last row. Held long enough, the chord modifier reveals them as
   // pills — the same affordance bb's own chrome uses for its shortcuts.
@@ -1467,8 +1656,22 @@ export function ConductorSidebar({
     });
   }
 
-  function openThread(threadId: string) {
-    actions.open(threadId);
+  function openThread(threadId: string, options?: { split?: boolean }) {
+    actions.open(threadId, options);
+    onNavigate();
+  }
+
+  function createWorkspaceConversation(workspace: ConductorWorkspace) {
+    if (!workspace.environmentId) return;
+    const target = pickWorkspaceThread(workspace, activeThreadId);
+    actions.openNewThread({
+      projectId: target?.projectId,
+      focusPrompt: true,
+      experimental_sameEnvironment: {
+        environmentId: workspace.environmentId,
+        locked: true,
+      },
+    });
     onNavigate();
   }
 
@@ -1734,12 +1937,14 @@ export function ConductorSidebar({
         >
           <FocusSection
             workspaces={focusedWorkspaces}
+            gitSummaries={gitSummaries}
             activeThreadId={activeThreadId}
             archivePending={archivePending}
             collapsed={focusCollapsed}
             jumpShortcuts={jumpShortcutByWorkspaceKey}
             showJumpShortcuts={showJumpShortcuts}
             onToggle={() => toggleSection("focus")}
+            onCreateConversation={createWorkspaceConversation}
             onOpen={openThread}
             onRequestArchive={(workspace) => {
               void requestArchive(workspace);
@@ -1763,6 +1968,7 @@ export function ConductorSidebar({
                 <ProjectSection
                   key={project.id}
                   project={project}
+                  gitSummaries={gitSummaries}
                   customization={customizations[project.id]}
                   githubAccountLogin={
                     projectAccountOverrides[project.id] === undefined
@@ -1791,6 +1997,7 @@ export function ConductorSidebar({
                     });
                     onNavigate();
                   }}
+                  onCreateConversation={createWorkspaceConversation}
                   onOpen={openThread}
                   onRequestArchive={(workspace) => {
                     void requestArchive(workspace);
@@ -1801,6 +2008,9 @@ export function ConductorSidebar({
                   onSetRead={setWorkspaceRead}
                   onSetFocused={setWorkspaceFocused}
                   onRequestRenameProject={() => requestRenameProject(project)}
+                  onOpenDetails={() =>
+                    openRepositoryDetails(navigate, project.id)
+                  }
                   onRequestChangeIcon={() => requestChangeProjectIcon(project)}
                   onRequestGithubCatalog={() => {
                     void loadGithubCatalog().catch(() => undefined);
