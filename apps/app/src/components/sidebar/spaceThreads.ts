@@ -1,15 +1,17 @@
 import { PERSONAL_PROJECT_ID } from "@bb/domain";
 
 export function filterSidebarThreadsForSpace<
-  Thread extends { projectId: string },
+  Thread extends { id: string; projectId: string },
 >(
   threads: readonly Thread[],
   activeSpaceProjectIds: ReadonlySet<string> | undefined,
+  globalPinnedThreadIds: ReadonlySet<string>,
 ): Thread[] {
-  if (activeSpaceProjectIds === undefined) return [...threads];
   return threads.filter(
     (thread) =>
       thread.projectId === PERSONAL_PROJECT_ID ||
-      activeSpaceProjectIds.has(thread.projectId),
+      activeSpaceProjectIds === undefined ||
+      activeSpaceProjectIds.has(thread.projectId) ||
+      globalPinnedThreadIds.has(thread.id),
   );
 }

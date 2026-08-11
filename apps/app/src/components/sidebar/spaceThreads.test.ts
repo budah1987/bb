@@ -5,23 +5,18 @@ import { filterSidebarThreadsForSpace } from "./spaceThreads";
 describe("filterSidebarThreadsForSpace", () => {
   const threads = [
     { id: "main", projectId: "proj_main" },
-    { id: "other-pinned", projectId: "proj_other" },
+    { id: "other", projectId: "proj_other" },
+    { id: "focused", projectId: "proj_other" },
     { id: "personal", projectId: PERSONAL_PROJECT_ID },
   ];
 
-  it("keeps only active Space and personal threads", () => {
+  it("keeps Pinned and Focus threads global", () => {
     expect(
-      filterSidebarThreadsForSpace(threads, new Set(["proj_main"])).map(
-        (thread) => thread.id,
-      ),
-    ).toEqual(["main", "personal"]);
-  });
-
-  it("keeps every thread when Spaces are unavailable", () => {
-    expect(
-      filterSidebarThreadsForSpace(threads, undefined).map(
-        (thread) => thread.id,
-      ),
-    ).toEqual(["main", "other-pinned", "personal"]);
+      filterSidebarThreadsForSpace(
+        threads,
+        new Set(["proj_main"]),
+        new Set(["focused"]),
+      ).map((thread) => thread.id),
+    ).toEqual(["main", "focused", "personal"]);
   });
 });
