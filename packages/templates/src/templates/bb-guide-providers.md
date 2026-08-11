@@ -87,6 +87,10 @@ host. For example, opencode, omp, Grok Build's grok CLI, or Hermes' hermes CLI
 on PATH appears as provider acp-opencode, acp-omp, acp-grok, or
 acp-hermes-agent.
 
+Cursor ACP threads discover project skills from .cursor/skills. This root can
+be a symlink to another skill root such as .agents/skills. bb shows a skill
+through a symlinked root as read-only under the Cursor project scope.
+
 Custom ACP agents are configured in the app data-dir config.json under
 customAcpAgents. bb derives provider id acp-<id> from each slug id. Edit the JSON
 and run bb-app config refresh; there is no set/unset CLI surface for this list.
@@ -95,3 +99,11 @@ example, override acp-opencode with id opencode. Use modelCli for CLI model
 listing/selection, reasoningCli for launch-time reasoning flags, and
 nativeReasoning for ACP session/set_config_option reasoning. Optional logo
 accepts an SVG, PNG, or WebP path; relative paths resolve from the bb data dir.
+Use nativeSkillRoots to add native skills to the composer. User roots resolve
+from the target host home directory. Project roots resolve from the selected
+workspace. Each root must use a relative path without dot segments.
+
+Use top-level sharedSkillRoots for one provider-neutral skill collection. The
+user and project paths use the same relative-path rules. bb indexes these roots
+as read-only sources. It then injects the selected skills into all providers.
+The bb user and project roots keep higher precedence than matching shared roots.

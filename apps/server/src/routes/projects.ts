@@ -1,7 +1,7 @@
 import path from "node:path";
 import {
   countProjectSources,
-  createProject,
+  findOrCreateProjectByLocalPathSource,
   getPersonalProject,
   createProjectSource,
   deleteProjectSource,
@@ -87,6 +87,8 @@ import {
   assertUsableHostId,
   requirePrimaryHostId,
 } from "../services/hosts/primary-host.js";
+import { resolveSharedSkills } from "../services/skills/shared-skills.js";
+import { resolveAcpLaunchSpecForProviderId } from "../services/system/acp-launch-spec.js";
 import {
   resolveProjectCommandWorkspace,
   resolveProjectWorkspaceTarget,
@@ -463,11 +465,21 @@ export function registerProjectRoutes(app: Hono, deps: AppDeps): void {
       }
     }
 
-    const { project } = createProject(deps.db, deps.hub, {
-      name: payload.name,
-      source: resolvedSource,
-      githubAccountLogin,
-    });
+    // Upstream #1277 dedupes by local folder. We rely on the atomic
+    // find-or-create rather than its pre-flight existence check: the clone
+    // branch above only knows its local path after cloning, and an early
+    // return would skip applying a supplied githubAccountLogin to the project
+    // we hand back. setProjectGitRemoteUrlIfMissing below is already a no-op
+    // when the found project has a remote.
+    const { project } = findOrCreateProjectByLocalPathSource(
+      deps.db,
+      deps.hub,
+      {
+        name: payload.name,
+        source: resolvedSource,
+        githubAccountLogin,
+      },
+    );
     if (gitRemoteUrl !== null) {
       setProjectGitRemoteUrlIfMissing(
         deps.db,
@@ -821,7 +833,11 @@ export function registerProjectRoutes(app: Hono, deps: AppDeps): void {
         : {}),
       ...(query.hostId !== undefined ? { hostId: query.hostId } : {}),
     });
-    const [result, projectSkillSources] = await Promise.all([
+    const acpLaunchSpec = resolveAcpLaunchSpecForProviderId(
+      deps,
+      query.provider,
+    );
+    const [result, projectSkillSources, sharedSkills] = await Promise.all([
       callHostRetryableOnlineRpc(deps, {
         hostId: workspace.hostId,
         timeoutMs: COMMAND_TIMEOUT_MS,
@@ -829,6 +845,9 @@ export function registerProjectRoutes(app: Hono, deps: AppDeps): void {
           type: "host.list_commands",
           providerId: query.provider,
           cwd: workspace.cwd,
+          ...(acpLaunchSpec?.nativeSkillRoots !== undefined
+            ? { nativeSkillRoots: acpLaunchSpec.nativeSkillRoots }
+            : {}),
         },
       }),
       workspace.cwd === null
@@ -837,8 +856,15 @@ export function registerProjectRoutes(app: Hono, deps: AppDeps): void {
             hostId: workspace.hostId,
             workspacePath: workspace.cwd,
           }),
+      resolveSharedSkills(deps, {
+        hostId: workspace.hostId,
+        cwd: workspace.cwd,
+      }),
     ]);
-    const skillCatalog = resolveSkillCatalog(deps, { projectSkillSources });
+    const skillCatalog = resolveSkillCatalog(deps, {
+      projectSkillSources,
+      sharedSkillSources: sharedSkills.runtimeSources,
+    });
     return context.json(
       buildCommandListResponse({
         commands: result.commands,

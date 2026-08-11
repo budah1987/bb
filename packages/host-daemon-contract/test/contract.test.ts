@@ -64,6 +64,10 @@ const ACP_LAUNCH_SPEC: HostDaemonAcpLaunchSpec = {
     supportedLevels: ["none", "low", "medium", "high", "xhigh", "max"],
     defaultLevel: "medium",
   },
+  nativeSkillRoots: {
+    user: [".agents/skills"],
+    project: [".agents/skills"],
+  },
   permissionCli: {
     full: ["--always-approve"],
     insertAfterArgs: 1,
@@ -884,6 +888,8 @@ const INTENTIONAL_OPTIONAL_HOST_DAEMON_FIELDS: Record<string, string> = {
     "ACP native reasoning config may omit defaultLevel so the bridge uses medium when supported or the first supported level.",
   "hostDaemonCommandSchema.acpLaunchSpec.nativeReasoning.levelValues":
     "ACP native reasoning config only needs levelValues when bb reasoning levels differ from the agent's ACP config vocabulary.",
+  "hostDaemonCommandSchema.acpLaunchSpec.nativeSkillRoots":
+    "dynamic ACP agents may omit nativeSkillRoots when they do not expose provider-native skills.",
   "hostDaemonCommandSchema.acpLaunchSpec.permissionCli":
     "dynamic ACP agents may omit permissionCli when their own prompt policy does not need launch-time permission flags.",
   "hostDaemonCommandSchema.acpLaunchSpec.permissionCli.full":
@@ -930,6 +936,8 @@ const INTENTIONAL_OPTIONAL_HOST_DAEMON_FIELDS: Record<string, string> = {
     "ACP native reasoning config may omit defaultLevel so the bridge uses medium when supported or the first supported level.",
   "hostDaemonOnlineRpcCommandSchema.acpLaunchSpec.nativeReasoning.levelValues":
     "ACP native reasoning config only needs levelValues when bb reasoning levels differ from the agent's ACP config vocabulary.",
+  "hostDaemonOnlineRpcCommandSchema.acpLaunchSpec.nativeSkillRoots":
+    "dynamic ACP agents may omit nativeSkillRoots when they do not expose provider-native skills.",
   "hostDaemonOnlineRpcCommandSchema.acpLaunchSpec.permissionCli":
     "dynamic ACP agents may omit permissionCli when their own prompt policy does not need launch-time permission flags.",
   "hostDaemonOnlineRpcCommandSchema.acpLaunchSpec.permissionCli.full":
@@ -952,6 +960,8 @@ const INTENTIONAL_OPTIONAL_HOST_DAEMON_FIELDS: Record<string, string> = {
     "host.read_file and host.file_metadata may omit rootPath only for explicit absolute disk reads; ref-based reads still require it.",
   "hostDaemonOnlineRpcCommandSchema.selectedBranch":
     "host.list_branches may omit exact selected-branch classification when the caller only needs a branch option page.",
+  "hostDaemonOnlineRpcCommandSchema.nativeSkillRoots":
+    "host skill discovery may omit nativeSkillRoots for providers with daemon-owned discovery rules.",
   "hostDaemonCommandSchema.threadStoragePath":
     "thread.start may include a storage path so the daemon creates the directory before the agent starts.",
   "hostDaemonCommandSchema.fork":
@@ -990,6 +1000,8 @@ const INTENTIONAL_OPTIONAL_HOST_DAEMON_FIELDS: Record<string, string> = {
     "resume-context ACP native reasoning config may omit defaultLevel so the bridge uses medium when supported or the first supported level.",
   "hostDaemonCommandSchema.resumeContext.acpLaunchSpec.nativeReasoning.levelValues":
     "resume-context ACP native reasoning config only needs levelValues when bb reasoning levels differ from the agent's ACP config vocabulary.",
+  "hostDaemonCommandSchema.resumeContext.acpLaunchSpec.nativeSkillRoots":
+    "resume-context ACP launch specs may omit nativeSkillRoots when the agent does not expose provider-native skills.",
   "hostDaemonCommandSchema.resumeContext.acpLaunchSpec.permissionCli":
     "resume-context ACP launch specs may omit permissionCli when the agent's prompt policy does not need launch-time permission flags.",
   "hostDaemonCommandSchema.resumeContext.acpLaunchSpec.permissionCli.full":
@@ -1236,12 +1248,14 @@ describe("host-daemon local schemas", () => {
 });
 
 describe("host-daemon command schemas", () => {
-  // Version 89 makes the ACP adapter mint turn-qualified fileChange item ids.
-  // An enrolled daemon on an older build still emits session-scoped counters
-  // that collide across resumed sessions, so it must update before it reports
-  // more file edits. Versions 90 and 91 add direct publication payloads.
-  it("uses protocol version 91 for turn-qualified file changes and direct publishing", () => {
-    expect(HOST_DAEMON_PROTOCOL_VERSION).toBe(91);
+  // Version 96 is the first build carrying both wire surfaces: BBamir's
+  // turn-qualified fileChange ids and direct publication payloads (89-91), and
+  // upstream's ACP context-window usage outside a turn (through 95). A stock
+  // upstream daemon reports 95 and would satisfy a `>= 95` check while missing
+  // the BBamir payloads, so the merged build claims 96 to force every older
+  // daemon on either lineage to update before it connects.
+  it("uses protocol version 96 for the merged BBamir and upstream wire surface", () => {
+    expect(HOST_DAEMON_PROTOCOL_VERSION).toBe(96);
   });
 
   it("binds Plan cancellation to a required turn id and typed result", () => {
@@ -1542,13 +1556,40 @@ describe("host-daemon command schemas", () => {
     expect(
       hostDaemonOnlineRpcCommandSchema.parse({
         type: "host.list_commands",
-        providerId: "claude-code",
+        providerId: "acp-amp",
         cwd: "/tmp/workspace",
+        nativeSkillRoots: {
+          user: [".agents/skills"],
+          project: [".amp/skills"],
+        },
       }),
     ).toMatchObject({
       type: "host.list_commands",
-      providerId: "claude-code",
+      providerId: "acp-amp",
       cwd: "/tmp/workspace",
+      nativeSkillRoots: {
+        user: [".agents/skills"],
+        project: [".amp/skills"],
+      },
+    });
+
+    expect(
+      hostDaemonOnlineRpcCommandSchema.parse({
+        type: "host.list_skills",
+        providerId: "bb-shared",
+        cwd: "/tmp/workspace",
+        nativeSkillRoots: {
+          user: [".agents/skills"],
+          project: [".agents/skills"],
+        },
+      }),
+    ).toMatchObject({
+      type: "host.list_skills",
+      providerId: "bb-shared",
+      nativeSkillRoots: {
+        user: [".agents/skills"],
+        project: [".agents/skills"],
+      },
     });
 
     expect(
@@ -2375,6 +2416,15 @@ describe("host-daemon command schemas", () => {
         skillFilePath: "/workspace/.bb/skills/workflow-help/SKILL.md",
       }),
     ).toMatchObject({ kind: "workspace-path", sourceType: "project" });
+    expect(
+      hostDaemonInjectedSkillSourceSchema.parse({
+        ...base,
+        kind: "host-path",
+        sourceType: "shared-user",
+        sourceRootPath: "/home/user/.agents/skills/workflow-help",
+        skillFilePath: "/home/user/.agents/skills/workflow-help/SKILL.md",
+      }),
+    ).toMatchObject({ kind: "host-path", sourceType: "shared-user" });
 
     expect(() =>
       hostDaemonInjectedSkillSourceSchema.parse({

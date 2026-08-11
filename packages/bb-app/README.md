@@ -138,6 +138,10 @@ bb uses whichever providers you have configured. Common providers:
 | `grok`         | Install [Grok Build](https://docs.x.ai/build/overview) and authenticate with `grok login` or `XAI_API_KEY`.                                                                               |
 | `hermes-agent` | Install [Hermes Agent](https://hermes-agent.nousresearch.com/docs/getting-started/installation), configure credentials with `hermes model`, then verify ACP with `hermes acp --check`.    |
 
+Cursor ACP threads discover project skills from `.cursor/skills`. The root can
+link to a shared location such as `.agents/skills`. BB lists skills through a
+linked root under `cursor-project` and keeps them read-only.
+
 BB reads Pi's global `~/.pi/agent` files and each workspace's `.pi` files.
 This includes settings, credentials, models, packages, extensions, skills,
 prompts, themes, and context files. Pi extensions can add models and tools.
@@ -150,6 +154,13 @@ Custom ACP agents can be configured through `customAcpAgents` in
 `~/.bb/config.json`; see the configuration docs for optional `modelCli` and
 `reasoningCli` or `nativeReasoning` reasoning settings. A `logo`
 field accepts an SVG, PNG, or WebP path for the provider picker icon.
+The optional `nativeSkillRoots` field adds provider-native skills to the
+composer. Its `user` paths resolve from the target host home directory. Its
+`project` paths resolve from the selected workspace.
+Top-level `sharedSkillRoots` uses the same `user` and `project` path format.
+BB lists these sources as read-only skills. BB injects them into Codex, Claude,
+Pi, and ACP threads. This permits one physical skill collection for BB and a
+standalone provider CLI.
 
 ## Configuration
 
