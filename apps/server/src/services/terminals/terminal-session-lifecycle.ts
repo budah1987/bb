@@ -721,7 +721,9 @@ export class TerminalSessionLifecycle {
         hostId: launchTarget.hostId,
         initialCwd: launchTarget.initialCwd,
         launchCommand: isNamedCommand ? start.command : null,
-        devServerPort: isNamedCommand ? (args.payload.devServerPort ?? null) : null,
+        devServerPort: isNamedCommand
+          ? (args.payload.devServerPort ?? null)
+          : null,
         rows: args.payload.rows,
         restartPolicy,
         status: "starting",
@@ -924,6 +926,10 @@ export class TerminalSessionLifecycle {
     const replacement = await this.createTerminal({
       payload: {
         cols: current.cols,
+        devServerPort:
+          current.launchCommand === null
+            ? undefined
+            : (current.devServerPort ?? undefined),
         rows: current.rows,
         restartPolicy:
           current.launchCommand === null ? undefined : current.restartPolicy,

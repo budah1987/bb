@@ -214,7 +214,7 @@ async function terminalProviders(
   tunnelIdentity: { baseDomain: string; label: string } | null,
 ): Promise<EnvironmentPreviewProvider[]> {
   const latestSessions = new Map<
-    string,
+    number,
     ReturnType<typeof listTerminalSessionsByEnvironment>[number]
   >();
   for (const session of listTerminalSessionsByEnvironment(
@@ -222,7 +222,7 @@ async function terminalProviders(
     target.environmentId,
   )) {
     if (session.devServerPort === null) continue;
-    latestSessions.set(session.supervisionId ?? session.id, session);
+    latestSessions.set(session.devServerPort, session);
   }
   const sessions = Array.from(latestSessions.values());
   return Promise.all(
@@ -258,7 +258,7 @@ async function terminalProviders(
           : shared
             ? "Local frame policy is checked by the browser."
             : "Expose this port with Connect to open it remotely.",
-        id: `terminal:${session.id}`,
+        id: `terminal:${port}`,
         kind: "local" as const,
         label: session.title,
         logUrl: null,
