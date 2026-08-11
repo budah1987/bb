@@ -110,10 +110,7 @@ export function shouldAutoGenerateRecap(
   if (!args.hasRecap) {
     return { generate: true };
   }
-  if (
-    args.completedTurns >= RECAP_TURN_CADENCE ||
-    args.salientEvents > 0
-  ) {
+  if (args.completedTurns >= RECAP_TURN_CADENCE || args.salientEvents > 0) {
     return { generate: true };
   }
   return { generate: false, reason: "waiting-for-cadence" };

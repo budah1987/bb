@@ -19,15 +19,15 @@ interface TabIdentity {
   id: string;
 }
 
-function terminalSession(
-  overrides: TerminalSessionOverrides,
-): TerminalSession {
+function terminalSession(overrides: TerminalSessionOverrides): TerminalSession {
   return {
     id: "term_1",
     threadId: "thr_1",
     environmentId: "env_1",
     hostId: "host_1",
     title: "Terminal",
+    launchCommand: null,
+    restartPolicy: "never",
     initialCwd: "/workspace",
     cols: 100,
     rows: 30,
@@ -300,9 +300,7 @@ describe("terminalPanelTabs", () => {
       terminalSessions: [terminalSession({ id: "term_1" })],
     });
 
-    expect(tabIds(nextState.secondary.tabs)).toEqual([
-      "terminal:term_1:none",
-    ]);
+    expect(tabIds(nextState.secondary.tabs)).toEqual(["terminal:term_1:none"]);
     expect(nextState.secondary.activeTabId).toBeNull();
   });
 

@@ -149,6 +149,7 @@ export async function createTestAppHarness(
     hub,
     logger: testLogger,
     openTimeoutMs: 50,
+    restoreRetryDelaysMs: [1, 2, 5],
   });
   const bbAppManagedConfig = await createBbAppManagedConfigReloader({
     config,
@@ -202,6 +203,7 @@ export async function createTestAppHarness(
     pluginService,
     pluginCatalogService,
     async cleanup(): Promise<void> {
+      terminalSessions.dispose();
       await rm(dataDir, { recursive: true, force: true });
     },
   };

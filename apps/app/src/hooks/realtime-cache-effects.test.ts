@@ -29,6 +29,7 @@ import {
   threadPromptHistoryQueryKey,
   threadQueryKey,
   threadTabsQueryKey,
+  threadAnnotationsQueryKey,
   threadSearchQueryKey,
   terminalsQueryKey,
   threadStorageFilePreviewQueryKey,
@@ -176,6 +177,22 @@ describe("createRealtimeCacheEffects", () => {
     });
 
     expect(queryClient.getQueryState(tabsKey)?.isInvalidated).toBe(true);
+    effects.dispose();
+  });
+
+  it("invalidates the affected browser annotations after another client changes them", () => {
+    const { effects, queryClient } = createRealtimeEffectsTestContext();
+    const annotationsKey = threadAnnotationsQueryKey("thr_1");
+    queryClient.setQueryData(annotationsKey, { annotations: [] });
+
+    effects.handleChanged({
+      type: "changed",
+      entity: "thread",
+      id: "thr_1",
+      changes: ["annotations-changed"],
+    });
+
+    expect(queryClient.getQueryState(annotationsKey)?.isInvalidated).toBe(true);
     effects.dispose();
   });
 

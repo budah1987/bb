@@ -15,8 +15,8 @@ vi.mock("@/hooks/useStandaloneCompactPwa", () => ({
   useStandaloneCompactPwa: () => isStandaloneCompactPwa,
 }));
 
-// The rail's only content today; its data hooks need a query client it has no
-// business owning in this test.
+// Rail sections own data hooks, so this layout test replaces them with stable
+// boundaries and only verifies rail visibility and composition.
 vi.mock("@/components/notes/NotesPanel", () => ({
   NotesPanel: ({
     enabled,
@@ -54,6 +54,34 @@ vi.mock("./PreviewSection", () => ({
     threadId: string;
   }) => (
     <div data-testid="preview-section" data-enabled={enabled}>
+      {threadId}
+    </div>
+  ),
+}));
+
+vi.mock("./FeedbackReviewSection", () => ({
+  FeedbackReviewSection: ({
+    enabled,
+    threadId,
+  }: {
+    enabled: boolean;
+    threadId: string;
+  }) => (
+    <div data-testid="feedback-review-section" data-enabled={enabled}>
+      {threadId}
+    </div>
+  ),
+}));
+
+vi.mock("./ReviewQueueSection", () => ({
+  ReviewQueueSection: ({
+    enabled,
+    threadId,
+  }: {
+    enabled: boolean;
+    threadId: string;
+  }) => (
+    <div data-testid="review-queue-section" data-enabled={enabled}>
       {threadId}
     </div>
   ),
@@ -103,6 +131,12 @@ describe("ThreadRail", () => {
       "thr_1",
     );
     expect(screen.getByTestId("preview-section").textContent).toBe("thr_1");
+    expect(screen.getByTestId("feedback-review-section").textContent).toBe(
+      "thr_1",
+    );
+    expect(screen.getByTestId("review-queue-section").textContent).toBe(
+      "thr_1",
+    );
     expect(screen.getByTestId("plugin-rail-sections").textContent).toBe(
       "thr_1",
     );
@@ -110,6 +144,8 @@ describe("ThreadRail", () => {
       "notes-panel",
       "local-servers-section",
       "preview-section",
+      "feedback-review-section",
+      "review-queue-section",
       "plugin-rail-sections",
     ]) {
       expect(screen.getByTestId(testId).getAttribute("data-enabled")).toBe(
@@ -157,6 +193,8 @@ describe("ThreadRail", () => {
       "notes-panel",
       "local-servers-section",
       "preview-section",
+      "feedback-review-section",
+      "review-queue-section",
       "plugin-rail-sections",
     ]) {
       expect(screen.getByTestId(testId).getAttribute("data-enabled")).toBe(

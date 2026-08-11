@@ -7,6 +7,11 @@ import type {
   UpdateProjectSourceRequest,
 } from "@bb/server-contract";
 import mimeTypes from "mime-types";
+import {
+  permissionModeSchema,
+  reasoningLevelSchema,
+  serviceTierSchema,
+} from "@bb/domain";
 import { action } from "../action.js";
 import { createCliBbSdk } from "../client.js";
 import { resolveLocalHostId } from "../daemon.js";
@@ -118,6 +123,22 @@ interface ProjectSourceUpdateCommandOptions {
 interface ProjectSourceDeleteCommandOptions {
   yes?: boolean;
   json?: boolean;
+}
+
+interface ProjectManagerCommandOptions {
+  json?: boolean;
+  prompt?: string;
+}
+
+interface ProjectManagerSettingsCommandOptions {
+  disable?: boolean;
+  enable?: boolean;
+  json?: boolean;
+  model?: string;
+  permissionMode?: string;
+  provider?: string;
+  reasoning?: string;
+  serviceTier?: string;
 }
 
 type ProjectSource = ProjectResponse["sources"][number];
@@ -269,6 +290,92 @@ export function registerProjectCommands(
   const attachment = project
     .command("attachment")
     .description("Upload and download server-managed project attachments");
+  const manager = project
+    .command("manager")
+    .description("Configure and run the repository manager");
+
+  manager
+    .command("show <id>")
+    .description("Show repository manager settings")
+    .option("--json", "Print machine-readable JSON output")
+    .action(
+      action(async (id: string, opts: ProjectManagerCommandOptions) => {
+        const settings = await createCliBbSdk(getUrl()).projects.manager.show({
+          projectId: id,
+        });
+        if (outputJson(opts, settings)) return;
+        console.log(`Enabled: ${settings.enabled ? "yes" : "no"}`);
+        console.log(`Provider: ${settings.providerId}`);
+        console.log(`Model: ${settings.model}`);
+        console.log(`Reasoning: ${settings.reasoningLevel}`);
+        console.log(`Service tier: ${settings.serviceTier}`);
+        console.log(`Permission mode: ${settings.permissionMode}`);
+      }),
+    );
+
+  manager
+    .command("run <id>")
+    .description("Start a repository manager briefing thread")
+    .option("--prompt <text>", "Add a focus for this briefing")
+    .option("--json", "Print machine-readable JSON output")
+    .action(
+      action(async (id: string, opts: ProjectManagerCommandOptions) => {
+        const thread = await createCliBbSdk(getUrl()).projects.manager.run({
+          projectId: id,
+          ...(opts.prompt ? { prompt: opts.prompt } : {}),
+        });
+        if (outputJson(opts, thread)) return;
+        console.log(`Repository manager thread started: ${thread.id}`);
+      }),
+    );
+
+  manager
+    .command("settings <id>")
+    .description("Update repository manager settings")
+    .option("--enable", "Enable manager runs")
+    .option("--disable", "Disable manager runs")
+    .option("--provider <id>", "Provider ID")
+    .option("--model <id>", "Model ID")
+    .option("--reasoning <level>", "Reasoning level")
+    .option("--service-tier <tier>", "Service tier")
+    .option("--permission-mode <mode>", "Permission mode")
+    .option("--json", "Print machine-readable JSON output")
+    .action(
+      action(async (id: string, opts: ProjectManagerSettingsCommandOptions) => {
+        if (opts.enable && opts.disable) {
+          throw new Error("Use only one of --enable or --disable.");
+        }
+        const update = {
+          ...(opts.enable || opts.disable
+            ? { enabled: Boolean(opts.enable) }
+            : {}),
+          ...(opts.provider ? { providerId: opts.provider } : {}),
+          ...(opts.model ? { model: opts.model } : {}),
+          ...(opts.reasoning
+            ? { reasoningLevel: reasoningLevelSchema.parse(opts.reasoning) }
+            : {}),
+          ...(opts.serviceTier
+            ? { serviceTier: serviceTierSchema.parse(opts.serviceTier) }
+            : {}),
+          ...(opts.permissionMode
+            ? {
+                permissionMode: permissionModeSchema.parse(opts.permissionMode),
+              }
+            : {}),
+        };
+        if (Object.keys(update).length === 0) {
+          throw new Error("Provide at least one manager setting.");
+        }
+        const settings = await createCliBbSdk(
+          getUrl(),
+        ).projects.manager.settings({
+          projectId: id,
+          ...update,
+        });
+        if (outputJson(opts, settings)) return;
+        console.log(`Repository manager settings updated for ${id}`);
+      }),
+    );
 
   attachment
     .command("upload <id>")

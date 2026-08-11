@@ -123,6 +123,8 @@ Making your repo work with bb:
   bb environment publish-to-main <id>     Publish a committed worktree to main
     --preserve-target-changes              Preserve local main changes before publishing
 
+  bb environment update-from-main <id>    Rebase a clean worktree onto origin/main
+
   bb environment archive-threads <id>     Archive all threads in an environment
 
   bb environment pull-request show <id>   Inspect a pull request

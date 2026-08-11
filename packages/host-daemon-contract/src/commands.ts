@@ -41,7 +41,7 @@ import {
   providerCliStatusResponseSchema,
 } from "./local.js";
 
-export const HOST_DAEMON_PROTOCOL_VERSION = 91 as const;
+export const HOST_DAEMON_PROTOCOL_VERSION = 92 as const;
 export const githubAccountLoginSchema = z.string().trim().min(1).max(255);
 
 export {
@@ -1321,6 +1321,13 @@ const workspacePublishCommittedBranchCommandSchema =
     })
     .strict();
 
+const workspaceUpdateFromTargetCommandSchema = hostDaemonWorkspaceTargetSchema
+  .extend({
+    type: z.literal("workspace.update_from_target"),
+    targetBranch: gitBranchNameSchema,
+  })
+  .strict();
+
 const workspaceRenameCommandSchema = z.discriminatedUnion("target", [
   hostDaemonWorkspaceTargetSchema
     .extend({
@@ -1775,6 +1782,35 @@ const workspacePublishCommittedBranchResultSchema = z.discriminatedUnion(
       .strict(),
   ],
 );
+const workspaceUpdateFromTargetResultSchema = z.discriminatedUnion("outcome", [
+  z
+    .object({
+      outcome: z.enum(["updated", "already_current"]),
+      sourceBranch: gitBranchNameSchema,
+      targetBranch: gitBranchNameSchema,
+      previousSha: z.string().min(1),
+      currentSha: z.string().min(1),
+      targetSha: z.string().min(1),
+      rebasedCommitCount: z.number().int().nonnegative(),
+    })
+    .strict(),
+  z
+    .object({
+      outcome: z.literal("blocked"),
+      reason: z.enum([
+        "source_detached",
+        "source_dirty",
+        "source_is_target",
+        "rebase_conflict",
+      ]),
+      sourceBranch: gitBranchNameSchema.nullable(),
+      targetBranch: gitBranchNameSchema,
+      previousSha: z.string().min(1).nullable(),
+      targetSha: z.string().min(1).nullable(),
+      conflictFiles: z.array(z.string().min(1)),
+    })
+    .strict(),
+]);
 const workspaceRenameResultSchema = z.discriminatedUnion("target", [
   z.object({ target: z.literal("branch"), branchName: gitBranchNameSchema }),
   z.object({ target: z.literal("folder"), path: z.string().min(1) }),
@@ -2212,6 +2248,15 @@ export const hostDaemonCommandRegistry = {
     type: "workspace.publish_committed_branch",
     schema: workspacePublishCommittedBranchCommandSchema,
     resultSchema: workspacePublishCommittedBranchResultSchema,
+    transport: "settled",
+    retryable: false,
+    flushEventsBeforeResult: false,
+    envLane: "write",
+  }),
+  "workspace.update_from_target": defineHostDaemonCommandDescriptor({
+    type: "workspace.update_from_target",
+    schema: workspaceUpdateFromTargetCommandSchema,
+    resultSchema: workspaceUpdateFromTargetResultSchema,
     transport: "settled",
     retryable: false,
     flushEventsBeforeResult: false,

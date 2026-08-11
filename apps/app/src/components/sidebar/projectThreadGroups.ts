@@ -229,8 +229,11 @@ function buildSortedItems(
     return nodes.map(buildThreadItem);
   }
 
-  const { environmentThreadGroups, looseNodes } =
-    bucketEnvironmentGroups(nodes, compareThreads, draftThreadIds);
+  const { environmentThreadGroups, looseNodes } = bucketEnvironmentGroups(
+    nodes,
+    compareThreads,
+    draftThreadIds,
+  );
   const items = [
     ...looseNodes.map(buildThreadItem),
     ...environmentThreadGroups.map(buildEnvironmentItem),

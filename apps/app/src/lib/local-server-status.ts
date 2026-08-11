@@ -76,6 +76,7 @@ export function isNamedLocalServerTerminal(session: TerminalSession): boolean {
   const normalizedTitle = session.title.trim().toLowerCase();
   return (
     isVisibleTerminalSessionStatus(session.status) &&
+    session.launchCommand !== null &&
     !GENERIC_TERMINAL_TITLES.has(normalizedTitle) &&
     !/^terminal \d+$/u.test(normalizedTitle)
   );

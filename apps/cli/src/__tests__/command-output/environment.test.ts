@@ -888,6 +888,32 @@ describe("bb environment command output", () => {
     });
   });
 
+  it("bb environment update-from-main posts the explicit update action", async () => {
+    const post = vi.fn(async () => ({
+      ok: true,
+      action: "update_from_main",
+      message: "Rebased workspace onto the latest main changes",
+      outcome: "updated",
+      sourceBranch: "feature/update",
+      targetBranch: "main",
+      previousSha: "previous-sha",
+      currentSha: "current-sha",
+      targetSha: "target-sha",
+      rebasedCommitCount: 2,
+    }));
+    stubServerApi({ "v1.environments.:id.actions.$post": post });
+
+    await runCommand(
+      ["environment", "update-from-main", "env-update-main"],
+      register,
+    );
+
+    expect(post).toHaveBeenCalledWith({
+      param: { id: "env-update-main" },
+      json: { action: "update_from_main", options: {} },
+    });
+  });
+
   it("bb environment update sets the merge base branch", async () => {
     const environment = fixtures.makeEnvironment({
       id: "env-update-1",

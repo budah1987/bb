@@ -251,6 +251,8 @@ function makeTerminalSession(
     environmentId: null,
     hostId: "host_1",
     title: "Terminal",
+    launchCommand: null,
+    restartPolicy: "never",
     initialCwd: "/repo",
     cols: 100,
     rows: 30,
@@ -288,6 +290,7 @@ describe("buildMobileSessionThreads", () => {
   it("includes visible projectless and project threads, excluding hidden side chats", () => {
     const sidebarNavigation: SidebarBootstrapResponse = {
       sections: [],
+      spaces: [],
       personalProject: makeProject({
         id: PERSONAL_PROJECT_ID,
         kind: "personal",

@@ -1417,6 +1417,109 @@ describe("Workspace", () => {
     ).resolves.toMatchObject({ stdout: `${remoteBefore}\n` });
   });
 
+  it("rebases a clean managed worktree onto the latest origin main", async () => {
+    const { primaryRepo, worktreePath } =
+      await createPrimaryAndFeatureWorktree();
+    const remotePath = await initBareRemoteFrom(primaryRepo);
+    const remoteCloneParent = await makeTempDir("bb-workspace-update-clone-");
+    const remoteClone = path.join(remoteCloneParent, "clone");
+    await runGit(["clone", remotePath, remoteClone], {
+      cwd: remoteCloneParent,
+    });
+    await runGit(["config", "user.name", "BB Tests"], { cwd: remoteClone });
+    await runGit(["config", "user.email", "bb@example.com"], {
+      cwd: remoteClone,
+    });
+    await fs.writeFile(
+      path.join(remoteClone, "main.txt"),
+      "main work\n",
+      "utf8",
+    );
+    await runGit(["add", "main.txt"], { cwd: remoteClone });
+    await runGit(["commit", "-m", "Main work"], { cwd: remoteClone });
+    await runGit(["push", "origin", "main"], { cwd: remoteClone });
+
+    const result = await new Workspace(worktreePath).updateFromTarget({
+      targetBranch: "main",
+    });
+
+    expect(result).toMatchObject({
+      outcome: "updated",
+      sourceBranch: "feature",
+      targetBranch: "main",
+      rebasedCommitCount: 1,
+    });
+    await expect(
+      fs.readFile(path.join(worktreePath, "main.txt"), "utf8"),
+    ).resolves.toBe("main work\n");
+    const ancestor = await runGit(
+      ["merge-base", "--is-ancestor", "origin/main", "HEAD"],
+      { cwd: worktreePath, allowFailure: true },
+    );
+    expect(ancestor.exitCode).toBe(0);
+  });
+
+  it("blocks an update when the managed worktree has uncommitted changes", async () => {
+    const { worktreePath } = await createPrimaryAndFeatureWorktree();
+    await fs.writeFile(path.join(worktreePath, "dirty.txt"), "dirty\n", "utf8");
+
+    await expect(
+      new Workspace(worktreePath).updateFromTarget({ targetBranch: "main" }),
+    ).resolves.toMatchObject({
+      outcome: "blocked",
+      reason: "source_dirty",
+      sourceBranch: "feature",
+      targetBranch: "main",
+    });
+  });
+
+  it("aborts a conflicted update and restores the previous commit", async () => {
+    const { primaryRepo, worktreePath } =
+      await createPrimaryAndFeatureWorktree();
+    const remotePath = await initBareRemoteFrom(primaryRepo);
+    const previousSha = (
+      await runGit(["rev-parse", "HEAD"], { cwd: worktreePath })
+    ).stdout.trim();
+    const remoteCloneParent = await makeTempDir(
+      "bb-workspace-update-conflict-clone-",
+    );
+    const remoteClone = path.join(remoteCloneParent, "clone");
+    await runGit(["clone", remotePath, remoteClone], {
+      cwd: remoteCloneParent,
+    });
+    await runGit(["config", "user.name", "BB Tests"], { cwd: remoteClone });
+    await runGit(["config", "user.email", "bb@example.com"], {
+      cwd: remoteClone,
+    });
+    await fs.writeFile(
+      path.join(remoteClone, "README.md"),
+      "main conflict\n",
+      "utf8",
+    );
+    await runGit(["add", "README.md"], { cwd: remoteClone });
+    await runGit(["commit", "-m", "Conflicting main work"], {
+      cwd: remoteClone,
+    });
+    await runGit(["push", "origin", "main"], { cwd: remoteClone });
+
+    const result = await new Workspace(worktreePath).updateFromTarget({
+      targetBranch: "main",
+    });
+
+    expect(result).toMatchObject({
+      outcome: "blocked",
+      reason: "rebase_conflict",
+      conflictFiles: ["README.md"],
+      previousSha,
+    });
+    await expect(
+      runGit(["rev-parse", "HEAD"], { cwd: worktreePath }),
+    ).resolves.toMatchObject({ stdout: `${previousSha}\n` });
+    await expect(
+      runGit(["status", "--porcelain"], { cwd: worktreePath }),
+    ).resolves.toMatchObject({ stdout: "" });
+  });
+
   it("rejects git mutations for non-git directories", async () => {
     const folder = await makeTempDir("bb-workspace-nongit-");
     const workspace = new Workspace(folder);

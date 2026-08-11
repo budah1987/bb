@@ -20,6 +20,10 @@ export function createProjectId(): string {
   return createId("proj");
 }
 
+export function createSpaceId(): string {
+  return createId("space");
+}
+
 export function createProjectSourceId(): string {
   return createId("src");
 }
@@ -62,6 +66,10 @@ export function createQueuedThreadMessageClaimToken(): string {
 
 export function createPendingInteractionId(): string {
   return createId("pint");
+}
+
+export function createBrowserAnnotationId(): string {
+  return createId("ann");
 }
 
 export function createHostDaemonSessionId(): string {

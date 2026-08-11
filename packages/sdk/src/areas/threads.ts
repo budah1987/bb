@@ -10,11 +10,19 @@ import {
   type ThreadStatus,
 } from "@bb/domain";
 import {
+  browserAnnotationListResponseSchema,
+  browserAnnotationSchema,
   threadNotesResponseSchema,
   threadTabsResponseSchema,
 } from "@bb/server-contract";
 import type {
+  BrowserAnnotation,
+  BrowserAnnotationListQuery,
+  BrowserAnnotationListResponse,
+  ClearBrowserAnnotationsRequest,
+  CreateBrowserAnnotationRequest,
   ThreadNotesResponse,
+  UpdateBrowserAnnotationRequest,
   UpdateThreadScratchpadRequest,
 } from "@bb/server-contract";
 import type {
@@ -146,6 +154,10 @@ export type ThreadChildSummaryResult = ThreadChildSummaryResponse;
 export type ThreadDefaultExecutionOptionsResult =
   ResolvedThreadExecutionOptions | null;
 export type ThreadConversationOutlineResult = ThreadConversationOutlineResponse;
+export type ThreadAnnotationListResult = BrowserAnnotationListResponse;
+export type ThreadAnnotationMutationResult = BrowserAnnotation;
+export type ThreadAnnotationDeleteResult = { ok: true };
+export type ThreadAnnotationsClearResult = { deleted: number };
 export type ThreadTimelineTurnSummaryDetailsResult =
   TimelineTurnSummaryDetailsResponse;
 
@@ -256,6 +268,30 @@ export interface ThreadTimelineTurnSummaryDetailsArgs extends TimelineTurnSummar
 }
 
 export interface ThreadTabsUpdateArgs extends UpdateThreadTabsRequest {
+  threadId: string;
+}
+
+export interface ThreadAnnotationListArgs extends BrowserAnnotationListQuery {
+  signal?: AbortSignal;
+  threadId: string;
+}
+
+export interface ThreadAnnotationCreateArgs extends CreateBrowserAnnotationRequest {
+  threadId: string;
+}
+
+export interface ThreadAnnotationUpdateArgs extends UpdateBrowserAnnotationRequest {
+  annotationId: string;
+  threadId: string;
+}
+
+export interface ThreadAnnotationDeleteArgs {
+  annotationId: string;
+  expectedRevision: number;
+  threadId: string;
+}
+
+export interface ThreadAnnotationsClearArgs extends ClearBrowserAnnotationsRequest {
   threadId: string;
 }
 
@@ -445,7 +481,24 @@ export interface ThreadNotesArea {
   ): Promise<ThreadScratchpadUpdateResult>;
 }
 
+export interface ThreadAnnotationsArea {
+  clear(
+    args: ThreadAnnotationsClearArgs,
+  ): Promise<ThreadAnnotationsClearResult>;
+  create(
+    args: ThreadAnnotationCreateArgs,
+  ): Promise<ThreadAnnotationMutationResult>;
+  delete(
+    args: ThreadAnnotationDeleteArgs,
+  ): Promise<ThreadAnnotationDeleteResult>;
+  list(args: ThreadAnnotationListArgs): Promise<ThreadAnnotationListResult>;
+  update(
+    args: ThreadAnnotationUpdateArgs,
+  ): Promise<ThreadAnnotationMutationResult>;
+}
+
 export interface ThreadsArea {
+  annotations: ThreadAnnotationsArea;
   archive(args: ThreadActionArgs): Promise<ThreadArchiveResult>;
   archiveAll(args: ThreadActionArgs): Promise<ThreadArchiveAllResult>;
   childSummary(args: ThreadStatusArgs): Promise<ThreadChildSummaryResult>;
@@ -931,7 +984,70 @@ export function createThreadsArea(args: CreateSdkAreaArgs): ThreadsArea {
       return threadNotesResponseSchema.parse(body);
     },
   };
+  const annotations: ThreadAnnotationsArea = {
+    async clear(input) {
+      return transport.readJson(
+        transport.api.v1.threads[":id"].annotations.clear.$post({
+          param: { id: input.threadId },
+          json: {
+            browserTabId: input.browserTabId,
+            ids: input.ids,
+          },
+        }),
+      );
+    },
+    async create(input) {
+      const { threadId, ...json } = input;
+      const body = await transport.readJson(
+        transport.api.v1.threads[":id"].annotations.$post({
+          param: { id: threadId },
+          json,
+        }),
+      );
+      return browserAnnotationSchema.parse(body);
+    },
+    async delete(input) {
+      await transport.readVoid(
+        transport.api.v1.threads[":id"].annotations[":annotationId"].$delete({
+          param: {
+            annotationId: input.annotationId,
+            id: input.threadId,
+          },
+          query: { expectedRevision: input.expectedRevision },
+        }),
+      );
+      return { ok: true };
+    },
+    async list(input) {
+      const body = await transport.readJson(
+        transport.api.v1.threads[":id"].annotations.$get(
+          {
+            param: { id: input.threadId },
+            query: {
+              ...(input.browserTabId === undefined
+                ? {}
+                : { browserTabId: input.browserTabId }),
+              ...(input.status === undefined ? {} : { status: input.status }),
+            },
+          },
+          ...signalRequestArgs(input.signal),
+        ),
+      );
+      return browserAnnotationListResponseSchema.parse(body);
+    },
+    async update(input) {
+      const { annotationId, threadId, ...json } = input;
+      const body = await transport.readJson(
+        transport.api.v1.threads[":id"].annotations[":annotationId"].$patch({
+          param: { annotationId, id: threadId },
+          json,
+        }),
+      );
+      return browserAnnotationSchema.parse(body);
+    },
+  };
   return {
+    annotations,
     async archive(input) {
       // Match the UI: archiving a parent also archives assigned children and
       // source-derived side chats via the cascade archive-all route.

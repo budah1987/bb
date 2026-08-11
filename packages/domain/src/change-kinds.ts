@@ -22,6 +22,7 @@ export const THREAD_CHANGE_KINDS = [
   "tabs-changed",
   "terminals-changed",
   "notes-changed",
+  "annotations-changed",
 ] as const;
 export type ThreadChangeKind = (typeof THREAD_CHANGE_KINDS)[number];
 
@@ -55,6 +56,7 @@ export type HostChangeKind = (typeof HOST_CHANGE_KINDS)[number];
 export const SYSTEM_CHANGE_KINDS = [
   "config-changed",
   "plugins-changed",
+  "spaces-changed",
 ] as const;
 export type SystemChangeKind = (typeof SYSTEM_CHANGE_KINDS)[number];
 

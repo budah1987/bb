@@ -40,6 +40,7 @@ Run `bb guide <chapter>` for command details:
   agent-configuration  AGENTS.md and skills files that shape agents
   providers            Discovering providers and models
   projects             Project CRUD and sources
+  spaces               Sidebar Spaces and project membership
   machines             Listing and targeting execution machines
   terminals            Persistent PTY sessions across all supported scopes
   simulators           Embedded iOS Simulator viewing and control

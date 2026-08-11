@@ -71,7 +71,12 @@ export function useRequestEnvironmentAction() {
           });
         case "pull_request_draft":
           return sdk.environments.markPullRequestDraft({ environmentId: id });
+        case "publish_to_main":
+          return sdk.environments.publishToMain({ environmentId: id });
+        case "update_from_main":
+          return sdk.environments.updateFromMain({ environmentId: id });
       }
+      throw new Error("Unsupported environment action");
     },
     onSettled: (_response, _error, variables) => {
       invalidateEnvironmentActionQueries({

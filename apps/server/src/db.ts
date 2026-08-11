@@ -1,4 +1,4 @@
-import { createConnection, migrate } from "@bb/db";
+import { createConnection, ensureDefaultSpace, migrate } from "@bb/db";
 import type {
   DbConnection,
   MigrationWarningLogger,
@@ -42,6 +42,7 @@ export function initDb(
     deferDestructiveLegacyCleanup: true,
     logger: options.logger,
   });
+  ensureDefaultSpace(db);
   ensurePersonalProjectBootstrap(db);
   return db;
 }

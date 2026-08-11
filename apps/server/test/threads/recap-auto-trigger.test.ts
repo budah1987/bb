@@ -108,7 +108,11 @@ describe("shouldAutoGenerateRecap", () => {
 describe("isWithinRecapCooldown", () => {
   it("treats a never-generated recap as outside any cooldown", () => {
     expect(
-      isWithinRecapCooldown({ generatedAt: null, intervalMs: 10_000, now: NOW }),
+      isWithinRecapCooldown({
+        generatedAt: null,
+        intervalMs: 10_000,
+        now: NOW,
+      }),
     ).toBe(false);
   });
 

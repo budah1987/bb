@@ -19,14 +19,11 @@ async function putScratchpad(
   threadId: string,
   scratchpad: string,
 ): Promise<Response> {
-  return harness.app.request(
-    `/api/v1/threads/${threadId}/notes/scratchpad`,
-    {
-      body: JSON.stringify({ scratchpad }),
-      headers: { "content-type": "application/json" },
-      method: "PUT",
-    },
-  );
+  return harness.app.request(`/api/v1/threads/${threadId}/notes/scratchpad`, {
+    body: JSON.stringify({ scratchpad }),
+    headers: { "content-type": "application/json" },
+    method: "PUT",
+  });
 }
 
 describe("public thread notes", () => {
@@ -36,13 +33,15 @@ describe("public thread notes", () => {
 
       const response = await getNotes(harness, thread.id);
       expect(response.status).toBe(200);
-      expect(threadNotesResponseSchema.parse(await readJson(response))).toEqual({
-        recapBody: null,
-        recapEnabled: false,
-        recapGeneratedAt: null,
-        recapSourceSeq: null,
-        scratchpad: "",
-      });
+      expect(threadNotesResponseSchema.parse(await readJson(response))).toEqual(
+        {
+          recapBody: null,
+          recapEnabled: false,
+          recapGeneratedAt: null,
+          recapSourceSeq: null,
+          scratchpad: "",
+        },
+      );
     });
   });
 
@@ -50,7 +49,11 @@ describe("public thread notes", () => {
     await withTestHarness(async (harness) => {
       const { thread } = seedThreadFixture(harness);
 
-      const written = await putScratchpad(harness, thread.id, "check token scope");
+      const written = await putScratchpad(
+        harness,
+        thread.id,
+        "check token scope",
+      );
       expect(written.status).toBe(200);
       expect(
         threadNotesResponseSchema.parse(await readJson(written)).scratchpad,

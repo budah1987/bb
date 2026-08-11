@@ -27,6 +27,7 @@ import { CSS } from "@dnd-kit/utilities";
 import {
   experimental_useSidebarThreadActions as useSidebarThreadActions,
   experimental_useSidebarThreads as useSidebarThreads,
+  useBbNavigate,
   useRpc,
   type PluginSidebarThread,
   type PluginThreadListProps,
@@ -99,6 +100,7 @@ import {
   type ProjectIconTarget,
   type ProjectRenameTarget,
 } from "./ProjectCustomizationDialogs";
+import { openRepositoryDetails } from "./RepositoryDetailsPane";
 
 type RenameScope = "display" | "branch" | "folder";
 
@@ -265,8 +267,7 @@ function AddRepositoryDialog({
               </p>
             ) : filteredRepositories.length === 0 ? (
               <p className="px-3 py-5 text-xs text-muted-foreground">
-                No repositories are visible to any authenticated GitHub
-                account.
+                No repositories are visible to any authenticated GitHub account.
               </p>
             ) : (
               filteredRepositories.map((repository) => (
@@ -903,6 +904,7 @@ function ProjectSection({
   onSetRead,
   onSetFocused,
   onRequestRenameProject,
+  onOpenDetails,
   onRequestChangeIcon,
   onRequestGithubCatalog,
   onSetGithubAccount,
@@ -931,6 +933,7 @@ function ProjectSection({
   onSetRead: (workspace: ConductorWorkspace, read: boolean) => void;
   onSetFocused: (workspace: ConductorWorkspace, focused: boolean) => void;
   onRequestRenameProject: () => void;
+  onOpenDetails: () => void;
   onRequestChangeIcon: () => void;
   onRequestGithubCatalog: () => void;
   onSetGithubAccount: (accountLogin: string | null) => void;
@@ -1008,6 +1011,11 @@ function ProjectSection({
           </div>
         </ContextMenuTrigger>
         <ContextMenuContent aria-label={`${projectLabel} actions`}>
+          <ContextMenuItem onSelect={onOpenDetails}>
+            <Icon name="Info" aria-hidden />
+            Details
+          </ContextMenuItem>
+          <ContextMenuSeparator />
           <ContextMenuItem onSelect={onRequestRenameProject}>
             <Icon name="Edit" aria-hidden />
             Rename…
@@ -1174,6 +1182,7 @@ export function ConductorSidebar({
 }: PluginThreadListProps) {
   const state = useSidebarThreads();
   const actions = useSidebarThreadActions();
+  const navigate = useBbNavigate();
   const rpc = useRpc<typeof conductorRpcContract>();
   const { isLoading, legacyWorkspaces, record } = useReconciliation();
   const [collapsedSections, setCollapsedSections] = useState(
@@ -1801,6 +1810,9 @@ export function ConductorSidebar({
                   onSetRead={setWorkspaceRead}
                   onSetFocused={setWorkspaceFocused}
                   onRequestRenameProject={() => requestRenameProject(project)}
+                  onOpenDetails={() =>
+                    openRepositoryDetails(navigate, project.id)
+                  }
                   onRequestChangeIcon={() => requestChangeProjectIcon(project)}
                   onRequestGithubCatalog={() => {
                     void loadGithubCatalog().catch(() => undefined);

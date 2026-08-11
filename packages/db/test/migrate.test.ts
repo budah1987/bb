@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 import { publishedMigrationWhensByTag } from "../src/migration-history.js";
 import {
   createQueuedThreadMessage,
+  createTerminalSession,
   createThread,
   createConnection,
   createProject,
@@ -109,6 +110,12 @@ interface MigratedTerminalSessionRow {
   createdAt: number;
   updatedAt: number;
   lastUserInputAt: number | null;
+}
+
+interface MigratedTerminalSupervisionRow {
+  supervisionAttempt: number;
+  supervisionDesired: number;
+  supervisionId: string | null;
 }
 
 interface OperationBackfillProjectRow {
@@ -225,16 +232,52 @@ interface SeededLargeValueBackfillValues {
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
+const migrationJournalEntries = (
+  JSON.parse(
+    readFileSync(resolve(__dirname, "../drizzle/meta/_journal.json"), "utf-8"),
+  ) as { entries: { tag: string; when: number }[] }
+).entries;
 const latestMigrationWhen = Math.max(
-  ...(
-    JSON.parse(
-      readFileSync(
-        resolve(__dirname, "../drizzle/meta/_journal.json"),
-        "utf-8",
-      ),
-    ) as { entries: { when: number }[] }
-  ).entries.map((entry) => entry.when),
+  ...migrationJournalEntries.map((entry) => entry.when),
 );
+const terminalSupervisionMigrationWhen = migrationJournalEntries.find(
+  (entry) => entry.tag === "0094_tricky_stark_industries",
+)?.when;
+if (terminalSupervisionMigrationWhen === undefined) {
+  throw new Error("Terminal supervision migration is missing");
+}
+
+function dropColumnIfPresent(
+  db: DbConnection,
+  tableName: "app_settings" | "terminal_sessions",
+  columnName: string,
+): void {
+  const columns = db.$client
+    .prepare<[], TableInfoRow>(`PRAGMA table_info(${tableName})`)
+    .all();
+  if (columns.some((column) => column.name === columnName)) {
+    db.$client
+      .prepare(`ALTER TABLE ${tableName} DROP COLUMN ${columnName}`)
+      .run();
+  }
+}
+
+function dropLatestFeatureSchema(db: DbConnection): void {
+  db.$client.prepare("DROP TABLE IF EXISTS browser_annotations").run();
+  db.$client.prepare("DROP TABLE IF EXISTS project_manager_settings").run();
+  db.$client
+    .prepare("DROP INDEX IF EXISTS terminal_sessions_host_supervision_idx")
+    .run();
+  db.$client
+    .prepare("DROP INDEX IF EXISTS terminal_sessions_supervision_idx")
+    .run();
+  dropColumnIfPresent(db, "app_settings", "dev_server_restart_policy");
+  dropColumnIfPresent(db, "terminal_sessions", "supervision_attempt");
+  dropColumnIfPresent(db, "terminal_sessions", "supervision_desired");
+  dropColumnIfPresent(db, "terminal_sessions", "supervision_id");
+  dropColumnIfPresent(db, "terminal_sessions", "launch_command");
+  dropColumnIfPresent(db, "terminal_sessions", "restart_policy");
+}
 
 function dropRewindAddedTables(db: DbConnection): void {
   // Several tests migrate to head, rewind the schema to a legacy state, then
@@ -246,6 +289,7 @@ function dropRewindAddedTables(db: DbConnection): void {
   db.$client.prepare("DROP TABLE IF EXISTS thread_tabs").run();
   db.$client.prepare("DROP TABLE IF EXISTS automation_runs").run();
   db.$client.prepare("DROP TABLE IF EXISTS automations").run();
+  dropLatestFeatureSchema(db);
   db.$client.prepare("DROP TABLE IF EXISTS app_theme").run();
   db.$client.prepare("DROP TABLE IF EXISTS app_settings").run();
   db.$client.prepare("DROP TABLE IF EXISTS plugin_state_snapshots").run();
@@ -1246,6 +1290,7 @@ describe("migrate", () => {
         [number]
       >("DELETE FROM __drizzle_migrations WHERE created_at >= ?")
       .run(onboardingMigrationWhen);
+    dropLatestFeatureSchema(db);
     db.$client
       .prepare(
         "INSERT INTO projects (id, name, created_at, updated_at, sort_key, kind) VALUES ('proj_a','app',1,1,'V','standard')",
@@ -1519,6 +1564,7 @@ describe("migrate", () => {
           "DELETE FROM __drizzle_migrations WHERE created_at >= ?",
         )
         .run(permissionModesMigrationWhen);
+      dropLatestFeatureSchema(db);
       dropSideChatPluginExperimentColumn(db);
       dropToolsHubExperimentColumn(db);
       restorePluginsExperimentColumn(db);
@@ -1916,6 +1962,7 @@ describe("migrate", () => {
           "DELETE FROM __drizzle_migrations WHERE created_at >= ?",
         )
         .run(threadSectionsRepairMigrationWhen);
+      dropLatestFeatureSchema(db);
       dropSideChatPluginExperimentColumn(db);
       dropToolsHubExperimentColumn(db);
       restorePluginsExperimentColumn(db);
@@ -2010,6 +2057,7 @@ describe("migrate", () => {
           "DELETE FROM __drizzle_migrations WHERE created_at >= ?",
         )
         .run(threadSectionsRepairMigrationWhen);
+      dropLatestFeatureSchema(db);
       dropSideChatPluginExperimentColumn(db);
       dropToolsHubExperimentColumn(db);
       restorePluginsExperimentColumn(db);
@@ -3763,6 +3811,77 @@ describe("migrate", () => {
         .all()
         .map((column) => column.name);
       expect(hostDaemonSessionColumns).not.toContain("last_heartbeat_at");
+    } finally {
+      closeConnection(db);
+    }
+  });
+
+  it("adopts a running until-stopped command into durable supervision", () => {
+    const db = createConnection(":memory:");
+
+    try {
+      migrate(db);
+      const host = upsertHost(db, noopNotifier, {
+        name: "supervision-host",
+        type: "persistent",
+      });
+      const terminal = createTerminalSession(db, {
+        cols: 80,
+        daemonSessionId: null,
+        environmentId: null,
+        hostId: host.id,
+        initialCwd: "/tmp/project",
+        launchCommand: "pnpm dev",
+        restartPolicy: "until_stopped",
+        rows: 24,
+        status: "disconnected",
+        threadId: null,
+        title: "Web dev server",
+      });
+
+      db.$client
+        .prepare<DeleteMigrationParameters>(
+          "DELETE FROM __drizzle_migrations WHERE created_at >= ?",
+        )
+        .run(terminalSupervisionMigrationWhen);
+      db.$client
+        .prepare("DROP INDEX terminal_sessions_host_supervision_idx")
+        .run();
+      db.$client.prepare("DROP INDEX terminal_sessions_supervision_idx").run();
+      db.$client
+        .prepare(
+          "ALTER TABLE terminal_sessions DROP COLUMN supervision_attempt",
+        )
+        .run();
+      db.$client
+        .prepare(
+          "ALTER TABLE terminal_sessions DROP COLUMN supervision_desired",
+        )
+        .run();
+      db.$client
+        .prepare("ALTER TABLE terminal_sessions DROP COLUMN supervision_id")
+        .run();
+
+      migrate(db);
+
+      expect(
+        db.$client
+          .prepare<[string], MigratedTerminalSupervisionRow>(
+            `
+              SELECT
+                supervision_id AS supervisionId,
+                supervision_desired AS supervisionDesired,
+                supervision_attempt AS supervisionAttempt
+              FROM terminal_sessions
+              WHERE id = ?
+            `,
+          )
+          .get(terminal.id),
+      ).toEqual({
+        supervisionAttempt: 0,
+        supervisionDesired: 1,
+        supervisionId: terminal.id,
+      });
     } finally {
       closeConnection(db);
     }

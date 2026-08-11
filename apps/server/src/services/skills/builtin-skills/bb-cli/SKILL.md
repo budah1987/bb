@@ -99,6 +99,12 @@ message agents, or inspect projects, providers, and environments.
   keyboard keeps Return as a newline; iPadOS WebKit preserves the Enter
   shortcuts for a connected Magic Keyboard. Update the preference with
   `bb settings general steerActiveThreadOnEnter <true|false>`.
+- The `devServerRestartPolicy` General preference defaults to `until_stopped`.
+  It restores named command terminals after exits, app restarts, or host daemon
+  restarts until the user stops them. Turning it off disarms existing restore
+  intent without stopping running commands. Turning it on applies to new named
+  commands. Update it with
+  `bb settings general devServerRestartPolicy <until-stopped|never>`.
 - Settings → Keyboard records server-backed per-command shortcut overrides.
   The `showKeyboardHints` preference controls the delayed badges shown while
   holding Command or Control and defaults to true; update it with
@@ -167,6 +173,15 @@ message agents, or inspect projects, providers, and environments.
   machines only when more than one is enrolled.
 - `bb skill cli-skills-status` reports per machine whether the installed copy is
   `installed`, `outdated`, `missing`, or `unknown` (disconnected or unreachable).
+
+## Spaces
+
+- Use `bb space list --json` to inspect Spaces and their project membership.
+- Create a Space with `bb space create --name <name> --icon <icon> --color <color>`.
+- Update all Space appearance fields with `bb space edit <id> --name <name> --icon <icon> --color <color>`.
+- Move one project with `bb space move-project <space-id> <project-id>`.
+- Delete a Space with `bb space delete <id>`. Use `--move-projects-to <id>` when it contains projects.
+- Run `bb guide spaces` for accepted icon and color values.
 
 ## Spawning Threads
 
@@ -287,6 +302,10 @@ status|install` to inspect or install provider CLIs on a selected machine.
   (`--host` alias) or `--environment <id>`, but not both. An environment uses
   its owning machine and workspace; an explicit machine uses that machine's
   project source; omitting both intentionally uses the primary machine source.
+- Use `bb project manager show <project-id>` to inspect manager settings.
+  Use `bb project manager run <project-id> [--prompt <focus>]` to create a
+  visible root briefing thread. Change the agent with
+  `bb project manager settings <project-id>`.
   `bb project content --json` returns UTF-8 text or base64 binary content with
   an explicit `contentEncoding`.
 - Use `bb project attachment upload <project-id> --client-file <path>` when the
@@ -322,6 +341,9 @@ environment pull-request show <id>`. Diff commands require an explicit target
   `--preserve-target-changes` only after the user approves preservation. BB
   commits safe local changes, integrates the source branch, and stops on a
   conflict.
+- `bb environment update-from-main <id>` fetches `origin/main` and rebases a
+  clean managed worktree onto it. BB aborts the rebase and reports conflicting
+  files when the update conflicts.
 - The official Ingestion Desk plugin exposes `bb ingestion`. Use `status`,
   `show`, `create`, and `source add` to manage source cases. Use `draft` to
   start an isolated Vault worktree. Use `publish` only after review. Pass
@@ -412,6 +434,13 @@ or artifacts, validation performed, and blockers.
   paragraph describing where the thread stands, ending in the next step. It
   costs an inference call, so a recap that already covers every event in the
   thread is returned unchanged unless you pass `--force`.
+- Use `bb thread annotations list <thread-id>` to inspect browser feedback.
+  Create, update, delete, and clear commands expose the same server records as
+  the app. Updates and deletes require the latest `--revision` value.
+- Use `bb thread annotations list <thread-id> --status open` to inspect browser
+  feedback. Use `add`, `update`, `delete`, and `clear` for the same records the
+  app review rail uses. Updates and deletes require the listed revision, which
+  prevents one agent from silently overwriting another agent's edit.
 
 For review or fix pipelines, get the environment ID from
 `bb thread show <thread-id> --json`, then spawn the follow-up with
@@ -457,6 +486,8 @@ For review or fix pipelines, get the environment ID from
   explicit host ID; terminal commands never silently fall back to primary.
 - Start a server with
   `bb terminal create --thread <thread-id> --title "pnpm dev" --command "pnpm dev"`.
+  Named commands use the saved `devServerRestartPolicy`, which defaults to
+  `until_stopped`. Override it with `--restart-policy never` when needed.
 - All existing-session operations need only the terminal ID. Use
   `bb terminal wait <terminal-id> --contains "Local:" --timeout 120` to wait
   for readiness from new output. Pass `--from-start` only when matching existing
@@ -466,8 +497,8 @@ For review or fix pipelines, get the environment ID from
   `bb terminal send <terminal-id> --text "..." --enter` for interactive input,
   `bb terminal rename <terminal-id> <title>` to rename, and
   `bb terminal close <terminal-id>` when the process is no longer needed.
-- `bb terminal restart <terminal-id>` replaces the session with a shell in the
-  same scope, size, and title. It does not replay the original launch command.
+- `bb terminal restart <terminal-id>` replays a saved command. It opens a new
+  shell when the terminal has no saved command.
 
 ## Failures And Interruptions
 
