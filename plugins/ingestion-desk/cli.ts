@@ -9,6 +9,7 @@ import type { IngestionSourceInput } from "./contract.js";
 const HELP = `Usage: bb ingestion <command> [options]
 
 Commands:
+  ingest [--project <id>] (--content <text> | --url <url>) [--context <text>] [--json]
   status [--project <id>] [--json]                 List ingestion cases
   create --project <id> --title <title> --kind <kind> --label <label> (--content <text> | --url <url>) [--json]
   source add <case-id> --kind <kind> --label <label> (--content <text> | --url <url>) [--json]
@@ -111,6 +112,11 @@ export function registerIngestionCli(args: {
   bb: BbPluginApi;
   store: IngestionStore;
   startDraft: (caseId: string, context: PluginCliContext) => Promise<unknown>;
+  ingestMeeting: (input: {
+    projectId: string | null;
+    context: string;
+    sources: IngestionSourceInput[];
+  }) => Promise<unknown>;
   submitDraft: (
     caseId: string,
     markdown: string,
@@ -122,6 +128,12 @@ export function registerIngestionCli(args: {
     name: "ingestion",
     summary: "Review and publish meeting and document ingestions",
     commands: [
+      {
+        name: "ingest",
+        summary: "Ingest meeting material for review",
+        usage:
+          "bb ingestion ingest [--project <id>] (--content <text> | --url <url>) [--context <text>] [--json]",
+      },
       {
         name: "status",
         summary: "List cases",
@@ -162,7 +174,28 @@ export function registerIngestionCli(args: {
         )
           return { exitCode: 0, stdout: HELP };
         let result: unknown;
-        if (command === "status")
+        if (command === "ingest") {
+          const content = option(argv, "content") ?? null;
+          const url = option(argv, "url") ?? null;
+          if ((content === null) === (url === null))
+            throw new UsageError("Provide exactly one of --content or --url");
+          const isDrive =
+            url !== null &&
+            /^https:\/\/(?:drive|docs)\.google\.com\//i.test(url);
+          result = await args.ingestMeeting({
+            projectId: option(argv, "project") ?? context.projectId ?? null,
+            context: option(argv, "context") ?? "",
+            sources: [
+              {
+                kind: url === null ? "granola_paste" : isDrive ? "drive_link" : "url",
+                label: url === null ? "Pasted meeting material" : isDrive ? "Google Drive document" : "Meeting context link",
+                authority: url === null || isDrive ? "primary" : "context",
+                url,
+                content,
+              },
+            ],
+          });
+        } else if (command === "status")
           result = args.store.listSummaries(option(argv, "project") ?? null);
         else if (command === "create")
           result = args.store.create({

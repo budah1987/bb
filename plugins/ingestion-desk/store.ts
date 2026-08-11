@@ -10,6 +10,7 @@ import {
   type IngestionOutput,
   type IngestionSource,
   type IngestionSourceInput,
+  type MeetingBriefing,
 } from "./contract.js";
 
 const emptyDetails: IngestionDetails = {
@@ -25,6 +26,15 @@ const defaultGit: GitParity = {
   publishedCommit: null,
   message: null,
 };
+const emptyBriefing: MeetingBriefing = {
+  decisions: [],
+  insights: [],
+  actions: [],
+  risks: [],
+  openQuestions: [],
+  uncertainties: [],
+  projectEffects: [],
+};
 
 type CaseRow = {
   id: string;
@@ -34,6 +44,7 @@ type CaseRow = {
   status: string;
   details_json: string;
   draft_markdown: string | null;
+  briefing_json: string | null;
   outputs_json: string | null;
   draft_thread_id: string | null;
   reviewed_at: string | null;
@@ -109,6 +120,7 @@ export const migrations = [
   UPDATE ingestion_sources
   SET content_length = length(content)
   WHERE content IS NOT NULL;`,
+  `ALTER TABLE ingestion_cases ADD COLUMN briefing_json TEXT;`,
 ];
 
 function now(): string {
@@ -207,6 +219,10 @@ export class IngestionStore {
           ? null
           : {
               markdown: row.draft_markdown ?? "",
+              briefing:
+                row.briefing_json === null
+                  ? emptyBriefing
+                  : parseJson(row.briefing_json, "briefing"),
               outputs,
               draftThreadId: row.draft_thread_id,
               reviewedAt: row.reviewed_at,
@@ -391,6 +407,34 @@ export class IngestionStore {
     return this.get(id);
   }
 
+  createMeeting(input: {
+    projectId: string;
+    context: string;
+    sources: IngestionSourceInput[];
+  }): IngestionCase {
+    const id = `ing_${randomUUID()}`;
+    const timestamp = now();
+    this.db.transaction(() => {
+      this.db
+        .prepare(
+          "INSERT INTO ingestion_cases (id, project_id, title, summary, status, details_json, git_json, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        )
+        .run(
+          id,
+          input.projectId,
+          "New meeting",
+          input.context,
+          "inbox",
+          JSON.stringify(emptyDetails),
+          JSON.stringify(defaultGit),
+          timestamp,
+          timestamp,
+        );
+      for (const source of input.sources) this.addSource(id, source);
+    })();
+    return this.get(id);
+  }
+
   update(
     caseId: string,
     input: {
@@ -461,7 +505,15 @@ export class IngestionStore {
 
   submitDraft(
     caseId: string,
-    input: { markdown: string; outputs: IngestionOutput[]; threadId?: string },
+    input: {
+      title: string;
+      summary: string;
+      details: IngestionDetails;
+      markdown: string;
+      briefing: MeetingBriefing;
+      outputs: IngestionOutput[];
+      threadId?: string;
+    },
   ): IngestionCase {
     const existing = this.get(caseId);
     if (existing.status !== "drafting")
@@ -477,16 +529,42 @@ export class IngestionStore {
     this.db.transaction(() => {
       this.db
         .prepare(
-          "UPDATE ingestion_cases SET status = 'ready', draft_markdown = ?, outputs_json = ?, reviewed_at = ?, updated_at = ? WHERE id = ?",
+          "UPDATE ingestion_cases SET title = ?, summary = ?, details_json = ?, status = 'ready', draft_markdown = ?, briefing_json = ?, outputs_json = ?, reviewed_at = ?, updated_at = ? WHERE id = ?",
         )
         .run(
+          input.title,
+          input.summary,
+          JSON.stringify(input.details),
           input.markdown,
+          JSON.stringify(input.briefing),
           JSON.stringify(input.outputs),
           now(),
           now(),
           caseId,
         );
       this.record(caseId, "draft", "Draft is ready for review");
+    })();
+    return this.get(caseId);
+  }
+
+  beginRevision(
+    caseId: string,
+    input: { title: string; details: IngestionDetails },
+  ): IngestionCase {
+    const existing = this.get(caseId);
+    if (
+      existing.status !== "ready" ||
+      existing.draft?.draftThreadId === null ||
+      existing.draft?.draftThreadId === undefined
+    )
+      throw new Error("Only a ready meeting can accept corrections");
+    this.db.transaction(() => {
+      this.db
+        .prepare(
+          "UPDATE ingestion_cases SET title = ?, details_json = ?, status = 'drafting', reviewed_at = NULL, updated_at = ? WHERE id = ?",
+        )
+        .run(input.title, JSON.stringify(input.details), now(), caseId);
+      this.record(caseId, "review", "Submitted briefing corrections");
     })();
     return this.get(caseId);
   }

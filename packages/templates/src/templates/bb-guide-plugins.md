@@ -142,6 +142,8 @@ The Ingestion Desk plugin is an opt-in official plugin bundled with the app:
 `bb plugin install ingestion-desk`. It reviews meeting notes, transcripts,
 Google Drive links, and pasted Granola notes before it changes a Vault:
 
+  bb ingestion ingest [--project <id>] (--content <text> | --url <url>)
+                      [--context <text>] [--json]
   bb ingestion status [--project <id>] [--json]
   bb ingestion create --project <id> --title <title> --kind <kind>
                       --label <label> (--content <text> | --url <url>) [--json]
@@ -153,8 +155,10 @@ Google Drive links, and pasted Granola notes before it changes a Vault:
                             [--output <path:summary>]... [--json]
   bb ingestion publish <case-id> [--preserve-local-changes] [--json]
 
-Drafting uses an isolated managed worktree based on `main`. Publishing commits
-approved changes, updates GitHub `main`, and synchronizes the local Vault.
+Ingestion starts one hidden processing task and returns the result to Ingestion
+Desk for approval. Drafting uses an isolated managed worktree based on `main`.
+Publishing commits approved changes, updates GitHub `main`, and synchronizes
+the local Vault.
 Publication stops when local Vault changes need review. The explicit
 `--preserve-local-changes` option preserves safe local changes before it
 publishes the ingestion changes. Merge conflicts still stop publication.
