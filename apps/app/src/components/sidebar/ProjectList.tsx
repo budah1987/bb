@@ -1976,7 +1976,7 @@ function ProjectListComponent({
   const pinnedSection: BuiltInSidebarSectionOptions = {
     activity: getCollapsedChildActivity(pinnedSectionThreads, draftThreadIds),
     collapsedThreads: pinnedSectionThreads,
-    label: "Pinned",
+    label: "Focus",
     content: pinnedSectionContent,
     actions: renderSectionDisplayOptions("pinned"),
     actionsOpen: isSectionDisplayOptionsOpen("pinned"),

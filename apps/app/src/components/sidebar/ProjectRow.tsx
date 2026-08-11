@@ -2375,6 +2375,8 @@ function ProjectRowComponent({
       <div data-sidebar-sticky-project-item="">
         <TopLevelSidebarSection
           label={projectLabel}
+          leadingIcon="FolderGit"
+          surface="workspace-card"
           actions={projectActions}
           actionsAlwaysVisible
           actionsMobileAlways

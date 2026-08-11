@@ -69,11 +69,31 @@ export function RailSection({
           )}
         />
       </button>
-      {isExpanded ? (
-        <div id={contentId} className={RAIL_SECTION_BODY_CLASS}>
-          {children}
+      <div
+        id={contentId}
+        aria-hidden={!isExpanded}
+        inert={!isExpanded}
+        className={cn(
+          "grid overflow-hidden transition-[grid-template-rows] ease-[var(--resize-ease)] motion-reduce:transition-none",
+          isExpanded
+            ? "grid-rows-[1fr] duration-[var(--resize-dur)]"
+            : "pointer-events-none grid-rows-[0fr] duration-150",
+        )}
+      >
+        <div className="min-h-0 overflow-hidden">
+          <div
+            className={cn(
+              RAIL_SECTION_BODY_CLASS,
+              "transition-[transform,opacity] duration-150 ease-[var(--resize-ease)] motion-reduce:transition-none",
+              isExpanded
+                ? "translate-y-0 opacity-100 delay-[40ms]"
+                : "-translate-y-1 opacity-0 delay-0",
+            )}
+          >
+            {children}
+          </div>
         </div>
-      ) : null}
+      </div>
     </section>
   );
 }

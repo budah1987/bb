@@ -7,7 +7,7 @@ import {
   type ReactNode,
 } from "react";
 import { cn } from "@bb/shared-ui/lib/utils";
-import { Icon } from "@bb/shared-ui/icon";
+import { Icon, type IconName } from "@bb/shared-ui/icon";
 import { LIST_HOVER_TRANSITION } from "@bb/shared-ui/motion";
 import { CHROME_SECTION_LABEL_CLASS } from "@/components/ui/chromeStyleTokens";
 import {
@@ -33,6 +33,8 @@ import {
 } from "./paneContentSplitIndicator";
 import { SplitPaneMiniMap } from "./SplitPaneMiniMap";
 
+export type TopLevelSidebarSectionSurface = "flat" | "workspace-card";
+
 const EMPTY_SPLIT_INDICATOR_THREADS: readonly ThreadSplitIndicatorTarget[] = [];
 
 export interface TopLevelSidebarSectionCollapseControl {
@@ -55,6 +57,8 @@ export interface TopLevelSidebarSectionProps {
   sectionStyle?: CSSProperties;
   consumeClickSuppression?: ConsumeDragClickSuppression;
   isDropTargetActive?: boolean;
+  leadingIcon?: IconName;
+  surface?: TopLevelSidebarSectionSurface;
 }
 
 /**
@@ -76,6 +80,8 @@ export function TopLevelSidebarSection({
   sectionStyle,
   consumeClickSuppression,
   isDropTargetActive = false,
+  leadingIcon,
+  surface = "flat",
 }: TopLevelSidebarSectionProps) {
   const threadSplitsEnabled = useThreadSplitsEnabled();
   const collapsedSplitIndicator = useThreadGroupSplitIndicator(
@@ -123,8 +129,17 @@ export function TopLevelSidebarSection({
     <SidebarStickyGroup
       ref={sectionRef}
       style={sectionStyle}
+      data-sidebar-section-surface={surface}
+      data-sidebar-section-expanded={
+        collapseControl?.isCollapsed === false ? "true" : "false"
+      }
       className={cn(
-        "group/sidebar-section min-w-0 rounded-md transition-colors",
+        "group/sidebar-section min-w-0 transition-[background-color,border-color] duration-150 ease-out motion-reduce:transition-none",
+        surface === "flat" && "rounded-md",
+        surface === "workspace-card" && "rounded-lg border border-transparent",
+        surface === "workspace-card" &&
+          collapseControl?.isCollapsed === false &&
+          "border-sidebar-border/70 bg-sidebar-accent/20",
         isDropTargetActive && "bg-sidebar-accent/60",
       )}
       onClickCapture={handleClickCapture}
@@ -137,16 +152,52 @@ export function TopLevelSidebarSection({
           CHROME_SECTION_LABEL_CLASS,
           SIDEBAR_STANDARD_ROW_PADDING_CLASS,
           "rounded-md pr-0 transition-colors",
+          surface === "workspace-card" &&
+            "bg-transparent text-sm font-medium text-sidebar-foreground",
           dragBindings && !dragBindings.disabled && "select-none",
         )}
         {...dragBindings?.attributes}
         {...(dragBindings?.listeners ?? {})}
       >
-        <span className="relative z-10 flex min-w-0 flex-1 items-center gap-1 text-left">
+        <span className="relative z-10 flex min-w-0 flex-1 items-center gap-1.5 text-left">
+          {collapseControl && surface === "workspace-card" ? (
+            <button
+              type="button"
+              aria-expanded={!collapseControl.isCollapsed}
+              aria-label={
+                collapseControl.isCollapsed
+                  ? `Expand ${label} section`
+                  : `Collapse ${label} section`
+              }
+              className={cn(
+                "relative z-20 inline-flex size-6 shrink-0 cursor-pointer items-center justify-center rounded-md text-subtle-foreground outline-none ring-sidebar-ring hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:ring-2",
+                LIST_HOVER_TRANSITION,
+              )}
+              onClick={handleCollapseControlClick}
+              onPointerDown={stopCollapseControlPointerDown}
+              onKeyDown={stopCollapseControlKeyDown}
+            >
+              <Icon
+                name="ChevronRight"
+                className={cn(
+                  "size-3 transition-transform duration-250 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none",
+                  !collapseControl.isCollapsed && "rotate-90",
+                )}
+                aria-hidden="true"
+              />
+            </button>
+          ) : null}
+          {leadingIcon ? (
+            <Icon
+              name={leadingIcon}
+              className="size-4 shrink-0 text-sidebar-foreground/80"
+              aria-hidden="true"
+            />
+          ) : null}
           <span className="min-w-0 truncate" title={label}>
             {label}
           </span>
-          {collapseControl ? (
+          {collapseControl && surface === "flat" ? (
             <button
               type="button"
               aria-expanded={!collapseControl.isCollapsed}
@@ -170,7 +221,7 @@ export function TopLevelSidebarSection({
               <Icon
                 name="ChevronRight"
                 className={cn(
-                  "size-3 transition-transform duration-150",
+                  "size-3 transition-transform duration-250 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none",
                   !collapseControl.isCollapsed && "rotate-90",
                 )}
                 aria-hidden="true"
@@ -223,7 +274,11 @@ export function TopLevelSidebarSection({
         ) : null}
       </SidebarStickyTier>
       {collapseControl?.isCollapsed || children == null ? null : (
-        <div className="mt-1">{children}</div>
+        <div
+          className={cn("mt-1", surface === "workspace-card" && "px-1 pb-1")}
+        >
+          {children}
+        </div>
       )}
     </SidebarStickyGroup>
   );

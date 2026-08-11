@@ -91,6 +91,48 @@ describe("TopLevelSidebarSection", () => {
     expect(header?.className).not.toContain("pr-1");
   });
 
+  it("uses a card surface only while a workspace section is expanded", () => {
+    const result = render(
+      <TopLevelSidebarSection
+        label="BB"
+        leadingIcon="FolderGit"
+        surface="workspace-card"
+        collapseControl={{ isCollapsed: false, onToggleCollapsed: vi.fn() }}
+      >
+        <div>Workspace thread</div>
+      </TopLevelSidebarSection>,
+    );
+
+    const section = result.container.querySelector(
+      '[data-sidebar-section-surface="workspace-card"]',
+    );
+    const disclosure = screen.getByRole("button", {
+      name: "Collapse BB section",
+    });
+    const icon = result.container.querySelector('[data-icon="FolderGit"]');
+
+    expect(section?.className).toContain("border-sidebar-border/70");
+    expect(icon).not.toBeNull();
+    expect(
+      disclosure.compareDocumentPosition(icon as Node) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).not.toBe(0);
+
+    result.rerender(
+      <TopLevelSidebarSection
+        label="BB"
+        leadingIcon="FolderGit"
+        surface="workspace-card"
+        collapseControl={{ isCollapsed: true, onToggleCollapsed: vi.fn() }}
+      >
+        <div>Workspace thread</div>
+      </TopLevelSidebarSection>,
+    );
+
+    expect(section?.className).not.toContain("border-sidebar-border/70");
+    expect(screen.queryByText("Workspace thread")).toBeNull();
+  });
+
   it("pins collapsed child activity to the sidebar edge independently of row actions", () => {
     render(
       <TopLevelSidebarSection
