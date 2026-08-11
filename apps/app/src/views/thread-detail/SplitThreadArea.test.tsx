@@ -81,6 +81,7 @@ const panelCallbacks = vi.hoisted(
     >(),
 );
 const commandHandlers = vi.hoisted(() => new Map<string, () => boolean>());
+const threadViewMountCounts = vi.hoisted(() => new Map<string, number>());
 interface ShortcutPresentationFixture {
   ariaKeyshortcuts: string;
   label: string;
@@ -243,6 +244,12 @@ vi.mock("./ThreadDetailView", () => ({
     projectId: string;
     threadId: string;
   }) => {
+    useState(() => {
+      threadViewMountCounts.set(
+        threadId,
+        (threadViewMountCounts.get(threadId) ?? 0) + 1,
+      );
+    });
     const pane = useContext(PaneContext);
     const [isPanelOpen, setIsPanelOpen] = useState(threadId === "thr-a");
     const composerHost = useMemo<PluginComposerHost>(() => {
@@ -630,6 +637,19 @@ function HistoryForwardNav() {
   );
 }
 
+function HistoryBackNav() {
+  const navigate = useNavigate();
+  return (
+    <button
+      type="button"
+      data-testid="history-back"
+      onClick={() => navigate(-1)}
+    >
+      back
+    </button>
+  );
+}
+
 function renderSplitArea(options: {
   path: string;
   layout?: SplitLayout;
@@ -673,6 +693,7 @@ function renderSplitArea(options: {
             )}
             <LocationProbe />
             <CommandCenterStateProbe />
+            <HistoryBackNav />
             <HistoryForwardNav />
             {options.externalTo !== undefined ? (
               <ExternalNav to={options.externalTo} />
@@ -692,6 +713,7 @@ beforeEach(() => {
   panelFullScreenState.isMainCollapsed = false;
   panelGroupLayoutState.layout = [100, 0];
   commandHandlers.clear();
+  threadViewMountCounts.clear();
   commandPresentationState.isModifierHeld = false;
   commandPresentationState.shortcut = null;
   threadStore.set("thr-a", { archivedAt: null, deletedAt: null });
@@ -710,6 +732,36 @@ afterEach(() => {
 });
 
 describe("SplitThreadArea", () => {
+  it("keeps recent single-pane thread views mounted while cycling", async () => {
+    renderSplitArea({
+      path: threadPath("thr-a"),
+      layout: {
+        root: {
+          type: "pane",
+          paneId: "pane-1",
+          content: threadContent("thr-a"),
+        },
+        focusedPaneId: "pane-1",
+      },
+      externalTo: threadPath("thr-b"),
+    });
+
+    expect(await screen.findByTestId("pane-thr-a")).toBeTruthy();
+    fireEvent.change(screen.getByTestId("draft-thr-a"), {
+      target: { value: "keep this draft" },
+    });
+    fireEvent.click(screen.getByTestId("external-nav"));
+    expect(await screen.findByTestId("pane-thr-b")).toBeTruthy();
+    fireEvent.click(screen.getByTestId("history-back"));
+    expect(await screen.findByTestId("pane-thr-a")).toBeTruthy();
+
+    expect(threadViewMountCounts.get("thr-a")).toBe(1);
+    expect(threadViewMountCounts.get("thr-b")).toBe(1);
+    expect(
+      (screen.getByTestId("draft-thr-a") as HTMLTextAreaElement).value,
+    ).toBe("keep this draft");
+  });
+
   it("maximizes without changing the split tree and restores mounted pane state", async () => {
     const initialLayout = twoPaneLayout("pane-1");
     const store = renderSplitArea({
@@ -1706,10 +1758,15 @@ describe("SplitThreadArea", () => {
 
     fireEvent.click(screen.getByTestId("external-nav"));
 
-    // Focused pane (thr-b) now shows thr-c; the unfocused pane (thr-a) survives.
+    // Focused pane now shows thr-c. Its prior thread stays hidden for fast back
+    // navigation, while the unfocused pane remains visible and untouched.
     expect(await screen.findByTestId("pane-thr-c")).toBeTruthy();
     expect(screen.getByTestId("pane-thr-a")).toBeTruthy();
-    expect(screen.queryByTestId("pane-thr-b")).toBeNull();
+    const retainedThread = screen.getByTestId("pane-thr-b");
+    expect(retainedThread.style.display).toBe("none");
+    expect(retainedThread.style.getPropertyPriority("display")).toBe(
+      "important",
+    );
     expect(
       screen
         .getAllByTestId(/^pane-thr-/)
@@ -2928,15 +2985,16 @@ describe("SplitThreadArea", () => {
 
   it("prunes a stale focused pane and moves focus + URL to the survivor", async () => {
     threadStore.set("thr-b", { archivedAt: null, deletedAt: 456 });
-    renderSplitArea({
+    const store = renderSplitArea({
       path: threadPath("thr-b"),
       layout: twoPaneLayout("pane-2"),
     });
 
     await waitFor(() => {
-      expect(screen.queryByTestId("pane-thr-b")).toBeNull();
+      expect(listPanes(storedSplitLayout(store).root)).toHaveLength(1);
     });
     expect(screen.getByTestId("pane-thr-a")).toBeTruthy();
+    expect(screen.getByTestId("pane-thr-b").style.display).toBe("none");
     await waitFor(() => {
       expect(screen.getByTestId("location").textContent).toBe(
         threadPath("thr-a"),

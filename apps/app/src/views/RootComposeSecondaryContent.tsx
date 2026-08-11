@@ -318,6 +318,7 @@ export function RootComposeSecondaryContent({
       ) : null}
       {contextBar}
       <div
+        data-conversation-surface=""
         className="@container/page min-h-0 flex-1 overflow-y-auto"
         style={{ viewTransitionName: conversationViewTransitionName }}
       >

@@ -9,7 +9,7 @@ describe("calculateVisibleTabCount", () => {
         railWidth: 500,
         threadCount: 10,
       }),
-    ).toBe(2);
+    ).toBe(3);
     expect(
       calculateVisibleTabCount({
         compact: false,

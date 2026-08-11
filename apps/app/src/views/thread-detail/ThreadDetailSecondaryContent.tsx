@@ -359,6 +359,7 @@ function ThreadDetailSecondaryContentBody({
       <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-clip">
         {header}
         <div
+          data-conversation-surface=""
           data-conversation-collapsed={isConversationCollapsedActive}
           inert={isConversationCollapsedActive}
           style={{ viewTransitionName: conversationViewTransitionName }}
@@ -428,6 +429,7 @@ function ThreadDetailSecondaryContentBody({
             )}
           >
             <div
+              data-conversation-surface=""
               data-conversation-collapsed={isConversationCollapsedActive}
               // `inert` removes the hidden conversation (header, timeline,
               // composer) from the tab order and a11y tree and blocks pointer

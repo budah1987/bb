@@ -81,6 +81,166 @@ afterEach(() => {
 });
 
 describe("ConductorSidebar", () => {
+  it("selects repositories and moves them into an empty Space", async () => {
+    const moveProject = vi.fn();
+    const moveProjects = vi.fn();
+    renderSlot(
+      sidebar,
+      {
+        activeThreadId: null,
+        activeProjectId: null,
+        experimental_spaces: {
+          activeSpaceId: "space-empty",
+          spaces: [
+            { id: "space-main", name: "Main", projectIds: ["project-1"] },
+            { id: "space-empty", name: "Planning", projectIds: [] },
+          ],
+          moveProject,
+          moveProjects,
+        },
+        isCompactViewport: false,
+        onNavigate: () => undefined,
+        searchQuery: "",
+      },
+      {
+        sidebarThreads: {
+          status: "ready",
+          projects: [{ id: "project-1", name: "BB", isPersonal: false }],
+          threads: [thread("Repository conversation")],
+        },
+        rpc: {
+          readReconciliation: () => ({
+            legacyWorkspaces: [],
+            recordedSignature: null,
+          }),
+          recordReconciliation: () => ({ recorded: false }),
+        },
+      },
+    );
+
+    expect(
+      await screen.findByRole("heading", {
+        name: "This Space has no repositories",
+      }),
+    ).toBeDefined();
+    expect(screen.queryByRole("region", { name: "BB" })).toBeNull();
+
+    fireEvent.click(screen.getByRole("checkbox", { name: /BB.*From Main/u }));
+    fireEvent.click(screen.getByRole("button", { name: "Move 1 repository" }));
+    expect(moveProjects).toHaveBeenCalledWith(["project-1"], "space-empty");
+    expect(moveProject).not.toHaveBeenCalled();
+  });
+
+  it("selects all available repositories for one batch move", async () => {
+    const moveProjects = vi.fn();
+    renderSlot(
+      sidebar,
+      {
+        activeThreadId: null,
+        activeProjectId: null,
+        experimental_spaces: {
+          activeSpaceId: "space-empty",
+          spaces: [
+            {
+              id: "space-main",
+              name: "Main",
+              projectIds: ["project-1", "project-2"],
+            },
+            { id: "space-empty", name: "Planning", projectIds: [] },
+          ],
+          moveProject: vi.fn(),
+          moveProjects,
+        },
+        isCompactViewport: false,
+        onNavigate: () => undefined,
+        searchQuery: "",
+      },
+      {
+        sidebarThreads: {
+          status: "ready",
+          projects: [
+            { id: "project-1", name: "BB", isPersonal: false },
+            { id: "project-2", name: "Vault", isPersonal: false },
+          ],
+          threads: [
+            thread("BB conversation"),
+            thread("Vault conversation", {
+              projectId: "project-2",
+              environment: {
+                id: "environment-2",
+                name: "Vault workspace",
+                branchName: "feature/vault",
+                workspaceDisplayKind: "managed-worktree",
+              },
+            }),
+          ],
+        },
+        rpc: {
+          readReconciliation: () => ({
+            legacyWorkspaces: [],
+            recordedSignature: null,
+          }),
+          recordReconciliation: () => ({ recorded: false }),
+        },
+      },
+    );
+
+    fireEvent.click(await screen.findByRole("button", { name: "Select all" }));
+    expect(screen.getAllByRole("checkbox", { checked: true })).toHaveLength(2);
+    fireEvent.click(
+      screen.getByRole("button", { name: "Move 2 repositories" }),
+    );
+    expect(moveProjects).toHaveBeenCalledWith(
+      ["project-1", "project-2"],
+      "space-empty",
+    );
+  });
+
+  it("moves a repository from its right-click menu", async () => {
+    const moveProject = vi.fn();
+    renderSlot(
+      sidebar,
+      {
+        activeThreadId: null,
+        activeProjectId: null,
+        experimental_spaces: {
+          activeSpaceId: "space-main",
+          spaces: [
+            { id: "space-main", name: "Main", projectIds: ["project-1"] },
+            { id: "space-planning", name: "Planning", projectIds: [] },
+          ],
+          moveProject,
+          moveProjects: vi.fn(),
+        },
+        isCompactViewport: false,
+        onNavigate: () => undefined,
+        searchQuery: "",
+      },
+      {
+        sidebarThreads: {
+          status: "ready",
+          projects: [{ id: "project-1", name: "BB", isPersonal: false }],
+          threads: [thread("Repository conversation")],
+        },
+        rpc: {
+          readReconciliation: () => ({
+            legacyWorkspaces: [],
+            recordedSignature: null,
+          }),
+          recordReconciliation: () => ({ recorded: false }),
+        },
+      },
+    );
+
+    const project = await screen.findByRole("region", { name: "BB" });
+    fireEvent.contextMenu(within(project).getByRole("button", { name: "BB" }));
+    fireEvent.click(
+      await screen.findByRole("menuitem", { name: "Move to Space" }),
+    );
+    fireEvent.click(await screen.findByRole("menuitem", { name: "Planning" }));
+    expect(moveProject).toHaveBeenCalledWith("project-1", "space-planning");
+  });
+
   it("shows live Git and pull request details on workspace cards", async () => {
     renderSlot(
       sidebar,

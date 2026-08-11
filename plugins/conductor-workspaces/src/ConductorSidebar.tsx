@@ -105,6 +105,7 @@ import {
 import { openRepositoryDetails } from "./RepositoryDetailsPane";
 
 type RenameScope = "display" | "branch" | "folder";
+type SidebarSpaces = NonNullable<PluginThreadListProps["experimental_spaces"]>;
 
 interface RenameTarget {
   environmentId: string;
@@ -304,13 +305,13 @@ function AddRepositoryDialog({
   const selectedRepository = filteredRepositories.find(
     (repository) => repository.nameWithOwner === selectedName,
   );
-  const availableAccounts = accountsForRepository(
-    catalog,
-    selectedRepository?.nameWithOwner ?? null,
+  const selectableAccounts = useMemo(
+    () =>
+      selectedRepository
+        ? accountsForRepository(catalog, selectedRepository.nameWithOwner)
+        : (catalog?.accounts ?? []),
+    [catalog, selectedRepository],
   );
-  const selectableAccounts = selectedRepository
-    ? availableAccounts
-    : (catalog?.accounts ?? []);
 
   useEffect(() => {
     if (!open) return;
@@ -1052,6 +1053,7 @@ function ProjectSection({
   onRequestChangeIcon,
   onRequestGithubCatalog,
   onSetGithubAccount,
+  sidebarSpaces,
 }: {
   project: ConductorProject;
   gitSummaries: ReadonlyMap<string, WorkspaceGitSummary>;
@@ -1083,6 +1085,7 @@ function ProjectSection({
   onRequestChangeIcon: () => void;
   onRequestGithubCatalog: () => void;
   onSetGithubAccount: (accountLogin: string | null) => void;
+  sidebarSpaces: SidebarSpaces | null;
 }) {
   const {
     attributes,
@@ -1171,6 +1174,27 @@ function ProjectSection({
             <Icon name="Palette" aria-hidden />
             Change icon…
           </ContextMenuItem>
+          {sidebarSpaces && sidebarSpaces.spaces.length > 1 ? (
+            <ContextMenuSub>
+              <ContextMenuSubTrigger>
+                <Icon name="Layers" aria-hidden />
+                Move to Space
+              </ContextMenuSubTrigger>
+              <ContextMenuSubContent>
+                {sidebarSpaces.spaces.map((space) => (
+                  <ContextMenuItem
+                    key={space.id}
+                    disabled={space.projectIds.includes(project.id)}
+                    onSelect={() =>
+                      sidebarSpaces.moveProject(project.id, space.id)
+                    }
+                  >
+                    {space.name}
+                  </ContextMenuItem>
+                ))}
+              </ContextMenuSubContent>
+            </ContextMenuSub>
+          ) : null}
           <ContextMenuSub>
             <ContextMenuSubTrigger>
               <Icon name="Github" aria-hidden />
@@ -1243,6 +1267,132 @@ function ProjectSection({
           </div>
         </SortableContext>
       </SectionContent>
+    </section>
+  );
+}
+
+function SpaceRepositoryEmptyState({
+  activeSpace,
+  customizations,
+  onAddRepository,
+  onMoveProjects,
+  projects,
+  spaces,
+}: {
+  activeSpace: SidebarSpaces["spaces"][number];
+  customizations: Readonly<Record<string, ProjectCustomization>>;
+  onAddRepository: () => void;
+  onMoveProjects: (projectIds: readonly string[], spaceId: string) => void;
+  projects: readonly ConductorProject[];
+  spaces: SidebarSpaces["spaces"];
+}) {
+  const [selectedProjectIds, setSelectedProjectIds] = useState<
+    ReadonlySet<string>
+  >(() => new Set());
+  const selectedCount = selectedProjectIds.size;
+  const allSelected = selectedCount === projects.length;
+
+  const toggleProject = (projectId: string) => {
+    setSelectedProjectIds((current) => {
+      const next = new Set(current);
+      if (next.has(projectId)) next.delete(projectId);
+      else next.add(projectId);
+      return next;
+    });
+  };
+
+  return (
+    <section
+      className="conductor-space-empty"
+      aria-label={`${activeSpace.name} repositories`}
+    >
+      <span className="conductor-space-empty-icon" aria-hidden>
+        <Icon name="Layers" className="size-4" />
+      </span>
+      <div className="min-w-0">
+        <h2>This Space has no repositories</h2>
+        <p>Move a repository here to keep this Space focused.</p>
+      </div>
+      {projects.length > 0 ? (
+        <>
+          <div className="conductor-space-empty-selection">
+            <span>
+              {selectedCount > 0
+                ? `${selectedCount} selected`
+                : `${projects.length} available`}
+            </span>
+            <button
+              type="button"
+              onClick={() =>
+                setSelectedProjectIds(
+                  allSelected
+                    ? new Set()
+                    : new Set(projects.map((project) => project.id)),
+                )
+              }
+            >
+              {allSelected ? "Clear" : "Select all"}
+            </button>
+          </div>
+          <ul className="conductor-space-empty-list">
+            {projects.map((project) => {
+              const label =
+                customizations[project.id]?.name ??
+                project.repositoryName ??
+                project.name;
+              const sourceSpace = spaces.find((space) =>
+                space.projectIds.includes(project.id),
+              );
+              const selected = selectedProjectIds.has(project.id);
+              return (
+                <li key={project.id}>
+                  <label data-selected={selected || undefined}>
+                    <input
+                      type="checkbox"
+                      checked={selected}
+                      onChange={() => toggleProject(project.id)}
+                    />
+                    <Icon name="Folder" className="size-3.5" aria-hidden />
+                    <span className="min-w-0 flex-1 truncate text-left">
+                      <span className="block truncate font-medium">
+                        {label}
+                      </span>
+                      {sourceSpace ? (
+                        <span className="block truncate text-2xs text-muted-foreground">
+                          From {sourceSpace.name}
+                        </span>
+                      ) : null}
+                    </span>
+                  </label>
+                </li>
+              );
+            })}
+          </ul>
+          <Button
+            type="button"
+            size="sm"
+            disabled={selectedCount === 0}
+            className="conductor-space-empty-submit"
+            onClick={() =>
+              onMoveProjects([...selectedProjectIds], activeSpace.id)
+            }
+          >
+            Move {selectedCount || "selected"}{" "}
+            {selectedCount === 1 ? "repository" : "repositories"}
+            <Icon name="ArrowRight" className="size-3.5" aria-hidden />
+          </Button>
+        </>
+      ) : (
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          onClick={onAddRepository}
+        >
+          <Icon name="Plus" className="size-3.5" aria-hidden />
+          Add repository
+        </Button>
+      )}
     </section>
   );
 }
@@ -1339,6 +1489,7 @@ function FocusSection({
 
 export function ConductorSidebar({
   activeThreadId,
+  experimental_spaces: sidebarSpaces,
   isCompactViewport,
   onNavigate,
   searchQuery,
@@ -1392,6 +1543,18 @@ export function ConductorSidebar({
       buildConductorProjection(state.threads, state.projects, legacyWorkspaces),
     [legacyWorkspaces, state.projects, state.threads],
   );
+  const activeSpace =
+    sidebarSpaces?.spaces.find(
+      (space) => space.id === sidebarSpaces.activeSpaceId,
+    ) ?? null;
+  const activeSpaceProjectIds = activeSpace
+    ? new Set(activeSpace.projectIds)
+    : null;
+  const spaceProjects = activeSpaceProjectIds
+    ? projection.projects.filter((project) =>
+        activeSpaceProjectIds.has(project.id),
+      )
+    : projection.projects;
   const loadGithubCatalog = useCallback(async () => {
     const catalog = await rpc.call("readGithubCatalog", {});
     setGithubCatalog(catalog);
@@ -1461,10 +1624,10 @@ export function ConductorSidebar({
       : true,
   );
   const projectById = new Map(
-    projection.projects.map((project) => [project.id, project]),
+    spaceProjects.map((project) => [project.id, project]),
   );
   const orderedProjects = orderProjectIds(
-    projection.projects.map((project) => project.id),
+    spaceProjects.map((project) => project.id),
     projectOrder,
   )
     .map((id) => projectById.get(id))
@@ -2044,6 +2207,7 @@ export function ConductorSidebar({
                   onSetGithubAccount={(accountLogin) =>
                     requestSetGithubAccount(project, accountLogin)
                   }
+                  sidebarSpaces={sidebarSpaces ?? null}
                 />
               );
             })}
@@ -2064,6 +2228,21 @@ export function ConductorSidebar({
             ) : null}
           </DragOverlay>
         </DndContext>
+
+        {activeSpace && spaceProjects.length === 0 && !query ? (
+          <SpaceRepositoryEmptyState
+            activeSpace={activeSpace}
+            customizations={customizations}
+            projects={projection.projects.filter(
+              (project) => !activeSpaceProjectIds?.has(project.id),
+            )}
+            spaces={sidebarSpaces?.spaces ?? []}
+            onAddRepository={() => setAddRepositoryOpen(true)}
+            onMoveProjects={(projectIds, spaceId) =>
+              sidebarSpaces?.moveProjects(projectIds, spaceId)
+            }
+          />
+        ) : null}
 
         {projection.personalProjectId &&
         (!query || personalThreads.length > 0) ? (
@@ -2159,7 +2338,9 @@ export function ConductorSidebar({
           </section>
         ) : null}
 
-        {projects.length === 0 && personalThreads.length === 0 ? (
+        {projects.length === 0 &&
+        personalThreads.length === 0 &&
+        (Boolean(query) || !activeSpace) ? (
           <p className="px-3 py-6 text-xs text-muted-foreground">
             {query ? "No matching conversations." : "No conversations yet."}
           </p>

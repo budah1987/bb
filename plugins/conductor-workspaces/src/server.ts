@@ -228,6 +228,87 @@ interface WorkspaceArchiveStatus {
   };
 }
 
+const TRANSCRIPT_SEGMENT_LIMIT = "100";
+const TRANSCRIPT_MAX_PAGES = 12;
+const TRANSCRIPT_MAX_CHARS = 30_000;
+
+interface TranscriptConversationRow {
+  kind: string;
+  role?: string;
+  text?: string;
+}
+
+export function formatConversationTranscript(
+  title: string,
+  rows: readonly TranscriptConversationRow[],
+): string {
+  const transcript = rows
+    .filter(
+      (
+        row,
+      ): row is TranscriptConversationRow & {
+        role: "user" | "assistant";
+        text: string;
+      } =>
+        row.kind === "conversation" &&
+        (row.role === "user" || row.role === "assistant") &&
+        typeof row.text === "string" &&
+        row.text.trim().length > 0,
+    )
+    .map((row) => {
+      const speaker = row.role === "user" ? "User" : "Assistant";
+      return `## ${speaker}\n\n${row.text.trim()}`;
+    })
+    .join("\n\n");
+  const clippedTranscript =
+    transcript.length <= TRANSCRIPT_MAX_CHARS
+      ? transcript
+      : `[Earlier transcript omitted]\n\n${transcript.slice(
+          -TRANSCRIPT_MAX_CHARS,
+        )}`;
+
+  return [
+    `# Conversation transcript: ${title}`,
+    "",
+    clippedTranscript || "(This conversation has no messages yet.)",
+  ].join("\n");
+}
+
+async function readConversationTranscript(
+  bb: BbPluginApi,
+  threadId: string,
+): Promise<string> {
+  const thread = await bb.sdk.threads.get({ threadId });
+  const pages = [];
+  let page = await bb.sdk.threads.timeline({
+    threadId,
+    segmentLimit: TRANSCRIPT_SEGMENT_LIMIT,
+  });
+  pages.unshift(page.rows);
+
+  for (
+    let pageCount = 1;
+    page.timelinePage.hasOlderRows &&
+    page.timelinePage.olderCursor !== null &&
+    pageCount < TRANSCRIPT_MAX_PAGES;
+    pageCount += 1
+  ) {
+    const cursor = page.timelinePage.olderCursor;
+    page = await bb.sdk.threads.timeline({
+      threadId,
+      segmentLimit: TRANSCRIPT_SEGMENT_LIMIT,
+      beforeAnchorSeq: String(cursor.anchorSeq),
+      beforeAnchorId: cursor.anchorId,
+    });
+    pages.unshift(page.rows);
+  }
+
+  return formatConversationTranscript(
+    thread.title ?? thread.titleFallback ?? "Conversation",
+    pages.flat(),
+  );
+}
+
 export function workspaceArchiveGuard(
   status: WorkspaceArchiveStatus,
 ): "clean" | "uncommitted" {
@@ -244,6 +325,36 @@ export function workspaceArchiveGuard(
 export default function plugin(bb: BbPluginApi) {
   const db = bb.storage.database();
   bb.storage.migrate(db, migrations);
+
+  bb.ui.registerMentionProvider({
+    id: "conversation-transcript",
+    label: "Conversation transcripts",
+    async search({ projectId, query, threadId }) {
+      if (projectId === null) return [];
+      const normalizedQuery = query.trim().toLocaleLowerCase();
+      const threads = await bb.sdk.threads.list({
+        projectId,
+        limit: 50,
+      });
+      return threads
+        .filter((thread) => thread.id !== threadId)
+        .filter((thread) => {
+          if (normalizedQuery.length === 0) return true;
+          const title = thread.title ?? thread.titleFallback ?? "Conversation";
+          return title.toLocaleLowerCase().includes(normalizedQuery);
+        })
+        .slice(0, 20)
+        .map((thread) => ({
+          id: thread.id,
+          title: thread.title ?? thread.titleFallback ?? "Conversation",
+          subtitle: "Conversation transcript",
+          icon: "MessageSquareText",
+        }));
+    },
+    async resolve(threadId) {
+      return { context: await readConversationTranscript(bb, threadId) };
+    },
+  });
 
   bb.rpc.register(conductorRpcContract, {
     async readWorkspaceGitSummaries({ environmentIds }) {

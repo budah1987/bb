@@ -61,6 +61,7 @@ import {
 import type { ThreadTimelinePluginMessageAction } from "./types.js";
 import type { PromptDraftAttachment } from "@/lib/prompt-draft";
 import { buildThreadHostFileContentUrl } from "@/lib/file-content-urls";
+import { useSoftStreamedText } from "./useSoftStreamedText.js";
 
 interface ConversationMessageContentBaseProps {
   attachments: TimelineConversationAttachments | null;
@@ -535,6 +536,7 @@ function AssistantConversationMessage({
   turnId,
   workspaceRootPath,
 }: AssistantConversationMessageProps) {
+  const visibleText = useSoftStreamedText(text);
   const linkRouting = useMemo<MarkdownLinkRouting>(() => {
     const localImage: NonNullable<MarkdownLinkRouting["localImage"]> = {
       absolutePaths: {
@@ -636,7 +638,7 @@ function AssistantConversationMessage({
       */}
       <SelectableMessageProse onSelect={onSelectProse}>
         <MarkdownPreview
-          content={text}
+          content={visibleText}
           className={CONVERSATION_PROSE_CLASS}
           linkRouting={linkRouting}
           messageDirectives={messageDirectives}

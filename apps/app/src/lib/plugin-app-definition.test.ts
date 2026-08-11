@@ -133,6 +133,7 @@ describe("collectPluginAppRegistrations — experimental_threadList", () => {
         component: Component,
         experimental_contextBar: Component,
         experimental_newThreadContextBar: Component,
+        experimental_newThreadEmptyState: Component,
       });
     });
 
@@ -142,6 +143,7 @@ describe("collectPluginAppRegistrations — experimental_threadList", () => {
       component: Component,
       experimental_contextBar: Component,
       experimental_newThreadContextBar: Component,
+      experimental_newThreadEmptyState: Component,
     });
   });
 

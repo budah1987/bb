@@ -93,16 +93,18 @@ export function SpaceDock({
               size="icon"
               variant="ghost"
               className={cn(
-                "h-8 shrink-0 rounded-md text-muted-foreground transition-[background-color,color,box-shadow]",
+                "h-8 shrink-0 items-center rounded-md text-muted-foreground transition-[background-color,color,box-shadow]",
                 space.id === activeSpaceId &&
-                  "max-w-40 gap-2 bg-sidebar-accent px-2 text-sidebar-foreground shadow-[inset_0_0_0_1px_var(--sidebar-border),0_1px_1px_color-mix(in_oklch,var(--ink)_6%,transparent)]",
-                space.id !== activeSpaceId && "w-8 px-0",
+                  "w-auto max-w-40 justify-start gap-2 bg-sidebar-accent px-2 text-sidebar-foreground shadow-[inset_0_0_0_1px_var(--sidebar-border),0_1px_1px_color-mix(in_oklch,var(--ink)_6%,transparent)]",
+                space.id !== activeSpaceId && "size-8 justify-center px-0",
               )}
               aria-label={`${space.name}, Space ${index + 1}`}
               aria-pressed={space.id === activeSpaceId}
               onClick={() => onSelect(space.id)}
             >
-              <Icon name={getSpaceIconName(space.icon)} />
+              <span className="grid size-4 shrink-0 place-items-center [&>svg]:size-4">
+                <Icon name={getSpaceIconName(space.icon)} />
+              </span>
               {space.id === activeSpaceId ? (
                 <span className="min-w-0 truncate text-xs font-medium">
                   {space.name}
@@ -132,13 +134,17 @@ export function SpaceDock({
         size="icon"
         variant="ghost"
         className={cn(
-          "h-8 shrink-0 rounded-md text-muted-foreground",
-          activeSpace ? "w-8 px-0" : "w-full justify-start gap-2 px-2",
+          "h-8 shrink-0 items-center rounded-md text-muted-foreground",
+          activeSpace
+            ? "size-8 justify-center px-0"
+            : "w-full justify-start gap-2 px-2",
         )}
         aria-label="Create Space"
         onClick={onNew}
       >
-        <Icon name="Plus" />
+        <span className="grid size-4 shrink-0 place-items-center [&>svg]:size-4">
+          <Icon name="Plus" />
+        </span>
         {activeSpace ? null : <span className="text-xs">Create Space</span>}
       </Button>
     </div>

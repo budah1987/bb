@@ -524,6 +524,7 @@ function collectRegistrations(definition) {
     sidebarFooterActions: [],
     threadLists: [],
     threadHeaderActions: [],
+    threadRailSections: [],
     fileOpeners: [],
     messageDirectives: [],
     messageActions: [],
@@ -539,6 +540,7 @@ function collectRegistrations(definition) {
     sidebarFooterAction: /* @__PURE__ */ new Set(),
     threadList: /* @__PURE__ */ new Set(),
     threadHeaderAction: /* @__PURE__ */ new Set(),
+    threadRailSection: /* @__PURE__ */ new Set(),
     fileOpener: /* @__PURE__ */ new Set(),
     messageDirective: /* @__PURE__ */ new Set(),
     messageAction: /* @__PURE__ */ new Set(),
@@ -664,6 +666,12 @@ function collectRegistrations(definition) {
               kind,
               registration.experimental_newThreadContextBar
             )
+          } : {},
+          ...registration.experimental_newThreadEmptyState !== void 0 ? {
+            experimental_newThreadEmptyState: requireComponent(
+              kind,
+              registration.experimental_newThreadEmptyState
+            )
           } : {}
         });
       },
@@ -672,6 +680,16 @@ function collectRegistrations(definition) {
         const id = requireSlotId(kind, registration?.id);
         requireUniqueId(kind, seenIds.threadHeaderAction, id);
         captured.threadHeaderActions.push({
+          id,
+          title: requireNonEmptyString(kind, "title", registration.title),
+          component: requireComponent(kind, registration.component)
+        });
+      },
+      experimental_threadRailSection(registration) {
+        const kind = "slots.experimental_threadRailSection";
+        const id = requireSlotId(kind, registration?.id);
+        requireUniqueId(kind, seenIds.threadRailSection, id);
+        captured.threadRailSections.push({
           id,
           title: requireNonEmptyString(kind, "title", registration.title),
           component: requireComponent(kind, registration.component)

@@ -11,6 +11,7 @@ import {
 import {
   experimental_useSidebarThreadActions as useSidebarThreadActions,
   experimental_useSidebarThreads as useSidebarThreads,
+  useComposer,
   type PluginSidebarThread,
   type PluginNewThreadContextBarProps,
   type PluginThreadContextBarProps,
@@ -87,6 +88,7 @@ function ConductorWorkspaceContextBar({
 }) {
   const state = useSidebarThreads();
   const actions = useSidebarThreadActions();
+  const composer = useComposer();
   const reconciliation = useReconciliation();
   const tabRailRef = useRef<HTMLElement>(null);
   const cycleThreadIdRef = useRef(activeThreadId);
@@ -123,26 +125,56 @@ function ConductorWorkspaceContextBar({
   const closedTabIdSet = new Set(closedTabIds);
   const openThreads =
     workspace?.threads.filter((thread) => !closedTabIdSet.has(thread.id)) ?? [];
-  const openNewConversation = useCallback(
-    (animate: boolean) => {
-      const navigate = () => {
-        actions.openNewThread({
-          projectId,
-          focusPrompt: true,
-          ...(environmentId
-            ? {
-                experimental_sameEnvironment: {
-                  environmentId,
-                  locked: true,
-                },
-              }
-            : {}),
-        });
-      };
-      if (animate) runWorkspaceTabTransition(navigate);
-      else navigate();
+  const openNewConversation = useCallback(() => {
+    runStableNewTabTransition(() => {
+      actions.openNewThread({
+        projectId,
+        focusPrompt: true,
+        ...(environmentId
+          ? {
+              experimental_sameEnvironment: {
+                environmentId,
+                locked: true,
+              },
+            }
+          : {}),
+      });
+    });
+  }, [actions, environmentId, projectId]);
+
+  const closeConversation = useCallback(
+    (threadId: string): boolean => {
+      if (!workspace) return false;
+      if (closeInFlightRef.current) return true;
+
+      const closingIndex = openThreads.findIndex(
+        (thread) => thread.id === threadId,
+      );
+      if (closingIndex < 0) return false;
+
+      saveClosedTabIds(workspace.key, [
+        threadId,
+        ...loadClosedTabIds(workspace.key).filter(
+          (closedId) => closedId !== threadId,
+        ),
+      ]);
+
+      if (threadId !== cycleThreadIdRef.current) return true;
+
+      const fallback =
+        openThreads[closingIndex + 1] ?? openThreads[closingIndex - 1] ?? null;
+      closeInFlightRef.current = true;
+      if (fallback) {
+        cycleThreadIdRef.current = fallback.id;
+        actions.open(fallback.id);
+        return true;
+      }
+
+      cycleThreadIdRef.current = null;
+      openNewConversation();
+      return true;
     },
-    [actions, environmentId, projectId],
+    [actions, openNewConversation, openThreads, workspace],
   );
 
   useLayoutEffect(() => {
@@ -188,26 +220,33 @@ function ConductorWorkspaceContextBar({
       actions.open(fallback.id);
       return true;
     }
-    // The thread route is also the workspace shell. Keep one tab open so a
-    // close request never sends the user to the blank composer or the window.
-    if (openThreads.length === 1) return true;
-
     const activeThread = openThreads[activeIndex];
-    const fallback =
-      openThreads[activeIndex + 1] ?? openThreads[activeIndex - 1] ?? null;
-    if (!activeThread || !fallback) return true;
+    return activeThread ? closeConversation(activeThread.id) : true;
+  }, [actions, closeConversation, openThreads, workspace]);
 
-    saveClosedTabIds(workspace.key, [
-      activeThread.id,
-      ...loadClosedTabIds(workspace.key).filter(
-        (closedId) => closedId !== activeThread.id,
-      ),
-    ]);
-    closeInFlightRef.current = true;
-    cycleThreadIdRef.current = fallback.id;
-    actions.open(fallback.id);
-    return true;
-  }, [actions, openThreads, workspace]);
+  const openConversation = useCallback(
+    (threadId: string) => {
+      if (threadId === activeThreadId) return;
+      cycleThreadIdRef.current = threadId;
+      actions.open(threadId);
+    },
+    [actions, activeThreadId],
+  );
+
+  const openAdjacentConversation = useCallback(
+    (threadId: string, offset: -1 | 1) => {
+      const currentIndex = openThreads.findIndex(
+        (thread) => thread.id === threadId,
+      );
+      if (currentIndex < 0 || openThreads.length < 2) return;
+      const nextThread =
+        openThreads[
+          (currentIndex + offset + openThreads.length) % openThreads.length
+        ];
+      if (nextThread) openConversation(nextThread.id);
+    },
+    [openConversation, openThreads],
+  );
 
   const reopenClosedConversation = useCallback(() => {
     if (!workspace) return;
@@ -253,7 +292,7 @@ function ConductorWorkspaceContextBar({
       if (event.code === "KeyT" || event.key.toLowerCase() === "t") {
         event.preventDefault();
         event.stopImmediatePropagation();
-        openNewConversation(false);
+        openNewConversation();
         return;
       }
       if (openThreads.length < 2) return;
@@ -279,14 +318,13 @@ function ConductorWorkspaceContextBar({
 
       event.preventDefault();
       event.stopImmediatePropagation();
-      cycleThreadIdRef.current = nextThread.id;
-      actions.open(nextThread.id);
+      openConversation(nextThread.id);
     };
     window.addEventListener("keydown", handleKeyDown, true);
     return () => window.removeEventListener("keydown", handleKeyDown, true);
   }, [
-    actions,
     closeFocusedConversation,
+    openConversation,
     openNewConversation,
     openThreads,
     renameThread,
@@ -340,7 +378,11 @@ function ConductorWorkspaceContextBar({
             <ConversationTab
               thread={thread}
               active={thread.id === activeThreadId}
-              onOpen={() => actions.open(thread.id)}
+              onOpen={() => openConversation(thread.id)}
+              onClose={() => closeConversation(thread.id)}
+              onOpenAdjacent={(offset) =>
+                openAdjacentConversation(thread.id, offset)
+              }
             />
           </ConversationActionMenu>
         ))}
@@ -360,7 +402,7 @@ function ConductorWorkspaceContextBar({
                 <DropdownMenuItem
                   key={thread.id}
                   textValue={threadDisplayTitle(thread)}
-                  onSelect={() => actions.open(thread.id)}
+                  onSelect={() => openConversation(thread.id)}
                 >
                   <ThreadPixelMatrix thread={thread} />
                   <span className="truncate">{threadDisplayTitle(thread)}</span>
@@ -370,20 +412,34 @@ function ConductorWorkspaceContextBar({
           </DropdownMenu>
         ) : null}
         {activeThreadId === null ? (
-          <button
-            type="button"
-            className="conductor-conversation-tab conductor-new-conversation-slot"
+          <div
+            className="conductor-conversation-tab conductor-new-conversation-tab"
             data-active
             data-new-conversation
-            aria-current="page"
-            aria-label="New conversation"
-            title="New conversation"
           >
-            <Icon name="Plus" className="size-3.5" aria-hidden />
-            {isCompactViewport ? null : (
-              <span className="truncate">New conversation</span>
-            )}
-          </button>
+            <button
+              type="button"
+              className="conductor-conversation-tab-main"
+              aria-current="page"
+              aria-label="New conversation"
+              title="New conversation"
+              onClick={() => composer.focus()}
+            >
+              <Icon name="Plus" className="size-3.5" aria-hidden />
+              {isCompactViewport ? null : (
+                <span className="truncate">New conversation</span>
+              )}
+            </button>
+            <button
+              type="button"
+              className="conductor-conversation-tab-close"
+              aria-label="Close new conversation"
+              title="Close new conversation"
+              onClick={closeFocusedConversation}
+            >
+              <Icon name="X" className="size-3" aria-hidden />
+            </button>
+          </div>
         ) : (
           <button
             type="button"
@@ -391,10 +447,9 @@ function ConductorWorkspaceContextBar({
             aria-label="New conversation in this workspace"
             aria-keyshortcuts="Meta+T"
             title="New conversation (⌘T)"
-            onClick={() => openNewConversation(true)}
+            onClick={openNewConversation}
           >
             <Icon name="Plus" className="size-3.5" aria-hidden />
-            {isCompactViewport ? null : <span>Conversation</span>}
           </button>
         )}
       </nav>
@@ -407,7 +462,7 @@ function ConductorWorkspaceContextBar({
   );
 }
 
-function runWorkspaceTabTransition(navigate: () => void): void {
+function runStableNewTabTransition(navigate: () => void): void {
   if (
     typeof document === "undefined" ||
     typeof document.startViewTransition !== "function" ||
@@ -418,10 +473,10 @@ function runWorkspaceTabTransition(navigate: () => void): void {
   }
 
   const root = document.documentElement;
-  root.dataset.conductorTabTransition = "";
+  root.dataset.conductorNewTabTransition = "";
   const transition = document.startViewTransition(navigate);
   void transition.finished.finally(() => {
-    delete root.dataset.conductorTabTransition;
+    delete root.dataset.conductorNewTabTransition;
   });
 }
 
@@ -431,30 +486,58 @@ function isCycleBlockedTarget(target: EventTarget | null): boolean {
 }
 
 interface ConversationTabProps extends Omit<
-  ComponentPropsWithoutRef<"button">,
+  ComponentPropsWithoutRef<"div">,
   "onClick"
 > {
   thread: ReturnType<typeof useSidebarThreads>["threads"][number];
   active: boolean;
   onOpen: () => void;
+  onClose: () => void;
+  onOpenAdjacent: (offset: -1 | 1) => void;
 }
 
-const ConversationTab = forwardRef<HTMLButtonElement, ConversationTabProps>(
-  function ConversationTab({ thread, active, onOpen, ...triggerProps }, ref) {
+const ConversationTab = forwardRef<HTMLDivElement, ConversationTabProps>(
+  function ConversationTab(
+    { thread, active, onOpen, onClose, onOpenAdjacent, ...triggerProps },
+    ref,
+  ) {
+    const title = threadDisplayTitle(thread);
     return (
-      <button
+      <div
         {...triggerProps}
         ref={ref}
-        type="button"
-        aria-current={active ? "page" : undefined}
         className="conductor-conversation-tab"
         data-active={active || undefined}
-        title={threadDisplayTitle(thread)}
-        onClick={onOpen}
       >
-        <ThreadPixelMatrix thread={thread} />
-        <span className="truncate">{threadDisplayTitle(thread)}</span>
-      </button>
+        <button
+          type="button"
+          className="conductor-conversation-tab-main"
+          aria-current={active ? "page" : undefined}
+          tabIndex={active ? 0 : -1}
+          title={title}
+          onClick={onOpen}
+          onKeyDown={(event) => {
+            if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") {
+              return;
+            }
+            event.preventDefault();
+            onOpenAdjacent(event.key === "ArrowLeft" ? -1 : 1);
+          }}
+        >
+          <ThreadPixelMatrix thread={thread} />
+          <span className="truncate">{title}</span>
+        </button>
+        <button
+          type="button"
+          className="conductor-conversation-tab-close"
+          tabIndex={active ? 0 : -1}
+          aria-label={`Close ${title}`}
+          title={`Close ${title}`}
+          onClick={onClose}
+        >
+          <Icon name="X" className="size-3" aria-hidden />
+        </button>
+      </div>
     );
   },
 );

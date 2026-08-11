@@ -211,6 +211,15 @@ and a disabled or uninstalled plugin gets its list back when it returns.
    `experimental_registerCloseHandler` follows the context bar's boolean close
    ownership protocol so an unsent draft tab can consume native close requests;
    audit whether both companions should share a dedicated close contract.
+8. **New-thread empty state.** A registration may provide
+   `experimental_newThreadEmptyState`, mounted inside the empty compose canvas
+   for a draft locked to an existing environment. Audit whether this surface
+   should stay coupled to the selected sidebar style, how the host should bound
+   its size, and whether it needs a host-owned loading or error contract.
+9. **Space ownership.** `PluginThreadListProps.experimental_spaces` provides
+   the active Space, Space membership, and host-owned single and batch moves.
+   Audit whether this remains a slot prop or becomes a shared Space hook. Also
+   confirm whether plugins need batch moves, Space creation, or Space editing.
 
 ## `experimental_useSidebarThreads` / `experimental_useSidebarThreadActions` (`@bb/plugin-sdk/app`)
 

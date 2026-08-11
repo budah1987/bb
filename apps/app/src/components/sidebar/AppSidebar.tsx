@@ -353,6 +353,54 @@ export function AppSidebar({
     [moveProjectMutation, setActiveSpaceOnly, spaces],
   );
 
+  const moveProjects = useCallback(
+    (projectIds: readonly string[], spaceId: string) => {
+      const destination = spaces.find((space) => space.id === spaceId);
+      if (!destination) return;
+
+      const moves = [...new Set(projectIds)].flatMap((projectId) => {
+        const sourceSpace = spaces.find((space) =>
+          space.projectIds.includes(projectId),
+        );
+        return sourceSpace?.id === destination.id
+          ? []
+          : [{ projectId, sourceSpaceId: sourceSpace?.id ?? null }];
+      });
+      if (moves.length === 0) return;
+
+      void Promise.all(
+        moves.map(({ projectId }) =>
+          moveProjectMutation.mutateAsync({ projectId, spaceId }),
+        ),
+      )
+        .then(() => {
+          setActiveSpaceOnly(spaceId);
+          appToast.success(
+            `Moved ${moves.length} ${moves.length === 1 ? "repository" : "repositories"} to ${destination.name}`,
+            {
+              action: moves.every(({ sourceSpaceId }) => sourceSpaceId)
+                ? {
+                    label: "Undo",
+                    onClick: () => {
+                      void Promise.all(
+                        moves.map(({ projectId, sourceSpaceId }) =>
+                          moveProjectMutation.mutateAsync({
+                            projectId,
+                            spaceId: sourceSpaceId!,
+                          }),
+                        ),
+                      ).catch(() => undefined);
+                    },
+                  }
+                : undefined,
+            },
+          );
+        })
+        .catch(() => undefined);
+    },
+    [moveProjectMutation, setActiveSpaceOnly, spaces],
+  );
+
   const openSidebarForThreadSearch = useCallback(() => {
     if (isCompactViewport) {
       setOpenMobile(true);
@@ -546,6 +594,7 @@ export function AppSidebar({
               />
             </div>
           ) : null}
+          <SidebarUsageLimits />
           <div
             data-testid="app-sidebar-primary-actions"
             className="shrink-0 border-b border-sidebar-border/60 bg-sidebar-accent/10 px-2 py-2.5 group-data-[collapsible=icon]:hidden"
@@ -596,6 +645,10 @@ export function AppSidebar({
                 builtInFallback={builtInThreadList}
                 searchQuery={threadSearch.query}
                 onNavigate={threadSearch.onExternalThreadOpen}
+                activeSpaceId={effectiveActiveSpaceId}
+                moveProject={moveProject}
+                moveProjects={moveProjects}
+                spaces={spaces}
               />
             ) : (
               builtInThreadList
@@ -608,7 +661,6 @@ export function AppSidebar({
             onNew={() => setSpaceEditor({ kind: "create" })}
             onEdit={(space) => setSpaceEditor({ kind: "edit", space })}
           />
-          <SidebarUsageLimits />
           <SidebarFooter className="relative border-t border-sidebar-border/60 bg-sidebar-accent/10">
             <OverflowFade placement="above" tone="sidebar" size="sm" />
             {/* The footer holds a variable number of plugin action buttons, so a

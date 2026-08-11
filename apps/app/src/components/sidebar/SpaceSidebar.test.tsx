@@ -43,13 +43,20 @@ describe("SpaceDock", () => {
 
     expect(screen.getByText("Main")).not.toBeNull();
     expect(screen.queryByText("Personal")).toBeNull();
-    expect(
-      screen
-        .getByRole("button", { name: "Main, Space 1" })
-        .getAttribute("aria-pressed"),
-    ).toBe("true");
+    const activeSpace = screen.getByRole("button", {
+      name: "Main, Space 1",
+    });
+    const inactiveSpace = screen.getByRole("button", {
+      name: "Personal, Space 2",
+    });
+    expect(activeSpace.getAttribute("aria-pressed")).toBe("true");
+    expect(activeSpace.className).toContain("w-auto");
+    expect(inactiveSpace.className).toContain("size-8");
+    expect(inactiveSpace.querySelector("span")?.className).toContain(
+      "place-items-center",
+    );
 
-    fireEvent.click(screen.getByRole("button", { name: "Personal, Space 2" }));
+    fireEvent.click(inactiveSpace);
     expect(onSelect).toHaveBeenCalledWith("space-personal");
   });
 

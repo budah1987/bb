@@ -58,7 +58,11 @@ import {
   type ProjectMachineSetupDialogTarget,
 } from "@/components/dialogs/ProjectMachineSetupDialog";
 import type { ReuseThreadOption } from "@/components/pickers/WorktreePicker";
-import { HEADER_ICON_BUTTON_CLASS } from "@/components/layout/AppPageHeader";
+import {
+  AppPageHeader,
+  HEADER_ICON_BUTTON_CLASS,
+} from "@/components/layout/AppPageHeader";
+import { CHROME_SUBTLE_ICON_BUTTON_FOREGROUND_CLASS } from "@/components/ui/chromeStyleTokens";
 import { AppCommandShortcutHint } from "@/components/commands/AppCommandShortcutHint";
 import type { SecondaryPanelFileTab } from "@/components/secondary-panel/ThreadSecondaryPanel";
 import { FilePreview } from "@/components/secondary-panel/FilePreview";
@@ -82,6 +86,7 @@ import { usePointerCoarse } from "@bb/shared-ui/hooks/use-pointer-coarse";
 import { COARSE_POINTER_COMPACT_ICON_SIZE_CLASS } from "@bb/shared-ui/coarse-pointer-sizing";
 import { PluginIcon } from "@/components/plugin/PluginIcon";
 import { PluginNewThreadContextBar } from "@/components/plugin/PluginNewThreadContextBar";
+import { PluginNewThreadEmptyState } from "@/components/plugin/PluginNewThreadEmptyState";
 import { PluginPanelTabContent } from "@/components/plugin/PluginPanelActions";
 import { usePluginSlots } from "@/lib/plugin-slots";
 import { useUploadPromptAttachment } from "@/hooks/mutations/project-mutations";
@@ -269,6 +274,8 @@ const RootComposeProviderAuth = lazy(() =>
 
 const ROOT_COMPOSE_ZEN_MODE_STORAGE_KEY = "bb.promptbox.zen-mode.root-compose";
 const ROOT_COMPOSE_SIDEBAR_ACTION_ALIGNED_TOP_PADDING_CLASS = "pt-14";
+const ROOT_COMPOSE_CONTEXTUAL_EMPTY_STATE_CONTENT_CLASS =
+  "min-h-full flex-1 pt-8";
 
 function resolveHostOpenContext(args: {
   hostId: string | null;
@@ -532,7 +539,7 @@ export function RootComposeRightPanelToggle({
       type="button"
       variant="ghost"
       size="icon"
-      className={`${HEADER_ICON_BUTTON_CLASS} relative`}
+      className={`${HEADER_ICON_BUTTON_CLASS} ${CHROME_SUBTLE_ICON_BUTTON_FOREGROUND_CLASS} relative`}
       aria-label={
         shortcut ? `${rightPanelLabel} (${shortcut.label})` : rightPanelLabel
       }
@@ -546,6 +553,103 @@ export function RootComposeRightPanelToggle({
         className="absolute right-full mr-1"
       />
     </Button>
+  );
+}
+
+function ContextualNewThreadHeader({
+  isSecondaryPanelOpen,
+  onToggleSecondaryPanel,
+  projectName,
+  workspaceName,
+}: {
+  isSecondaryPanelOpen: boolean;
+  onToggleSecondaryPanel: () => void;
+  projectName: string;
+  workspaceName: string;
+}) {
+  const idleActionClassName = `${HEADER_ICON_BUTTON_CLASS} ${CHROME_SUBTLE_ICON_BUTTON_FOREGROUND_CLASS} opacity-40`;
+  const center = (
+    <>
+      <div
+        role="group"
+        aria-label={`Project: ${projectName}, Workspace: ${workspaceName}`}
+        className="flex min-w-0 items-center gap-2 text-sm font-normal"
+      >
+        <span className="flex min-w-0 items-center gap-1.5">
+          <Icon name="Folder" className="size-3.5 shrink-0" aria-hidden />
+          <span className="min-w-0 truncate" title={`Project: ${projectName}`}>
+            {projectName}
+          </span>
+        </span>
+        <span className="flex min-w-0 items-center gap-1.5">
+          <Icon name="GitBranch" className="size-3.5 shrink-0" aria-hidden />
+          <span
+            className="min-w-0 truncate text-muted-foreground"
+            title={`Workspace: ${workspaceName}`}
+          >
+            {workspaceName}
+          </span>
+        </span>
+      </div>
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon"
+        className={idleActionClassName}
+        aria-label="Conversation actions become available after the first message"
+        disabled
+      >
+        <Icon name="MoreHorizontal" />
+      </Button>
+    </>
+  );
+  const actions = (
+    <>
+      <div
+        className="flex min-w-7 items-center gap-1"
+        data-thread-header-workflow-actions=""
+      >
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          className={idleActionClassName}
+          aria-label="No conversation activity yet"
+          disabled
+        >
+          <Icon name="Workflow" />
+        </Button>
+      </div>
+      <div
+        className="ml-1 flex items-center gap-0.5"
+        data-thread-header-pane-actions=""
+      >
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          className={idleActionClassName}
+          aria-label="The conversation rail becomes available after the first message"
+          disabled
+        >
+          <Icon name="ListView" />
+        </Button>
+        {!isSecondaryPanelOpen ? (
+          <RootComposeRightPanelToggle
+            isOpen={false}
+            onToggle={onToggleSecondaryPanel}
+          />
+        ) : null}
+      </div>
+    </>
+  );
+
+  return (
+    <AppPageHeader
+      isWindowDragRegion={false}
+      center={center}
+      actions={actions}
+    />
   );
 }
 
@@ -2205,6 +2309,17 @@ export function RootComposeView() {
     staleTime: 5_000,
   });
   const rootPanelEnvironment = rootPanelEnvironmentQuery.data;
+  const contextualProject = projectOptions.find(
+    (project) => project.id === projectId,
+  );
+  const contextualProjectName =
+    contextualProject?.githubRepository?.nameWithOwner ??
+    contextualProject?.name ??
+    "Workspace";
+  const contextualWorkspaceName =
+    rootPanelEnvironment?.name ??
+    rootPanelEnvironment?.branchName ??
+    "New conversation";
   const rootPanelHostPathTerminalTarget =
     useMemo<RootComposeTerminalTarget | null>(() => {
       if (rootPanelEnvironmentId !== null) {
@@ -3428,14 +3543,15 @@ export function RootComposeView() {
     isHosted: (paneContext?.secondaryPanelHost ?? null) !== null,
     isOpen: isSecondaryPanelOpen,
   });
-  const rootPanelToggle = panelTogglePlacement.showPinnedToggle ? (
-    <div className={`fixed z-40 ${panelTogglePositionClassName}`}>
-      <RootComposeRightPanelToggle
-        isOpen={isSecondaryPanelOpen}
-        onToggle={handleToggleSecondaryPanel}
-      />
-    </div>
-  ) : null;
+  const rootPanelToggle =
+    panelTogglePlacement.showPinnedToggle && reuseEnvironmentId === null ? (
+      <div className={`fixed z-40 ${panelTogglePositionClassName}`}>
+        <RootComposeRightPanelToggle
+          isOpen={isSecondaryPanelOpen}
+          onToggle={handleToggleSecondaryPanel}
+        />
+      </div>
+    ) : null;
   const attachmentsConfig = useMemo(
     () => ({
       items: promptDraft.attachments,
@@ -3897,17 +4013,27 @@ export function RootComposeView() {
           contentClassName={
             showEmptyWelcome
               ? ROOT_COMPOSE_EMPTY_WELCOME_CONTENT_CLASS
-              : ROOT_COMPOSE_SIDEBAR_ACTION_ALIGNED_TOP_PADDING_CLASS
+              : reuseEnvironmentId !== null
+                ? ROOT_COMPOSE_CONTEXTUAL_EMPTY_STATE_CONTENT_CLASS
+                : ROOT_COMPOSE_SIDEBAR_ACTION_ALIGNED_TOP_PADDING_CLASS
           }
           contextBar={
             reuseEnvironmentId !== null ? (
-              <PluginNewThreadContextBar
-                projectId={projectId}
-                environmentId={reuseEnvironmentId}
-                onCloseHandlerChange={
-                  handlePluginNewThreadTabCloseHandlerChange
-                }
-              />
+              <>
+                <ContextualNewThreadHeader
+                  projectName={contextualProjectName}
+                  workspaceName={contextualWorkspaceName}
+                  isSecondaryPanelOpen={isSecondaryPanelOpen}
+                  onToggleSecondaryPanel={handleToggleSecondaryPanel}
+                />
+                <PluginNewThreadContextBar
+                  projectId={projectId}
+                  environmentId={reuseEnvironmentId}
+                  onCloseHandlerChange={
+                    handlePluginNewThreadTabCloseHandlerChange
+                  }
+                />
+              </>
             ) : null
           }
           isSecondaryPanelOpen={isSecondaryPanelOpen}
@@ -3969,6 +4095,14 @@ export function RootComposeView() {
               />
             ) : (
               <>
+                {reuseEnvironmentId !== null ? (
+                  <div className="flex min-h-0 flex-1 flex-col empty:hidden">
+                    <PluginNewThreadEmptyState
+                      projectId={projectId}
+                      environmentId={reuseEnvironmentId}
+                    />
+                  </div>
+                ) : null}
                 <RootComposeMobileSessions
                   highlightedThreadId={lastCreatedThreadId}
                   projectNamesById={mobileSessionProjectNamesById}

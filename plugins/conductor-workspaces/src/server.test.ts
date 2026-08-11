@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { workspaceArchiveGuard } from "./server";
+import { formatConversationTranscript, workspaceArchiveGuard } from "./server";
 
 describe("workspaceArchiveGuard", () => {
   it("requires confirmation when the workspace has uncommitted changes", () => {
@@ -24,6 +24,22 @@ describe("workspaceArchiveGuard", () => {
     ).toBe("clean");
     expect(() => workspaceArchiveGuard({ outcome: "unavailable" })).toThrow(
       "Nothing was archived",
+    );
+  });
+
+  it("formats only user and assistant messages as transcript context", () => {
+    expect(
+      formatConversationTranscript("Build tab controls", [
+        { kind: "system", text: "Ignored" },
+        { kind: "conversation", role: "user", text: "Add close buttons." },
+        {
+          kind: "conversation",
+          role: "assistant",
+          text: "I will add them.",
+        },
+      ]),
+    ).toBe(
+      "# Conversation transcript: Build tab controls\n\n## User\n\nAdd close buttons.\n\n## Assistant\n\nI will add them.",
     );
   });
 });

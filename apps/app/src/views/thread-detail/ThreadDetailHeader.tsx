@@ -274,7 +274,7 @@ export function ThreadDetailHeader({
   const actions = (
     <>
       <div
-        className="flex items-center gap-1"
+        className="flex min-w-7 items-center gap-1"
         data-thread-header-workflow-actions=""
       >
         {pluginActions}

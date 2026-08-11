@@ -99,6 +99,21 @@ export interface PluginThreadListProps {
   /** True on phone-width viewports and coarse pointers. */
   isCompactViewport: boolean;
   /**
+   * The host's Space selection and repository movement action. Omitted by
+   * older hosts that do not expose Space-aware plugin sidebars.
+   * Experimental: see docs/api_to_audit.md.
+   */
+  experimental_spaces?: {
+    activeSpaceId: string;
+    spaces: readonly {
+      id: string;
+      name: string;
+      projectIds: readonly string[];
+    }[];
+    moveProject(projectId: string, spaceId: string): void;
+    moveProjects(projectIds: readonly string[], spaceId: string): void;
+  };
+  /**
    * Call after the user opens a thread. It closes the mobile sidebar drawer,
    * and it clears the host search field on every viewport. Always call it, or
    * the sidebar stays in search mode after the thread opens.
@@ -148,6 +163,17 @@ export interface PluginNewThreadContextBarProps {
    * Experimental: see docs/api_to_audit.md.
    */
   experimental_registerCloseHandler?: (handler: (() => boolean) | null) => void;
+}
+
+/**
+ * Props passed to a selected thread-list provider's new-thread empty state.
+ * The host mounts this inside the compose canvas while the draft uses an
+ * existing environment.
+ */
+export interface PluginNewThreadEmptyStateProps {
+  projectId: string;
+  environmentId: string;
+  isCompactViewport: boolean;
 }
 
 /**
@@ -682,6 +708,12 @@ export interface PluginThreadListRegistration {
    * Experimental: see docs/api_to_audit.md.
    */
   experimental_newThreadContextBar?: ComponentType<PluginNewThreadContextBarProps>;
+  /**
+   * Optional companion rendered inside the empty compose canvas while a new
+   * conversation is locked to an existing environment.
+   * Experimental: see docs/api_to_audit.md.
+   */
+  experimental_newThreadEmptyState?: ComponentType<PluginNewThreadEmptyStateProps>;
 }
 
 /**

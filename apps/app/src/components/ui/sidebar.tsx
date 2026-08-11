@@ -389,7 +389,7 @@ const Sidebar = React.forwardRef<
         <div
           data-sidebar="gap"
           className={cn(
-            "relative hidden h-full w-(--sidebar-width) bg-transparent transition-[width] duration-200 ease-linear md:block",
+            "relative hidden h-full w-(--sidebar-width) bg-transparent transition-[width] duration-[220ms] ease-[cubic-bezier(0.32,0.72,0,1)] md:block",
             "group-data-[collapsible=offcanvas]:w-0",
             "group-data-[side=right]:rotate-180",
             variant === "floating" || variant === "inset"
@@ -402,7 +402,7 @@ const Sidebar = React.forwardRef<
           className={cn(
             // Fixed: a percentage height would resolve against the short
             // initial containing block, so it reads the shell unit directly.
-            "fixed inset-y-0 z-10 flex h-(--bb-shell-height) w-(--sidebar-width) flex-col bg-sidebar text-sidebar-foreground transition-[left,right,width] duration-200 ease-linear",
+            "fixed inset-y-0 z-10 flex h-(--bb-shell-height) w-(--sidebar-width) flex-col bg-sidebar text-sidebar-foreground transition-[left,right,width] duration-[220ms] ease-[cubic-bezier(0.32,0.72,0,1)]",
             side === "left"
               ? "left-0 group-data-[collapsible=offcanvas]:left-[calc(var(--sidebar-width)*-1)]"
               : "right-0 group-data-[collapsible=offcanvas]:right-[calc(var(--sidebar-width)*-1)]",

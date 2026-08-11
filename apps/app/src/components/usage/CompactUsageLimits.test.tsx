@@ -120,10 +120,11 @@ describe("CommandCenterUsageRailContent", () => {
     const dock = rail.querySelector<HTMLElement>(".compact-usage-dock");
     const trigger = screen.getByRole("button", { name: /Expand details/u });
     expect(dock?.style.getPropertyValue("--usage-collapsed-height")).toBe(
-      "44px",
+      "40px",
     );
     expect(dock?.dataset.open).toBe("false");
-    expect(rail.querySelector("svg")).toBeNull();
+    expect(rail.querySelector('[title="Claude"]')).not.toBeNull();
+    expect(rail.querySelector('[title="Codex"]')).not.toBeNull();
 
     fireEvent.click(trigger);
 

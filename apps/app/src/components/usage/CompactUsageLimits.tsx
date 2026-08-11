@@ -22,11 +22,15 @@ import {
   useSystemUsageLimits,
 } from "@/hooks/queries/system-queries";
 import { formatProviderUsageReset } from "@/lib/provider-usage-format";
+import {
+  getProviderIconColorClass,
+  getProviderIconInfo,
+} from "@/lib/provider-icon";
 import "./CompactUsageLimits.css";
 
 const SIDEBAR_USAGE_EXPANDED_STORAGE_KEY = "bb.sidebar.usageExpanded";
-const DESKTOP_COLLAPSED_HEIGHT_PX = 56;
-const MOBILE_COLLAPSED_HEIGHT_PX = 44;
+const DESKTOP_COLLAPSED_HEIGHT_PX = 40;
+const MOBILE_COLLAPSED_HEIGHT_PX = 40;
 
 const sidebarUsageExpandedAtom = atomWithStorage<boolean>(
   SIDEBAR_USAGE_EXPANDED_STORAGE_KEY,
@@ -185,11 +189,15 @@ function expandedDockHeight(
   model: CompactUsageLimitsModel,
   collapsedHeight: number,
 ): number {
-  const metricCount = model.providers.reduce(
-    (count, provider) => count + provider.detailMetrics.length,
+  const resetRowCount = model.providers.reduce(
+    (count, provider) =>
+      count +
+      (provider.detailMetrics.some((metric) => metric.resetsAt !== null)
+        ? 1
+        : 0),
     0,
   );
-  return collapsedHeight + 12 + model.providers.length * 32 + metricCount * 32;
+  return collapsedHeight + 8 + model.providers.length * 44 + resetRowCount * 16;
 }
 
 function useCloseOnEscape(open: boolean, close: () => void): void {
@@ -203,6 +211,26 @@ function useCloseOnEscape(open: boolean, close: () => void): void {
   }, [close, open]);
 }
 
+function ProviderIcon({ provider }: { provider: CompactProviderUsage }) {
+  const providerId = provider.name === "Claude" ? "claude-code" : "codex";
+  const iconInfo = getProviderIconInfo(providerId);
+  if (iconInfo === undefined) return null;
+  const ProviderLogo = iconInfo.icon;
+
+  return (
+    <span
+      aria-hidden="true"
+      title={provider.name}
+      className={cn(
+        "flex size-4 shrink-0 items-center justify-center",
+        getProviderIconColorClass(providerId),
+      )}
+    >
+      <ProviderLogo className="size-3.5" />
+    </span>
+  );
+}
+
 function UsageProviderSummary({
   provider,
 }: {
@@ -210,33 +238,36 @@ function UsageProviderSummary({
 }) {
   const metric = provider.summaryMetric;
   return (
-    <span className="flex min-w-0 flex-1 flex-col gap-1.5">
-      <span className="flex min-w-0 items-baseline justify-between gap-2 text-2xs leading-4">
-        <span className="truncate font-semibold text-muted-foreground">
-          {provider.name} · {metric.label}
+    <span className="flex min-w-0 flex-1 items-center gap-2">
+      <ProviderIcon provider={provider} />
+      <span className="flex min-w-0 flex-1 flex-col gap-1">
+        <span className="flex min-w-0 items-baseline justify-between gap-1.5 text-2xs leading-3">
+          <span className="truncate text-subtle-foreground">
+            {metric.label}
+          </span>
+          <span
+            className={cn(
+              "shrink-0 tabular-nums font-semibold",
+              usageValueToneClass(metric.usedPercent),
+            )}
+          >
+            {metric.usedPercent === null ? "—" : `${metric.usedPercent}%`}
+          </span>
         </span>
-        <span
-          className={cn(
-            "shrink-0 tabular-nums font-semibold",
-            usageValueToneClass(metric.usedPercent),
-          )}
-        >
-          {metric.usedPercent === null ? "—" : `${metric.usedPercent}%`}
+        <span className="h-px overflow-hidden rounded-full bg-muted/70">
+          <span
+            className={cn(
+              "block h-full rounded-full opacity-80",
+              usageBarToneClass(metric.usedPercent),
+            )}
+            style={{
+              width:
+                metric.usedPercent === null
+                  ? "0%"
+                  : `${Math.max(metric.usedPercent, 2)}%`,
+            }}
+          />
         </span>
-      </span>
-      <span className="h-0.5 overflow-hidden rounded-full bg-muted/70">
-        <span
-          className={cn(
-            "block h-full rounded-full opacity-80",
-            usageBarToneClass(metric.usedPercent),
-          )}
-          style={{
-            width:
-              metric.usedPercent === null
-                ? "0%"
-                : `${Math.max(metric.usedPercent, 2)}%`,
-          }}
-        />
       </span>
     </span>
   );
@@ -253,7 +284,7 @@ function UsageSummary({ model }: { model: CompactUsageLimitsModel }) {
           key={provider.name}
           className={cn(
             "flex min-w-0 flex-1 items-center",
-            index > 0 && "ml-3 border-l border-border-hairline pl-3",
+            index > 0 && "ml-2.5 border-l border-border-hairline pl-2.5",
           )}
         >
           <UsageProviderSummary provider={provider} />
@@ -263,7 +294,7 @@ function UsageSummary({ model }: { model: CompactUsageLimitsModel }) {
   );
 }
 
-function UsageMetricRow({ metric }: { metric: CompactUsageMetric }) {
+function UsageMetricCell({ metric }: { metric: CompactUsageMetric }) {
   const reset = formatProviderUsageReset(metric.resetsAt);
   const usageLabel =
     metric.usedPercent === null
@@ -271,21 +302,21 @@ function UsageMetricRow({ metric }: { metric: CompactUsageMetric }) {
       : `${metric.label}, ${metric.usedPercent} percent used`;
   return (
     <div
-      className="space-y-1"
+      className="min-w-0 space-y-1"
       aria-label={`${usageLabel}${reset ? `, ${reset}` : ""}`}
     >
-      <div className="flex items-baseline justify-between gap-2 text-xs">
-        <span className="text-muted-foreground">{metric.label}</span>
+      <div className="flex items-baseline justify-between gap-1 text-2xs leading-4">
+        <span className="truncate text-muted-foreground">{metric.label}</span>
         <span
           className={cn(
-            "tabular-nums font-medium",
+            "shrink-0 tabular-nums font-semibold",
             usageValueToneClass(metric.usedPercent),
           )}
         >
           {metric.usedPercent === null ? "—" : `${metric.usedPercent}%`}
         </span>
       </div>
-      <div className="h-1 overflow-hidden rounded-full bg-muted">
+      <div className="h-0.5 overflow-hidden rounded-full bg-muted/80">
         <div
           className={cn(
             "h-full rounded-full",
@@ -300,46 +331,38 @@ function UsageMetricRow({ metric }: { metric: CompactUsageMetric }) {
         />
       </div>
       {reset ? (
-        <p className="text-2xs leading-4 text-subtle-foreground">{reset}</p>
+        <p className="truncate text-2xs leading-3 text-subtle-foreground">
+          {reset}
+        </p>
       ) : null}
     </div>
   );
 }
 
-function providerPeak(provider: CompactProviderUsage): number | null {
-  const availableMetrics = provider.detailMetrics.flatMap((metric) =>
-    metric.usedPercent === null ? [] : [metric.usedPercent],
-  );
-  return availableMetrics.length === 0 ? null : Math.max(...availableMetrics);
-}
-
 function UsageDetails({ model }: { model: CompactUsageLimitsModel }) {
   return (
-    <div className="grid gap-2 px-2 pb-2">
-      {model.providers.map((provider) => {
-        const peak = providerPeak(provider);
-        return (
-          <section
-            key={provider.name}
-            aria-label={`${provider.name} usage`}
-            className="rounded-xl border border-border-hairline bg-surface-raised/70 p-3"
+    <div className="px-2 pb-2">
+      {model.providers.map((provider) => (
+        <section
+          key={provider.name}
+          aria-label={`${provider.name} usage`}
+          className="flex min-w-0 items-start gap-2.5 border-t border-border-hairline px-1 py-2"
+        >
+          <span className="flex h-4 items-center">
+            <ProviderIcon provider={provider} />
+          </span>
+          <div
+            className="grid min-w-0 flex-1 gap-2.5"
+            style={{
+              gridTemplateColumns: `repeat(${provider.detailMetrics.length}, minmax(0, 1fr))`,
+            }}
           >
-            <div className="mb-2 flex items-baseline justify-between gap-3">
-              <h3 className="text-xs font-semibold text-foreground">
-                {provider.name}
-              </h3>
-              <span className="text-2xs tabular-nums text-muted-foreground">
-                Peak {peak === null ? "—" : `${peak}%`}
-              </span>
-            </div>
-            <div className="grid grid-cols-2 gap-x-3 gap-y-2">
-              {provider.detailMetrics.map((metric) => (
-                <UsageMetricRow key={metric.label} metric={metric} />
-              ))}
-            </div>
-          </section>
-        );
-      })}
+            {provider.detailMetrics.map((metric) => (
+              <UsageMetricCell key={metric.label} metric={metric} />
+            ))}
+          </div>
+        </section>
+      ))}
     </div>
   );
 }
@@ -382,7 +405,7 @@ export function SidebarUsageLimitsContent({
     <div
       data-testid="sidebar-usage-limits"
       className={cn(
-        "relative shrink-0 px-2 max-md:hidden pointer-coarse:hidden group-data-[collapsible=icon]:hidden",
+        "relative shrink-0 px-2 py-1 max-md:hidden pointer-coarse:hidden group-data-[collapsible=icon]:hidden",
         open && "z-40",
       )}
     >
@@ -404,7 +427,7 @@ export function SidebarUsageLimitsContent({
           aria-expanded={open}
           aria-controls={detailsId}
           aria-label={`${compactUsageAriaLabel(model)} ${open ? "Collapse" : "Expand"} details.`}
-          className="flex h-14 w-full items-center gap-3 px-3 text-left hover:bg-sidebar-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-sidebar-ring"
+          className="flex h-10 w-full items-center gap-2.5 px-2.5 text-left hover:bg-sidebar-accent/60 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-sidebar-ring"
           onClick={() => onOpenChange(!open)}
         >
           <UsageSummary model={model} />
@@ -412,7 +435,7 @@ export function SidebarUsageLimitsContent({
             name="ChevronDown"
             aria-hidden
             className={cn(
-              "size-3.5 shrink-0 text-muted-foreground transition-transform duration-200",
+              "size-3 shrink-0 text-subtle-foreground transition-transform duration-200",
               open && "rotate-180",
             )}
           />
@@ -420,7 +443,7 @@ export function SidebarUsageLimitsContent({
         <div
           id={detailsId}
           aria-hidden={!open}
-          className="compact-usage-details max-h-[calc(var(--usage-expanded-height)-3.5rem)] overflow-y-auto"
+          className="compact-usage-details max-h-[calc(var(--usage-expanded-height)-2.5rem)] overflow-y-auto"
         >
           <UsageDetails model={model} />
         </div>
@@ -487,7 +510,7 @@ export function CommandCenterUsageRailContent({
           aria-expanded={open}
           aria-controls={detailsId}
           aria-label={`${compactUsageAriaLabel(model)} ${open ? "Collapse" : "Expand"} details.`}
-          className="flex h-11 w-full items-center gap-3 px-3 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+          className="flex h-10 w-full items-center gap-2.5 px-2.5 text-left focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-ring"
           onClick={() => setOpen((current) => !current)}
         >
           <UsageSummary model={model} />
@@ -495,7 +518,7 @@ export function CommandCenterUsageRailContent({
         <div
           id={detailsId}
           aria-hidden={!open}
-          className="compact-usage-details max-h-[calc(var(--usage-expanded-height)-2.75rem)] overflow-y-auto"
+          className="compact-usage-details max-h-[calc(var(--usage-expanded-height)-2.5rem)] overflow-y-auto"
           onClick={closeFromDetails}
         >
           <UsageDetails model={model} />

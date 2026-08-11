@@ -717,6 +717,14 @@ function collectRegistrations(
                 ),
               }
             : {}),
+          ...(registration.experimental_newThreadEmptyState !== undefined
+            ? {
+                experimental_newThreadEmptyState: requireComponent(
+                  kind,
+                  registration.experimental_newThreadEmptyState,
+                ),
+              }
+            : {}),
         });
       },
       experimental_threadHeaderAction(registration) {

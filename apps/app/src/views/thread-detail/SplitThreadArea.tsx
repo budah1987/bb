@@ -2,6 +2,7 @@ import { cn } from "@bb/shared-ui/lib/utils";
 import { PANE_FOCUS_APP_COMMAND_IDS } from "@bb/domain";
 import { useAtom, useAtomValue, useStore } from "jotai";
 import {
+  Activity,
   Fragment,
   useCallback,
   useContext,
@@ -124,6 +125,67 @@ import { wsManager } from "@/lib/ws";
 
 // A `pointerdown`-relative move threshold before a pane-header drag engages.
 const PANE_DRAG_ENGAGE_DISTANCE_PX = 7;
+const RETAINED_THREAD_VIEW_LIMIT = 3;
+
+type ThreadPaneContent = Extract<PaneContent, { kind: "thread" }>;
+
+interface RetainedThreadViewsState {
+  activeThreadId: string;
+  contents: ThreadPaneContent[];
+  scopeKey: string;
+}
+
+function useRetainedThreadViews(
+  activeContent: ThreadPaneContent,
+  scopeKey: string,
+): readonly ThreadPaneContent[] {
+  const [state, setState] = useState<RetainedThreadViewsState>(() => ({
+    activeThreadId: activeContent.threadId,
+    contents: [activeContent],
+    scopeKey,
+  }));
+
+  if (
+    state.activeThreadId === activeContent.threadId &&
+    state.scopeKey === scopeKey
+  ) {
+    return state.contents;
+  }
+
+  const contents =
+    state.scopeKey === scopeKey
+      ? [
+          activeContent,
+          ...state.contents.filter(
+            (content) => content.threadId !== activeContent.threadId,
+          ),
+        ].slice(0, RETAINED_THREAD_VIEW_LIMIT)
+      : [activeContent];
+  setState({ activeThreadId: activeContent.threadId, contents, scopeKey });
+  return contents;
+}
+
+function RetainedThreadDetailViews({
+  activeContent,
+  scopeKey,
+}: {
+  activeContent: ThreadPaneContent;
+  scopeKey: string;
+}) {
+  const contents = useRetainedThreadViews(activeContent, scopeKey);
+  return contents.map((content) => (
+    <Activity
+      key={content.threadId}
+      mode={content.threadId === activeContent.threadId ? "visible" : "hidden"}
+    >
+      <ThreadDetailView
+        surface="pane"
+        projectId={content.projectId}
+        threadId={content.threadId}
+      />
+    </Activity>
+  ));
+}
 
 type BeginPaneDrag = (
   paneId: string,
@@ -244,6 +306,7 @@ function SplitThreadAreaContent({ routeContent }: SplitThreadAreaProps) {
   const [storedLayout, setLayout] = useAtom(splitLayoutAtom);
   const [maximizedPaneId, setMaximizedPaneIdAtom] =
     useAtom(maximizedPaneIdAtom);
+  const [threadRetentionEpoch, setThreadRetentionEpoch] = useState(0);
   const secondaryPanelRegistry = useMemo(
     () => createPaneSecondaryPanelRegistry(),
     [],
@@ -460,6 +523,7 @@ function SplitThreadAreaContent({ routeContent }: SplitThreadAreaProps) {
       if (next === layout) {
         return;
       }
+      setThreadRetentionEpoch((epoch) => epoch + 1);
       setLayout(next);
       if (maximizedPaneId === paneId) {
         setMaximizedPaneId(null);
@@ -557,6 +621,7 @@ function SplitThreadAreaContent({ routeContent }: SplitThreadAreaProps) {
       if (next === current) {
         return;
       }
+      setThreadRetentionEpoch((epoch) => epoch + 1);
       store.set(splitLayoutAtom, next);
       if (maximizedPaneId === paneId) {
         setMaximizedPaneId(null);
@@ -708,6 +773,7 @@ function SplitThreadAreaContent({ routeContent }: SplitThreadAreaProps) {
         <WorkspacePaneContent
           content={firstPane.content}
           paneId={firstPane.paneId}
+          retentionEpoch={threadRetentionEpoch}
           isFocused
           isSplitPane={false}
           secondaryPanelRegistry={null}
@@ -750,6 +816,7 @@ function SplitThreadAreaContent({ routeContent }: SplitThreadAreaProps) {
             focusedPaneId={effectiveMaximizedPaneId ?? layout.focusedPaneId}
             maximizedPaneId={effectiveMaximizedPaneId}
             secondaryPanelRegistry={secondaryPanelRegistry}
+            retentionEpoch={threadRetentionEpoch}
             onFocusPane={focusPane}
             onClosePane={closePane}
             onToggleMaximizePane={toggleMaximizePane}
@@ -829,6 +896,7 @@ interface SplitTreeProps {
   focusedPaneId: string;
   maximizedPaneId: string | null;
   secondaryPanelRegistry: PaneSecondaryPanelRegistry;
+  retentionEpoch: number;
   onFocusPane: (paneId: string) => void;
   onClosePane: (paneId: string) => void;
   onToggleMaximizePane: (paneId: string) => void;
@@ -886,6 +954,7 @@ function SplitTree(props: SplitTreeProps) {
           isFocused={isFocused}
           isSplitPane
           secondaryPanelRegistry={props.secondaryPanelRegistry}
+          retentionEpoch={props.retentionEpoch}
           // Position alone decides this: the host pins its toggle over the
           // workspace corner, so a plugin pane sitting there must reserve the
           // same footprint or the toggle lands on its Close pane button.
@@ -968,6 +1037,7 @@ interface WorkspacePaneContentProps {
   isFocused: boolean;
   isSplitPane: boolean;
   secondaryPanelRegistry: PaneSecondaryPanelRegistry | null;
+  retentionEpoch: number;
   reservesWindowPanelToggle: boolean;
   onRequestClose: (() => void) | null;
   isMaximized: boolean;
@@ -989,6 +1059,7 @@ function WorkspacePaneContent({
   isFocused,
   isSplitPane,
   secondaryPanelRegistry,
+  retentionEpoch,
   reservesWindowPanelToggle,
   onRequestClose,
   isMaximized,
@@ -1074,10 +1145,10 @@ function WorkspacePaneContent({
 
   return (
     <PaneContext.Provider value={value}>
-      <ThreadDetailView
-        surface="pane"
-        projectId={content.projectId}
-        threadId={content.threadId}
+      <RetainedThreadDetailViews
+        key={`${paneId}:${retentionEpoch}`}
+        activeContent={content}
+        scopeKey={`${paneId}:${retentionEpoch}`}
       />
     </PaneContext.Provider>
   );

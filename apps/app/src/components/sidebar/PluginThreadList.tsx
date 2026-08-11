@@ -4,6 +4,7 @@ import { PluginSlotMount } from "@/components/plugin/PluginSlotMount";
 import { useSidebar } from "@/components/ui/sidebar.js";
 import { useRouteState } from "@/hooks/useRouteState";
 import type { PluginThreadListSlot } from "@/lib/plugin-slots";
+import type { SpaceResponse } from "@bb/server-contract";
 
 /** Shared by the mount and the host's crash check. */
 export const THREAD_LIST_SLOT_KIND = "threadList";
@@ -20,6 +21,10 @@ interface PluginThreadListProps {
   /** The host search field's text; "" when closed or plugin-owned. */
   searchQuery: string;
   onNavigate: () => void;
+  activeSpaceId: string;
+  moveProject: (projectId: string, spaceId: string) => void;
+  moveProjects: (projectIds: readonly string[], spaceId: string) => void;
+  spaces: readonly SpaceResponse[];
 }
 
 /**
@@ -32,6 +37,10 @@ export function PluginThreadList({
   builtInFallback,
   searchQuery,
   onNavigate,
+  activeSpaceId,
+  moveProject,
+  moveProjects,
+  spaces,
 }: PluginThreadListProps) {
   const { projectId, threadId } = useRouteState();
   const { isCompactViewport } = useSidebar();
@@ -58,6 +67,16 @@ export function PluginThreadList({
       <Component
         activeThreadId={threadId ?? null}
         activeProjectId={projectId ?? null}
+        experimental_spaces={{
+          activeSpaceId,
+          spaces: spaces.map((space) => ({
+            id: space.id,
+            name: space.name,
+            projectIds: space.projectIds,
+          })),
+          moveProject,
+          moveProjects,
+        }}
         isCompactViewport={isCompactViewport}
         onNavigate={onNavigate}
         searchQuery={searchQuery}

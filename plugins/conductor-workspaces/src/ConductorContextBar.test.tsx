@@ -32,6 +32,13 @@ if (!newThreadContextComponent)
 const newThreadContextBar = {
   component: newThreadContextComponent,
 };
+const newThreadEmptyStateComponent =
+  app.threadLists[0]?.experimental_newThreadEmptyState;
+if (!newThreadEmptyStateComponent)
+  throw new Error("Conductor new-thread empty state was not registered");
+const newThreadEmptyState = {
+  component: newThreadEmptyStateComponent,
+};
 
 beforeAll(() => {
   Object.defineProperty(window, "matchMedia", {
@@ -50,30 +57,6 @@ beforeAll(() => {
 });
 
 beforeEach(() => window.localStorage.clear());
-
-function mockViewTransitions() {
-  vi.spyOn(window, "matchMedia").mockImplementation(
-    (query: string): MediaQueryList => ({
-      matches: false,
-      media: query,
-      onchange: null,
-      addListener: () => undefined,
-      removeListener: () => undefined,
-      addEventListener: () => undefined,
-      removeEventListener: () => undefined,
-      dispatchEvent: () => true,
-    }),
-  );
-  const startViewTransition = vi.fn((update: () => void) => {
-    update();
-    return { finished: Promise.resolve() };
-  });
-  Object.defineProperty(document, "startViewTransition", {
-    configurable: true,
-    value: startViewTransition,
-  });
-  return startViewTransition;
-}
 
 function thread(id: number): PluginSidebarThread {
   return {
@@ -374,6 +357,16 @@ describe("ConductorContextBar compact layout", () => {
         .getByRole("button", { name: "New conversation" })
         .getAttribute("aria-current"),
     ).toBe("page");
+    expect(
+      screen.getByRole("button", { name: "Close new conversation" }),
+    ).toBeDefined();
+
+    fireEvent.click(screen.getByRole("button", { name: "Conversation 2" }));
+    expect(rendered.sidebarActionCalls.at(-1)).toEqual({
+      method: "open",
+      threadId: "thread-2",
+      options: undefined,
+    });
 
     await waitFor(() => expect(closeHandler).not.toBeNull());
     let handled = false;
@@ -453,7 +446,6 @@ describe("ConductorContextBar compact layout", () => {
   });
 
   it("uses Command+T for a new conversation in the current worktree", async () => {
-    const startViewTransition = mockViewTransitions();
     const rendered = renderSlot(
       contextBar,
       {
@@ -499,7 +491,6 @@ describe("ConductorContextBar compact layout", () => {
       },
     });
     expect(competingHandler).not.toHaveBeenCalled();
-    expect(startViewTransition).not.toHaveBeenCalled();
     expect(
       screen
         .getByRole("button", {
@@ -509,8 +500,27 @@ describe("ConductorContextBar compact layout", () => {
     ).toBe("Meta+T");
   });
 
-  it("animates a pointer-created conversation", async () => {
-    const startViewTransition = mockViewTransitions();
+  it("opens a pointer-created conversation with a scoped transition", async () => {
+    vi.spyOn(window, "matchMedia").mockImplementation(
+      (query: string): MediaQueryList => ({
+        matches: false,
+        media: query,
+        onchange: null,
+        addListener: () => undefined,
+        removeListener: () => undefined,
+        addEventListener: () => undefined,
+        removeEventListener: () => undefined,
+        dispatchEvent: () => true,
+      }),
+    );
+    const startViewTransition = vi.fn((update: () => void) => {
+      update();
+      return { finished: Promise.resolve() };
+    });
+    Object.defineProperty(document, "startViewTransition", {
+      configurable: true,
+      value: startViewTransition,
+    });
     const rendered = renderSlot(
       contextBar,
       {
@@ -552,6 +562,42 @@ describe("ConductorContextBar compact layout", () => {
           locked: true,
         },
       },
+    });
+  });
+
+  it("closes a tab from its visible close control", async () => {
+    const rendered = renderSlot(
+      contextBar,
+      {
+        threadId: "thread-2",
+        projectId: "project-1",
+        environmentId: "environment-1",
+        isCompactViewport: false,
+      },
+      {
+        sidebarThreads: {
+          status: "ready",
+          threads: [thread(1), thread(2), thread(3)],
+          projects: [{ id: "project-1", name: "BB", isPersonal: false }],
+        },
+        rpc: {
+          readReconciliation: () => ({
+            legacyWorkspaces: [],
+            recordedSignature: null,
+          }),
+        },
+      },
+    );
+
+    await screen.findByRole("button", { name: "Close Conversation 2" });
+    fireEvent.click(
+      screen.getByRole("button", { name: "Close Conversation 2" }),
+    );
+
+    expect(rendered.sidebarActionCalls.at(-1)).toEqual({
+      method: "open",
+      threadId: "thread-3",
+      options: undefined,
     });
   });
 
@@ -608,7 +654,7 @@ describe("ConductorContextBar compact layout", () => {
     });
   });
 
-  it("consumes closing the last workspace tab without leaving its route", async () => {
+  it("opens a blank workspace conversation when the final tab closes", async () => {
     let closeHandler: (() => boolean) | null = null;
     const rendered = renderSlot(
       contextBar,
@@ -642,6 +688,57 @@ describe("ConductorContextBar compact layout", () => {
       handled = closeHandler?.() ?? false;
     });
     expect(handled).toBe(true);
-    expect(rendered.sidebarActionCalls).toEqual([]);
+    expect(rendered.sidebarActionCalls).toEqual([
+      {
+        method: "openNewThread",
+        options: {
+          projectId: "project-1",
+          focusPrompt: true,
+          experimental_sameEnvironment: {
+            environmentId: "environment-1",
+            locked: true,
+          },
+        },
+      },
+    ]);
+  });
+
+  it("adds a workspace transcript to a blank conversation", async () => {
+    const rendered = renderSlot(
+      newThreadEmptyState,
+      {
+        projectId: "project-1",
+        environmentId: "environment-1",
+        isCompactViewport: false,
+      },
+      {
+        sidebarThreads: {
+          status: "ready",
+          threads: [thread(1), thread(2)],
+          projects: [{ id: "project-1", name: "BB", isPersonal: false }],
+        },
+        rpc: {
+          readReconciliation: () => ({
+            legacyWorkspaces: [],
+            recordedSignature: null,
+          }),
+        },
+      },
+    );
+
+    await screen.findByText("Carry forward context");
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: "Add transcript from Conversation 1",
+      }),
+    );
+
+    expect(rendered.composer.mentions).toEqual([
+      {
+        provider: "conversation-transcript",
+        id: "thread-1",
+        label: "Conversation 1",
+      },
+    ]);
   });
 });

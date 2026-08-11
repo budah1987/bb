@@ -415,6 +415,14 @@ describe("sidebar thread search navigation items", () => {
 });
 
 describe("ProjectListActionButtons", () => {
+  it("keeps New thread neutral until hover or press", () => {
+    render(<ProjectListActionButtons onNewChat={vi.fn()} />);
+
+    const newThread = screen.getByRole("button", { name: "New thread" });
+    expect(newThread.className).toContain("bg-transparent");
+    expect(newThread.className).not.toContain("bg-sidebar-accent/35");
+  });
+
   it("shows the compose pane position when New thread is open in a split", () => {
     const store = createStore();
     store.set(splitLayoutAtom, {
