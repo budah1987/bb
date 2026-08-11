@@ -84,6 +84,7 @@ describe("applyEnvironmentUpdateResult", () => {
     });
     const sidebar: SidebarBootstrapResponse = {
       sections: [],
+      spaces: [],
       projects: [
         {
           id: "proj_1",

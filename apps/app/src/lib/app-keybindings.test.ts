@@ -149,6 +149,30 @@ describe("app keybindings", () => {
     ).toBe(false);
   });
 
+  it("matches macOS Option number chords by physical digit", () => {
+    expect(
+      matchesAppShortcut(
+        {
+          key: "¡",
+          code: "Digit1",
+          metaKey: false,
+          ctrlKey: false,
+          altKey: true,
+          shiftKey: false,
+        },
+        {
+          key: "1",
+          mod: false,
+          meta: false,
+          control: false,
+          alt: true,
+          shift: false,
+        },
+        true,
+      ),
+    ).toBe(true);
+  });
+
   it("requires every positive context and excludes every negative context", () => {
     const binding: AppKeybinding = {
       command: "diff.toggle",

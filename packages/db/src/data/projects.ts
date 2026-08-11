@@ -6,10 +6,11 @@ import type {
   DbTransaction,
 } from "../connection.js";
 import type { DbNotifier } from "../notifier.js";
-import { projects, projectSources } from "../schema.js";
+import { projects, projectSources, spaceProjects } from "../schema.js";
 import { createProjectId, createProjectSourceId } from "../ids.js";
 import { toProjectSource } from "./project-sources.js";
 import { createOrderKeyAfter, createOrderKeyBetween } from "./order-keys.js";
+import { ensureDefaultSpace } from "./spaces.js";
 
 export interface CreateProjectLocalPathSourceInput {
   type: "local_path";
@@ -129,6 +130,7 @@ export function createProject(
   const now = Date.now();
   const projectId = createProjectId();
   const sourceId = createProjectSourceId();
+  const defaultSpace = ensureDefaultSpace(db);
 
   const { project, source } = db.transaction((tx) => {
     const lastProject = getLastPublicProject(tx);
@@ -161,6 +163,9 @@ export function createProject(
       })
       .returning()
       .get();
+    tx.insert(spaceProjects)
+      .values({ projectId, spaceId: defaultSpace.id, updatedAt: now })
+      .run();
     return { project: p, source: s };
   });
 

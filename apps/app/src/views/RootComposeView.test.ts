@@ -288,6 +288,7 @@ describe("buildMobileSessionThreads", () => {
   it("includes visible projectless and project threads, excluding hidden side chats", () => {
     const sidebarNavigation: SidebarBootstrapResponse = {
       sections: [],
+      spaces: [],
       personalProject: makeProject({
         id: PERSONAL_PROJECT_ID,
         kind: "personal",

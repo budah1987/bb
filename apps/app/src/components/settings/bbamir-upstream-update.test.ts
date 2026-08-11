@@ -44,6 +44,7 @@ function navigation(
 ): SidebarBootstrapResponse {
   return {
     sections: [],
+    spaces: [],
     projects: [...projects],
     personalProject: {
       ...project,

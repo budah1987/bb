@@ -10,6 +10,9 @@ import {
   ContextMenuContent,
   ContextMenuItem,
   ContextMenuSeparator,
+  ContextMenuSub,
+  ContextMenuSubContent,
+  ContextMenuSubTrigger,
   ContextMenuTrigger,
 } from "@bb/shared-ui/context-menu";
 import {
@@ -17,12 +20,16 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "@bb/shared-ui/dropdown-menu";
 import { usePathPickerHost } from "@/hooks/useLocalPathPicker";
 import { getProjectSettingsRoutePath } from "@/lib/route-paths";
 import { cn } from "@bb/shared-ui/lib/utils";
 import { useProjectActions } from "./ProjectActionsProvider";
+import { useSpaceActions } from "@/components/sidebar/SpaceActionsContext";
 
 interface ProjectActionsMenuBaseProps {
   project: ProjectResponse;
@@ -121,6 +128,7 @@ function ProjectActionsMenuItems({
   const { hostId: pickerHostId } = usePathPickerHost();
   const { requestRename, requestDelete, requestAddLocalPath } =
     useProjectActions();
+  const spaceActions = useSpaceActions();
   const showAddLocalPath =
     pickerHostId != null &&
     !findLocalPathProjectSourceForHost(project.sources, pickerHostId);
@@ -156,6 +164,49 @@ function ProjectActionsMenuItems({
         >
           Add local path
         </ProjectActionMenuItem>
+      ) : null}
+      {spaceActions && spaceActions.spaces.length > 1 ? (
+        surface === "context" ? (
+          <ContextMenuSub>
+            <ContextMenuSubTrigger>
+              <Icon name="Layers" aria-hidden="true" />
+              Add to Space
+            </ContextMenuSubTrigger>
+            <ContextMenuSubContent>
+              {spaceActions.spaces.map((space) => (
+                <ContextMenuItem
+                  key={space.id}
+                  disabled={space.projectIds.includes(project.id)}
+                  onSelect={() =>
+                    spaceActions.moveProject(project.id, space.id)
+                  }
+                >
+                  {space.name}
+                </ContextMenuItem>
+              ))}
+            </ContextMenuSubContent>
+          </ContextMenuSub>
+        ) : (
+          <DropdownMenuSub>
+            <DropdownMenuSubTrigger>
+              <Icon name="Layers" aria-hidden="true" />
+              Add to Space
+            </DropdownMenuSubTrigger>
+            <DropdownMenuSubContent>
+              {spaceActions.spaces.map((space) => (
+                <DropdownMenuItem
+                  key={space.id}
+                  disabled={space.projectIds.includes(project.id)}
+                  onSelect={() =>
+                    spaceActions.moveProject(project.id, space.id)
+                  }
+                >
+                  {space.name}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuSubContent>
+          </DropdownMenuSub>
+        )
       ) : null}
       <ProjectActionMenuItem
         surface={surface}

@@ -19,6 +19,7 @@ const guideChapters: Record<string, TemplateId> = {
   "agent-configuration": "bbGuideAgentConfiguration",
   providers: "bbGuideProviders",
   projects: "bbGuideProjects",
+  spaces: "bbGuideSpaces",
   machines: "bbGuideMachines",
   terminals: "bbGuideTerminals",
   customization: "bbGuideCustomization",

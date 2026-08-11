@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { getAppKeybindingOverrides } from "@bb/db";
 import {
   PANE_FOCUS_APP_COMMAND_IDS,
+  SPACE_JUMP_APP_COMMAND_IDS,
   THREAD_JUMP_APP_COMMAND_IDS,
   appKeybindingOverridesSchema,
 } from "@bb/domain";
@@ -111,6 +112,27 @@ describe("app keybindings", () => {
       );
       expect(
         config.defaultKeybindings
+          .filter((binding) => binding.command.startsWith("space.jump."))
+          .map((binding) => ({
+            alt: binding.shortcut.alt,
+            command: binding.command,
+            desktopOnly: binding.desktopOnly,
+            key: binding.shortcut.key,
+            mod: binding.shortcut.mod,
+            shift: binding.shortcut.shift,
+          })),
+      ).toEqual(
+        SPACE_JUMP_APP_COMMAND_IDS.map((command, index) => ({
+          alt: true,
+          command,
+          desktopOnly: true,
+          key: String(index + 1),
+          mod: false,
+          shift: false,
+        })),
+      );
+      expect(
+        config.defaultKeybindings
           .filter((binding) => binding.command === "terminal.open")
           .map((binding) => ({
             desktopOnly: binding.desktopOnly,
@@ -201,13 +223,14 @@ describe("app keybindings", () => {
           when: { all: ["mainSurface", "modelPickerOpen"], none: [] },
         },
       ]);
-      // No other default binding may use Alt, so the cycle chords cannot be
-      // shadowed by an earlier binding for the same chord.
+      // Other Alt bindings must use different keys, so the cycle chords cannot
+      // be shadowed by an earlier binding for the same chord.
       expect(
         config.defaultKeybindings
           .filter((binding) => binding.shortcut.alt)
           .map((binding) => binding.command),
       ).toEqual([
+        ...SPACE_JUMP_APP_COMMAND_IDS,
         "modelPicker.cycleModel",
         "modelPicker.cycleReasoning",
         "modelPicker.cycleModel",
@@ -310,6 +333,7 @@ describe("app keybindings", () => {
         "thread.previous",
         "thread.next",
         ...THREAD_JUMP_APP_COMMAND_IDS,
+        ...SPACE_JUMP_APP_COMMAND_IDS,
         ...PANE_FOCUS_APP_COMMAND_IDS,
         "terminal.open",
         "browser.focusLocation",
