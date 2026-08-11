@@ -548,7 +548,7 @@ export function AppSidebar({
           ) : null}
           <div
             data-testid="app-sidebar-primary-actions"
-            className="shrink-0 px-2 py-2 group-data-[collapsible=icon]:hidden"
+            className="shrink-0 border-b border-sidebar-border/60 bg-sidebar-accent/10 px-2 py-2.5 group-data-[collapsible=icon]:hidden"
           >
             <ProjectListActionButtons
               splitEnabled={threadSplitsEnabled}
@@ -609,7 +609,7 @@ export function AppSidebar({
             onEdit={(space) => setSpaceEditor({ kind: "edit", space })}
           />
           <SidebarUsageLimits />
-          <SidebarFooter className="relative">
+          <SidebarFooter className="relative border-t border-sidebar-border/60 bg-sidebar-accent/10">
             <OverflowFade placement="above" tone="sidebar" size="sm" />
             {/* The footer holds a variable number of plugin action buttons, so a
              * narrowed sidebar plus several plugins can no longer fit the action

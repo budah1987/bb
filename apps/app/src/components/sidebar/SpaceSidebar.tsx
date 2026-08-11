@@ -78,9 +78,11 @@ export function SpaceDock({
   onSelect: (spaceId: string) => void;
   spaces: readonly SpaceResponse[];
 }) {
+  const activeSpace = spaces.find((space) => space.id === activeSpaceId);
+
   return (
     <div
-      className="flex shrink-0 items-center gap-1 overflow-x-auto border-t border-sidebar-border px-2 py-2 group-data-[collapsible=icon]:hidden"
+      className="flex shrink-0 items-center gap-1 overflow-x-auto border-t border-sidebar-border/70 bg-sidebar-accent/15 px-2 py-1.5 group-data-[collapsible=icon]:hidden"
       aria-label="Spaces"
     >
       {spaces.map((space, index) => (
@@ -91,15 +93,21 @@ export function SpaceDock({
               size="icon"
               variant="ghost"
               className={cn(
-                "size-8 shrink-0 rounded-lg text-muted-foreground",
+                "h-8 shrink-0 rounded-md text-muted-foreground transition-[background-color,color,box-shadow]",
                 space.id === activeSpaceId &&
-                  "bg-sidebar-accent text-sidebar-foreground ring-1 ring-sidebar-border",
+                  "max-w-40 gap-2 bg-sidebar-accent px-2 text-sidebar-foreground shadow-[inset_0_0_0_1px_var(--sidebar-border),0_1px_1px_color-mix(in_oklch,var(--ink)_6%,transparent)]",
+                space.id !== activeSpaceId && "w-8 px-0",
               )}
               aria-label={`${space.name}, Space ${index + 1}`}
               aria-pressed={space.id === activeSpaceId}
               onClick={() => onSelect(space.id)}
             >
               <Icon name={getSpaceIconName(space.icon)} />
+              {space.id === activeSpaceId ? (
+                <span className="min-w-0 truncate text-xs font-medium">
+                  {space.name}
+                </span>
+              ) : null}
             </Button>
           </ContextMenuTrigger>
           <ContextMenuContent aria-label={`${space.name} actions`}>
@@ -123,11 +131,15 @@ export function SpaceDock({
         type="button"
         size="icon"
         variant="ghost"
-        className="size-8 shrink-0 rounded-lg text-muted-foreground"
+        className={cn(
+          "h-8 shrink-0 rounded-md text-muted-foreground",
+          activeSpace ? "w-8 px-0" : "w-full justify-start gap-2 px-2",
+        )}
         aria-label="Create Space"
         onClick={onNew}
       >
         <Icon name="Plus" />
+        {activeSpace ? null : <span className="text-xs">Create Space</span>}
       </Button>
     </div>
   );

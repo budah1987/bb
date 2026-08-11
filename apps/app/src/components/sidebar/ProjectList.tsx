@@ -868,7 +868,10 @@ export function ProjectListActionButtons({
             type="button"
             size="sm"
             variant="ghost"
-            className={cn(PROJECT_LIST_ACTION_BUTTON_CLASS, "flex-1")}
+            className={cn(
+              PROJECT_LIST_ACTION_BUTTON_CLASS,
+              "flex-1 border border-sidebar-border/80 bg-sidebar-accent/35 shadow-[0_1px_0_color-mix(in_oklch,var(--ink)_8%,transparent)] hover:border-sidebar-border hover:bg-sidebar-accent active:translate-y-px active:shadow-none motion-reduce:transform-none",
+            )}
             onPointerDown={newThreadSplit?.onPointerDown}
             onClick={(event) => {
               if (event.metaKey || event.ctrlKey) {
