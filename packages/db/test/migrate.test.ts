@@ -3944,6 +3944,9 @@ describe("migrate", () => {
       db.$client
         .prepare("ALTER TABLE terminal_sessions DROP COLUMN supervision_id")
         .run();
+      // Rewinding past 0092 also rewinds past upstream's 0095 experiments
+      // rebuild, so the wide table has to come back before migrating forward.
+      restoreWideExperimentsTable(db);
 
       migrate(db);
 

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { getAppKeybindingOverrides } from "@bb/db";
 import {
   PANE_FOCUS_APP_COMMAND_IDS,
+  SPACE_JUMP_APP_COMMAND_IDS,
   THREAD_JUMP_APP_COMMAND_IDS,
   applyAppKeybindingOverrides,
   appKeybindingOverridesSchema,
@@ -329,6 +330,7 @@ describe("app keybindings", () => {
         "thread.previous",
         "thread.next",
         ...THREAD_JUMP_APP_COMMAND_IDS,
+        ...SPACE_JUMP_APP_COMMAND_IDS,
         ...PANE_FOCUS_APP_COMMAND_IDS,
         "terminal.open",
         "browser.focusLocation",

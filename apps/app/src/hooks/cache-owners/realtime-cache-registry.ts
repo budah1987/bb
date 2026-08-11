@@ -466,6 +466,11 @@ export const REALTIME_HOST_CHANGE_REGISTRY = {
 } satisfies HostChangeRegistry;
 
 export const REALTIME_SYSTEM_CHANGE_REGISTRY = {
+  // Space membership decides how the sidebar groups projects, so a space write
+  // re-reads the project list.
+  "spaces-changed": {
+    dirty: [dirtyProjectListQueries],
+  },
   "config-changed": {
     dirty: [
       dirtySystemConfigQueries, // Experiments gate UI surfaces; other windows re-read after a settings write.

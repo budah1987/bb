@@ -296,3 +296,17 @@ export function applyProjectDeleteResult({
   );
   invalidateProjectDeleteQueries({ queryClient });
 }
+
+/**
+ * A space write changes how the sidebar groups projects, so the navigation
+ * payload is re-read. This owner already holds `sidebarNavigationQueryKey`,
+ * which is why space mutations invalidate through here rather than reaching for
+ * the query key themselves.
+ */
+export function invalidateCachedSpaces(
+  queryClient: QueryClient,
+): Promise<void> {
+  return queryClient.invalidateQueries({
+    queryKey: sidebarNavigationQueryKey(),
+  });
+}
