@@ -719,7 +719,7 @@ list --environment "$BB_ENVIRONMENT_ID" --json`, then query only the chosen
   - `bb theme dir` — print the absolute custom-theme directory (where to create
     `<name>/theme.css`). Use this instead of guessing the path.
   - `bb theme set <id> [--favicon-color <color>]` — activate a built-in
-    (`default`, `nord`, `dracula`, `solarized`, `gruvbox`, `catppuccin`), custom,
+    (`default`, `nord`, `dracula`, `solarized`, `gruvbox`, `catppuccin`, `github`), custom,
     or plugin-contributed theme. Without the flag it preserves the favicon
     color; with the flag it updates the complete appearance selection.
   - `bb theme show [--css]` — print the active palette; `--css` dumps the active
