@@ -10,7 +10,11 @@ import {
 import type { ProjectResponse } from "@bb/server-contract";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter } from "react-router-dom";
-import { ProjectActionsMenu } from "./ProjectActionsMenu";
+import type { ReactNode } from "react";
+import {
+  ProjectActionsContextMenu,
+  ProjectActionsMenu,
+} from "./ProjectActionsMenu";
 import { SpaceActionsProvider } from "@/components/sidebar/SpaceActionsContext";
 
 const mockPathPickerHost = vi.hoisted(() => ({
@@ -42,6 +46,39 @@ function makeProject(): ProjectResponse {
     createdAt: 0,
     updatedAt: 0,
   };
+}
+
+function SpacesFixture({ children }: { children: ReactNode }) {
+  return (
+    <SpaceActionsProvider
+      value={{
+        activeSpaceId: "space_main",
+        moveProject: vi.fn(),
+        spaces: [
+          {
+            id: "space_main",
+            name: "Main",
+            icon: "layers",
+            color: "sage",
+            projectIds: ["proj_test"],
+            createdAt: 0,
+            updatedAt: 0,
+          },
+          {
+            id: "space_personal",
+            name: "Personal",
+            icon: "star",
+            color: "blue",
+            projectIds: [],
+            createdAt: 0,
+            updatedAt: 0,
+          },
+        ],
+      }}
+    >
+      {children}
+    </SpaceActionsProvider>
+  );
 }
 
 describe("ProjectActionsMenu", () => {
@@ -76,34 +113,9 @@ describe("ProjectActionsMenu", () => {
 
     render(
       <MemoryRouter>
-        <SpaceActionsProvider
-          value={{
-            activeSpaceId: "space_main",
-            moveProject: vi.fn(),
-            spaces: [
-              {
-                id: "space_main",
-                name: "Main",
-                icon: "layers",
-                color: "sage",
-                projectIds: [project.id],
-                createdAt: 0,
-                updatedAt: 0,
-              },
-              {
-                id: "space_personal",
-                name: "Personal",
-                icon: "star",
-                color: "blue",
-                projectIds: [],
-                createdAt: 0,
-                updatedAt: 0,
-              },
-            ],
-          }}
-        >
+        <SpacesFixture>
           <ProjectActionsMenu project={project} />
-        </SpaceActionsProvider>
+        </SpacesFixture>
       </MemoryRouter>,
     );
 
@@ -111,6 +123,26 @@ describe("ProjectActionsMenu", () => {
       screen.getByRole("button", { name: "Test project actions" }),
       { button: 0 },
     );
+
+    expect(
+      await screen.findByRole("menuitem", { name: "Add to Space" }),
+    ).not.toBeNull();
+  });
+
+  it("shows the Space submenu on project right-click", async () => {
+    const project = makeProject();
+
+    render(
+      <MemoryRouter>
+        <SpacesFixture>
+          <ProjectActionsContextMenu project={project}>
+            <button type="button">Project row</button>
+          </ProjectActionsContextMenu>
+        </SpacesFixture>
+      </MemoryRouter>,
+    );
+
+    fireEvent.contextMenu(screen.getByRole("button", { name: "Project row" }));
 
     expect(
       await screen.findByRole("menuitem", { name: "Add to Space" }),
