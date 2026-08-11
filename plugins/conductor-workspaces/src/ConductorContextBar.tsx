@@ -112,7 +112,8 @@ function ConductorWorkspaceContextBar({
   const workspace = project?.workspaces.find((candidate) =>
     environmentId === null
       ? candidate.isUnassigned &&
-        candidate.threads.some((thread) => thread.id === activeThreadId)
+        (activeThreadId === null ||
+          candidate.threads.some((thread) => thread.id === activeThreadId))
       : candidate.environmentId === environmentId,
   );
   const hasContext = Boolean(workspace && project);
@@ -130,14 +131,10 @@ function ConductorWorkspaceContextBar({
       actions.openNewThread({
         projectId,
         focusPrompt: true,
-        ...(environmentId
-          ? {
-              experimental_sameEnvironment: {
-                environmentId,
-                locked: true,
-              },
-            }
-          : {}),
+        experimental_sameEnvironment: {
+          environmentId,
+          locked: environmentId !== null,
+        },
       });
     });
   }, [actions, environmentId, projectId]);

@@ -2209,6 +2209,8 @@ export function RootComposeView() {
     parsedEnvironment?.type === "reuse"
       ? parsedEnvironment.environmentId
       : null;
+  const hasContextualWorkspaceDraft =
+    reuseEnvironmentId !== null || pluginNewThreadDraftKey !== null;
   const rootProjectRouting = resolveRootComposeProjectRouting(
     parsedEnvironment,
     primaryHostId,
@@ -3544,7 +3546,7 @@ export function RootComposeView() {
     isOpen: isSecondaryPanelOpen,
   });
   const rootPanelToggle =
-    panelTogglePlacement.showPinnedToggle && reuseEnvironmentId === null ? (
+    panelTogglePlacement.showPinnedToggle && !hasContextualWorkspaceDraft ? (
       <div className={`fixed z-40 ${panelTogglePositionClassName}`}>
         <RootComposeRightPanelToggle
           isOpen={isSecondaryPanelOpen}
@@ -4013,12 +4015,12 @@ export function RootComposeView() {
           contentClassName={
             showEmptyWelcome
               ? ROOT_COMPOSE_EMPTY_WELCOME_CONTENT_CLASS
-              : reuseEnvironmentId !== null
+              : hasContextualWorkspaceDraft
                 ? ROOT_COMPOSE_CONTEXTUAL_EMPTY_STATE_CONTENT_CLASS
                 : ROOT_COMPOSE_SIDEBAR_ACTION_ALIGNED_TOP_PADDING_CLASS
           }
           contextBar={
-            reuseEnvironmentId !== null ? (
+            hasContextualWorkspaceDraft ? (
               <>
                 <ContextualNewThreadHeader
                   projectName={contextualProjectName}
@@ -4095,7 +4097,7 @@ export function RootComposeView() {
               />
             ) : (
               <>
-                {reuseEnvironmentId !== null ? (
+                {hasContextualWorkspaceDraft ? (
                   <div className="flex min-h-0 flex-1 flex-col empty:hidden">
                     <PluginNewThreadEmptyState
                       projectId={projectId}

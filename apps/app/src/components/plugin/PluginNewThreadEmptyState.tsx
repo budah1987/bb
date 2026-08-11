@@ -7,7 +7,7 @@ export function PluginNewThreadEmptyState({
   environmentId,
 }: {
   projectId: string;
-  environmentId: string;
+  environmentId: string | null;
 }) {
   const provider = useThreadListProvider();
   const isCompactViewport = useIsCompactViewport();
@@ -17,11 +17,11 @@ export function PluginNewThreadEmptyState({
 
   return (
     <PluginSlotMount
-      key={`${provider.pluginId}/${provider.id}/${provider.generation}/new-thread-empty-state/${environmentId}`}
+      key={`${provider.pluginId}/${provider.id}/${provider.generation}/new-thread-empty-state/${environmentId ?? "unassigned"}`}
       pluginId={provider.pluginId}
       slotKind="newThreadEmptyState"
       slotId={provider.id}
-      instanceId={environmentId}
+      instanceId={environmentId ?? `unassigned:${projectId}`}
       crashFallback={null}
     >
       <Component

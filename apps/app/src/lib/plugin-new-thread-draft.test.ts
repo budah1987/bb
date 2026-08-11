@@ -26,6 +26,17 @@ describe("plugin workspace new-thread drafts", () => {
     expect(other).not.toEqual(first);
   });
 
+  it("keeps an unassigned workspace draft in its project", () => {
+    expect(
+      buildPluginWorkspaceDraftLocationState({
+        projectId: "proj_1",
+        environmentId: null,
+      }),
+    ).toEqual({
+      pluginNewThreadDraftKey: "sidebar-workspace:proj_1:unassigned",
+    });
+  });
+
   it("rejects stale or malformed navigation state", () => {
     expect(readPluginNewThreadDraftKeyFromLocationState(null)).toBeNull();
     expect(

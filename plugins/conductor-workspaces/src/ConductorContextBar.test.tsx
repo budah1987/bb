@@ -392,6 +392,43 @@ describe("ConductorContextBar compact layout", () => {
     });
   });
 
+  it("keeps unassigned workspace tabs visible while composing", async () => {
+    const unassignedThreads = [thread(1), thread(2)].map((candidate) => ({
+      ...candidate,
+      environment: null,
+    }));
+    renderSlot(
+      newThreadContextBar,
+      {
+        projectId: "project-1",
+        environmentId: null,
+        isCompactViewport: false,
+      },
+      {
+        sidebarThreads: {
+          status: "ready",
+          threads: unassignedThreads,
+          projects: [{ id: "project-1", name: "BB", isPersonal: false }],
+        },
+        rpc: {
+          readReconciliation: () => ({
+            legacyWorkspaces: [],
+            recordedSignature: null,
+          }),
+        },
+      },
+    );
+
+    expect(
+      await screen.findByRole("button", { name: "Conversation 1" }),
+    ).toBeDefined();
+    expect(
+      screen
+        .getByRole("button", { name: "New conversation" })
+        .getAttribute("aria-current"),
+    ).toBe("page");
+  });
+
   it("cycles left and right through every conversation in the workspace", async () => {
     const threads = [1, 2, 3, 4, 5, 6].map(thread);
     const rendered = renderSlot(
@@ -498,6 +535,54 @@ describe("ConductorContextBar compact layout", () => {
         })
         .getAttribute("aria-keyshortcuts"),
     ).toBe("Meta+T");
+  });
+
+  it("keeps an unassigned workspace when opening a new conversation", async () => {
+    const unassignedThread: PluginSidebarThread = {
+      ...thread(1),
+      environment: null,
+    };
+    const rendered = renderSlot(
+      contextBar,
+      {
+        threadId: unassignedThread.id,
+        projectId: "project-1",
+        environmentId: null,
+        isCompactViewport: false,
+      },
+      {
+        sidebarThreads: {
+          status: "ready",
+          threads: [unassignedThread],
+          projects: [{ id: "project-1", name: "BB", isPersonal: false }],
+        },
+        rpc: {
+          readReconciliation: () => ({
+            legacyWorkspaces: [],
+            recordedSignature: null,
+          }),
+        },
+      },
+    );
+    await screen.findByRole("navigation", { name: "Workspace conversations" });
+
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: "New conversation in this workspace",
+      }),
+    );
+
+    expect(rendered.sidebarActionCalls).toContainEqual({
+      method: "openNewThread",
+      options: {
+        projectId: "project-1",
+        focusPrompt: true,
+        experimental_sameEnvironment: {
+          environmentId: null,
+          locked: false,
+        },
+      },
+    });
   });
 
   it("opens a pointer-created conversation with a scoped transition", async () => {

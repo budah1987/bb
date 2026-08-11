@@ -164,10 +164,10 @@ export function useSidebarThreadActions(): PluginSidebarThreadActions {
           // project the user last composed in.
           setRootComposeProjectId(projectId);
         }
-        const requestedEnvironmentId =
-          options?.experimental_sameEnvironment?.environmentId;
+        const sameEnvironmentRequest = options?.experimental_sameEnvironment;
+        const requestedEnvironmentId = sameEnvironmentRequest?.environmentId;
         const reusableEnvironmentEntry =
-          requestedEnvironmentId === undefined
+          sameEnvironmentRequest === undefined
             ? undefined
             : [...entriesById.values()].find(
                 (entry) =>
@@ -175,15 +175,19 @@ export function useSidebarThreadActions(): PluginSidebarThreadActions {
                   (projectId === undefined || entry.projectId === projectId),
               );
         const sameEnvironmentState =
+          sameEnvironmentRequest !== undefined &&
           requestedEnvironmentId !== undefined &&
           reusableEnvironmentEntry !== undefined
             ? {
-                reuseEnvironmentId: requestedEnvironmentId,
+                ...(requestedEnvironmentId === null
+                  ? {}
+                  : { reuseEnvironmentId: requestedEnvironmentId }),
                 ...buildPluginWorkspaceDraftLocationState({
                   environmentId: requestedEnvironmentId,
                   projectId: projectId ?? reusableEnvironmentEntry.projectId,
                 }),
-                ...(options?.experimental_sameEnvironment?.locked
+                ...(requestedEnvironmentId !== null &&
+                sameEnvironmentRequest.locked
                   ? { lockEnvironment: true }
                   : {}),
               }

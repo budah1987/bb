@@ -8,7 +8,7 @@ export function PluginNewThreadContextBar({
   onCloseHandlerChange,
 }: {
   projectId: string;
-  environmentId: string;
+  environmentId: string | null;
   onCloseHandlerChange: (handler: (() => boolean) | null) => void;
 }) {
   const provider = useThreadListProvider();
@@ -19,11 +19,11 @@ export function PluginNewThreadContextBar({
 
   return (
     <PluginSlotMount
-      key={`${provider.pluginId}/${provider.id}/${provider.generation}/new-thread/${environmentId}`}
+      key={`${provider.pluginId}/${provider.id}/${provider.generation}/new-thread/${environmentId ?? "unassigned"}`}
       pluginId={provider.pluginId}
       slotKind="newThreadContextBar"
       slotId={provider.id}
-      instanceId={environmentId}
+      instanceId={environmentId ?? `unassigned:${projectId}`}
       crashFallback={null}
     >
       <Component

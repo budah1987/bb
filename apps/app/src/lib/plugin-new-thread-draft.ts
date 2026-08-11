@@ -1,11 +1,11 @@
 const PLUGIN_NEW_THREAD_DRAFT_KEY_LOCATION_STATE = "pluginNewThreadDraftKey";
 
 export function buildPluginWorkspaceDraftLocationState(args: {
-  environmentId: string;
+  environmentId: string | null;
   projectId: string;
 }): { pluginNewThreadDraftKey: string } {
   return {
-    pluginNewThreadDraftKey: `sidebar-workspace:${args.projectId}:${args.environmentId}`,
+    pluginNewThreadDraftKey: `sidebar-workspace:${args.projectId}:${args.environmentId ?? "unassigned"}`,
   };
 }
 

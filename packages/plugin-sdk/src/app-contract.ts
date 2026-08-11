@@ -149,11 +149,11 @@ export interface PluginThreadContextBarProps {
 
 /**
  * Props passed to a selected thread-list provider's new-thread companion.
- * The host mounts this only while composing into an existing environment.
+ * The host mounts this while composing inside a plugin workspace context.
  */
 export interface PluginNewThreadContextBarProps {
   projectId: string;
-  environmentId: string;
+  environmentId: string | null;
   isCompactViewport: boolean;
   /**
    * Registers the new-thread companion's focused-tab close handler with the
@@ -167,12 +167,12 @@ export interface PluginNewThreadContextBarProps {
 
 /**
  * Props passed to a selected thread-list provider's new-thread empty state.
- * The host mounts this inside the compose canvas while the draft uses an
- * existing environment.
+ * The host mounts this inside the compose canvas while the draft uses a
+ * plugin workspace context.
  */
 export interface PluginNewThreadEmptyStateProps {
   projectId: string;
-  environmentId: string;
+  environmentId: string | null;
   isCompactViewport: boolean;
 }
 
@@ -567,12 +567,13 @@ export interface PluginSidebarThreadActions {
     projectId?: string;
     focusPrompt?: boolean;
     /**
-     * Seed the composer to reuse one native environment and optionally keep
-     * its project/environment controls fixed. Experimental: see
-     * docs/api_to_audit.md.
+     * Preserve one plugin workspace context. A non-null environment reuses
+     * that native environment and can keep its controls fixed. Experimental:
+     * see docs/api_to_audit.md.
      */
     experimental_sameEnvironment?: {
-      environmentId: string;
+      /** Null preserves an unassigned workspace without selecting an environment. */
+      environmentId: string | null;
       locked: boolean;
     };
     /** Open bb's GitHub branch / pull-request workflow chooser. */

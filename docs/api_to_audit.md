@@ -205,17 +205,19 @@ and a disabled or uninstalled plugin gets its list back when it returns.
    host-owned tab primitives instead.
 7. **New-thread companion.** A registration may also provide
    `experimental_newThreadContextBar`, mounted above the composer while it is
-   locked to an existing environment. Audit whether this should remain tied to
-   the sidebar style, whether unlocked environment selection needs the same
-   surface, and which draft-tab lifecycle commands the host should own. Its
+   scoped to an existing environment or an unassigned workspace. Audit whether
+   this should remain tied to the sidebar style, whether unlocked environment
+   selection needs the same surface, and which draft-tab lifecycle commands
+   the host should own. Its
    `experimental_registerCloseHandler` follows the context bar's boolean close
    ownership protocol so an unsent draft tab can consume native close requests;
    audit whether both companions should share a dedicated close contract.
 8. **New-thread empty state.** A registration may provide
    `experimental_newThreadEmptyState`, mounted inside the empty compose canvas
-   for a draft locked to an existing environment. Audit whether this surface
-   should stay coupled to the selected sidebar style, how the host should bound
-   its size, and whether it needs a host-owned loading or error contract.
+   for a draft scoped to an existing environment or an unassigned workspace.
+   Audit whether this surface should stay coupled to the selected sidebar
+   style, how the host should bound its size, and whether it needs a host-owned
+   loading or error contract.
 9. **Space ownership.** `PluginThreadListProps.experimental_spaces` provides
    the active Space, Space membership, and host-owned single and batch moves.
    Audit whether this remains a slot prop or becomes a shared Space hook. Also
@@ -277,10 +279,12 @@ reimplementing it, and `indicatorLabel` carries the matching accessible string.
    a sidebar of many distinct worktrees does not stampede the git host; and
    returning `null` for "lookup failed" (rather than an error) is the right
    failure for a row that should simply show nothing.
-9. **Locked same-environment creation.** `openNewThread` can receive
-   `experimental_sameEnvironment`, which seeds an existing `environmentId`
-   and can lock it, disabling project,
-   environment, worktree, and branch controls in the root composer. Audit the
+9. **Workspace-scoped creation.** `openNewThread` can receive
+   `experimental_sameEnvironment`, which preserves one plugin workspace. A
+   non-null `environmentId` reuses that environment and can lock it, disabling
+   project, environment, worktree, and branch controls in the root composer.
+   A null `environmentId` preserves an unassigned workspace without locking
+   those controls. Audit the
    missing-environment fallback, whether the lock needs visible explanatory
    copy, whether the workspace-scoped draft should remain isolated from the
    ordinary root composer, and whether this should become a purpose-built host
