@@ -1,14 +1,8 @@
-import { useMemo, useState, type CSSProperties } from "react";
+import { lazy, Suspense, type CSSProperties } from "react";
 import type { SpaceResponse } from "@bb/server-contract";
-import {
-  spaceColorValues,
-  spaceIconValues,
-  type SpaceColor,
-  type SpaceIcon,
-} from "@bb/domain";
+import type { SpaceColor, SpaceIcon } from "@bb/domain";
 import { Button } from "@bb/shared-ui/button";
 import { Icon, type IconName } from "@bb/shared-ui/icon";
-import { Input } from "@bb/shared-ui/input";
 import {
   ContextMenu,
   ContextMenuContent,
@@ -17,18 +11,8 @@ import {
   ContextMenuTrigger,
 } from "@bb/shared-ui/context-menu";
 import { cn } from "@bb/shared-ui/lib/utils";
-import {
-  useCreateSpace,
-  useDeleteSpace,
-  useUpdateSpace,
-} from "@/hooks/mutations/space-mutations";
 
-export type SpaceEditorState =
-  | { kind: "create" }
-  | { kind: "edit"; space: SpaceResponse }
-  | null;
-
-const SPACE_ICON_NAMES: Record<SpaceIcon, IconName> = {
+const BASE_SPACE_ICON_NAMES: Partial<Record<SpaceIcon, IconName>> = {
   layers: "Layers",
   grid: "GridView",
   star: "Star",
@@ -37,48 +21,11 @@ const SPACE_ICON_NAMES: Record<SpaceIcon, IconName> = {
   target: "Target",
   folder: "FolderGit",
   workflow: "Workflow",
-  app: "AppWindow",
-  archive: "Archive",
-  beaker: "Beaker",
-  brain: "Brain",
-  browser: "Browser",
-  bug: "Bug",
-  calendar: "Calendar",
-  chart: "ChartColumn",
-  cloud: "Container",
-  code: "Code",
-  terminal: "Terminal",
-  discord: "Discord",
-  document: "FileText",
-  eye: "Eye",
-  file: "File",
-  folderOpen: "FolderOpen",
-  fork: "Fork",
-  branch: "GitBranch",
-  merge: "GitMerge",
-  globe: "Globe",
-  laptop: "Laptop",
-  list: "ListView",
-  todo: "ListTodo",
-  lock: "Lock",
-  mail: "Mail",
-  message: "MessageSquare",
-  mic: "Mic",
-  package: "PackageReceive",
-  palette: "Palette",
-  pin: "Pin",
-  play: "Play",
-  puzzle: "Puzzle",
-  repeat: "Repeat",
-  search: "Search",
-  settings: "Settings",
-  smartphone: "Smartphone",
-  square: "Square",
-  toolbox: "Toolbox",
-  user: "UserRound",
 };
 
-const SPACE_COLOR_CSS: Record<SpaceColor, string> = {
+const ExtendedSpaceIcon = lazy(() => import("./ExtendedSpaceIcon"));
+
+export const SPACE_COLOR_CSS: Record<SpaceColor, string> = {
   sage: "var(--success)",
   amber: "var(--warning)",
   mulberry: "var(--pr-merged)",
@@ -88,8 +35,15 @@ const SPACE_COLOR_CSS: Record<SpaceColor, string> = {
   neutral: "var(--ink)",
 };
 
-export function getSpaceIconName(icon: SpaceIcon): IconName {
-  return SPACE_ICON_NAMES[icon];
+export function SpaceIconGlyph({ icon }: { icon: SpaceIcon }) {
+  const baseIconName = BASE_SPACE_ICON_NAMES[icon];
+  if (baseIconName) return <Icon name={baseIconName} />;
+
+  return (
+    <Suspense fallback={<span aria-hidden="true" className="size-4" />}>
+      <ExtendedSpaceIcon icon={icon} />
+    </Suspense>
+  );
 }
 
 export function getSpaceSidebarStyle(color: SpaceColor): CSSProperties {
@@ -134,7 +88,7 @@ export function SpaceDock({
               aria-pressed={space.id === activeSpaceId}
               onClick={() => onSelect(space.id)}
             >
-              <Icon name={getSpaceIconName(space.icon)} />
+              <SpaceIconGlyph icon={space.icon} />
             </Button>
           </ContextMenuTrigger>
           <ContextMenuContent aria-label={`${space.name} actions`}>
@@ -164,183 +118,6 @@ export function SpaceDock({
       >
         <Icon name="Plus" />
       </Button>
-    </div>
-  );
-}
-
-export function SpaceEditor({
-  editor,
-  onCancel,
-  onSaved,
-  spaces,
-}: {
-  editor: Exclude<SpaceEditorState, null>;
-  onCancel: () => void;
-  onSaved: (spaceId: string) => void;
-  spaces: readonly SpaceResponse[];
-}) {
-  const initial = editor.kind === "edit" ? editor.space : null;
-  const initialDestinationSpaceId =
-    spaces.find((space) => space.id !== initial?.id)?.id ?? "";
-  const [name, setName] = useState(initial?.name ?? "");
-  const [icon, setIcon] = useState<SpaceIcon>(initial?.icon ?? "layers");
-  const [color, setColor] = useState<SpaceColor>(initial?.color ?? "sage");
-  const [destinationSpaceId, setDestinationSpaceId] = useState(
-    initialDestinationSpaceId,
-  );
-  const createMutation = useCreateSpace();
-  const updateMutation = useUpdateSpace();
-  const deleteMutation = useDeleteSpace();
-  const otherSpaces = useMemo(
-    () => spaces.filter((space) => space.id !== initial?.id),
-    [initial?.id, spaces],
-  );
-  const isPending =
-    createMutation.isPending ||
-    updateMutation.isPending ||
-    deleteMutation.isPending;
-
-  const save = () => {
-    const request = { name: name.trim(), icon, color };
-    if (!request.name) return;
-    if (editor.kind === "create") {
-      createMutation.mutate(request, {
-        onSuccess: (space) => onSaved(space.id),
-      });
-      return;
-    }
-    updateMutation.mutate(
-      { spaceId: editor.space.id, ...request },
-      { onSuccess: (space) => onSaved(space.id) },
-    );
-  };
-
-  const remove = () => {
-    if (editor.kind !== "edit") return;
-    const containsProjects = editor.space.projectIds.length > 0;
-    deleteMutation.mutate(
-      {
-        spaceId: editor.space.id,
-        destinationSpaceId: containsProjects ? destinationSpaceId : null,
-      },
-      {
-        onSuccess: () =>
-          onSaved(destinationSpaceId || otherSpaces[0]?.id || ""),
-      },
-    );
-  };
-
-  return (
-    <div className="space-y-5 px-3 py-2 group-data-[collapsible=icon]:hidden">
-      <div>
-        <h2 className="text-sm font-medium">
-          {editor.kind === "create" ? "Create Space" : "Edit Space"}
-        </h2>
-        <p className="mt-1 text-xs text-muted-foreground">
-          Choose a name, icon, and sidebar color.
-        </p>
-      </div>
-      <Input
-        value={name}
-        maxLength={40}
-        autoFocus
-        aria-label="Space name"
-        placeholder="Space name"
-        onChange={(event) => setName(event.currentTarget.value)}
-      />
-      <fieldset>
-        <legend className="mb-2 text-xs text-muted-foreground">Icon</legend>
-        <div className="grid grid-cols-4 gap-2">
-          {spaceIconValues.map((value) => (
-            <Button
-              key={value}
-              type="button"
-              size="icon"
-              variant="ghost"
-              className={cn(
-                "w-full",
-                icon === value &&
-                  "bg-sidebar-accent ring-1 ring-sidebar-border",
-              )}
-              aria-label={value}
-              aria-pressed={icon === value}
-              onClick={() => setIcon(value)}
-            >
-              <Icon name={getSpaceIconName(value)} />
-            </Button>
-          ))}
-        </div>
-      </fieldset>
-      <fieldset>
-        <legend className="mb-2 text-xs text-muted-foreground">Color</legend>
-        <div className="grid grid-cols-7 gap-2">
-          {spaceColorValues.map((value) => (
-            <button
-              key={value}
-              type="button"
-              className={cn(
-                "size-7 rounded-full ring-offset-2 ring-offset-sidebar focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring",
-                color === value && "ring-2 ring-sidebar-foreground",
-              )}
-              style={{ background: SPACE_COLOR_CSS[value] }}
-              aria-label={value}
-              aria-pressed={color === value}
-              onClick={() => setColor(value)}
-            />
-          ))}
-        </div>
-      </fieldset>
-      {editor.kind === "edit" && editor.space.projectIds.length > 0 ? (
-        <label className="block text-xs text-muted-foreground">
-          Move projects before deletion
-          <select
-            className="mt-2 h-9 w-full rounded-md border border-sidebar-border bg-sidebar px-2 text-sm text-sidebar-foreground"
-            value={destinationSpaceId}
-            onChange={(event) =>
-              setDestinationSpaceId(event.currentTarget.value)
-            }
-          >
-            {otherSpaces.map((space) => (
-              <option key={space.id} value={space.id}>
-                {space.name}
-              </option>
-            ))}
-          </select>
-        </label>
-      ) : null}
-      <div className="flex items-center gap-2">
-        <Button
-          type="button"
-          size="sm"
-          onClick={save}
-          disabled={!name.trim() || isPending}
-        >
-          {editor.kind === "create" ? "Create" : "Save"}
-        </Button>
-        <Button
-          type="button"
-          size="sm"
-          variant="ghost"
-          onClick={onCancel}
-          disabled={isPending}
-        >
-          Cancel
-        </Button>
-      </div>
-      {editor.kind === "edit" && spaces.length > 1 ? (
-        <Button
-          type="button"
-          size="sm"
-          variant="destructive"
-          onClick={remove}
-          disabled={
-            isPending ||
-            (editor.space.projectIds.length > 0 && !destinationSpaceId)
-          }
-        >
-          Delete Space
-        </Button>
-      ) : null}
     </div>
   );
 }

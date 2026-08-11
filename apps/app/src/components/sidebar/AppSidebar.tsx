@@ -1,4 +1,12 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  lazy,
+  Suspense,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { cn } from "@bb/shared-ui/lib/utils";
 import {
   DEFAULT_SPACE_ID,
@@ -73,12 +81,8 @@ import { SidebarUsageLimits } from "@/components/usage/CompactUsageLimits";
 import { useSidebarNavigation } from "@/hooks/queries/sidebar-navigation-query";
 import { useMoveProjectToSpace } from "@/hooks/mutations/space-mutations";
 import { SpaceActionsProvider } from "./SpaceActionsContext";
-import {
-  getSpaceSidebarStyle,
-  SpaceDock,
-  SpaceEditor,
-  type SpaceEditorState,
-} from "./SpaceSidebar";
+import { getSpaceSidebarStyle, SpaceDock } from "./SpaceSidebar";
+import type { SpaceEditorState } from "./SpaceEditor";
 import {
   deserializeSplitLayout,
   serializeSplitLayout,
@@ -86,6 +90,7 @@ import {
 import { appToast } from "@/components/ui/app-toast.js";
 
 const NEW_THREAD_PANE_CONTENT = { kind: "new-thread" } as const;
+const SpaceEditor = lazy(() => import("./SpaceEditor"));
 const ACTIVE_SPACE_STORAGE_KEY = "bb.spaces.active";
 const SPACE_VIEW_STORAGE_PREFIX = "bb.spaces.view.";
 
@@ -576,20 +581,22 @@ export function AppSidebar({
           />
           <SidebarContent>
             {spaceEditor ? (
-              <SpaceEditor
-                key={
-                  spaceEditor.kind === "edit"
-                    ? `edit:${spaceEditor.space.id}`
-                    : "create"
-                }
-                editor={spaceEditor}
-                spaces={spaces}
-                onCancel={() => setSpaceEditor(null)}
-                onSaved={(spaceId) => {
-                  if (spaceId) setActiveSpaceOnly(spaceId);
-                  setSpaceEditor(null);
-                }}
-              />
+              <Suspense fallback={null}>
+                <SpaceEditor
+                  key={
+                    spaceEditor.kind === "edit"
+                      ? `edit:${spaceEditor.space.id}`
+                      : "create"
+                  }
+                  editor={spaceEditor}
+                  spaces={spaces}
+                  onCancel={() => setSpaceEditor(null)}
+                  onSaved={(spaceId) => {
+                    if (spaceId) setActiveSpaceOnly(spaceId);
+                    setSpaceEditor(null);
+                  }}
+                />
+              </Suspense>
             ) : threadListProvider ? (
               <PluginThreadList
                 slot={threadListProvider}
