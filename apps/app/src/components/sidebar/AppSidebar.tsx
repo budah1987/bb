@@ -619,6 +619,7 @@ export function AppSidebar({
             onSelect={handleCommandCenter}
           />
           <PluginNavSidebarItems
+            isCompactViewport={isCompactViewport}
             onNavigate={closeOnMobile}
             splitEnabled={threadSplitsEnabled}
             toolsRoutePath={toolsRoutePath}

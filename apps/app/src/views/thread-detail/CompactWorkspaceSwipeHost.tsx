@@ -29,6 +29,7 @@ const SWIPE_LAYER_CLASS = "flex min-h-0 min-w-0 flex-1 flex-col p-4 md:p-5";
 type SwipeDestination =
   | { kind: "pane"; paneId: string; content: PaneContent }
   | { kind: "command-center" }
+  | { kind: "right-panel" }
   | { kind: "return"; paneId: string; content: PaneContent | null };
 
 interface SwipePreview {
@@ -67,10 +68,13 @@ export interface CompactWorkspaceSwipeHostProps {
   focusedPaneId: string;
   /** Whether a long rightward drag may open the Command Center from here. */
   allowsCommandCenter: boolean;
+  /** Whether a long leftward drag may open the current task's right panel. */
+  allowsRightPanel: boolean;
   /** Set only while this surface is a Command Center this gesture opened. */
   returnPaneId: string | null;
   onFocusPane: (paneId: string) => void;
   onOpenCommandCenter: () => void;
+  onOpenRightPanel: () => void;
   onReturnFromCommandCenter: () => void;
 }
 
@@ -159,9 +163,11 @@ export function CompactWorkspaceSwipeHost({
   panes,
   focusedPaneId,
   allowsCommandCenter,
+  allowsRightPanel,
   returnPaneId,
   onFocusPane,
   onOpenCommandCenter,
+  onOpenRightPanel,
   onReturnFromCommandCenter,
 }: CompactWorkspaceSwipeHostProps) {
   const prefersReducedMotion = useMediaQuery(REDUCED_MOTION_QUERY);
@@ -286,12 +292,16 @@ export function CompactWorkspaceSwipeHost({
       deltaX,
       width,
       allowsCommandCenter,
+      allowsRightPanel,
     });
     if (target === null) {
       return null;
     }
     if (target.kind === "command-center") {
       return { direction: "right", destination: target };
+    }
+    if (target.kind === "right-panel") {
+      return { direction: "left", destination: target };
     }
     const paneId = resolveWorkspaceSwipePaneId(
       panes,
@@ -329,6 +339,7 @@ export function CompactWorkspaceSwipeHost({
       ),
       width: session.width,
       allowsCommandCenter,
+      allowsRightPanel,
     });
     const { destination } = current;
     if (
@@ -336,6 +347,9 @@ export function CompactWorkspaceSwipeHost({
       destination.kind === "command-center"
     ) {
       return { announcement: "Command Center", run: onOpenCommandCenter };
+    }
+    if (outcome.kind === "right-panel" && destination.kind === "right-panel") {
+      return { announcement: "Right panel", run: onOpenRightPanel };
     }
     if (outcome.kind !== "pane") {
       return null;
@@ -555,10 +569,12 @@ export function CompactWorkspaceSwipeHost({
         >
           <CompactWorkspacePreviewSurface
             content={
-              preview.destination.kind === "command-center"
+              preview.destination.kind === "command-center" ||
+              preview.destination.kind === "right-panel"
                 ? null
                 : preview.destination.content
             }
+            kind={preview.destination.kind}
           />
         </div>
       ) : null}

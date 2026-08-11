@@ -805,7 +805,6 @@ function WorkspaceRow({
       ref={setActivatorNodeRef}
       type="button"
       className="conductor-workspace-row"
-      data-focused={focused || undefined}
       data-sidebar-thread-shortcut-target={isShortcutTarget ? "" : undefined}
       data-sidebar-thread-id={isShortcutTarget ? target?.id : undefined}
       data-active={isActive || undefined}
@@ -820,15 +819,7 @@ function WorkspaceRow({
         label={statusLabel ? `${statusLabel} workspace` : undefined}
       />
       <span className="conductor-workspace-copy">
-        <span
-          className={
-            focused
-              ? "conductor-workspace-title conductor-workspace-title--focused"
-              : "conductor-workspace-title"
-          }
-        >
-          {workspace.title}
-        </span>
+        <span className="conductor-workspace-title">{workspace.title}</span>
         <WorkspaceMetadata
           branchLabel={branchLabel}
           summary={gitSummary}

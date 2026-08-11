@@ -131,6 +131,8 @@ describe("plugin app bundles (build policy, inventory, asset routes)", () => {
     expect(bundle.cssUrl).toBe(
       `/api/v1/plugins/appy/assets/app.css?h=${bundle.hash}`,
     );
+    const inventory = await harness.app.request(`${BASE}/api/v1/plugins`);
+    expect(inventory.headers.get("cache-control")).toBe("no-store");
     // The install-time build materialized the dist outputs.
     await stat(join(rootDir, "dist", "app.js"));
     await stat(join(rootDir, "dist", "app.meta.json"));

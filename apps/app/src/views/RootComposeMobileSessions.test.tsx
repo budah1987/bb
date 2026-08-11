@@ -7,7 +7,6 @@ import {
   fireEvent,
   render,
   screen,
-  within,
 } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -298,26 +297,12 @@ describe("RootComposeMobileSessions", () => {
       </MemoryRouter>,
     );
 
-    const focusToggle = screen.getByRole("button", { name: "Focus" });
-    const focusSection = focusToggle.closest("section");
-    expect(focusSection).not.toBeNull();
-    expect(
-      within(focusSection as HTMLElement).getByText("Activity workspace"),
-    ).not.toBeNull();
-    expect(
-      within(focusSection as HTMLElement)
-        .getByRole("link")
-        .className.includes("min-h-16"),
-    ).toBe(true);
-    expect(screen.getByRole("tab", { name: "All (0)" })).not.toBeNull();
+    const focusTab = screen.getByRole("tab", { name: "Focus (1)" });
+    fireEvent.click(focusTab);
+    expect(screen.getByText("Activity workspace")).not.toBeNull();
+    expect(screen.getByText(/2 conversations/u)).not.toBeNull();
+    expect(screen.getByRole("link").className.includes("min-h-16")).toBe(true);
     expect(screen.queryByText("Research tab")).toBeNull();
-    fireEvent.click(focusToggle);
-    expect(focusToggle.getAttribute("aria-expanded")).toBe("false");
-    expect(
-      focusSection
-        ?.querySelector(".mobile-priority-section__content")
-        ?.hasAttribute("data-collapsed"),
-    ).toBe(true);
   });
 
   it("shows a passive parent as working while its sub-agent runs", () => {
@@ -344,7 +329,7 @@ describe("RootComposeMobileSessions", () => {
     );
 
     expect(screen.getByRole("tab", { name: "Active (2)" })).not.toBeNull();
-    expect(screen.getByRole("tab", { name: "Inactive (0)" })).not.toBeNull();
+    expect(screen.getByRole("tab", { name: "Recall (0)" })).not.toBeNull();
     expect(
       screen.getByRole("link", {
         name: /Open Coordinate agents — Working/,
@@ -352,7 +337,7 @@ describe("RootComposeMobileSessions", () => {
     ).not.toBeNull();
   });
 
-  it("keeps awaiting replies above the filters and lets the section collapse", () => {
+  it("keeps work that needs attention above the workspace views", () => {
     const awaitingReply = makeThread({
       id: "thr_awaiting_reply",
       title: "Review mobile navigation",
@@ -372,9 +357,9 @@ describe("RootComposeMobileSessions", () => {
       </MemoryRouter>,
     );
 
-    const toggle = screen.getByRole("button", { name: "Awaiting Reply" });
+    const toggle = screen.getByRole("button", { name: "Attention" });
     expect(screen.getByText("Review mobile navigation")).not.toBeNull();
-    expect(screen.getByRole("tab", { name: "All (0)" })).not.toBeNull();
+    expect(screen.getByRole("tab", { name: "Focus (0)" })).not.toBeNull();
     fireEvent.click(toggle);
     expect(toggle.getAttribute("aria-expanded")).toBe("false");
     expect(
@@ -441,11 +426,11 @@ describe("RootComposeMobileSessions", () => {
 
     expect(screen.getByText("Ready")).not.toBeNull();
     expect(screen.getByLabelText("Ready")).not.toBeNull();
-    expect(screen.getByRole("tab", { name: "Active (1)" })).not.toBeNull();
-    expect(screen.getByRole("tab", { name: "Inactive (0)" })).not.toBeNull();
+    expect(screen.getByRole("tab", { name: "Active (0)" })).not.toBeNull();
+    expect(screen.getByRole("tab", { name: "Recall (0)" })).not.toBeNull();
   });
 
-  it("switches between active, inactive, and all sessions", () => {
+  it("switches between active, recall, and focus workspaces", () => {
     render(
       <MemoryRouter>
         <RootComposeMobileSessions
@@ -454,6 +439,11 @@ describe("RootComposeMobileSessions", () => {
           showCreatingRow={false}
           threads={[
             makeThread({ id: "thr_idle", title: "Idle session" }),
+            makeThread({
+              id: "thr_focus",
+              title: "Focused session",
+              pinnedAt: 4,
+            }),
             makeThread({
               id: "thr_running",
               title: "Running session",
@@ -469,13 +459,13 @@ describe("RootComposeMobileSessions", () => {
     );
 
     expect(screen.queryByText("Idle session")).toBeNull();
-    fireEvent.click(screen.getByRole("tab", { name: "Inactive (1)" }));
+    fireEvent.click(screen.getByRole("tab", { name: "Recall (1)" }));
     expect(screen.getByText("Idle session")).not.toBeNull();
     expect(screen.queryByText("Running session")).toBeNull();
 
-    fireEvent.click(screen.getByRole("tab", { name: "All (2)" }));
-    expect(screen.getByText("Idle session")).not.toBeNull();
-    expect(screen.getByText("Running session")).not.toBeNull();
+    fireEvent.click(screen.getByRole("tab", { name: "Focus (1)" }));
+    expect(screen.getByText("Focused session")).not.toBeNull();
+    expect(screen.queryByText("Running session")).toBeNull();
   });
 
   it("swipes deliberately through session categories in both directions", () => {
@@ -528,7 +518,7 @@ describe("RootComposeMobileSessions", () => {
     swipe(100, 20);
     expect(
       screen
-        .getByRole("tab", { name: "Inactive (1)" })
+        .getByRole("tab", { name: "Recall (1)" })
         .getAttribute("aria-selected"),
     ).toBe("true");
     expect(screen.getByText("Idle session")).not.toBeNull();

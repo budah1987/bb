@@ -44,6 +44,7 @@ interface MobileSessionGroup {
 }
 
 interface MobileSessionRowProps {
+  conversationCount?: number;
   displayTitle?: string;
   groupKind: MobileSessionGroupKind;
   highlighted: boolean;
@@ -359,6 +360,7 @@ function MobileSessionActionsDrawer({
 }
 
 function MobileSessionRow({
+  conversationCount = 1,
   displayTitle,
   groupKind,
   highlighted,
@@ -381,6 +383,7 @@ function MobileSessionRow({
   const metadata = [
     projectName,
     thread.environmentBranchName ?? thread.environmentName,
+    conversationCount > 1 ? `${conversationCount} conversations` : null,
   ]
     .filter((value): value is string => value !== null)
     .join(" · ");
@@ -438,7 +441,7 @@ function MobileSessionRow({
           threadId: thread.id,
         })}
         aria-label={`Open ${threadTitle} — ${visibleStatus}${metadata ? `, ${metadata}` : ""}`}
-        aria-description="Press and hold for thread actions"
+        aria-description="Press and hold for conversation actions"
         className={cn(
           "grid touch-pan-y select-none grid-cols-[auto_minmax(0,1fr)_auto] items-center rounded-lg text-foreground/90 [-webkit-touch-callout:none] transition-[transform,background-color,color] duration-150 active:scale-[0.985] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring",
           priority
@@ -509,9 +512,9 @@ function MobileSessionRow({
 }
 
 const FILTERS: Array<{ label: string; value: MobileSessionFilter }> = [
+  { label: "Focus", value: "all" },
   { label: "Active", value: "active" },
-  { label: "Inactive", value: "inactive" },
-  { label: "All", value: "all" },
+  { label: "Recall", value: "inactive" },
 ];
 
 const CATEGORY_SWIPE_INTENT_PX = 12;
@@ -575,6 +578,54 @@ function MobilePrioritySection({
   );
 }
 
+interface MobileWorkspaceSummary {
+  groupKind: MobileSessionGroupKind;
+  key: string;
+  thread: ThreadListEntry;
+  threads: readonly ThreadListEntry[];
+}
+
+function buildMobileWorkspaceSummaries(
+  threads: readonly ThreadListEntry[],
+  activeAncestorIds: ReadonlySet<string>,
+): MobileWorkspaceSummary[] {
+  const grouped = new Map<string, ThreadListEntry[]>();
+  for (const thread of [...threads].sort(compareMobileSessions)) {
+    const key = thread.environmentId ?? `thread:${thread.id}`;
+    const current = grouped.get(key);
+    if (current) current.push(thread);
+    else grouped.set(key, [thread]);
+  }
+  return [...grouped.entries()]
+    .map(([key, workspaceThreads]) => ({
+      groupKind: getMobileWorkspaceGroupKind(
+        workspaceThreads,
+        activeAncestorIds,
+      ),
+      key,
+      thread: workspaceThreads[0],
+      threads: workspaceThreads,
+    }))
+    .sort((left, right) => compareMobileSessions(left.thread, right.thread));
+}
+
+function matchesWorkspaceQuery(
+  workspace: MobileWorkspaceSummary,
+  projectNamesById: ReadonlyMap<string, string>,
+  query: string,
+): boolean {
+  const normalizedQuery = query.trim().toLocaleLowerCase();
+  if (!normalizedQuery) return true;
+  return workspace.threads.some((thread) =>
+    [
+      getThreadDisplayTitle(thread),
+      projectNamesById.get(thread.projectId) ?? "",
+      thread.environmentName ?? "",
+      thread.environmentBranchName ?? "",
+    ].some((value) => value.toLocaleLowerCase().includes(normalizedQuery)),
+  );
+}
+
 export function RootComposeMobileSessions({
   highlightedThreadId,
   projectNamesById,
@@ -599,77 +650,36 @@ export function RootComposeMobileSessions({
     () => getActiveMobileSessionAncestorIds(threads),
     [threads],
   );
-  const groups = useMemo(
+  const workspaces = useMemo(
     () =>
-      buildMobileSessionGroups({ filter, projectNamesById, query, threads }),
-    [filter, projectNamesById, query, threads],
+      buildMobileWorkspaceSummaries(threads, activeAncestorIds).filter(
+        (workspace) =>
+          matchesWorkspaceQuery(workspace, projectNamesById, query),
+      ),
+    [activeAncestorIds, projectNamesById, query, threads],
   );
-  const focusedThreads = useMemo(() => {
-    const normalizedQuery = query.trim().toLocaleLowerCase();
-    const pinnedThreads = threads
-      .filter((thread) => {
-        if (thread.pinnedAt === null) return false;
-        if (!normalizedQuery) return true;
-        return [
-          getThreadDisplayTitle(thread),
-          projectNamesById.get(thread.projectId) ?? "",
-          thread.environmentName ?? "",
-          thread.environmentBranchName ?? "",
-        ].some((value) => value.toLocaleLowerCase().includes(normalizedQuery));
-      })
-      .sort(compareMobileSessions);
-    const representatives = new Map<string, ThreadListEntry>();
-    for (const thread of pinnedThreads) {
-      const key = thread.environmentId ?? `thread:${thread.id}`;
-      if (!representatives.has(key)) representatives.set(key, thread);
-    }
-    return [...representatives.entries()].map(([key, thread]) => {
-      const workspaceThreads = key.startsWith("thread:")
-        ? [thread]
-        : threads.filter((candidate) => candidate.environmentId === key);
-      return {
-        thread,
-        groupKind: getMobileWorkspaceGroupKind(
-          workspaceThreads,
-          activeAncestorIds,
-        ),
-      };
-    });
-  }, [activeAncestorIds, projectNamesById, query, threads]);
-  const focusedEnvironmentIds = new Set(
-    threads.flatMap((thread) =>
-      thread.pinnedAt !== null && thread.environmentId !== null
-        ? [thread.environmentId]
-        : [],
+  const isFocusedWorkspace = (workspace: MobileWorkspaceSummary) =>
+    workspace.threads.some((thread) => thread.pinnedAt !== null);
+  const attentionWorkspaces = workspaces.filter((workspace) =>
+    ["waiting", "failed", "ready", "awaiting-reply"].includes(
+      workspace.groupKind,
     ),
   );
-  const secondaryThreads = threads.filter(
-    (thread) =>
-      thread.pinnedAt === null &&
-      (thread.environmentId === null ||
-        !focusedEnvironmentIds.has(thread.environmentId)),
+  const focusedWorkspaces = workspaces.filter(isFocusedWorkspace);
+  const activeWorkspaces = workspaces.filter(
+    (workspace) =>
+      !isFocusedWorkspace(workspace) && workspace.groupKind === "working",
   );
-  const awaitingReplyThreads = secondaryThreads
-    .filter((thread) => {
-      if (!isAwaitingReplyThread(thread)) return false;
-      const normalizedQuery = query.trim().toLocaleLowerCase();
-      if (!normalizedQuery) return true;
-      return [
-        getThreadDisplayTitle(thread),
-        projectNamesById.get(thread.projectId) ?? "",
-        thread.environmentName ?? "",
-        thread.environmentBranchName ?? "",
-      ].some((value) => value.toLocaleLowerCase().includes(normalizedQuery));
-    })
-    .sort(compareMobileSessions);
-  const filterableThreads = secondaryThreads.filter(
-    (thread) => !isAwaitingReplyThread(thread),
+  const recallWorkspaces = workspaces.filter(
+    (workspace) =>
+      !isFocusedWorkspace(workspace) && workspace.groupKind === "passive",
   );
-  const activeCount = filterableThreads.filter(
-    (thread) =>
-      getMobileSessionGroupKind(thread, activeAncestorIds) !== "passive",
-  ).length;
-  const inactiveCount = filterableThreads.length - activeCount;
+  const visibleWorkspaces =
+    filter === "all"
+      ? focusedWorkspaces
+      : filter === "active"
+        ? activeWorkspaces
+        : recallWorkspaces;
 
   const openSearch = () => {
     setSearchOpen(true);
@@ -836,56 +846,35 @@ export function RootComposeMobileSessions({
         </div>
       ) : null}
 
-      {focusedThreads.length > 0 ? (
-        <MobilePrioritySection contentId="mobile-focus-rows" label="Focus">
+      {attentionWorkspaces.length > 0 ? (
+        <MobilePrioritySection
+          contentId="mobile-attention-rows"
+          initiallyExpanded={attentionWorkspaces.length <= 4}
+          label="Attention"
+        >
           <ul className="space-y-px">
-            {focusedThreads.map(({ groupKind, thread }) => (
+            {attentionWorkspaces.map((workspace) => (
               <MobileSessionRow
-                key={thread.id}
+                key={workspace.key}
+                conversationCount={workspace.threads.length}
                 displayTitle={
-                  thread.environmentName ??
-                  thread.environmentBranchName ??
+                  workspace.thread.environmentName ??
+                  workspace.thread.environmentBranchName ??
                   undefined
                 }
-                groupKind={groupKind}
-                highlighted={thread.id === highlightedThreadId}
+                groupKind={workspace.groupKind}
+                highlighted={workspace.threads.some(
+                  (thread) => thread.id === highlightedThreadId,
+                )}
                 now={renderedAt}
                 onOpenActions={setActionsThread}
                 priority
                 projectName={
-                  isProjectlessProjectId(thread.projectId)
+                  isProjectlessProjectId(workspace.thread.projectId)
                     ? null
-                    : (projectNamesById.get(thread.projectId) ?? null)
+                    : (projectNamesById.get(workspace.thread.projectId) ?? null)
                 }
-                thread={thread}
-              />
-            ))}
-          </ul>
-        </MobilePrioritySection>
-      ) : null}
-
-      {awaitingReplyThreads.length > 0 ? (
-        <MobilePrioritySection
-          contentId="mobile-awaiting-reply-rows"
-          initiallyExpanded={awaitingReplyThreads.length <= 4}
-          label="Awaiting Reply"
-        >
-          <ul className="space-y-px">
-            {awaitingReplyThreads.map((thread) => (
-              <MobileSessionRow
-                key={thread.id}
-                groupKind="awaiting-reply"
-                highlighted={thread.id === highlightedThreadId}
-                now={renderedAt}
-                onOpenActions={setActionsThread}
-                priority={false}
-                projectName={
-                  isProjectlessProjectId(thread.projectId)
-                    ? null
-                    : (projectNamesById.get(thread.projectId) ?? null)
-                }
-                showMetadata={false}
-                thread={thread}
+                thread={workspace.thread}
               />
             ))}
           </ul>
@@ -894,7 +883,7 @@ export function RootComposeMobileSessions({
 
       <div
         role="tablist"
-        aria-label="Session filter"
+        aria-label="Workspace view"
         data-active-tab={filter}
         className="mobile-session-tabs relative grid grid-cols-3 border-b border-border-hairline"
       >
@@ -904,11 +893,11 @@ export function RootComposeMobileSessions({
         />
         {FILTERS.map((option) => {
           const count =
-            option.value === "active"
-              ? activeCount
-              : option.value === "inactive"
-                ? inactiveCount
-                : filterableThreads.length;
+            option.value === "all"
+              ? focusedWorkspaces.length
+              : option.value === "active"
+                ? activeWorkspaces.length
+                : recallWorkspaces.length;
           return (
             <button
               key={option.value}
@@ -997,36 +986,44 @@ export function RootComposeMobileSessions({
           </div>
         ) : null}
 
-        {groups.length > 0 ? (
+        {visibleWorkspaces.length > 0 ? (
           <ul className="space-y-px">
-            {groups.flatMap((group) =>
-              group.threads.map((thread) => (
-                <MobileSessionRow
-                  key={thread.id}
-                  groupKind={group.kind}
-                  highlighted={thread.id === highlightedThreadId}
-                  now={renderedAt}
-                  onOpenActions={setActionsThread}
-                  priority={false}
-                  projectName={
-                    isProjectlessProjectId(thread.projectId)
-                      ? null
-                      : (projectNamesById.get(thread.projectId) ?? null)
-                  }
-                  thread={thread}
-                />
-              )),
-            )}
+            {visibleWorkspaces.map((workspace) => (
+              <MobileSessionRow
+                key={workspace.key}
+                conversationCount={workspace.threads.length}
+                displayTitle={
+                  workspace.thread.environmentName ??
+                  workspace.thread.environmentBranchName ??
+                  undefined
+                }
+                groupKind={workspace.groupKind}
+                highlighted={workspace.threads.some(
+                  (thread) => thread.id === highlightedThreadId,
+                )}
+                now={renderedAt}
+                onOpenActions={setActionsThread}
+                priority={filter === "all"}
+                projectName={
+                  isProjectlessProjectId(workspace.thread.projectId)
+                    ? null
+                    : (projectNamesById.get(workspace.thread.projectId) ?? null)
+                }
+                thread={workspace.thread}
+              />
+            ))}
           </ul>
         ) : (
           <div className="flex min-h-28 flex-col items-center justify-center gap-1 px-6 text-center">
             <p className="text-sm text-foreground/85">
-              {query.trim() ? "No matching sessions" : "No sessions here"}
+              {query.trim() ? "No matching workspaces" : "No workspaces here"}
             </p>
             <p className="text-xs text-muted-foreground">
               {filter === "active"
-                ? "Working, ready, waiting, and failed sessions appear here."
-                : "Try another filter or start a new conversation."}
+                ? "Working workspaces appear here."
+                : filter === "all"
+                  ? "Pin a conversation to keep its workspace in Focus."
+                  : "Inactive workspaces appear here for quick recall."}
             </p>
           </div>
         )}

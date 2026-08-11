@@ -30,7 +30,7 @@ import "./CompactUsageLimits.css";
 
 const SIDEBAR_USAGE_EXPANDED_STORAGE_KEY = "bb.sidebar.usageExpanded";
 const DESKTOP_COLLAPSED_HEIGHT_PX = 40;
-const MOBILE_COLLAPSED_HEIGHT_PX = 40;
+const MOBILE_COLLAPSED_HEIGHT_PX = 44;
 
 const sidebarUsageExpandedAtom = atomWithStorage<boolean>(
   SIDEBAR_USAGE_EXPANDED_STORAGE_KEY,
@@ -510,7 +510,7 @@ export function CommandCenterUsageRailContent({
           aria-expanded={open}
           aria-controls={detailsId}
           aria-label={`${compactUsageAriaLabel(model)} ${open ? "Collapse" : "Expand"} details.`}
-          className="flex h-10 w-full items-center gap-2.5 px-2.5 text-left focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-ring"
+          className="flex h-11 w-full items-center gap-2.5 px-2.5 text-left focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-ring"
           onClick={() => setOpen((current) => !current)}
         >
           <UsageSummary model={model} />
@@ -518,7 +518,7 @@ export function CommandCenterUsageRailContent({
         <div
           id={detailsId}
           aria-hidden={!open}
-          className="compact-usage-details max-h-[calc(var(--usage-expanded-height)-2.5rem)] overflow-y-auto"
+          className="compact-usage-details max-h-[calc(var(--usage-expanded-height)-2.75rem)] overflow-y-auto"
           onClick={closeFromDetails}
         >
           <UsageDetails model={model} />

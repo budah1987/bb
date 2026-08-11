@@ -120,7 +120,7 @@ describe("CommandCenterUsageRailContent", () => {
     const dock = rail.querySelector<HTMLElement>(".compact-usage-dock");
     const trigger = screen.getByRole("button", { name: /Expand details/u });
     expect(dock?.style.getPropertyValue("--usage-collapsed-height")).toBe(
-      "40px",
+      "44px",
     );
     expect(dock?.dataset.open).toBe("false");
     expect(rail.querySelector('[title="Claude"]')).not.toBeNull();

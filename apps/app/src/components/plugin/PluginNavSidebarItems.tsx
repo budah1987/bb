@@ -114,9 +114,11 @@ type SidebarNavRow =
  * preferences live in `pluginNavSidebarAtoms`.
  */
 export function PluginNavSidebarItems({
+  isCompactViewport = false,
   toolsRoutePath,
   ...props
 }: {
+  isCompactViewport?: boolean;
   onNavigate?: () => void;
   splitEnabled?: boolean;
   /** Omit to drop the built-in Extensions row, e.g. when its experiment is off. */
@@ -146,14 +148,22 @@ export function PluginNavSidebarItems({
   // Router hooks live in the inner component so hosts without a Router
   // (isolated sidebar tests/stories) can render the empty state.
   if (rows.length === 0) return null;
-  return <PluginNavSidebarItemList {...props} rows={rows} />;
+  return (
+    <PluginNavSidebarItemList
+      {...props}
+      isCompactViewport={isCompactViewport}
+      rows={rows}
+    />
+  );
 }
 
 function PluginNavSidebarItemList({
+  isCompactViewport,
   onNavigate,
   rows,
   splitEnabled = false,
 }: {
+  isCompactViewport: boolean;
   onNavigate?: () => void;
   rows: readonly SidebarNavRow[];
   splitEnabled?: boolean;
@@ -257,7 +267,7 @@ function PluginNavSidebarItemList({
           ))}
         </SortableContext>
       </DndContext>
-      {hidden.length > 0 ? (
+      {hidden.length > 0 && !isCompactViewport ? (
         <>
           <PluginNavSidebarOverflowToggle
             count={hidden.length}

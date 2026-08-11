@@ -9,17 +9,19 @@ import { getAdjacentPaneId } from "./splitPaneCommands";
 /** Horizontal travel that declares the gesture and takes pointer capture. */
 export const WORKSPACE_SWIPE_INTENT_PX = 12;
 /** Distance alone commits a pane change past this share of the width. */
-export const WORKSPACE_SWIPE_PANE_COMMIT_RATIO = 0.33;
+export const WORKSPACE_SWIPE_PANE_COMMIT_RATIO = 0.22;
 /** A fling commits from this much shorter distance… */
-export const WORKSPACE_SWIPE_FLING_MIN_RATIO = 0.12;
+export const WORKSPACE_SWIPE_FLING_MIN_RATIO = 0.08;
 /** …when it is still travelling at least this fast, in the same direction. */
-export const WORKSPACE_SWIPE_FLING_VELOCITY_PX_PER_SEC = 450;
+export const WORKSPACE_SWIPE_FLING_VELOCITY_PX_PER_SEC = 360;
 /**
  * The Command Center opens on physical rightward distance only. Velocity can
  * complete a short pane swipe but must never promote one to this destination,
  * or a quick flick would replace the whole surface.
  */
 export const WORKSPACE_SWIPE_COMMAND_CENTER_RATIO = 0.68;
+/** A deliberate leftward drag opens the current task's right panel. */
+export const WORKSPACE_SWIPE_RIGHT_PANEL_RATIO = 0.68;
 /**
  * How recent the last movement sample must be to describe the release. A finger
  * that travelled fast and then rested is no longer flinging, so a stale sample
@@ -102,7 +104,8 @@ export function abandonsWorkspaceSwipe(
 
 export type WorkspaceSwipeTarget =
   | { kind: "pane"; direction: WorkspaceSwipeDirection }
-  | { kind: "command-center" };
+  | { kind: "command-center" }
+  | { kind: "right-panel" };
 
 export type WorkspaceSwipeOutcome = WorkspaceSwipeTarget | { kind: "cancel" };
 
@@ -115,6 +118,8 @@ export interface WorkspaceSwipeInput {
   width: number;
   /** Whether a long rightward drag may open the Command Center here. */
   allowsCommandCenter: boolean;
+  /** Whether a long leftward drag may open the current task's right panel. */
+  allowsRightPanel: boolean;
 }
 
 /** Where a release right now would land, ignoring commit thresholds. */
@@ -122,6 +127,7 @@ export function resolveWorkspaceSwipeTarget({
   deltaX,
   width,
   allowsCommandCenter,
+  allowsRightPanel,
 }: Omit<WorkspaceSwipeInput, "velocityX">): WorkspaceSwipeTarget | null {
   if (!Number.isFinite(width) || width <= 0) {
     return null;
@@ -135,6 +141,12 @@ export function resolveWorkspaceSwipeTarget({
     deltaX / width >= WORKSPACE_SWIPE_COMMAND_CENTER_RATIO
   ) {
     return { kind: "command-center" };
+  }
+  if (
+    allowsRightPanel &&
+    deltaX / width <= -WORKSPACE_SWIPE_RIGHT_PANEL_RATIO
+  ) {
+    return { kind: "right-panel" };
   }
   return { kind: "pane", direction };
 }
@@ -157,7 +169,7 @@ export function decideWorkspaceSwipe(
   if (target === null) {
     return { kind: "cancel" };
   }
-  if (target.kind === "command-center") {
+  if (target.kind === "command-center" || target.kind === "right-panel") {
     return target;
   }
   const ratio = Math.abs(input.deltaX) / input.width;

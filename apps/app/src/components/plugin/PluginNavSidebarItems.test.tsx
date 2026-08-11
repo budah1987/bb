@@ -16,7 +16,10 @@ import {
   type PluginRegistrationSet,
 } from "@/lib/plugin-slots";
 import { PluginNavSidebarItems } from "./PluginNavSidebarItems";
-import { pluginNavPanelOrderAtom } from "./pluginNavSidebarAtoms";
+import {
+  hiddenPluginNavPanelsAtom,
+  pluginNavPanelOrderAtom,
+} from "./pluginNavSidebarAtoms";
 
 function registrationSet(
   overrides: Partial<PluginRegistrationSet>,
@@ -54,6 +57,8 @@ function renderSidebarItems(
   options: {
     toolsRoutePath?: string;
     storedOrder?: string[];
+    hiddenKeys?: string[];
+    isCompactViewport?: boolean;
   } = {},
 ) {
   const store = createStore();
@@ -62,11 +67,17 @@ function renderSidebarItems(
   if (options.storedOrder) {
     store.set(pluginNavPanelOrderAtom, options.storedOrder);
   }
+  if (options.hiddenKeys) {
+    store.set(hiddenPluginNavPanelsAtom, options.hiddenKeys);
+  }
   return render(
     <Provider store={store}>
       <MemoryRouter initialEntries={["/"]}>
         <SidebarProvider>
-          <PluginNavSidebarItems toolsRoutePath={options.toolsRoutePath} />
+          <PluginNavSidebarItems
+            isCompactViewport={options.isCompactViewport}
+            toolsRoutePath={options.toolsRoutePath}
+          />
         </SidebarProvider>
       </MemoryRouter>
     </Provider>,
@@ -164,6 +175,21 @@ describe("PluginNavSidebarItems", () => {
     await waitFor(() => {
       expect(panelRowNames()).toEqual(["GitHub", "Docs"]);
     });
+  });
+
+  it("keeps desktop-hidden panels fully hidden on compact viewports", () => {
+    registerPanel("docs", "Docs");
+    registerPanel("github", "GitHub");
+
+    renderSidebarItems({
+      hiddenKeys: ["docs/main"],
+      isCompactViewport: true,
+    });
+
+    expect(panelRowNames()).toEqual(["GitHub"]);
+    expect(
+      screen.queryByTestId("plugin-nav-sidebar-overflow-toggle"),
+    ).toBeNull();
   });
 
   it("hides the built-in Extensions row like a plugin row", async () => {

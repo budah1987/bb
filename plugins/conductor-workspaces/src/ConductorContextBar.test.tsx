@@ -105,7 +105,7 @@ afterEach(() => {
 });
 
 describe("ConductorContextBar compact layout", () => {
-  it("keeps two readable tabs and moves the rest into a working overflow", async () => {
+  it("keeps three compact tabs and moves the rest into a working overflow", async () => {
     const threads = [1, 2, 3, 4, 5, 6].map(thread);
     const rendered = renderSlot(
       contextBar,
@@ -140,15 +140,17 @@ describe("ConductorContextBar compact layout", () => {
     expect(
       screen.getByRole("button", { name: "Conversation 6" }),
     ).toBeDefined();
-    expect(screen.queryByRole("button", { name: "Conversation 2" })).toBeNull();
+    expect(
+      screen.getByRole("button", { name: "Conversation 2" }),
+    ).toBeDefined();
 
-    fireEvent.click(screen.getByRole("button", { name: "4 more" }));
+    fireEvent.click(screen.getByRole("button", { name: "3 more" }));
     fireEvent.click(
-      await screen.findByRole("menuitem", { name: "Conversation 2" }),
+      await screen.findByRole("menuitem", { name: "Conversation 3" }),
     );
     expect(rendered.sidebarActionCalls).toContainEqual({
       method: "open",
-      threadId: "thread-2",
+      threadId: "thread-3",
       options: undefined,
     });
 
@@ -167,6 +169,60 @@ describe("ConductorContextBar compact layout", () => {
           locked: true,
         },
       },
+    });
+  });
+
+  it("uses a short swipe to move between workspace conversations", async () => {
+    const rendered = renderSlot(
+      contextBar,
+      {
+        threadId: "thread-2",
+        projectId: "project-1",
+        environmentId: "environment-1",
+        isCompactViewport: true,
+      },
+      {
+        sidebarThreads: {
+          status: "ready",
+          threads: [thread(1), thread(2), thread(3)],
+          projects: [{ id: "project-1", name: "BB", isPersonal: false }],
+        },
+        rpc: {
+          readReconciliation: () => ({
+            legacyWorkspaces: [],
+            recordedSignature: null,
+          }),
+        },
+      },
+    );
+
+    const rail = await screen.findByRole("navigation", {
+      name: "Workspace conversations",
+    });
+    fireEvent.pointerDown(rail, {
+      button: 0,
+      clientX: 120,
+      clientY: 20,
+      pointerId: 1,
+      pointerType: "touch",
+    });
+    fireEvent.pointerMove(rail, {
+      clientX: 72,
+      clientY: 22,
+      pointerId: 1,
+      pointerType: "touch",
+    });
+    fireEvent.pointerUp(rail, {
+      clientX: 72,
+      clientY: 22,
+      pointerId: 1,
+      pointerType: "touch",
+    });
+
+    expect(rendered.sidebarActionCalls.at(-1)).toEqual({
+      method: "open",
+      threadId: "thread-3",
+      options: undefined,
     });
   });
 

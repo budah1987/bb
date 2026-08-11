@@ -7,6 +7,7 @@ import {
   useRef,
   useState,
   type ComponentPropsWithoutRef,
+  type PointerEvent as ReactPointerEvent,
 } from "react";
 import {
   experimental_useSidebarThreadActions as useSidebarThreadActions,
@@ -37,6 +38,16 @@ import {
   RenameConversationDialog,
   pickDeleteFallbackThread,
 } from "./ConversationActions";
+
+const COMPACT_TAB_SWIPE_INTENT_PX = 10;
+const COMPACT_TAB_SWIPE_COMMIT_PX = 36;
+
+interface CompactTabSwipeSession {
+  active: boolean;
+  pointerId: number;
+  startX: number;
+  startY: number;
+}
 
 export function ConductorContextBar({
   threadId,
@@ -93,6 +104,8 @@ function ConductorWorkspaceContextBar({
   const tabRailRef = useRef<HTMLElement>(null);
   const cycleThreadIdRef = useRef(activeThreadId);
   const closeInFlightRef = useRef(false);
+  const tabSwipeRef = useRef<CompactTabSwipeSession | null>(null);
+  const suppressTabClickRef = useRef(false);
   const [tabRailWidth, setTabRailWidth] = useState<number | null>(null);
   const [renameThread, setRenameThread] = useState<PluginSidebarThread | null>(
     null,
@@ -245,6 +258,64 @@ function ConductorWorkspaceContextBar({
     [openConversation, openThreads],
   );
 
+  const resetTabSwipe = useCallback(() => {
+    tabSwipeRef.current = null;
+  }, []);
+  const handleTabSwipeStart = (event: ReactPointerEvent<HTMLElement>) => {
+    if (
+      !isCompactViewport ||
+      event.pointerType !== "touch" ||
+      event.button !== 0
+    ) {
+      return;
+    }
+    suppressTabClickRef.current = false;
+    tabSwipeRef.current = {
+      active: false,
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+    };
+  };
+  const handleTabSwipeMove = (event: ReactPointerEvent<HTMLElement>) => {
+    const swipe = tabSwipeRef.current;
+    if (swipe === null || swipe.pointerId !== event.pointerId) return;
+    const deltaX = event.clientX - swipe.startX;
+    const deltaY = event.clientY - swipe.startY;
+    if (!swipe.active) {
+      if (
+        Math.abs(deltaY) > COMPACT_TAB_SWIPE_INTENT_PX &&
+        Math.abs(deltaY) > Math.abs(deltaX)
+      ) {
+        resetTabSwipe();
+        return;
+      }
+      if (
+        Math.abs(deltaX) < COMPACT_TAB_SWIPE_INTENT_PX ||
+        Math.abs(deltaX) <= Math.abs(deltaY) * 1.25
+      ) {
+        return;
+      }
+      swipe.active = true;
+      suppressTabClickRef.current = true;
+      event.currentTarget.setPointerCapture?.(event.pointerId);
+    }
+    event.preventDefault();
+  };
+  const handleTabSwipeEnd = (event: ReactPointerEvent<HTMLElement>) => {
+    const swipe = tabSwipeRef.current;
+    if (swipe === null || swipe.pointerId !== event.pointerId) return;
+    const deltaX = event.clientX - swipe.startX;
+    if (
+      swipe.active &&
+      Math.abs(deltaX) >= COMPACT_TAB_SWIPE_COMMIT_PX &&
+      activeThreadId !== null
+    ) {
+      openAdjacentConversation(activeThreadId, deltaX < 0 ? 1 : -1);
+    }
+    resetTabSwipe();
+  };
+
   const reopenClosedConversation = useCallback(() => {
     if (!workspace) return;
     const workspaceThreadIds = new Set(
@@ -349,6 +420,17 @@ function ConductorWorkspaceContextBar({
         ref={tabRailRef}
         className="conductor-tab-rail"
         aria-label="Workspace conversations"
+        data-no-workspace-swipe=""
+        onClickCapture={(event) => {
+          if (!suppressTabClickRef.current) return;
+          event.preventDefault();
+          event.stopPropagation();
+          suppressTabClickRef.current = false;
+        }}
+        onPointerCancel={resetTabSwipe}
+        onPointerDown={handleTabSwipeStart}
+        onPointerMove={handleTabSwipeMove}
+        onPointerUp={handleTabSwipeEnd}
       >
         {visibleTabs.map((thread) => (
           <ConversationActionMenu

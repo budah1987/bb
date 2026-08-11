@@ -27,6 +27,7 @@ import { CompactCommandCenterIntro } from "./CompactCommandCenterIntro";
 import { CompactPluginPanelSurface } from "./CompactPluginPanelSurface";
 import { CompactWorkspaceSwipeHost } from "./CompactWorkspaceSwipeHost";
 import { useStandaloneCompactPwa } from "@/hooks/useStandaloneCompactPwa";
+import { useIsCompactViewport } from "@bb/shared-ui/hooks/use-compact-viewport";
 import {
   getRootComposeRoutePath,
   getThreadRoutePath,
@@ -122,10 +123,12 @@ import {
 } from "@/components/ui/context-selection";
 import { PaneMaximizeButton } from "./PaneMaximizeButton";
 import { wsManager } from "@/lib/ws";
+import { useOpenFixedSecondaryPanel } from "@/lib/fixed-panel-tabs";
 
 // A `pointerdown`-relative move threshold before a pane-header drag engages.
 const PANE_DRAG_ENGAGE_DISTANCE_PX = 7;
 const RETAINED_THREAD_VIEW_LIMIT = 3;
+const COMPACT_RETAINED_THREAD_VIEW_LIMIT = 2;
 
 type ThreadPaneContent = Extract<PaneContent, { kind: "thread" }>;
 
@@ -138,6 +141,7 @@ interface RetainedThreadViewsState {
 function useRetainedThreadViews(
   activeContent: ThreadPaneContent,
   scopeKey: string,
+  limit: number,
 ): readonly ThreadPaneContent[] {
   const [state, setState] = useState<RetainedThreadViewsState>(() => ({
     activeThreadId: activeContent.threadId,
@@ -159,7 +163,7 @@ function useRetainedThreadViews(
           ...state.contents.filter(
             (content) => content.threadId !== activeContent.threadId,
           ),
-        ].slice(0, RETAINED_THREAD_VIEW_LIMIT)
+        ].slice(0, limit)
       : [activeContent];
   setState({ activeThreadId: activeContent.threadId, contents, scopeKey });
   return contents;
@@ -172,7 +176,14 @@ function RetainedThreadDetailViews({
   activeContent: ThreadPaneContent;
   scopeKey: string;
 }) {
-  const contents = useRetainedThreadViews(activeContent, scopeKey);
+  const isCompactViewport = useIsCompactViewport();
+  const contents = useRetainedThreadViews(
+    activeContent,
+    scopeKey,
+    isCompactViewport
+      ? COMPACT_RETAINED_THREAD_VIEW_LIMIT
+      : RETAINED_THREAD_VIEW_LIMIT,
+  );
   return contents.map((content) => (
     <Activity
       key={content.threadId}
@@ -1177,6 +1188,18 @@ function StandaloneWorkspaceSurface({
   onReturnFromCommandCenter,
 }: StandaloneWorkspaceSurfaceProps) {
   const panes = listPanes(layout.root);
+  const secondaryPanelStateId =
+    content.kind === "thread"
+      ? content.threadId
+      : content.kind === "new-thread"
+        ? "root-compose"
+        : null;
+  const secondaryPanelSyncThreadId =
+    content.kind === "thread" ? content.threadId : null;
+  const openRightPanel = useOpenFixedSecondaryPanel(
+    secondaryPanelStateId,
+    secondaryPanelSyncThreadId,
+  );
   // On a standalone compact display, the root compose page is always the
   // Command Center. A validated swipe still adds its return destination.
   const isCommandCenter = content.kind === "new-thread";
@@ -1189,9 +1212,11 @@ function StandaloneWorkspaceSurface({
       focusedPaneId={layout.focusedPaneId}
       // Already on the Command Center: offer the return, not another open.
       allowsCommandCenter={content.kind !== "new-thread"}
+      allowsRightPanel={secondaryPanelStateId !== null}
       returnPaneId={commandCenterNavigation?.returnPaneId ?? null}
       onFocusPane={onFocusPane}
       onOpenCommandCenter={onOpenCommandCenter}
+      onOpenRightPanel={openRightPanel}
       onReturnFromCommandCenter={onReturnFromCommandCenter}
     >
       {isCommandCenter ? (

@@ -567,6 +567,7 @@ function ContextualNewThreadHeader({
   projectName: string;
   workspaceName: string;
 }) {
+  const isCompactViewport = useIsCompactViewport();
   const idleActionClassName = `${HEADER_ICON_BUTTON_CLASS} ${CHROME_SUBTLE_ICON_BUTTON_FOREGROUND_CLASS} opacity-40`;
   const center = (
     <>
@@ -575,7 +576,9 @@ function ContextualNewThreadHeader({
         aria-label={`Project: ${projectName}, Workspace: ${workspaceName}`}
         className="flex min-w-0 items-center gap-2 text-sm font-normal"
       >
-        <span className="flex min-w-0 items-center gap-1.5">
+        <span
+          className={`flex min-w-0 items-center gap-1.5 ${isCompactViewport ? "hidden" : ""}`}
+        >
           <Icon name="Folder" className="size-3.5 shrink-0" aria-hidden />
           <span className="min-w-0 truncate" title={`Project: ${projectName}`}>
             {projectName}
@@ -591,49 +594,55 @@ function ContextualNewThreadHeader({
           </span>
         </span>
       </div>
-      <Button
-        type="button"
-        variant="ghost"
-        size="icon"
-        className={idleActionClassName}
-        aria-label="Conversation actions become available after the first message"
-        disabled
-      >
-        <Icon name="MoreHorizontal" />
-      </Button>
+      {!isCompactViewport ? (
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          className={idleActionClassName}
+          aria-label="Conversation actions become available after the first message"
+          disabled
+        >
+          <Icon name="MoreHorizontal" />
+        </Button>
+      ) : null}
     </>
   );
   const actions = (
     <>
-      <div
-        className="flex min-w-7 items-center gap-1"
-        data-thread-header-workflow-actions=""
-      >
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          className={idleActionClassName}
-          aria-label="No conversation activity yet"
-          disabled
+      {!isCompactViewport ? (
+        <div
+          className="flex min-w-7 items-center gap-1"
+          data-thread-header-workflow-actions=""
         >
-          <Icon name="Workflow" />
-        </Button>
-      </div>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className={idleActionClassName}
+            aria-label="No conversation activity yet"
+            disabled
+          >
+            <Icon name="Workflow" />
+          </Button>
+        </div>
+      ) : null}
       <div
         className="ml-1 flex items-center gap-0.5"
         data-thread-header-pane-actions=""
       >
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          className={idleActionClassName}
-          aria-label="The conversation rail becomes available after the first message"
-          disabled
-        >
-          <Icon name="ListView" />
-        </Button>
+        {!isCompactViewport ? (
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className={idleActionClassName}
+            aria-label="The conversation rail becomes available after the first message"
+            disabled
+          >
+            <Icon name="ListView" />
+          </Button>
+        ) : null}
         {!isSecondaryPanelOpen ? (
           <RootComposeRightPanelToggle
             isOpen={false}

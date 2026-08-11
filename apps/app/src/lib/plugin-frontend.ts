@@ -272,7 +272,9 @@ function isFrontendBundle(value: unknown): value is PluginFrontendBundle {
 
 /** Running plugins with a servable bundle, from GET /api/v1/plugins. */
 async function fetchFrontendCandidates(): Promise<PluginFrontendCandidate[]> {
-  const response = await fetch("/api/v1/plugins");
+  // A reload must observe the current bundle hash. Browser heuristic caching
+  // can otherwise keep a running window on an older frontend generation.
+  const response = await fetch("/api/v1/plugins", { cache: "no-store" });
   // Nothing to load rather than an error: an older server or a disabled
   // experiment both mean "no plugin frontends".
   if (!response.ok) return [];

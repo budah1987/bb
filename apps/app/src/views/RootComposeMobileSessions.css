@@ -12,11 +12,11 @@
   transition: transform 250ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
-.mobile-session-tabs[data-active-tab="inactive"] .mobile-session-tabs__pill {
+.mobile-session-tabs[data-active-tab="active"] .mobile-session-tabs__pill {
   transform: translate3d(100%, 0, 0);
 }
 
-.mobile-session-tabs[data-active-tab="all"] .mobile-session-tabs__pill {
+.mobile-session-tabs[data-active-tab="inactive"] .mobile-session-tabs__pill {
   transform: translate3d(200%, 0, 0);
 }
 

@@ -421,6 +421,7 @@ describe("ProjectListActionButtons", () => {
     const newThread = screen.getByRole("button", { name: "New thread" });
     expect(newThread.className).toContain("bg-transparent");
     expect(newThread.className).not.toContain("bg-sidebar-accent/35");
+    expect(newThread.className).not.toContain("border-sidebar-border");
   });
 
   it("shows the compose pane position when New thread is open in a split", () => {

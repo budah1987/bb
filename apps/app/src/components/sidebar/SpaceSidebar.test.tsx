@@ -3,7 +3,7 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import type { SpaceResponse } from "@bb/server-contract";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { SpaceDock } from "./SpaceSidebar";
+import { getSpaceSidebarStyle, SpaceDock } from "./SpaceSidebar";
 
 const spaces: SpaceResponse[] = [
   {
@@ -29,6 +29,15 @@ const spaces: SpaceResponse[] = [
 afterEach(cleanup);
 
 describe("SpaceDock", () => {
+  it("keeps Space color separate from the active theme palette", () => {
+    const style = getSpaceSidebarStyle("mulberry") as Record<string, string>;
+
+    expect(style["--sidebar"]).toBeUndefined();
+    expect(style["--sidebar-accent"]).toBeUndefined();
+    expect(style["--space-accent"]).toContain("var(--pr-merged)");
+    expect(style["--space-border"]).toContain("var(--pr-merged)");
+  });
+
   it("names the active Space and keeps every Space selectable", () => {
     const onSelect = vi.fn();
     render(

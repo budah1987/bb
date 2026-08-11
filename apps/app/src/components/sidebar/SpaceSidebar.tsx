@@ -59,9 +59,8 @@ export function SpaceIconGlyph({ icon }: { icon: SpaceIcon }) {
 
 export function getSpaceSidebarStyle(color: SpaceColor): CSSProperties {
   return {
-    "--sidebar": `color-mix(in oklch, ${SPACE_COLOR_CSS[color]} 9%, var(--canvas))`,
-    "--sidebar-accent": `color-mix(in oklch, ${SPACE_COLOR_CSS[color]} 15%, var(--canvas))`,
-    "--sidebar-border": `color-mix(in oklch, ${SPACE_COLOR_CSS[color]} 22%, var(--canvas))`,
+    "--space-accent": `color-mix(in oklch, ${SPACE_COLOR_CSS[color]} 15%, var(--canvas))`,
+    "--space-border": `color-mix(in oklch, ${SPACE_COLOR_CSS[color]} 22%, var(--canvas))`,
   } as CSSProperties;
 }
 
@@ -95,7 +94,7 @@ export function SpaceDock({
               className={cn(
                 "h-8 shrink-0 items-center rounded-md text-muted-foreground transition-[background-color,color,box-shadow]",
                 space.id === activeSpaceId &&
-                  "w-auto max-w-40 justify-start gap-2 bg-sidebar-accent px-2 text-sidebar-foreground shadow-[inset_0_0_0_1px_var(--sidebar-border),0_1px_1px_color-mix(in_oklch,var(--ink)_6%,transparent)]",
+                  "w-auto max-w-40 justify-start gap-2 bg-[var(--space-accent)] px-2 text-sidebar-foreground shadow-[inset_0_0_0_1px_var(--space-border),0_1px_1px_color-mix(in_oklch,var(--ink)_6%,transparent)]",
                 space.id !== activeSpaceId && "size-8 justify-center px-0",
               )}
               aria-label={`${space.name}, Space ${index + 1}`}

@@ -32,12 +32,18 @@ const panes = [
   threadPane("pane-3", "thr-c"),
 ];
 
-function decide(deltaX: number, velocityX: number, allowsCommandCenter = true) {
+function decide(
+  deltaX: number,
+  velocityX: number,
+  allowsCommandCenter = true,
+  allowsRightPanel = true,
+) {
   return decideWorkspaceSwipe({
     deltaX,
     velocityX,
     width: WIDTH,
     allowsCommandCenter,
+    allowsRightPanel,
   });
 }
 
@@ -58,8 +64,8 @@ describe("workspace swipe intent", () => {
 });
 
 describe("decideWorkspaceSwipe", () => {
-  it("commits a pane on distance, or on a fling from a third of that", () => {
-    expect(decide(WIDTH * 0.33, 0)).toEqual({
+  it("commits a pane on short distance, or on a deliberate flick", () => {
+    expect(decide(WIDTH * 0.22, 0)).toEqual({
       kind: "pane",
       direction: "right",
     });
@@ -67,17 +73,17 @@ describe("decideWorkspaceSwipe", () => {
       kind: "pane",
       direction: "left",
     });
-    expect(decide(WIDTH * 0.2, 0)).toEqual({ kind: "cancel" });
+    expect(decide(WIDTH * 0.15, 0)).toEqual({ kind: "cancel" });
     expect(
-      decide(WIDTH * 0.13, WORKSPACE_SWIPE_FLING_VELOCITY_PX_PER_SEC),
+      decide(WIDTH * 0.09, WORKSPACE_SWIPE_FLING_VELOCITY_PX_PER_SEC),
     ).toEqual({ kind: "pane", direction: "right" });
     // Just under the fling distance, and just under its speed.
-    expect(decide(WIDTH * 0.11, 900)).toEqual({ kind: "cancel" });
+    expect(decide(WIDTH * 0.07, 900)).toEqual({ kind: "cancel" });
     expect(
-      decide(WIDTH * 0.2, WORKSPACE_SWIPE_FLING_VELOCITY_PX_PER_SEC - 1),
+      decide(WIDTH * 0.15, WORKSPACE_SWIPE_FLING_VELOCITY_PX_PER_SEC - 1),
     ).toEqual({ kind: "cancel" });
     // A rebounding finger (travelled right, now moving left) is not a fling.
-    expect(decide(WIDTH * 0.2, -2_000)).toEqual({ kind: "cancel" });
+    expect(decide(WIDTH * 0.15, -2_000)).toEqual({ kind: "cancel" });
   });
 
   it("opens the Command Center on long rightward distance only", () => {
@@ -88,7 +94,7 @@ describe("decideWorkspaceSwipe", () => {
       direction: "right",
     });
     // Leftward distance is never a Command Center, however far it travels.
-    expect(decide(-WIDTH * 0.9, -4_000)).toEqual({
+    expect(decide(-WIDTH * 0.9, -4_000, true, false)).toEqual({
       kind: "pane",
       direction: "left",
     });
@@ -99,6 +105,18 @@ describe("decideWorkspaceSwipe", () => {
     });
   });
 
+  it("opens the right panel on long leftward distance only", () => {
+    expect(decide(-WIDTH * 0.68, 0)).toEqual({ kind: "right-panel" });
+    expect(decide(-WIDTH * 0.3, -4_000)).toEqual({
+      kind: "pane",
+      direction: "left",
+    });
+    expect(decide(-WIDTH * 0.8, 0, true, false)).toEqual({
+      kind: "pane",
+      direction: "left",
+    });
+  });
+
   it("cancels without a measurable surface", () => {
     expect(
       decideWorkspaceSwipe({
@@ -106,6 +124,7 @@ describe("decideWorkspaceSwipe", () => {
         velocityX: 0,
         width: 0,
         allowsCommandCenter: true,
+        allowsRightPanel: true,
       }),
     ).toEqual({ kind: "cancel" });
     expect(decide(0, 0)).toEqual({ kind: "cancel" });

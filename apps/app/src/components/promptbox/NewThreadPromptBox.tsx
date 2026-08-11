@@ -12,6 +12,12 @@ import {
 import type { Host, ProjectSource, PromptTextMention } from "@bb/domain";
 import type { ComposerView } from "@bb/plugin-sdk";
 import { Button } from "@bb/shared-ui/button";
+import {
+  Drawer,
+  DrawerContent,
+  DrawerDescription,
+  DrawerTitle,
+} from "@bb/shared-ui/drawer";
 import { Icon } from "@bb/shared-ui/icon";
 import type { ComposerTextEffectSource } from "@/lib/composer-text-effects";
 import { PluginComposerBanners } from "@/components/plugin/PluginComposerBanners";
@@ -259,6 +265,7 @@ export const NewThreadPromptBoxUI = memo(function NewThreadPromptBoxUI({
   const composerShellRef = useRef<HTMLDivElement>(null);
   const isCompactViewport = useIsCompactViewport();
   const [mobileComposerExpanded, setMobileComposerExpanded] = useState(false);
+  const [mobileTaskContextOpen, setMobileTaskContextOpen] = useState(false);
   const isMobileQuickComposerCompact =
     mobileQuickComposer && isCompactViewport && !mobileComposerExpanded;
   const expandMobileComposer = useCallback(() => {
@@ -267,7 +274,8 @@ export const NewThreadPromptBoxUI = memo(function NewThreadPromptBoxUI({
     setMobileComposerExpanded(true);
   }, [mobileComposerExpanded, mobileQuickComposer]);
   useEffect(() => {
-    if (!mobileQuickComposer || !isCompactViewport) return;
+    if (!mobileQuickComposer || !isCompactViewport || mobileTaskContextOpen)
+      return;
     const handleDocumentInteraction = (event: Event) => {
       const shell = composerShellRef.current;
       const target = event.target;
@@ -286,7 +294,7 @@ export const NewThreadPromptBoxUI = memo(function NewThreadPromptBoxUI({
       );
       document.removeEventListener("focusin", handleDocumentInteraction, true);
     };
-  }, [isCompactViewport, mobileQuickComposer]);
+  }, [isCompactViewport, mobileQuickComposer, mobileTaskContextOpen]);
   // Scope Cmd+Shift+C to the focused split pane (see FollowUpPromptBox). The
   // new-thread composer is always a pane's primary composer.
   const isFocusedPane = useOptionalPaneContext()?.isFocused ?? true;
@@ -330,6 +338,19 @@ export const NewThreadPromptBoxUI = memo(function NewThreadPromptBoxUI({
   );
   const permissionPickerDisabledByPlanMode =
     shouldDisablePermissionPickerForPromptMode(promptModeInput);
+  const selectedProject = project?.projects.find(
+    (candidate) => candidate.id === project.value,
+  );
+  const mobileProjectLabel =
+    selectedProject?.githubRepository?.nameWithOwner ??
+    selectedProject?.name ??
+    "No project";
+  const mobileWorkspaceLabel =
+    modeConfig.githubWorkflow?.label ??
+    modeConfig.branch.triggerLabel ??
+    modeConfig.branch.value ??
+    modeConfig.branch.currentBranch ??
+    "Choose workspace";
   const submitTitle = isSubmitting
     ? "Submitting..."
     : execution.model.isLoading
@@ -404,53 +425,135 @@ export const NewThreadPromptBoxUI = memo(function NewThreadPromptBoxUI({
           />
         </PluginComposerHostProvider>
       </PluginComposerViewProvider>
-      {/* Strip below the prompt-box card: optional project + env + branch (or
-          worktree) on the left, permission picker pinned to the right. `mt-1`
-          reproduces the 4px gap main got from a
-          `space-y-1` wrapper in RootComposeView (now gone since the
-          standalone project row was removed). */}
-      <div
-        className={cn(
-          "mt-1 flex items-center justify-between gap-2 px-3.5",
-          isMobileQuickComposerCompact && "hidden",
-        )}
-      >
-        <div className="flex min-w-0 flex-1 items-center gap-1">
-          {project ? (
-            <ProjectSelector
-              projects={project.projects}
-              value={project.value}
-              onChange={project.onChange}
-              allowNoProject={project.allowNoProject ?? false}
-              createProject={project.createProject}
-              disabled={project.disabled}
-              onOpenChange={project.onOpenChange}
-              className="shrink-0"
+      {mobileQuickComposer && isCompactViewport ? (
+        <>
+          <button
+            type="button"
+            className={cn(
+              "mt-1 flex min-h-11 w-full items-center gap-2 rounded-lg px-3.5 text-left text-xs text-muted-foreground transition-colors hover:bg-state-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+              isMobileQuickComposerCompact && "hidden",
+            )}
+            aria-label={`Edit task context. ${mobileProjectLabel}, ${mobileWorkspaceLabel}`}
+            onClick={() => setMobileTaskContextOpen(true)}
+          >
+            <Icon name="FolderGit" className="size-4 shrink-0" aria-hidden />
+            <span className="min-w-0 flex-1 truncate">
+              {mobileProjectLabel} · {mobileWorkspaceLabel}
+            </span>
+            <span className="shrink-0 text-foreground">Edit</span>
+          </button>
+          <Drawer
+            open={mobileTaskContextOpen}
+            onOpenChange={setMobileTaskContextOpen}
+          >
+            <DrawerContent className="max-h-[92dvh] overflow-y-auto pb-[max(1rem,env(safe-area-inset-bottom))]">
+              <div className="px-5 pb-4 pt-2">
+                <DrawerTitle className="text-lg font-medium">
+                  Task context
+                </DrawerTitle>
+                <DrawerDescription className="mt-1 text-sm leading-5">
+                  Choose where this task runs and what it can change.
+                </DrawerDescription>
+              </div>
+              <div className="grid gap-5 px-5">
+                {project ? (
+                  <section className="grid gap-2" aria-label="Repository">
+                    <p className="text-xs font-medium text-muted-foreground">
+                      Repository
+                    </p>
+                    <div className="flex min-h-11 items-center rounded-lg border border-border px-2">
+                      <ProjectSelector
+                        projects={project.projects}
+                        value={project.value}
+                        onChange={project.onChange}
+                        allowNoProject={project.allowNoProject ?? false}
+                        createProject={project.createProject}
+                        disabled={project.disabled}
+                        onOpenChange={project.onOpenChange}
+                      />
+                    </div>
+                  </section>
+                ) : null}
+                <section className="grid gap-2" aria-label="Workspace">
+                  <p className="text-xs font-medium text-muted-foreground">
+                    Workspace and Git source
+                  </p>
+                  <div className="flex min-h-11 flex-wrap items-center gap-1 rounded-lg border border-border px-2 py-1.5">
+                    {project?.value !== null ? (
+                      <ThreadEnvSlot
+                        environment={modeConfig.environment}
+                        branch={modeConfig.branch}
+                        worktree={modeConfig.worktree}
+                        githubWorkflow={modeConfig.githubWorkflow}
+                      />
+                    ) : (
+                      <ProjectlessMachineSlot
+                        environment={modeConfig.environment}
+                      />
+                    )}
+                  </div>
+                </section>
+                <section className="grid gap-2" aria-label="Permission">
+                  <p className="text-xs font-medium text-muted-foreground">
+                    Permission
+                  </p>
+                  <div className="flex min-h-11 items-center rounded-lg border border-border px-2">
+                    <PermissionModePicker
+                      value={modeConfig.permission.value}
+                      options={modeConfig.permission.options}
+                      onChange={modeConfig.permission.onChange}
+                      supported={modeConfig.permission.supported}
+                      disabled={permissionPickerDisabledByPlanMode}
+                      showChevronWhenDisabled={
+                        permissionPickerDisabledByPlanMode
+                      }
+                      displayOverride={permissionDisplayOverride}
+                    />
+                  </div>
+                </section>
+              </div>
+            </DrawerContent>
+          </Drawer>
+        </>
+      ) : (
+        <div className="mt-1 flex items-center justify-between gap-2 px-3.5">
+          <div className="flex min-w-0 flex-1 items-center gap-1">
+            {project ? (
+              <ProjectSelector
+                projects={project.projects}
+                value={project.value}
+                onChange={project.onChange}
+                allowNoProject={project.allowNoProject ?? false}
+                createProject={project.createProject}
+                disabled={project.disabled}
+                onOpenChange={project.onOpenChange}
+                className="shrink-0"
+              />
+            ) : null}
+            {project?.value !== null ? (
+              <ThreadEnvSlot
+                environment={modeConfig.environment}
+                branch={modeConfig.branch}
+                worktree={modeConfig.worktree}
+                githubWorkflow={modeConfig.githubWorkflow}
+              />
+            ) : (
+              <ProjectlessMachineSlot environment={modeConfig.environment} />
+            )}
+          </div>
+          <div className="flex shrink-0 items-center gap-2">
+            <PermissionModePicker
+              value={modeConfig.permission.value}
+              options={modeConfig.permission.options}
+              onChange={modeConfig.permission.onChange}
+              supported={modeConfig.permission.supported}
+              disabled={permissionPickerDisabledByPlanMode}
+              showChevronWhenDisabled={permissionPickerDisabledByPlanMode}
+              displayOverride={permissionDisplayOverride}
             />
-          ) : null}
-          {project?.value !== null ? (
-            <ThreadEnvSlot
-              environment={modeConfig.environment}
-              branch={modeConfig.branch}
-              worktree={modeConfig.worktree}
-              githubWorkflow={modeConfig.githubWorkflow}
-            />
-          ) : (
-            <ProjectlessMachineSlot environment={modeConfig.environment} />
-          )}
+          </div>
         </div>
-        <div className="flex shrink-0 items-center gap-2">
-          <PermissionModePicker
-            value={modeConfig.permission.value}
-            options={modeConfig.permission.options}
-            onChange={modeConfig.permission.onChange}
-            supported={modeConfig.permission.supported}
-            disabled={permissionPickerDisabledByPlanMode}
-            showChevronWhenDisabled={permissionPickerDisabledByPlanMode}
-            displayOverride={permissionDisplayOverride}
-          />
-        </div>
-      </div>
+      )}
     </div>
   );
 });

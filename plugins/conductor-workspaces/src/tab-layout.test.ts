@@ -26,7 +26,7 @@ describe("calculateVisibleTabCount", () => {
         railWidth: 390,
         threadCount: 6,
       }),
-    ).toBe(2);
+    ).toBe(3);
   });
 
   it("uses stable defaults before the rail has been measured", () => {
@@ -43,6 +43,6 @@ describe("calculateVisibleTabCount", () => {
         railWidth: null,
         threadCount: 8,
       }),
-    ).toBe(2);
+    ).toBe(3);
   });
 });

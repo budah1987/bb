@@ -14,10 +14,15 @@ import { describePaneContent } from "./compactWorkspaceLabels";
  */
 export function CompactWorkspacePreviewSurface({
   content,
+  kind,
 }: {
   /** `null` previews the Command Center (the root compose page). */
   content: PaneContent | null;
+  kind?: "pane" | "command-center" | "right-panel" | "return";
 }) {
+  if (kind === "right-panel") {
+    return <RightPanelShell />;
+  }
   if (content === null || content.kind === "new-thread") {
     return <CommandCenterShell />;
   }
@@ -25,6 +30,20 @@ export function CompactWorkspacePreviewSurface({
     return <ThreadShell />;
   }
   return <PanelShell content={content} />;
+}
+
+function RightPanelShell() {
+  return (
+    <div className="flex min-h-0 flex-1 flex-col gap-4">
+      <ShellHeader label="Right panel" />
+      <div className="grid grid-cols-3 gap-2">
+        <Skeleton className="h-8 rounded-md" />
+        <Skeleton className="h-8 rounded-md" />
+        <Skeleton className="h-8 rounded-md" />
+      </div>
+      <Skeleton className="min-h-0 flex-1 rounded-lg" />
+    </div>
+  );
 }
 
 function ShellHeader({ label }: { label: string }) {

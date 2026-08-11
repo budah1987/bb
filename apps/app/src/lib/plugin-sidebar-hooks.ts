@@ -27,7 +27,7 @@ import {
   getProjectComposeRoutePath,
   getThreadRoutePath,
 } from "./route-paths";
-import { buildPluginWorkspaceDraftLocationState } from "./plugin-new-thread-draft";
+import { resolvePluginWorkspaceDraftNavigationState } from "./plugin-new-thread-draft";
 
 const EMPTY_THREADS: readonly PluginSidebarThread[] = [];
 const EMPTY_PROJECTS: readonly PluginSidebarProject[] = [];
@@ -175,23 +175,14 @@ export function useSidebarThreadActions(): PluginSidebarThreadActions {
                   (projectId === undefined || entry.projectId === projectId),
               );
         const sameEnvironmentState =
-          sameEnvironmentRequest !== undefined &&
-          requestedEnvironmentId !== undefined &&
-          reusableEnvironmentEntry !== undefined
-            ? {
-                ...(requestedEnvironmentId === null
-                  ? {}
-                  : { reuseEnvironmentId: requestedEnvironmentId }),
-                ...buildPluginWorkspaceDraftLocationState({
-                  environmentId: requestedEnvironmentId,
-                  projectId: projectId ?? reusableEnvironmentEntry.projectId,
-                }),
-                ...(requestedEnvironmentId !== null &&
-                sameEnvironmentRequest.locked
-                  ? { lockEnvironment: true }
-                  : {}),
-              }
-            : null;
+          sameEnvironmentRequest === undefined
+            ? null
+            : resolvePluginWorkspaceDraftNavigationState({
+                environmentId: requestedEnvironmentId,
+                fallbackProjectId: reusableEnvironmentEntry?.projectId,
+                locked: sameEnvironmentRequest.locked,
+                projectId,
+              });
         const state =
           options?.focusPrompt ||
           options?.experimental_startGithubWorkflow ||

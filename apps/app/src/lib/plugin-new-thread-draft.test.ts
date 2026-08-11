@@ -2,9 +2,24 @@ import { describe, expect, it } from "vitest";
 import {
   buildPluginWorkspaceDraftLocationState,
   readPluginNewThreadDraftKeyFromLocationState,
+  resolvePluginWorkspaceDraftNavigationState,
 } from "./plugin-new-thread-draft";
 
 describe("plugin workspace new-thread drafts", () => {
+  it("keeps an explicit environment without a loaded sidebar entry", () => {
+    expect(
+      resolvePluginWorkspaceDraftNavigationState({
+        environmentId: "env_1",
+        locked: true,
+        projectId: "proj_1",
+      }),
+    ).toEqual({
+      lockEnvironment: true,
+      pluginNewThreadDraftKey: "sidebar-workspace:proj_1:env_1",
+      reuseEnvironmentId: "env_1",
+    });
+  });
+
   it("keeps the draft stable within one workspace and isolated across workspaces", () => {
     const first = buildPluginWorkspaceDraftLocationState({
       projectId: "proj_1",

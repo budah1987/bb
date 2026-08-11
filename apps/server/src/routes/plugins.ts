@@ -193,7 +193,10 @@ export function registerPluginRoutes(
     MAX_CACHED_APP_ASSETS,
   );
 
-  app.get("/plugins", (context) => context.json({ plugins: plugins.list() }));
+  app.get("/plugins", (context) => {
+    context.header("cache-control", "no-store");
+    return context.json({ plugins: plugins.list() });
+  });
 
   // Fast metadata for the bb CLI's help/proxy path and the app's
   // host-rendered UI contributions: no plugin code runs; empty (not an
