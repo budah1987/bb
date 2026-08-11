@@ -12,14 +12,15 @@ export const BB_DESKTOP_BROWSER_MAX_ANNOTATION_SELECTOR_LENGTH = 2048;
 export const BB_DESKTOP_BROWSER_MAX_ANNOTATION_COMMENT_LENGTH = 8000;
 
 /**
- * Pixel rect (CSS px, which equal device-independent points on macOS) of the
- * panel region the native browser view must overlay, measured by the renderer
- * against its own layout viewport. This rect is the single placement
- * authority: the renderer re-measures and pushes it whenever its layout moves
- * the panel, and the desktop main process only intersects it with the live
- * window content bounds — it never extrapolates placement from native window
- * resizes, whose size the renderer's (possibly lagging) chrome paint does not
- * yet reflect.
+ * Pixel rect of the panel region the native browser view must overlay,
+ * measured by the renderer against its own layout viewport. The preload
+ * converts these CSS pixels to native window points at the current page zoom
+ * before it sends the rect to the desktop main process. This rect is the
+ * single placement authority: the renderer re-measures and pushes it whenever
+ * its layout moves the panel, and the desktop main process only intersects it
+ * with the live window content bounds — it never extrapolates placement from
+ * native window resizes, whose size the renderer's (possibly lagging) chrome
+ * paint does not yet reflect.
  */
 export const bbDesktopBrowserViewBoundsSchema = z
   .object({

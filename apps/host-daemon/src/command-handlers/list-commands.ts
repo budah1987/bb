@@ -3,6 +3,7 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import type { HostDaemonOnlineRpcResult } from "@bb/host-daemon-contract";
+import type { ProviderNativeSkillRoots } from "@bb/domain";
 import { z } from "zod";
 import {
   CommandDispatchError,
@@ -21,6 +22,7 @@ export interface CommandRootResolution {
   /** Codex user-home base (`$CODEX_HOME` or `~/.codex`). */
   codexHome: string;
   providerId: string;
+  nativeSkillRoots?: ProviderNativeSkillRoots;
 }
 
 type ClaudePluginScope = "managed" | "project" | "local" | "user";
@@ -117,6 +119,7 @@ const CODEX_PLUGIN_MANIFEST_FILE_NAME = "plugin.json";
 const CODEX_CONFIG_FILE_NAME = "config.toml";
 const AGENTS_DIR_NAME = ".agents";
 const CLAUDE_DIR_NAME = ".claude";
+const CURSOR_DIR_NAME = ".cursor";
 const CLAUDE_PLUGIN_DIR_NAME = ".claude-plugin";
 const CLAUDE_PLUGIN_MANIFEST_FILE_NAME = "plugin.json";
 const CLAUDE_PLUGIN_INSTALLED_FILE_NAME = "installed_plugins.json";
@@ -1032,6 +1035,7 @@ export async function resolveProviderCommandScanRoots(
   resolution: CommandRootResolution,
 ): Promise<CommandScanRoot[]> {
   const roots = resolveCommandScanRoots(resolution);
+  roots.push(...resolveConfiguredSkillScanRoots(resolution));
   if (resolution.providerId === "codex") {
     if (resolution.cwd !== null) {
       roots.push(...(await resolveCodexProjectSkillScanRoots(resolution.cwd)));
@@ -1050,6 +1054,40 @@ export async function resolveProviderCommandScanRoots(
     ...(await resolveClaudePluginCommandScanRoots({
       cwd: resolution.cwd,
       homeDir: resolution.homeDir,
+    })),
+  );
+  return roots;
+}
+
+function resolveConfiguredSkillScanRoots(
+  resolution: CommandRootResolution,
+): CommandScanRoot[] {
+  const configured = resolution.nativeSkillRoots;
+  if (configured === undefined) {
+    return [];
+  }
+  const roots: CommandScanRoot[] = [];
+  if (resolution.cwd !== null) {
+    const projectRoot = resolution.cwd;
+    roots.push(
+      ...configured.project.map((relativePath) => ({
+        rootPath: path.resolve(projectRoot, relativePath),
+        shape: "skill" as const,
+        namePrefix: "",
+        source: "skill" as const,
+        origin: "project" as const,
+        skillIdentitySeed: `${resolution.providerId}:provider-project:${relativePath}`,
+      })),
+    );
+  }
+  roots.push(
+    ...configured.user.map((relativePath) => ({
+      rootPath: path.resolve(resolution.homeDir, relativePath),
+      shape: "skill" as const,
+      namePrefix: "",
+      source: "skill" as const,
+      origin: "user" as const,
+      skillIdentitySeed: `${resolution.providerId}:provider-user:${relativePath}`,
     })),
   );
   return roots;
@@ -1176,6 +1214,20 @@ export function resolveCommandScanRoots(
     return roots;
   }
 
+  if (resolution.providerId === "acp-cursor") {
+    if (resolution.cwd !== null) {
+      roots.push({
+        rootPath: path.join(resolution.cwd, CURSOR_DIR_NAME, "skills"),
+        shape: "skill",
+        namePrefix: "",
+        source: "skill",
+        origin: "project",
+        skillIdentitySeed: "acp-cursor:provider-project:.cursor",
+      });
+    }
+    return roots;
+  }
+
   return roots;
 }
 
@@ -1191,6 +1243,9 @@ export async function listHostCommands(
     homeDir,
     codexHome: resolveCodexHome(homeDir),
     providerId: command.providerId,
+    ...(command.nativeSkillRoots !== undefined
+      ? { nativeSkillRoots: command.nativeSkillRoots }
+      : {}),
   });
   const commands = await discoverProviderCommands({ roots });
   return { commands };

@@ -659,6 +659,9 @@ function ThreadRowComponent({
         ) : null}
       </span>
       <span className="flex shrink-0 items-center gap-0.5">
+        {/* BBamir keeps the shortcut pill subordinate to row indicators.
+            Upstream #1297 shows the pill unconditionally; we deliberately keep
+            ours, so a row already carrying an indicator stays uncluttered. */}
         {shortcut &&
         trailingIndicatorKind === "none" &&
         pluginThreadRowStatus === null &&

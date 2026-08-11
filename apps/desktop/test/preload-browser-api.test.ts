@@ -79,6 +79,7 @@ const electronMock = vi.hoisted(() => {
   let exposedSpellcheckApi: {
     getCorrectionContext(word: string): unknown;
   } | null = null;
+  let zoomFactor = 1;
 
   return {
     get exposedApi() {
@@ -102,6 +103,10 @@ const electronMock = vi.hoisted(() => {
       invokeCalls.length = 0;
       listeners.clear();
       sendCalls.length = 0;
+      zoomFactor = 1;
+    },
+    setZoomFactor(nextZoomFactor: number): void {
+      zoomFactor = nextZoomFactor;
     },
     contextBridge: {
       exposeInMainWorld(name: string, api: unknown): void {
@@ -134,6 +139,9 @@ const electronMock = vi.hoisted(() => {
       },
     },
     webFrame: {
+      getZoomFactor(): number {
+        return zoomFactor;
+      },
       getWordSuggestions(word: string): string[] {
         return word === "recieve" ? ["receive", "relieve"] : [];
       },
@@ -337,6 +345,41 @@ describe("desktop preload browser API", () => {
       BB_DESKTOP_INSTALL_UPDATE_CHANNEL,
     );
   }, 10_000);
+
+  it("converts zoomed renderer bounds to native window coordinates", async () => {
+    const api = await loadPreload();
+    electronMock.setZoomFactor(1.25);
+
+    api.browser.attach({
+      tabId: "browser:zoomed",
+      url: "https://example.com/",
+      bounds: { x: 800, y: 40, width: 400, height: 600 },
+      visible: false,
+    });
+    api.browser.setBounds({
+      tabId: "browser:zoomed",
+      bounds: { x: 801, y: 41, width: 399, height: 599 },
+    });
+
+    expect(electronMock.sendCalls).toEqual([
+      {
+        channel: BB_DESKTOP_BROWSER_ATTACH_CHANNEL,
+        payload: {
+          tabId: "browser:zoomed",
+          url: "https://example.com/",
+          bounds: { x: 1000, y: 50, width: 500, height: 750 },
+          visible: false,
+        },
+      },
+      {
+        channel: BB_DESKTOP_BROWSER_SET_BOUNDS_CHANNEL,
+        payload: {
+          tabId: "browser:zoomed",
+          bounds: { x: 1001, y: 51, width: 499, height: 749 },
+        },
+      },
+    ]);
+  });
 
   it("validates browser event payloads before notifying renderer listeners", async () => {
     const api = await loadPreload();

@@ -20,6 +20,9 @@ importers:
       esbuild:
         specifier: ^0.28.0
         version: 0.28.1
+      http-proxy-3:
+        specifier: ^1.23.2
+        version: 1.23.3
       prettier:
         specifier: ^3.8.3
         version: 3.8.3
@@ -393,6 +396,9 @@ importers:
       eslint-plugin-react-hooks:
         specifier: ^7.0.1
         version: 7.0.1(eslint@9.39.3(jiti@2.7.0))
+      lightningcss:
+        specifier: ^1.32.0
+        version: 1.32.0
       mdast-util-to-hast:
         specifier: ^13.2.1
         version: 13.2.1
@@ -609,6 +615,9 @@ importers:
       '@bb/config':
         specifier: workspace:*
         version: link:../../packages/config
+      '@bb/connect-client':
+        specifier: workspace:*
+        version: link:../../packages/connect-client
       '@bb/domain':
         specifier: workspace:*
         version: link:../../packages/domain
@@ -1923,6 +1932,12 @@ importers:
       '@bb/config':
         specifier: workspace:*
         version: link:../config
+      '@bb/db':
+        specifier: workspace:*
+        version: link:../db
+      '@bb/domain':
+        specifier: workspace:*
+        version: link:../domain
       '@bb/host-daemon-contract':
         specifier: workspace:*
         version: link:../host-daemon-contract
@@ -8886,6 +8901,15 @@ packages:
   flatted@3.3.3:
     resolution: {integrity: sha512-GX+ysw4PBCz0PzosHDepZGANEuFCMLrnRTiEy9McGjmkCQYwRq4A/X786G/fjM/+OjsWSU1ZrY5qyARZmO/uwg==}
 
+  follow-redirects@1.16.0:
+    resolution: {integrity: sha512-y5rN/uOsadFT/JfYwhxRS5R7Qce+g3zG97+JrtFZlC9klX/W5hD7iiLzScI4nZqUS7DNUdhPgw4xI8W2LuXlUw==}
+    engines: {node: '>=4.0'}
+    peerDependencies:
+      debug: '*'
+    peerDependenciesMeta:
+      debug:
+        optional: true
+
   foreground-child@3.3.1:
     resolution: {integrity: sha512-gIXjKqtFuWEgzFRJA9WCQeSJLZDjgJUOMCMzxtvFq/37KojM1BFGufqsCy0r4qSQmYLsZYMeyRqzIWOMup03sw==}
     engines: {node: '>=14'}
@@ -9225,6 +9249,10 @@ packages:
   http-errors@2.0.1:
     resolution: {integrity: sha512-4FbRdAX+bSdmo4AUFuS0WNiPz8NgFt+r8ThgNWmlrjQjt1Q7ZR9+zTlce2859x4KSXrwIsaeTqDoKQmtP8pLmQ==}
     engines: {node: '>= 0.8'}
+
+  http-proxy-3@1.23.3:
+    resolution: {integrity: sha512-zm8JCrJUwB3Rn0HJypwwDraljDt7YbF+r7Gz0exDRlaT8Yimjs5VRfwug1GrhoasMna1DjwHeEs48+iKxCozyA==}
+    engines: {node: '>=18'}
 
   http-proxy-agent@7.0.2:
     resolution: {integrity: sha512-T1gkAiYYDWYx3V5Bmyu7HcfcvL7mUrTWiM6yOfa3PIphViJ/gFPbvidQ+veqSOHci/PxBcDabeUNCzpOODJZig==}
@@ -17781,6 +17809,10 @@ snapshots:
 
   flatted@3.3.3: {}
 
+  follow-redirects@1.16.0(debug@4.4.3):
+    optionalDependencies:
+      debug: 4.4.3
+
   foreground-child@3.3.1:
     dependencies:
       cross-spawn: 7.0.6
@@ -18288,6 +18320,13 @@ snapshots:
       setprototypeof: 1.2.0
       statuses: 2.0.2
       toidentifier: 1.0.1
+
+  http-proxy-3@1.23.3:
+    dependencies:
+      debug: 4.4.3
+      follow-redirects: 1.16.0(debug@4.4.3)
+    transitivePeerDependencies:
+      - supports-color
 
   http-proxy-agent@7.0.2:
     dependencies:

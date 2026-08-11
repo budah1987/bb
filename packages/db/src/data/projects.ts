@@ -108,6 +108,87 @@ function getPublicProjectForMutation(
   );
 }
 
+function getPublicProjectWithLocalPathSource(
+  db: DbQueryConnection,
+  source: CreateProjectLocalPathSourceInput,
+) {
+  return (
+    db
+      .select({ project: projects, source: projectSources })
+      .from(projects)
+      .innerJoin(projectSources, eq(projectSources.projectId, projects.id))
+      .where(
+        and(
+          publicProjectFilter(),
+          eq(projectSources.type, source.type),
+          eq(projectSources.hostId, source.hostId),
+          eq(projectSources.path, source.path),
+        ),
+      )
+      .orderBy(asc(projects.sortKey), asc(projects.id))
+      .limit(1)
+      .get() ?? null
+  );
+}
+
+export function getPublicProjectByLocalPathSource(
+  db: DbQueryConnection,
+  source: CreateProjectLocalPathSourceInput,
+): ProjectRow | null {
+  return getPublicProjectWithLocalPathSource(db, source)?.project ?? null;
+}
+
+function insertProject(
+  tx: DbTransaction,
+  input: CreateProjectInput,
+  spaceId: string,
+) {
+  const now = Date.now();
+  const projectId = createProjectId();
+  const sourceId = createProjectSourceId();
+  const lastProject = getLastPublicProject(tx);
+  const sortKey = lastProject
+    ? createOrderKeyAfter({ previousKey: lastProject.sortKey })
+    : createOrderKeyBetween({ previousKey: null, nextKey: null });
+  const project = tx
+    .insert(projects)
+    .values({
+      id: projectId,
+      name: input.name,
+      githubAccountLogin: input.githubAccountLogin ?? null,
+      sortKey,
+      createdAt: now,
+      updatedAt: now,
+    })
+    .returning()
+    .get();
+  const source = tx
+    .insert(projectSources)
+    .values({
+      id: sourceId,
+      projectId,
+      type: input.source.type,
+      hostId: input.source.hostId,
+      path: input.source.path,
+      isDefault: true,
+      createdAt: now,
+      updatedAt: now,
+    })
+    .returning()
+    .get();
+  // Every project belongs to a space, so the membership row is part of creating
+  // one rather than a later backfill.
+  tx.insert(spaceProjects)
+    .values({ projectId, spaceId, updatedAt: now })
+    .run();
+  return { project, source };
+}
+
+function notifyProjectCreated(notifier: DbNotifier, projectId: string): void {
+  notifier.notifyProject(projectId, ["project-created"]);
+  notifier.notifyProject(projectId, ["project-sources-changed"]);
+}
+
 function resolveProjectNeighbor(
   db: DbQueryConnection,
   args: ResolveProjectNeighborArgs,
@@ -127,50 +208,69 @@ export function createProject(
   notifier: DbNotifier,
   input: CreateProjectInput,
 ) {
-  const now = Date.now();
-  const projectId = createProjectId();
-  const sourceId = createProjectSourceId();
   const defaultSpace = ensureDefaultSpace(db);
+  const { project, source } = db.transaction((tx) =>
+    insertProject(tx, input, defaultSpace.id),
+  );
+  notifyProjectCreated(notifier, project.id);
+  return { project, source: toProjectSource(source) };
+}
 
-  const { project, source } = db.transaction((tx) => {
-    const lastProject = getLastPublicProject(tx);
-    const sortKey = lastProject
-      ? createOrderKeyAfter({ previousKey: lastProject.sortKey })
-      : createOrderKeyBetween({ previousKey: null, nextKey: null });
-    const p = tx
-      .insert(projects)
-      .values({
-        id: projectId,
-        name: input.name,
-        githubAccountLogin: input.githubAccountLogin ?? null,
-        sortKey,
-        createdAt: now,
-        updatedAt: now,
-      })
-      .returning()
-      .get();
-    const s = tx
-      .insert(projectSources)
-      .values({
-        id: sourceId,
-        projectId,
-        type: input.source.type,
-        hostId: input.source.hostId,
-        path: input.source.path,
-        isDefault: true,
-        createdAt: now,
-        updatedAt: now,
-      })
-      .returning()
-      .get();
-    tx.insert(spaceProjects)
-      .values({ projectId, spaceId: defaultSpace.id, updatedAt: now })
-      .run();
-    return { project: p, source: s };
-  });
+export function findOrCreateProjectByLocalPathSource(
+  db: DbConnection,
+  notifier: DbNotifier,
+  input: CreateProjectInput,
+) {
+  const defaultSpace = ensureDefaultSpace(db);
+  const { created, githubAccountLoginChanged, project, source } =
+    db.transaction(
+      (tx) => {
+        const existing = getPublicProjectWithLocalPathSource(tx, input.source);
+        if (existing === null) {
+          return {
+            created: true,
+            githubAccountLoginChanged: false,
+            ...insertProject(tx, input, defaultSpace.id),
+          };
+        }
+        // Deduping hands back a row we did not insert, so an explicitly
+        // supplied GitHub account would otherwise be accepted and silently
+        // ignored. Apply it to the row we return; `undefined` means the caller
+        // said nothing about the account, so the stored value stands.
+        if (
+          input.githubAccountLogin === undefined ||
+          input.githubAccountLogin === existing.project.githubAccountLogin
+        ) {
+          return {
+            created: false,
+            githubAccountLoginChanged: false,
+            ...existing,
+          };
+        }
+        const project = tx
+          .update(projects)
+          .set({
+            githubAccountLogin: input.githubAccountLogin,
+            updatedAt: Date.now(),
+          })
+          .where(eq(projects.id, existing.project.id))
+          .returning()
+          .get();
+        return {
+          created: false,
+          githubAccountLoginChanged: true,
+          project,
+          source: existing.source,
+        };
+      },
+      { behavior: "immediate" },
+    );
 
-  notifier.notifyProject(projectId, ["project-created"]);
-  notifier.notifyProject(projectId, ["project-sources-changed"]);
+  if (created) {
+    notifyProjectCreated(notifier, project.id);
+  } else if (githubAccountLoginChanged) {
+    notifier.notifyProject(project.id, ["project-updated"]);
+  }
   return { project, source: toProjectSource(source) };
 }
 

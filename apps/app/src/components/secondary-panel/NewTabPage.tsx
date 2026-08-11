@@ -60,11 +60,12 @@ function SimulatorActions({
  * overlays that can be occluded by native browser/webview surfaces.
  */
 export function NewTabPage({
+  autoFocus,
   currentThreadId,
   environmentId,
   hostId,
-  focusRequest,
   initialQuery,
+  onAutoFocusHandled,
   onOpenBrowser,
   onOpenNotes,
   onOpenSimulator,
@@ -83,7 +84,7 @@ export function NewTabPage({
         environmentId={environmentId}
         hostId={hostId}
         currentThreadId={currentThreadId}
-        focusRequest={focusRequest}
+        autoFocus={autoFocus}
         idleActions={
           onOpenSimulator ? (
             <SimulatorActions
@@ -105,6 +106,7 @@ export function NewTabPage({
           )
         }
         initialQuery={initialQuery}
+        onAutoFocusHandled={onAutoFocusHandled}
         onSelect={onSelect}
         recentItemsThreadId={recentItemsThreadId}
         showFileSearch={showFileSearch}

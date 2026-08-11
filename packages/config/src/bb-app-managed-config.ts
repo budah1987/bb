@@ -1,6 +1,10 @@
 import { join } from "node:path";
 import { agentProviderIdSchema, isAgentProviderId } from "@bb/agent-providers";
-import { acpNativeReasoningSchema, acpReasoningCliSchema } from "@bb/domain";
+import {
+  acpNativeReasoningSchema,
+  acpReasoningCliSchema,
+  providerNativeSkillRootsSchema,
+} from "@bb/domain";
 import { z } from "zod";
 
 export const BB_APP_CONFIG_FILE_NAME = "config.json";
@@ -96,6 +100,7 @@ export const customAcpAgentSchema = z
     modelCli: customAcpAgentModelCliSchema.optional(),
     reasoningCli: acpReasoningCliSchema.optional(),
     nativeReasoning: acpNativeReasoningSchema.optional(),
+    nativeSkillRoots: providerNativeSkillRootsSchema.optional(),
   })
   .strict()
   .superRefine((agent, context) => {
@@ -134,6 +139,7 @@ export const bbAppManagedConfigSchema = z
     config: bbAppManagedConfigValuesSchema.optional(),
     customAcpAgents: customAcpAgentsSchema.optional(),
     customModels: z.array(customProviderModelSchema).optional(),
+    sharedSkillRoots: providerNativeSkillRootsSchema.optional(),
     machineCredential: z.string().min(1).optional(),
     connectMachineId: z.string().min(1).optional(),
     serverUrl: z.string().min(1).optional(),
@@ -145,6 +151,7 @@ const bbAppManagedConfigBoundarySchema = z
     config: bbAppManagedConfigValuesSchema.optional(),
     customAcpAgents: z.array(z.unknown()).optional(),
     customModels: z.array(customProviderModelSchema).optional(),
+    sharedSkillRoots: providerNativeSkillRootsSchema.optional(),
     machineCredential: z.string().min(1).optional(),
     connectMachineId: z.string().min(1).optional(),
     serverUrl: z.string().min(1).optional(),
@@ -225,6 +232,9 @@ export function parseBbAppManagedConfig(
   }
   if (parsed.customModels !== undefined) {
     config.customModels = parsed.customModels;
+  }
+  if (parsed.sharedSkillRoots !== undefined) {
+    config.sharedSkillRoots = parsed.sharedSkillRoots;
   }
   if (parsed.serverUrl !== undefined) {
     config.serverUrl = parsed.serverUrl;

@@ -6,6 +6,20 @@ import {
 } from "../src/bb-app-managed-config.js";
 
 describe("bbAppManagedConfigSchema", () => {
+  it("parses shared user and project skill roots", () => {
+    expect(
+      parseBbAppManagedConfig({
+        sharedSkillRoots: {
+          user: [".agents/skills"],
+          project: [".agents/skills"],
+        },
+      }).sharedSkillRoots,
+    ).toEqual({
+      user: [".agents/skills"],
+      project: [".agents/skills"],
+    });
+  });
+
   it("parses custom models with a known provider", () => {
     const parsed = bbAppManagedConfigSchema.parse({
       customModels: [
@@ -192,6 +206,44 @@ describe("bbAppManagedConfigSchema", () => {
         defaultLevel: "medium",
       },
     });
+  });
+
+  it("keeps portable custom ACP native skill roots", () => {
+    const parsed = bbAppManagedConfigSchema.parse({
+      customAcpAgents: [
+        {
+          id: "amp",
+          displayName: "Amp",
+          command: "amp-acp",
+          nativeSkillRoots: {
+            user: [".agents/skills"],
+            project: [".agents/skills", ".amp/skills"],
+          },
+        },
+      ],
+    });
+
+    expect(parsed.customAcpAgents?.[0]?.nativeSkillRoots).toEqual({
+      user: [".agents/skills"],
+      project: [".agents/skills", ".amp/skills"],
+    });
+  });
+
+  it("rejects unsafe custom ACP native skill roots", () => {
+    for (const root of ["/tmp/skills", "../skills", "skills/../other"]) {
+      expect(
+        bbAppManagedConfigSchema.safeParse({
+          customAcpAgents: [
+            {
+              id: "amp",
+              displayName: "Amp",
+              command: "amp-acp",
+              nativeSkillRoots: { user: [root] },
+            },
+          ],
+        }).success,
+      ).toBe(false);
+    }
   });
 
   it("rejects custom ACP reasoningCli defaults outside supported levels", () => {
