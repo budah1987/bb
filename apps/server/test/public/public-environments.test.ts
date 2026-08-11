@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { getEnvironment, upsertHost } from "@bb/db";
+import { createTerminalSession, getEnvironment, upsertHost } from "@bb/db";
 import {
   reportQueuedCommandSuccess,
   waitForQueuedCommand,
@@ -405,6 +405,86 @@ describe("public environments", () => {
         harness.deps.sharedPorts.reconcileSharedPortsForHost(fixture.host.id)
           .ports,
       ).not.toContain(4173);
+    });
+  });
+
+  it("keeps one stable preview provider for a restarted development server", async () => {
+    await withTestHarness(async (harness) => {
+      const fixture = seedThreadFixture(harness, {
+        session: { id: "host-restarted-preview" },
+      });
+      const environmentPath = fixture.environment.path;
+      if (environmentPath === null) {
+        throw new Error("Expected a ready environment path");
+      }
+      for (const [id, title, now] of [
+        ["terminal-old", "Old dev server", 1],
+        ["terminal-new", "New dev server", 2],
+      ] as const) {
+        createTerminalSession(harness.db, {
+          cols: 120,
+          daemonSessionId: fixture.session.id,
+          devServerPort: 4173,
+          environmentId: fixture.environment.id,
+          hostId: fixture.host.id,
+          initialCwd: environmentPath,
+          launchCommand: "pnpm dev -- --port 4173",
+          now,
+          restartPolicy: "until_stopped",
+          rows: 32,
+          status: "exited",
+          supervisionDesired: false,
+          supervisionId: id,
+          threadId: fixture.thread.id,
+          title,
+        });
+      }
+
+      const responsePromise = harness.app.request(
+        `/api/v1/environments/${fixture.environment.id}/previews`,
+      );
+      const dockerCommand = await waitForQueuedCommand(
+        harness,
+        ({ command }) => command.type === "workspace.docker_mounts",
+      );
+      await reportQueuedCommandSuccess(harness, dockerCommand, {
+        containers: [],
+        outcome: "available",
+        workspaceGit: {
+          branch: "feature",
+          commonDir: "/repo/.git",
+          root: environmentPath,
+        },
+      });
+      const githubCommand = await waitForQueuedCommand(
+        harness,
+        ({ command }) => command.type === "workspace.github_deployments",
+      );
+      await reportQueuedCommandSuccess(harness, githubCommand, {
+        message: "Not a GitHub repository",
+        outcome: "unavailable",
+        reason: "not_github_repository",
+      });
+      const portCommand = await waitForQueuedCommand(
+        harness,
+        ({ command }) => command.type === "workspace.port_status",
+      );
+      await reportQueuedCommandSuccess(harness, portCommand, {
+        isListening: false,
+      });
+
+      const response = await responsePromise;
+      expect(response.status).toBe(200);
+      await expect(readJson(response)).resolves.toMatchObject({
+        providers: [
+          {
+            id: "terminal:4173",
+            label: "New dev server",
+            port: 4173,
+            source: "terminal",
+          },
+        ],
+      });
     });
   });
 

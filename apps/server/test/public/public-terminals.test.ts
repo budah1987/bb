@@ -1767,6 +1767,7 @@ describe("public terminal routes", () => {
       hostId: fixture.host.id,
       initialCwd: "/tmp/terminal-workspace",
       launchCommand: "pnpm dev",
+      devServerPort: 4173,
       rows: 30,
       restartPolicy: "until_stopped",
       status: "running",
@@ -1826,6 +1827,8 @@ describe("public terminal routes", () => {
     );
     expect(firstReplacement.id).toBe(openMessage.terminalId);
     expect(secondReplacement.id).toBe(openMessage.terminalId);
+    expect(firstReplacement.devServerPort).toBe(4173);
+    expect(secondReplacement.devServerPort).toBe(4173);
     expect(
       readDaemonMessages(fixture.socket).filter(
         (message) => message.type === "terminal.open",
