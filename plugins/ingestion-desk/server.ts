@@ -3,14 +3,18 @@ import type {
   PluginAgentToolResult,
   PluginCliContext,
 } from "@bb/plugin-sdk";
+import { defineRpcContract } from "@bb/plugin-sdk";
 import { z } from "zod";
 import {
   addSourceInputSchema,
+  bootstrapInputSchema,
+  bootstrapOutputSchema,
   caseIdInputSchema,
   createCaseInputSchema,
   ingestMeetingInputSchema,
-  ingestionRpcContract,
+  ingestionCaseSchema,
   publishCaseInputSchema,
+  reviseCaseInputSchema,
   submitDraftInputSchema,
   updateCaseInputSchema,
   type IngestionCase,
@@ -19,7 +23,21 @@ import { registerIngestionCli } from "./cli.js";
 import { publishMain } from "./publish-main.js";
 import { IngestionStore, migrations } from "./store.js";
 
-export { ingestionRpcContract } from "./contract.js";
+export const ingestionRpcContract = defineRpcContract({
+  bootstrap: { input: bootstrapInputSchema, output: bootstrapOutputSchema },
+  ingestMeeting: {
+    input: ingestMeetingInputSchema,
+    output: ingestionCaseSchema,
+  },
+  createCase: { input: createCaseInputSchema, output: ingestionCaseSchema },
+  updateCase: { input: updateCaseInputSchema, output: ingestionCaseSchema },
+  addSource: { input: addSourceInputSchema, output: ingestionCaseSchema },
+  startDraft: { input: caseIdInputSchema, output: ingestionCaseSchema },
+  submitDraft: { input: submitDraftInputSchema, output: ingestionCaseSchema },
+  reviseCase: { input: reviseCaseInputSchema, output: ingestionCaseSchema },
+  refreshCase: { input: caseIdInputSchema, output: ingestionCaseSchema },
+  publishCase: { input: publishCaseInputSchema, output: ingestionCaseSchema },
+});
 
 export const INGESTION_DESK_VERSION = "0.1.0";
 
@@ -343,9 +361,7 @@ export default async function plugin(bb: BbPluginApi) {
     parameters: submitDraftInputSchema,
     execute(input, context) {
       try {
-        return result(
-          submitDraft(input, context.threadId),
-        );
+        return result(submitDraft(input, context.threadId));
       } catch (error) {
         return failure(error);
       }

@@ -115,6 +115,11 @@
       // runtime (shared RPC contract), so the SDK dist must exist first.
       "dependsOn": ["topo", "@bb/plugin-sdk#build"]
     },
+    "bb-plugin-ingestion-desk#build": {
+      // The app build reads the SDK facade to generate its runtime shim.
+      // A fresh checkout has no SDK dist until this dependency completes.
+      "dependsOn": ["topo", "@bb/plugin-sdk#build"]
+    },
     "@bb/desktop#build": {
       "dependsOn": ["bb-app#build"],
       "env": ["BB_DESKTOP_RELEASE_CHANNEL"],

@@ -1,4 +1,3 @@
-import { defineRpcContract } from "@bb/plugin-sdk";
 import { z } from "zod";
 
 export const INGESTION_CASE_STATUSES = [
@@ -230,22 +229,6 @@ export const publishCaseInputSchema = z
   })
   .strict();
 
-export const ingestionRpcContract = defineRpcContract({
-  bootstrap: { input: bootstrapInputSchema, output: bootstrapOutputSchema },
-  ingestMeeting: {
-    input: ingestMeetingInputSchema,
-    output: ingestionCaseSchema,
-  },
-  createCase: { input: createCaseInputSchema, output: ingestionCaseSchema },
-  updateCase: { input: updateCaseInputSchema, output: ingestionCaseSchema },
-  addSource: { input: addSourceInputSchema, output: ingestionCaseSchema },
-  startDraft: { input: caseIdInputSchema, output: ingestionCaseSchema },
-  submitDraft: { input: submitDraftInputSchema, output: ingestionCaseSchema },
-  reviseCase: { input: reviseCaseInputSchema, output: ingestionCaseSchema },
-  refreshCase: { input: caseIdInputSchema, output: ingestionCaseSchema },
-  publishCase: { input: publishCaseInputSchema, output: ingestionCaseSchema },
-});
-
 export type IngestionCase = z.infer<typeof ingestionCaseSchema>;
 export type IngestionDetails = z.infer<typeof ingestionDetailsSchema>;
 export type IngestionSourceInput = z.input<typeof sourceInputSchema>;
@@ -254,4 +237,3 @@ export type IngestionOutput = z.infer<typeof outputSchema>;
 export type MeetingBriefing = z.infer<typeof meetingBriefingSchema>;
 export type ProjectSummary = z.infer<typeof projectSummarySchema>;
 export type GitParity = z.infer<typeof gitParitySchema>;
-export type IngestionRpcContract = typeof ingestionRpcContract;

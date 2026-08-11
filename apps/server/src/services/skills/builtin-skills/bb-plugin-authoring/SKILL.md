@@ -959,6 +959,20 @@ interface PluginThreadListProps {
   activeThreadId: string | null;
   activeProjectId: string | null;
   isCompactViewport: boolean;
+  /**
+   * The current Space, all Spaces, and repository movement actions. Older
+   * hosts can omit this experimental field.
+   */
+  experimental_spaces?: {
+    activeSpaceId: string;
+    spaces: readonly {
+      id: string;
+      name: string;
+      projectIds: readonly string[];
+    }[];
+    moveProject(projectId: string, spaceId: string): void;
+    moveProjects(projectIds: readonly string[], spaceId: string): void;
+  };
   /** Closes the mobile drawer and clears the host search field. Always call it
       after opening a thread, or the sidebar stays in search mode. */
   onNavigate: () => void;
