@@ -11,6 +11,8 @@ export const appSettingsSchema = z
      * asking the local host daemon to hold a caffeinate assertion.
      */
     caffeinate: z.boolean(),
+    /** Default restart policy for named command terminals used as dev servers. */
+    devServerRestartPolicy: z.enum(["never", "until_stopped"]),
     /** Show shortcut hints after holding Command or Control. */
     showKeyboardHints: z.boolean(),
     /**
@@ -46,6 +48,7 @@ export type AppSettings = z.infer<typeof appSettingsSchema>;
 
 export const defaultAppSettings: AppSettings = {
   caffeinate: false,
+  devServerRestartPolicy: "until_stopped",
   showKeyboardHints: true,
   steerActiveThreadOnEnter: false,
   showUnhandledProviderEvents: false,

@@ -70,7 +70,27 @@ Making your repo work with bb:
 
   bb environment docker-activity <id>     Compare mounted source and build timestamps
 
+  bb environment docker-control <id>      Restart or stop a repository Docker container
+    --container <id>                     Docker container ID (required)
+    --action <restart|stop>               Docker action (required)
+
   bb environment previews <id>            Show local and deployment preview providers
+
+  bb environment dev-server-start <id>    Start a durable development server
+    --thread <id>                        Owning thread (required)
+    --title <title>                      Server title (required)
+    --command <command>                  Command with a {port} placeholder (required)
+    --port <port>                        Preferred port
+
+  bb environment preview-share <id>       Share a local preview port through Connect
+    --port <port>                        Local port (required)
+
+  bb environment preview-unshare <id>     Stop sharing a local preview port
+    --port <port>                        Local port (required)
+
+  bb environment preview-bypass <id>      Create a Vercel protection-bypass URL
+    --provider <id>                      Preview provider ID (required)
+    --secret-env <name>                  Secret environment variable
 
   bb environment branches <id>            List local and remote branches
     --query <query>                       Filter branch names
@@ -122,6 +142,8 @@ Making your repo work with bb:
 
   bb environment publish-to-main <id>     Publish a committed worktree to main
     --preserve-target-changes              Preserve local main changes before publishing
+
+  bb environment update-from-main <id>    Rebase a clean worktree onto origin/main
 
   bb environment archive-threads <id>     Archive all threads in an environment
 

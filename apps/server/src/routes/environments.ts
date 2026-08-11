@@ -1,5 +1,6 @@
 import path from "node:path";
 import {
+  hasBusyThreadInEnvironment,
   recordEnvironmentWorkspaceRename,
   updateEnvironmentMetadata,
 } from "@bb/db";
@@ -30,6 +31,7 @@ import {
 import { ApiError } from "../errors.js";
 import {
   requireEnvironment,
+  requirePublicThread,
   requireReadyEnvironment,
 } from "../services/lib/entity-lookup.js";
 import { runLiveCommandAndWait } from "../services/hosts/live-command-wait.js";
@@ -54,7 +56,10 @@ import {
   getEnvironmentDockerActivity,
   getEnvironmentDockerProvenance,
 } from "../services/environments/docker-provenance.js";
-import { getEnvironmentPreviews } from "../services/environments/previews.js";
+import {
+  buildVercelProtectionBypassUrl,
+  getEnvironmentPreviews,
+} from "../services/environments/previews.js";
 import { assembleThreadPullRequest } from "../services/environments/pull-request.js";
 import { getGithubAccounts } from "../services/system/github-repositories.js";
 import {
@@ -309,6 +314,19 @@ function simulatorSharedPortOwner(environmentId: string): string {
   return `core:simulator:${environmentId}`;
 }
 
+function previewSharedPortOwner(environmentId: string, port: number): string {
+  return `core:preview:${environmentId}:${port}`;
+}
+
+function defaultDevServerPort(environmentId: string): number {
+  let hash = 2166136261;
+  for (const character of environmentId) {
+    hash ^= character.charCodeAt(0);
+    hash = Math.imul(hash, 16777619);
+  }
+  return 3000 + ((hash >>> 0) % 2000);
+}
+
 async function simulatorStreamConnection(
   deps: AppDeps,
   args: {
@@ -362,6 +380,144 @@ export function registerEnvironmentRoutes(app: Hono, deps: AppDeps): void {
   get(routes.get, (context) =>
     context.json(requireEnvironment(deps.db, context.req.param("id"))),
   );
+
+  post(routes.startDevServer, async (context, payload) => {
+    const environment = requireReadyEnvironment(
+      deps.db,
+      context.req.param("id"),
+    );
+    const thread = requirePublicThread(deps.db, payload.threadId);
+    if (thread.environmentId !== environment.id) {
+      throw new ApiError(
+        409,
+        "invalid_request",
+        "The thread does not use this environment",
+      );
+    }
+    const target = requireWorkspaceCommandTarget(environment);
+    const { port } = await callHostRetryableOnlineRpc(deps, {
+      hostId: target.hostId,
+      timeoutMs: COMMAND_TIMEOUT_MS,
+      command: {
+        type: "workspace.find_available_port",
+        candidateCount: 20,
+        environmentId: target.environmentId,
+        preferredPort:
+          payload.preferredPort ?? defaultDevServerPort(environment.id),
+        workspaceContext: target.workspaceContext,
+      },
+    });
+    return context.json(
+      await deps.terminalSessions.createTerminal({
+        payload: {
+          cols: 120,
+          devServerPort: port,
+          restartPolicy: "until_stopped",
+          rows: 32,
+          start: {
+            mode: "command",
+            command: payload.command.replaceAll("{port}", String(port)),
+          },
+          target: { kind: "thread", threadId: thread.id },
+          title: payload.title,
+        },
+      }),
+      201,
+    );
+  });
+
+  post(routes.dockerControl, async (context, payload) => {
+    const environment = requireReadyEnvironment(
+      deps.db,
+      context.req.param("id"),
+    );
+    const target = requireWorkspaceCommandTarget(environment);
+    return context.json(
+      await callHostOnlineRpc(deps, {
+        hostId: target.hostId,
+        timeoutMs: COMMAND_TIMEOUT_MS,
+        command: {
+          type: "workspace.docker_control",
+          action: payload.action,
+          containerId: payload.containerId,
+          environmentId: target.environmentId,
+          workspaceContext: target.workspaceContext,
+        },
+      }),
+    );
+  });
+
+  post(routes.sharePreviewPort, async (context, payload) => {
+    const environment = requireReadyEnvironment(
+      deps.db,
+      context.req.param("id"),
+    );
+    const target = requireWorkspaceCommandTarget(environment);
+    const ownerId = previewSharedPortOwner(environment.id, payload.port);
+    deps.sharedPorts.declareSharedPorts({
+      ownerId,
+      hostId: target.hostId,
+      ports: [payload.port],
+    });
+    try {
+      const identity = await deps.sharedPorts.ensureTunnelIdentity(
+        target.hostId,
+        () =>
+          callHostRetryableOnlineRpc(deps, {
+            command: { type: "connect-tunnel.ensure-identity" },
+            hostId: target.hostId,
+            timeoutMs: 30_000,
+          }),
+      );
+      return context.json({
+        port: payload.port,
+        url: `https://${identity.label}--${payload.port}.${identity.baseDomain}`,
+      });
+    } catch (error) {
+      deps.sharedPorts.clearDeclarationsForOwner(ownerId);
+      throw error;
+    }
+  });
+
+  post(routes.unsharePreviewPort, async (context, payload) => {
+    const environment = requireReadyEnvironment(
+      deps.db,
+      context.req.param("id"),
+    );
+    deps.sharedPorts.clearDeclarationsForOwner(
+      previewSharedPortOwner(environment.id, payload.port),
+    );
+    return context.json({ port: payload.port, shared: false as const });
+  });
+
+  post(routes.bypassPreviewProtection, async (context, payload) => {
+    const environment = requireReadyEnvironment(
+      deps.db,
+      context.req.param("id"),
+    );
+    const previews = await getEnvironmentPreviews(deps, {
+      target: requireWorkspaceCommandTarget(environment),
+    });
+    const provider = previews.providers.find(
+      (candidate) => candidate.id === payload.providerId,
+    );
+    if (provider?.source !== "github" || provider.url === null) {
+      throw new ApiError(
+        409,
+        "invalid_request",
+        "This preview does not support Vercel protection bypass",
+      );
+    }
+    const url = buildVercelProtectionBypassUrl(provider.url, payload.secret);
+    if (url === null) {
+      throw new ApiError(
+        409,
+        "invalid_request",
+        "This preview is not hosted by Vercel",
+      );
+    }
+    return context.json({ url });
+  });
 
   get(routes.simulatorStatus, async (context) => {
     const environment = requireReadyEnvironment(
@@ -1144,6 +1300,84 @@ export function registerEnvironmentRoutes(app: Hono, deps: AppDeps): void {
           localTargetAfterSha: result.localTargetAfterSha,
           preservedTargetChangesCommitSha:
             result.preservedTargetChangesCommitSha,
+        });
+      }
+      case "update_from_main": {
+        if (
+          !environment.isGitRepo ||
+          environment.workspaceProvisionType !== "managed-worktree"
+        ) {
+          throw new ApiError(
+            409,
+            "invalid_request",
+            "Updating from main requires a managed Git worktree",
+          );
+        }
+
+        if (
+          hasBusyThreadInEnvironment(deps.db, {
+            environmentId: environment.id,
+          })
+        ) {
+          throw new ApiError(
+            409,
+            "environment_busy",
+            "Stop active conversations in this workspace before updating from main",
+            {
+              details: {
+                kind: "workspace_busy",
+                action: "update_from_main",
+                reason: "active_threads",
+              },
+            },
+          );
+        }
+
+        const target = requireWorkspaceCommandTarget(environment);
+        const result = await runLiveCommandAndWait(deps, {
+          hostId: target.hostId,
+          timeoutMs: COMMAND_TIMEOUT_MS,
+          command: {
+            type: "workspace.update_from_target",
+            environmentId: target.environmentId,
+            workspaceContext: target.workspaceContext,
+            targetBranch: "main",
+          },
+        });
+
+        if (result.outcome === "blocked") {
+          throw new ApiError(
+            409,
+            "update_from_main_blocked",
+            `Cannot update from main: ${result.reason.replaceAll("_", " ")}`,
+            {
+              details: {
+                kind: "update_from_main_blocked",
+                reason: result.reason,
+                sourceBranch: result.sourceBranch,
+                targetBranch: "main",
+                previousSha: result.previousSha,
+                targetSha: result.targetSha,
+                conflictFiles: result.conflictFiles,
+              },
+            },
+          );
+        }
+
+        return context.json({
+          ok: true,
+          action: "update_from_main",
+          message:
+            result.outcome === "already_current"
+              ? "Workspace already includes the latest main changes"
+              : "Rebased workspace onto the latest main changes",
+          outcome: result.outcome,
+          sourceBranch: result.sourceBranch,
+          targetBranch: "main",
+          previousSha: result.previousSha,
+          currentSha: result.currentSha,
+          targetSha: result.targetSha,
+          rebasedCommitCount: result.rebasedCommitCount,
         });
       }
       case "pull_request_ready": {

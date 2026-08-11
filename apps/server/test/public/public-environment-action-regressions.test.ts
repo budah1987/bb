@@ -363,6 +363,168 @@ describe("public environment action regressions", () => {
     });
   });
 
+  it("updates a managed worktree from main through the host daemon", async () => {
+    await withTestHarness(async (harness) => {
+      const { host } = seedHostSession(harness.deps, {
+        id: "host-update-from-main",
+      });
+      const { project } = seedProjectWithSource(harness.deps, {
+        hostId: host.id,
+      });
+      const environment = seedEnvironment(harness.deps, {
+        hostId: host.id,
+        projectId: project.id,
+        managed: true,
+        workspaceProvisionType: "managed-worktree",
+        path: "/tmp/update-from-main",
+      });
+      seedThread(harness.deps, {
+        environmentId: environment.id,
+        projectId: project.id,
+        status: "idle",
+      });
+
+      const responsePromise = harness.app.request(
+        `/api/v1/environments/${environment.id}/actions`,
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ action: "update_from_main", options: {} }),
+        },
+      );
+      const command = await waitForQueuedCommand(
+        harness,
+        ({ command: queued }) =>
+          queued.type === "workspace.update_from_target" &&
+          queued.environmentId === environment.id,
+      );
+      expect(command.command).toMatchObject({ targetBranch: "main" });
+      await reportQueuedCommandSuccess(harness, command, {
+        outcome: "updated",
+        sourceBranch: "feature/update",
+        targetBranch: "main",
+        previousSha: "previous-sha",
+        currentSha: "current-sha",
+        targetSha: "target-sha",
+        rebasedCommitCount: 2,
+      });
+
+      const response = await responsePromise;
+      expect(response.status).toBe(200);
+      await expect(readJson(response)).resolves.toMatchObject({
+        ok: true,
+        action: "update_from_main",
+        outcome: "updated",
+        currentSha: "current-sha",
+        rebasedCommitCount: 2,
+      });
+    });
+  });
+
+  it("does not update from main while a conversation can use the workspace", async () => {
+    await withTestHarness(async (harness) => {
+      const { host } = seedHostSession(harness.deps, {
+        id: "host-update-from-main-busy",
+      });
+      const { project } = seedProjectWithSource(harness.deps, {
+        hostId: host.id,
+      });
+      const environment = seedEnvironment(harness.deps, {
+        hostId: host.id,
+        projectId: project.id,
+        managed: true,
+        workspaceProvisionType: "managed-worktree",
+        path: "/tmp/update-from-main-busy",
+      });
+      seedThread(harness.deps, {
+        environmentId: environment.id,
+        projectId: project.id,
+        status: "active",
+      });
+
+      const response = await harness.app.request(
+        `/api/v1/environments/${environment.id}/actions`,
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ action: "update_from_main", options: {} }),
+        },
+      );
+
+      expect(response.status).toBe(409);
+      await expect(readJson(response)).resolves.toMatchObject({
+        code: "environment_busy",
+        message:
+          "Stop active conversations in this workspace before updating from main",
+        details: {
+          kind: "workspace_busy",
+          action: "update_from_main",
+          reason: "active_threads",
+        },
+      });
+      expect(
+        listQueuedEnvironmentCommands(
+          harness,
+          "workspace.update_from_target",
+          environment.id,
+        ),
+      ).toHaveLength(0);
+    });
+  });
+
+  it("returns structured update conflicts from the host daemon", async () => {
+    await withTestHarness(async (harness) => {
+      const { host } = seedHostSession(harness.deps, {
+        id: "host-update-from-main-blocked",
+      });
+      const { project } = seedProjectWithSource(harness.deps, {
+        hostId: host.id,
+      });
+      const environment = seedEnvironment(harness.deps, {
+        hostId: host.id,
+        projectId: project.id,
+        managed: true,
+        workspaceProvisionType: "managed-worktree",
+        path: "/tmp/update-from-main-blocked",
+      });
+
+      const responsePromise = harness.app.request(
+        `/api/v1/environments/${environment.id}/actions`,
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ action: "update_from_main", options: {} }),
+        },
+      );
+      const command = await waitForQueuedCommand(
+        harness,
+        ({ command: queued }) =>
+          queued.type === "workspace.update_from_target" &&
+          queued.environmentId === environment.id,
+      );
+      await reportQueuedCommandSuccess(harness, command, {
+        outcome: "blocked",
+        reason: "rebase_conflict",
+        sourceBranch: "feature/update",
+        targetBranch: "main",
+        previousSha: "previous-sha",
+        targetSha: "target-sha",
+        conflictFiles: ["README.md"],
+      });
+
+      const response = await responsePromise;
+      expect(response.status).toBe(409);
+      await expect(readJson(response)).resolves.toMatchObject({
+        code: "update_from_main_blocked",
+        details: {
+          kind: "update_from_main_blocked",
+          reason: "rebase_conflict",
+          conflictFiles: ["README.md"],
+        },
+      });
+    });
+  });
+
   it("rejects legacy environment action payloads that still send threadId", async () => {
     await withTestHarness(async (harness) => {
       const { host } = seedHostSession(harness.deps, {

@@ -96,6 +96,7 @@ const CACHE_OWNER_QUERY_KEY_IMPORTS: CacheOwnerQueryKeyImportRegistry = {
     "environmentFilePreviewQueryKeyPrefix",
     "environmentMergeBaseBranchesQueryKeyPrefix",
     "environmentPathsQueryKeyPrefix",
+    "environmentPreviewsQueryKey",
     "environmentWorkspaceFilesQueryKeyPrefix",
     "environmentWorkStatusQueryKeyPrefix",
     "systemExecutionOptionsEnvironmentQueryKeyPrefix",

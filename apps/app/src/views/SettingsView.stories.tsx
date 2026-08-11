@@ -187,6 +187,9 @@ function useSettingsStoryState() {
   const [steerActiveThreadOnEnter, setSteerActiveThreadOnEnter] =
     useState(false);
   const [caffeinate, setCaffeinate] = useState(false);
+  const [devServerRestartPolicy, setDevServerRestartPolicy] = useState<
+    "never" | "until_stopped"
+  >("until_stopped");
   const [showUnhandledProviderEvents, setShowUnhandledProviderEvents] =
     useState(false);
   const [preferredAudioInputDeviceId, setPreferredAudioInputDeviceId] =
@@ -201,6 +204,7 @@ function useSettingsStoryState() {
   return {
     appearance,
     caffeinate,
+    devServerRestartPolicy,
     directoryTargetId,
     experiments,
     fileTargetId,
@@ -213,6 +217,7 @@ function useSettingsStoryState() {
     showUnhandledProviderEvents,
     setAppearance,
     setCaffeinate,
+    setDevServerRestartPolicy,
     setDirectoryTargetId,
     setExperiments,
     setFileTargetId,
@@ -259,9 +264,12 @@ function GeneralSettingsStory({
         caffeinateAvailable={caffeinateAvailable}
         caffeinateDisabled={false}
         caffeinateEnabled={state.caffeinate}
+        devServerRestartPolicy={state.devServerRestartPolicy}
+        devServerRestartPolicyDisabled={false}
         desktopBrowserAvailable={desktopBrowserAvailable}
         navigateToThreadAfterCreate={state.navigateToThreadAfterCreate}
         onCaffeinateChange={state.setCaffeinate}
+        onDevServerRestartPolicyChange={state.setDevServerRestartPolicy}
         onNavigateToThreadAfterCreateChange={
           state.setNavigateToThreadAfterCreate
         }

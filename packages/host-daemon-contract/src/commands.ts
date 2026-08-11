@@ -41,7 +41,7 @@ import {
   providerCliStatusResponseSchema,
 } from "./local.js";
 
-export const HOST_DAEMON_PROTOCOL_VERSION = 91 as const;
+export const HOST_DAEMON_PROTOCOL_VERSION = 93 as const;
 export const githubAccountLoginSchema = z.string().trim().min(1).max(255);
 
 export {
@@ -1208,6 +1208,29 @@ const workspaceDockerMountsCommandSchema = hostDaemonWorkspaceTargetSchema
   })
   .strict();
 
+const workspaceDockerControlCommandSchema = hostDaemonWorkspaceTargetSchema
+  .extend({
+    type: z.literal("workspace.docker_control"),
+    action: z.enum(["restart", "stop"]),
+    containerId: z.string().regex(/^[a-f0-9]{12,64}$/u),
+  })
+  .strict();
+
+const workspaceFindAvailablePortCommandSchema = hostDaemonWorkspaceTargetSchema
+  .extend({
+    type: z.literal("workspace.find_available_port"),
+    preferredPort: z.number().int().min(1024).max(65535),
+    candidateCount: z.number().int().min(1).max(100).default(20),
+  })
+  .strict();
+
+const workspacePortStatusCommandSchema = hostDaemonWorkspaceTargetSchema
+  .extend({
+    type: z.literal("workspace.port_status"),
+    port: z.number().int().min(1).max(65535),
+  })
+  .strict();
+
 const workspaceDockerPathActivityCommandSchema = hostDaemonWorkspaceTargetSchema
   .extend({
     type: z.literal("workspace.docker_path_activity"),
@@ -1320,6 +1343,13 @@ const workspacePublishCommittedBranchCommandSchema =
       preserveTargetChanges: z.boolean().default(false),
     })
     .strict();
+
+const workspaceUpdateFromTargetCommandSchema = hostDaemonWorkspaceTargetSchema
+  .extend({
+    type: z.literal("workspace.update_from_target"),
+    targetBranch: gitBranchNameSchema,
+  })
+  .strict();
 
 const workspaceRenameCommandSchema = z.discriminatedUnion("target", [
   hostDaemonWorkspaceTargetSchema
@@ -1444,6 +1474,18 @@ const workspaceDockerMountsResultSchema = z.discriminatedUnion("outcome", [
     })
     .strict(),
 ]);
+
+const workspaceDockerControlResultSchema = z
+  .object({ action: z.enum(["restart", "stop"]), containerId: z.string() })
+  .strict();
+
+const workspaceFindAvailablePortResultSchema = z
+  .object({ port: z.number().int().min(1024).max(65535) })
+  .strict();
+
+const workspacePortStatusResultSchema = z
+  .object({ isListening: z.boolean() })
+  .strict();
 
 const dockerPathActivitySchema = z
   .object({
@@ -1775,6 +1817,35 @@ const workspacePublishCommittedBranchResultSchema = z.discriminatedUnion(
       .strict(),
   ],
 );
+const workspaceUpdateFromTargetResultSchema = z.discriminatedUnion("outcome", [
+  z
+    .object({
+      outcome: z.enum(["updated", "already_current"]),
+      sourceBranch: gitBranchNameSchema,
+      targetBranch: gitBranchNameSchema,
+      previousSha: z.string().min(1),
+      currentSha: z.string().min(1),
+      targetSha: z.string().min(1),
+      rebasedCommitCount: z.number().int().nonnegative(),
+    })
+    .strict(),
+  z
+    .object({
+      outcome: z.literal("blocked"),
+      reason: z.enum([
+        "source_detached",
+        "source_dirty",
+        "source_is_target",
+        "rebase_conflict",
+      ]),
+      sourceBranch: gitBranchNameSchema.nullable(),
+      targetBranch: gitBranchNameSchema,
+      previousSha: z.string().min(1).nullable(),
+      targetSha: z.string().min(1).nullable(),
+      conflictFiles: z.array(z.string().min(1)),
+    })
+    .strict(),
+]);
 const workspaceRenameResultSchema = z.discriminatedUnion("target", [
   z.object({ target: z.literal("branch"), branchName: gitBranchNameSchema }),
   z.object({ target: z.literal("folder"), path: z.string().min(1) }),
@@ -2217,6 +2288,15 @@ export const hostDaemonCommandRegistry = {
     flushEventsBeforeResult: false,
     envLane: "write",
   }),
+  "workspace.update_from_target": defineHostDaemonCommandDescriptor({
+    type: "workspace.update_from_target",
+    schema: workspaceUpdateFromTargetCommandSchema,
+    resultSchema: workspaceUpdateFromTargetResultSchema,
+    transport: "settled",
+    retryable: false,
+    flushEventsBeforeResult: false,
+    envLane: "write",
+  }),
   "workspace.rename": defineHostDaemonCommandDescriptor({
     type: "workspace.rename",
     schema: workspaceRenameCommandSchema,
@@ -2640,6 +2720,24 @@ export const hostDaemonCommandRegistry = {
     flushEventsBeforeResult: false,
     envLane: "read",
   }),
+  "workspace.find_available_port": defineHostDaemonCommandDescriptor({
+    type: "workspace.find_available_port",
+    schema: workspaceFindAvailablePortCommandSchema,
+    resultSchema: workspaceFindAvailablePortResultSchema,
+    transport: "onlineRpc",
+    retryable: true,
+    flushEventsBeforeResult: false,
+    envLane: "read",
+  }),
+  "workspace.port_status": defineHostDaemonCommandDescriptor({
+    type: "workspace.port_status",
+    schema: workspacePortStatusCommandSchema,
+    resultSchema: workspacePortStatusResultSchema,
+    transport: "onlineRpc",
+    retryable: true,
+    flushEventsBeforeResult: false,
+    envLane: "read",
+  }),
   "workspace.docker_mounts": defineHostDaemonCommandDescriptor({
     type: "workspace.docker_mounts",
     schema: workspaceDockerMountsCommandSchema,
@@ -2648,6 +2746,15 @@ export const hostDaemonCommandRegistry = {
     retryable: true,
     flushEventsBeforeResult: false,
     envLane: "read",
+  }),
+  "workspace.docker_control": defineHostDaemonCommandDescriptor({
+    type: "workspace.docker_control",
+    schema: workspaceDockerControlCommandSchema,
+    resultSchema: workspaceDockerControlResultSchema,
+    transport: "onlineRpc",
+    retryable: false,
+    flushEventsBeforeResult: false,
+    envLane: "write",
   }),
   "workspace.docker_path_activity": defineHostDaemonCommandDescriptor({
     type: "workspace.docker_path_activity",

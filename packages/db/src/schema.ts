@@ -26,6 +26,7 @@ import type {
   ReasoningLevel,
   ServiceTier,
   TerminalSessionCloseReason,
+  TerminalRestartPolicy,
   TerminalSessionStatus,
   ThreadDynamicContextFileStatus,
   ThreadSearchSourceKind,
@@ -178,6 +179,19 @@ export const projectExecutionDefaults = sqliteTable(
   ],
 );
 
+export const projectManagerSettings = sqliteTable("project_manager_settings", {
+  projectId: text("project_id")
+    .primaryKey()
+    .references(() => projects.id, { onDelete: "cascade" }),
+  enabled: integer("enabled", { mode: "boolean" }).notNull(),
+  providerId: text("provider_id").notNull(),
+  model: text("model").notNull(),
+  reasoningLevel: text("reasoning_level").$type<ReasoningLevel>().notNull(),
+  serviceTier: text("service_tier").$type<ServiceTier>().notNull(),
+  permissionMode: text("permission_mode").$type<PermissionMode>().notNull(),
+  updatedAt: integer("updated_at").notNull(),
+});
+
 export const systemExperiments = sqliteTable("system_experiments", {
   id: text("id").primaryKey(),
   claudeCodeMockCliTraffic: integer("claude_code_mock_cli_traffic", {
@@ -195,6 +209,10 @@ export const appSettings = sqliteTable("app_settings", {
   caffeinate: integer("caffeinate", { mode: "boolean" })
     .notNull()
     .default(false),
+  devServerRestartPolicy: text("dev_server_restart_policy")
+    .$type<TerminalRestartPolicy>()
+    .notNull()
+    .default("until_stopped"),
   showKeyboardHints: integer("show_keyboard_hints", { mode: "boolean" })
     .notNull()
     .default(true),
@@ -926,6 +944,17 @@ export const terminalSessions = sqliteTable(
       { onDelete: "set null" },
     ),
     title: text("title").notNull(),
+    launchCommand: text("launch_command"),
+    devServerPort: integer("dev_server_port"),
+    restartPolicy: text("restart_policy")
+      .$type<TerminalRestartPolicy>()
+      .notNull()
+      .default("never"),
+    supervisionId: text("supervision_id"),
+    supervisionDesired: integer("supervision_desired", { mode: "boolean" })
+      .notNull()
+      .default(false),
+    supervisionAttempt: integer("supervision_attempt").notNull().default(0),
     initialCwd: text("initial_cwd").notNull(),
     cols: integer("cols").notNull(),
     rows: integer("rows").notNull(),
@@ -947,6 +976,11 @@ export const terminalSessions = sqliteTable(
       table.status,
     ),
     index("terminal_sessions_host_status_idx").on(table.hostId, table.status),
+    index("terminal_sessions_host_supervision_idx").on(
+      table.hostId,
+      table.supervisionDesired,
+    ),
+    index("terminal_sessions_supervision_idx").on(table.supervisionId),
     index("terminal_sessions_daemon_session_idx").on(table.daemonSessionId),
   ],
 );

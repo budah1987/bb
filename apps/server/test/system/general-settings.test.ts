@@ -1,5 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
-import { getAppSettings, setAppSettings } from "@bb/db";
+import {
+  createTerminalSession,
+  getAppSettings,
+  getTerminalSession,
+  setAppSettings,
+} from "@bb/db";
 import { appSettingsSchema, defaultAppSettings } from "@bb/domain";
 import { systemConfigResponseSchema } from "@bb/server-contract";
 import { schedulePrimaryHostCaffeinateReconciliation } from "../../src/services/system/app-settings.js";
@@ -111,6 +116,58 @@ describe("general settings", () => {
 
       await vi.waitFor(() => {
         expect(responder.requests).toHaveLength(1);
+      });
+    });
+  });
+
+  it("disarms existing servers when disabled without adopting them when re-enabled", async () => {
+    await withTestHarness(async (harness) => {
+      const { host, session } = seedHostSession(harness.deps);
+      const terminal = createTerminalSession(harness.db, {
+        cols: 80,
+        daemonSessionId: session.id,
+        environmentId: null,
+        hostId: host.id,
+        initialCwd: "/tmp/project",
+        launchCommand: "pnpm dev",
+        restartPolicy: "until_stopped",
+        rows: 24,
+        status: "running",
+        supervisionDesired: true,
+        supervisionId: "supervisor-1",
+        threadId: null,
+        title: "Web dev server",
+      });
+
+      const disable = await harness.app.request("/api/v1/settings/general", {
+        method: "PUT",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          ...defaultAppSettings,
+          devServerRestartPolicy: "never",
+        }),
+      });
+      expect(disable.status).toBe(200);
+      expect(
+        getTerminalSession(harness.db, { terminalId: terminal.id }),
+      ).toMatchObject({
+        restartPolicy: "never",
+        status: "running",
+        supervisionDesired: false,
+      });
+
+      const enable = await harness.app.request("/api/v1/settings/general", {
+        method: "PUT",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(defaultAppSettings),
+      });
+      expect(enable.status).toBe(200);
+      expect(
+        getTerminalSession(harness.db, { terminalId: terminal.id }),
+      ).toMatchObject({
+        restartPolicy: "never",
+        status: "running",
+        supervisionDesired: false,
       });
     });
   });

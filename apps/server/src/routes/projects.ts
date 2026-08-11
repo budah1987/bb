@@ -18,6 +18,8 @@ import {
   updateProjectSource,
   setProjectGitRemoteUrlIfMissing,
   isSqliteUniqueConstraintOnColumns,
+  getProjectManagerSettings,
+  upsertProjectManagerSettings,
   type ReorderProjectResult,
 } from "@bb/db";
 import {
@@ -29,6 +31,7 @@ import {
   type ProjectResponse,
   type ProjectWithThreadsResponse,
   type PublicApiSchema,
+  type ProjectManagerSettings,
 } from "@bb/server-contract";
 import type { Hono } from "hono";
 import type { AppDeps } from "../types.js";
@@ -48,7 +51,11 @@ import {
 import { PROMPT_HISTORY_ENTRY_LIMIT } from "@bb/domain";
 import { resolveCreateThreadExecutionDefaults } from "../services/threads/thread-default-policy.js";
 import { resolveProjectCreateDefaultExecutionPlan } from "../services/threads/thread-execution-plan.js";
-import { toThreadListEntryResponses } from "../services/threads/thread-runtime-display.js";
+import {
+  toThreadListEntryResponses,
+  toThreadResponseFromThread,
+} from "../services/threads/thread-runtime-display.js";
+import { createThreadFromRequest } from "../services/threads/thread-create.js";
 import { callHostRetryableOnlineRpc } from "../services/hosts/online-rpc.js";
 import { runLiveHostCommand } from "../services/hosts/live-command.js";
 import {
@@ -96,6 +103,28 @@ import {
 type ProjectResponseProjectFields = Omit<ProjectResponse, "sources">;
 type ProjectResponseRow = ProjectResponseProjectFields;
 const PROJECT_CLONE_TIMEOUT_MS = 20 * 60 * 1000;
+
+const PROJECT_MANAGER_DEFAULTS: ProjectManagerSettings = {
+  enabled: true,
+  providerId: "codex",
+  model: "gpt-5.4-mini",
+  reasoningLevel: "medium",
+  serviceTier: "default",
+  permissionMode: "auto",
+};
+
+const PROJECT_MANAGER_BRIEFING_PROMPT = `Review this project as its repository manager.
+
+Inspect the current repository, worktrees, and active threads. Summarize current work, blockers, conflicts, and review needs. Recommend the smallest useful next actions. Do not change files or run destructive commands unless the user asks.`;
+
+function resolveProjectManagerSettings(
+  deps: Pick<AppDeps, "db">,
+  projectId: string,
+): ProjectManagerSettings {
+  return (
+    getProjectManagerSettings(deps.db, projectId) ?? PROJECT_MANAGER_DEFAULTS
+  );
+}
 
 function githubRepositoryName(remoteUrl: string | null): string | null {
   if (!remoteUrl) return null;
@@ -484,6 +513,65 @@ export function registerProjectRoutes(app: Hono, deps: AppDeps): void {
   get(routes.get, (context) =>
     context.json(buildProjectResponses(deps, context.req.param("id"))[0]),
   );
+
+  get(routes.managerShow, (context) => {
+    const projectId = context.req.param("id");
+    requirePublicStandardProject(deps.db, projectId);
+    return context.json(resolveProjectManagerSettings(deps, projectId));
+  });
+
+  patch(routes.managerSettings, (context, payload) => {
+    const projectId = context.req.param("id");
+    requirePublicStandardProject(deps.db, projectId);
+    const current = resolveProjectManagerSettings(deps, projectId);
+    return context.json(
+      upsertProjectManagerSettings(deps.db, {
+        ...current,
+        ...payload,
+        projectId,
+      }),
+    );
+  });
+
+  post(routes.managerRun, async (context, payload) => {
+    const projectId = context.req.param("id");
+    const project = requirePublicStandardProject(deps.db, projectId);
+    const settings = resolveProjectManagerSettings(deps, projectId);
+    if (!settings.enabled) {
+      throw new ApiError(
+        409,
+        "invalid_request",
+        "The repository manager is disabled for this project",
+      );
+    }
+    const userPrompt = payload.prompt?.trim();
+    const prompt = userPrompt
+      ? `${PROJECT_MANAGER_BRIEFING_PROMPT}\n\nUser focus:\n${userPrompt}`
+      : PROJECT_MANAGER_BRIEFING_PROMPT;
+    const thread = await createThreadFromRequest(deps, {
+      projectId,
+      providerId: settings.providerId,
+      model: settings.model,
+      serviceTier: settings.serviceTier,
+      reasoningLevel: settings.reasoningLevel,
+      permissionMode: settings.permissionMode,
+      executionInputSources: {
+        providerId: "explicit",
+        model: "explicit",
+        serviceTier: "explicit",
+        reasoningLevel: "explicit",
+        permissionMode: "explicit",
+      },
+      origin: "plugin",
+      originPluginId: "conductor-workspaces",
+      title: `${project.name} manager briefing`,
+      input: [{ type: "text", text: prompt, mentions: [] }],
+      environment: { type: "project-default" },
+      startedOnBehalfOf: null,
+      originKind: null,
+    });
+    return context.json(toThreadResponseFromThread(deps, { thread }), 201);
+  });
 
   get(routes.defaultExecutionOptions, (context, query) => {
     const projectId = context.req.param("id");

@@ -1,10 +1,14 @@
 import { randomUUID } from "node:crypto";
 import {
   createTerminalSession,
+  disableAllTerminalSupervision,
+  getAppSettings,
+  getDesiredTerminalSessionBySupervisionId,
   getTerminalSession,
   getTerminalSessionForThread,
   listTerminalSessionsByEnvironment,
   listTerminalSessionsByThread,
+  listDesiredTerminalSessionsByHost,
   listThreadlessTerminalSessionsByEnvironment,
   listVisibleTerminalSessions,
   listVisibleTerminalSessionsByThread,
@@ -17,6 +21,7 @@ import {
   markTerminalSessionRunning,
   markTerminalSessionUserInputById,
   markThreadTerminalSessionsExited,
+  setTerminalSupervisionDesired,
   updateTerminalSessionSizeById,
   updateTerminalSessionTitleById,
   type TerminalSessionRow,
@@ -63,6 +68,7 @@ const DEFAULT_TERMINAL_START: NonNullable<CreateTerminalRequest["start"]> = {
 const HOST_HOME_INITIAL_CWD = "~";
 const BROWSER_TERMINAL_REPLAY_MAX_BYTES = 512 * 1024;
 const TERMINAL_SCROLLBACK_MAX_BYTES = 4 * 1024 * 1024;
+const DEFAULT_RESTORE_RETRY_DELAYS_MS = [1_000, 2_000, 5_000, 10_000, 30_000];
 
 type TerminalOpenedMessage = Extract<
   HostDaemonDaemonWsMessage,
@@ -306,6 +312,7 @@ interface TerminalSessionLifecycleOptions {
   hub: AppDeps["hub"];
   logger: ServerLogger;
   openTimeoutMs?: number;
+  restoreRetryDelaysMs?: readonly number[];
 }
 
 interface ListTerminalsArgs {
@@ -322,7 +329,9 @@ interface GetTerminalArgs {
 
 interface TerminalCreatePayload {
   cols: number;
+  devServerPort?: CreateTerminalRequest["devServerPort"];
   rows: number;
+  restartPolicy?: CreateTerminalRequest["restartPolicy"];
   start?: NonNullable<CreateTerminalRequest["start"]>;
   title?: string;
 }
@@ -332,6 +341,10 @@ interface CreateTerminalForTargetArgs {
   target: TerminalLaunchTarget;
   threadId: string | null;
   title: string;
+  supervision?: {
+    attempt: number;
+    id: string;
+  };
 }
 
 interface RenameTerminalArgs {
@@ -473,6 +486,19 @@ function terminalRestartTarget(row: TerminalSessionRow): TerminalCreateTarget {
   };
 }
 
+function terminalRestoreLaunchTarget(
+  row: TerminalSessionRow,
+): TerminalLaunchTarget {
+  if (row.environmentId !== null) {
+    return { kind: "environment", environmentId: row.environmentId };
+  }
+  return {
+    kind: "host_path",
+    hostId: row.hostId,
+    cwd: row.initialCwd === HOST_HOME_INITIAL_CWD ? null : row.initialCwd,
+  };
+}
+
 function getTerminalDaemonCloseTarget(
   row: TerminalSessionRow,
 ): TerminalDaemonCloseTarget | null {
@@ -495,6 +521,9 @@ export function toTerminalSession(row: TerminalSessionRow): TerminalSession {
     environmentId: row.environmentId,
     hostId: row.hostId,
     title: row.title,
+    launchCommand: row.launchCommand,
+    devServerPort: row.devServerPort,
+    restartPolicy: row.restartPolicy,
     initialCwd: row.initialCwd,
     cols: row.cols,
     rows: row.rows,
@@ -522,6 +551,11 @@ export class TerminalSessionLifecycle {
     Promise<TerminalSession>
   >();
   private readonly openTimeoutMs: number;
+  private readonly restoreRetryDelaysMs: readonly number[];
+  private readonly supervisedRestoreTimers = new Map<
+    string,
+    ReturnType<typeof setTimeout>
+  >();
 
   constructor(private readonly options: TerminalSessionLifecycleOptions) {
     this.attachTimeoutMs =
@@ -530,6 +564,8 @@ export class TerminalSessionLifecycle {
       options.closeTimeoutMs ?? DEFAULT_TERMINAL_CLOSE_TIMEOUT_MS;
     this.openTimeoutMs =
       options.openTimeoutMs ?? DEFAULT_TERMINAL_OPEN_TIMEOUT_MS;
+    this.restoreRetryDelaysMs =
+      options.restoreRetryDelaysMs ?? DEFAULT_RESTORE_RETRY_DELAYS_MS;
   }
 
   listTerminals(args: ListTerminalsArgs): TerminalSession[] {
@@ -592,12 +628,34 @@ export class TerminalSessionLifecycle {
       target.kind === "thread"
         ? this.resolveThreadTerminalCreateTarget(target.threadId)
         : target;
-    return this.createTerminalForTarget({
-      payload: args.payload,
-      target: launchTarget,
-      threadId: target.kind === "thread" ? target.threadId : null,
-      title: initialTitleForTerminal(args.payload, existingSessionCount),
-    });
+    const start = args.payload.start ?? DEFAULT_TERMINAL_START;
+    const isNamedCommand =
+      start.mode === "command" && args.payload.title !== undefined;
+    const restartPolicy = isNamedCommand
+      ? (args.payload.restartPolicy ??
+        getAppSettings(this.options.db).devServerRestartPolicy)
+      : "never";
+    const supervision =
+      restartPolicy === "until_stopped"
+        ? { attempt: 0, id: randomUUID() }
+        : undefined;
+    try {
+      return await this.createTerminalForTarget({
+        payload: { ...args.payload, restartPolicy },
+        target: launchTarget,
+        threadId: target.kind === "thread" ? target.threadId : null,
+        title: initialTitleForTerminal(args.payload, existingSessionCount),
+        supervision,
+      });
+    } catch (error) {
+      if (supervision !== undefined) {
+        setTerminalSupervisionDesired(this.options.db, {
+          desired: false,
+          supervisionId: supervision.id,
+        });
+      }
+      throw error;
+    }
   }
 
   private countExistingSessionsForTarget(target: TerminalCreateTarget): number {
@@ -643,16 +701,38 @@ export class TerminalSessionLifecycle {
       launchTarget.hostId,
     );
     const start = args.payload.start ?? DEFAULT_TERMINAL_START;
-    const startingSession = createTerminalSession(this.options.db, {
-      cols: args.payload.cols,
-      daemonSessionId: daemonSession.id,
-      environmentId: launchTarget.environmentId,
-      hostId: launchTarget.hostId,
-      initialCwd: launchTarget.initialCwd,
-      rows: args.payload.rows,
-      status: "starting",
-      threadId: args.threadId,
-      title: args.title,
+    const isNamedCommand =
+      start.mode === "command" && args.payload.title !== undefined;
+    const restartPolicy = isNamedCommand
+      ? (args.payload.restartPolicy ??
+        getAppSettings(this.options.db).devServerRestartPolicy)
+      : "never";
+    const startingSession = this.options.db.transaction((tx) => {
+      if (args.supervision !== undefined) {
+        setTerminalSupervisionDesired(tx, {
+          desired: false,
+          supervisionId: args.supervision.id,
+        });
+      }
+      return createTerminalSession(tx, {
+        cols: args.payload.cols,
+        daemonSessionId: daemonSession.id,
+        environmentId: launchTarget.environmentId,
+        hostId: launchTarget.hostId,
+        initialCwd: launchTarget.initialCwd,
+        launchCommand: isNamedCommand ? start.command : null,
+        devServerPort: isNamedCommand
+          ? (args.payload.devServerPort ?? null)
+          : null,
+        rows: args.payload.rows,
+        restartPolicy,
+        status: "starting",
+        supervisionAttempt: args.supervision?.attempt,
+        supervisionDesired: args.supervision !== undefined,
+        supervisionId: args.supervision?.id,
+        threadId: args.threadId,
+        title: args.title,
+      });
     });
     const requestId = randomUUID();
     const openMessage: HostDaemonServerWsMessage = {
@@ -846,9 +926,18 @@ export class TerminalSessionLifecycle {
     const replacement = await this.createTerminal({
       payload: {
         cols: current.cols,
+        devServerPort:
+          current.launchCommand === null
+            ? undefined
+            : (current.devServerPort ?? undefined),
         rows: current.rows,
-        start: { mode: "shell" },
+        restartPolicy:
+          current.launchCommand === null ? undefined : current.restartPolicy,
         target: terminalRestartTarget(current),
+        start:
+          current.launchCommand === null
+            ? { mode: "shell" }
+            : { mode: "command", command: current.launchCommand },
         title: current.title,
       },
     });
@@ -908,6 +997,9 @@ export class TerminalSessionLifecycle {
     args: CloseTerminalSessionArgs,
   ): Promise<TerminalSession> {
     const current = args.current;
+    if (args.payload.reason === "user") {
+      this.disarmTerminalSupervision(current);
+    }
     if (current.status === "exited") {
       return toTerminalSession(current);
     }
@@ -1153,6 +1245,9 @@ export class TerminalSessionLifecycle {
       this.options.db,
       args.environmentId,
     );
+    for (const session of currentSessions) {
+      this.disarmTerminalSupervision(session);
+    }
     this.requestTerminalCloses({
       closeReason: "environment-destroyed",
       sessions: currentSessions,
@@ -1196,6 +1291,132 @@ export class TerminalSessionLifecycle {
         message: "Host disconnected from terminal session",
       });
     }
+    this.restoreDesiredDevServersForHost(args.hostId);
+  }
+
+  private restoreDesiredDevServersForHost(hostId: string): void {
+    for (const session of listDesiredTerminalSessionsByHost(
+      this.options.db,
+      hostId,
+    )) {
+      if (session.status !== "starting" && session.status !== "running") {
+        this.scheduleDevServerRestore(session, 0);
+      }
+    }
+  }
+
+  private scheduleDevServerRestore(
+    session: TerminalSessionRow,
+    delayMs?: number,
+  ): void {
+    if (
+      session.supervisionId === null ||
+      !session.supervisionDesired ||
+      session.launchCommand === null ||
+      this.supervisedRestoreTimers.has(session.supervisionId)
+    ) {
+      return;
+    }
+    const retryDelay =
+      delayMs ??
+      this.restoreRetryDelaysMs[
+        Math.min(
+          session.supervisionAttempt,
+          this.restoreRetryDelaysMs.length - 1,
+        )
+      ] ??
+      30_000;
+    const timeout = setTimeout(() => {
+      if (session.supervisionId === null) return;
+      this.supervisedRestoreTimers.delete(session.supervisionId);
+      void this.restoreDevServer(session.supervisionId);
+    }, retryDelay);
+    timeout.unref?.();
+    this.supervisedRestoreTimers.set(session.supervisionId, timeout);
+  }
+
+  private async restoreDevServer(supervisionId: string): Promise<void> {
+    const session = getDesiredTerminalSessionBySupervisionId(
+      this.options.db,
+      supervisionId,
+    );
+    if (
+      session === null ||
+      session.launchCommand === null ||
+      session.status === "starting" ||
+      session.status === "running"
+    ) {
+      return;
+    }
+    try {
+      await this.createTerminalForTarget({
+        payload: {
+          cols: session.cols,
+          devServerPort: session.devServerPort ?? undefined,
+          rows: session.rows,
+          restartPolicy: session.restartPolicy,
+          start: { mode: "command", command: session.launchCommand },
+          title: session.title,
+        },
+        target: terminalRestoreLaunchTarget(session),
+        threadId: session.threadId,
+        title: session.title,
+        supervision: {
+          attempt: session.supervisionAttempt + 1,
+          id: supervisionId,
+        },
+      });
+    } catch (error) {
+      this.options.logger.warn(
+        {
+          err: error instanceof Error ? error : new Error(String(error)),
+          terminalId: session.id,
+        },
+        "Failed to restore supervised dev server",
+      );
+      const desired = getDesiredTerminalSessionBySupervisionId(
+        this.options.db,
+        supervisionId,
+      );
+      if (desired !== null) {
+        this.scheduleDevServerRestore(desired);
+      }
+    }
+  }
+
+  private disarmTerminalSupervision(session: TerminalSessionRow): void {
+    if (session.supervisionId === null) return;
+    const timeout = this.supervisedRestoreTimers.get(session.supervisionId);
+    if (timeout !== undefined) {
+      clearTimeout(timeout);
+      this.supervisedRestoreTimers.delete(session.supervisionId);
+    }
+    setTerminalSupervisionDesired(this.options.db, {
+      desired: false,
+      supervisionId: session.supervisionId,
+    });
+  }
+
+  reconcileDevServerRestartPolicy(args: {
+    next: "never" | "until_stopped";
+    previous: "never" | "until_stopped";
+  }): void {
+    if (args.previous === args.next || args.next === "until_stopped") return;
+    const disabled = disableAllTerminalSupervision(this.options.db);
+    for (const session of disabled) {
+      if (session.supervisionId === null) continue;
+      const timeout = this.supervisedRestoreTimers.get(session.supervisionId);
+      if (timeout !== undefined) clearTimeout(timeout);
+      this.supervisedRestoreTimers.delete(session.supervisionId);
+      this.notifyTerminalSessionChanged(session);
+    }
+  }
+
+  dispose(): void {
+    for (const timeout of this.supervisedRestoreTimers.values()) {
+      clearTimeout(timeout);
+    }
+    this.supervisedRestoreTimers.clear();
   }
 
   attachBrowserTerminal(args: AttachBrowserTerminalArgs): void {
@@ -1362,6 +1583,11 @@ export class TerminalSessionLifecycle {
             code: "terminal_exited",
             message: "Terminal session exited",
           });
+          if (exited.closeReason === "user") {
+            this.disarmTerminalSupervision(exited);
+          } else if (exited.supervisionDesired) {
+            this.scheduleDevServerRestore(exited);
+          }
         }
         return;
       case "terminal.output": {
@@ -1404,6 +1630,9 @@ export class TerminalSessionLifecycle {
       this.options.db,
       args.threadId,
     );
+    for (const session of currentSessions) {
+      this.disarmTerminalSupervision(session);
+    }
     this.requestTerminalCloses({
       closeReason: args.closeReason,
       sessions: currentSessions,

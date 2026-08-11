@@ -11,6 +11,7 @@ import {
   pullRequestMergeActionResponseSchema,
   pullRequestReadyActionResponseSchema,
   publishToMainActionResponseSchema,
+  updateFromMainActionResponseSchema,
   squashMergeActionResponseSchema,
   renameEnvironmentRequestSchema,
   updateEnvironmentRequestSchema,
@@ -27,11 +28,15 @@ import type {
   EnvironmentDiffQuery,
   EnvironmentDiffResponse,
   EnvironmentDockerActivityResponse,
+  EnvironmentDockerControlResponse,
   EnvironmentDockerProvenanceResponse,
   EnvironmentDiffFilesResponse,
   EnvironmentPathsQuery,
   EnvironmentPullRequestResponse,
   EnvironmentPreviewsResponse,
+  EnvironmentPreviewBypassResponse,
+  EnvironmentPreviewShareResponse,
+  EnvironmentPreviewUnshareResponse,
   EnvironmentStatusResponse,
   SimulatorAccessibilityResponse,
   SimulatorAttachResponse,
@@ -48,11 +53,13 @@ import type {
   PullRequestMergeActionResponse,
   PullRequestReadyActionResponse,
   PublishToMainActionResponse,
+  UpdateFromMainActionResponse,
   RenameEnvironmentRequest,
   SquashMergeActionResponse,
   EnvironmentStatusQuery,
   UpdateEnvironmentRequest,
   WorkspacePathListResponse,
+  TerminalSession,
 } from "@bb/server-contract";
 import { signalRequestArgs, type CreateSdkAreaArgs } from "./common.js";
 
@@ -122,8 +129,29 @@ export interface EnvironmentDockerActivityArgs extends EnvironmentActionArgs {
   signal?: AbortSignal;
 }
 
+export interface EnvironmentDockerControlArgs extends EnvironmentActionArgs {
+  action: "restart" | "stop";
+  containerId: string;
+}
+
 export interface EnvironmentPreviewsArgs extends EnvironmentActionArgs {
   signal?: AbortSignal;
+}
+
+export interface EnvironmentStartDevServerArgs extends EnvironmentActionArgs {
+  command: string;
+  preferredPort?: number;
+  threadId: string;
+  title: string;
+}
+
+export interface EnvironmentPreviewPortArgs extends EnvironmentActionArgs {
+  port: number;
+}
+
+export interface EnvironmentPreviewBypassArgs extends EnvironmentActionArgs {
+  providerId: string;
+  secret: string;
 }
 
 export type EnvironmentDiffArgs = EnvironmentDiffQuery & {
@@ -162,6 +190,8 @@ export interface EnvironmentSquashMergeArgs {
 export interface EnvironmentPublishToMainArgs extends EnvironmentActionArgs {
   preserveTargetChanges?: boolean;
 }
+
+export type EnvironmentUpdateFromMainArgs = EnvironmentActionArgs;
 
 export interface EnvironmentPullRequestMergeArgs {
   environmentId: string;
@@ -212,11 +242,18 @@ export type EnvironmentPullRequestResult = EnvironmentPullRequestResponse;
 export type EnvironmentRenameResult = Environment;
 export type EnvironmentSquashMergeResult = SquashMergeActionResponse;
 export type EnvironmentPublishToMainResult = PublishToMainActionResponse;
+export type EnvironmentUpdateFromMainResult = UpdateFromMainActionResponse;
 export type EnvironmentStatusResult = EnvironmentStatusResponse;
 export type EnvironmentDockerProvenanceResult =
   EnvironmentDockerProvenanceResponse;
 export type EnvironmentDockerActivityResult = EnvironmentDockerActivityResponse;
+export type EnvironmentDockerControlResult = EnvironmentDockerControlResponse;
 export type EnvironmentPreviewsResult = EnvironmentPreviewsResponse;
+export type EnvironmentStartDevServerResult = TerminalSession;
+export type EnvironmentPreviewShareResult = EnvironmentPreviewShareResponse;
+export type EnvironmentPreviewUnshareResult =
+  EnvironmentPreviewUnshareResponse;
+export type EnvironmentPreviewBypassResult = EnvironmentPreviewBypassResponse;
 export type EnvironmentUpdateResult = Environment;
 export type EnvironmentSimulatorStatusResult = SimulatorStatusResponse;
 export type EnvironmentSimulatorAttachResult = SimulatorAttachResponse;
@@ -247,9 +284,24 @@ export interface EnvironmentsArea {
   dockerActivity(
     args: EnvironmentDockerActivityArgs,
   ): Promise<EnvironmentDockerActivityResult>;
+  dockerControl(
+    args: EnvironmentDockerControlArgs,
+  ): Promise<EnvironmentDockerControlResult>;
   get(args: EnvironmentGetArgs): Promise<EnvironmentGetResult>;
   pullRequest(args: EnvironmentGetArgs): Promise<EnvironmentPullRequestResult>;
   previews(args: EnvironmentPreviewsArgs): Promise<EnvironmentPreviewsResult>;
+  startDevServer(
+    args: EnvironmentStartDevServerArgs,
+  ): Promise<EnvironmentStartDevServerResult>;
+  sharePreviewPort(
+    args: EnvironmentPreviewPortArgs,
+  ): Promise<EnvironmentPreviewShareResult>;
+  unsharePreviewPort(
+    args: EnvironmentPreviewPortArgs,
+  ): Promise<EnvironmentPreviewUnshareResult>;
+  bypassPreviewProtection(
+    args: EnvironmentPreviewBypassArgs,
+  ): Promise<EnvironmentPreviewBypassResult>;
   createPullRequest(
     args: EnvironmentPullRequestCreateArgs,
   ): Promise<EnvironmentCreatePullRequestResult>;
@@ -273,6 +325,9 @@ export interface EnvironmentsArea {
   publishToMain(
     args: EnvironmentPublishToMainArgs,
   ): Promise<EnvironmentPublishToMainResult>;
+  updateFromMain(
+    args: EnvironmentUpdateFromMainArgs,
+  ): Promise<EnvironmentUpdateFromMainResult>;
   status(args: EnvironmentStatusArgs): Promise<EnvironmentStatusResult>;
   simulatorStatus(
     args: EnvironmentActionArgs,
@@ -604,6 +659,18 @@ export function createEnvironmentsArea(
       );
       return publishToMainActionResponseSchema.parse(body);
     },
+    async updateFromMain(input) {
+      const body = await transport.readJson(
+        transport.api.v1.environments[":id"].actions.$post({
+          param: { id: input.environmentId },
+          json: {
+            action: "update_from_main",
+            options: {},
+          },
+        }),
+      );
+      return updateFromMainActionResponseSchema.parse(body);
+    },
     async status(input) {
       return transport.readJson(
         transport.api.v1.environments[":id"].status.$get(
@@ -631,12 +698,57 @@ export function createEnvironmentsArea(
         ),
       );
     },
+    async dockerControl(input) {
+      return transport.readJson(
+        transport.api.v1.environments[":id"]["docker-control"].$post({
+          param: { id: input.environmentId },
+          json: { action: input.action, containerId: input.containerId },
+        }),
+      );
+    },
     async previews(input) {
       return transport.readJson(
         transport.api.v1.environments[":id"].previews.$get(
           { param: { id: input.environmentId } },
           ...signalRequestArgs(input.signal),
         ),
+      );
+    },
+    async startDevServer(input) {
+      return transport.readJson(
+        transport.api.v1.environments[":id"]["dev-servers"].start.$post({
+          param: { id: input.environmentId },
+          json: {
+            command: input.command,
+            preferredPort: input.preferredPort,
+            threadId: input.threadId,
+            title: input.title,
+          },
+        }),
+      );
+    },
+    async sharePreviewPort(input) {
+      return transport.readJson(
+        transport.api.v1.environments[":id"].previews.share.$post({
+          param: { id: input.environmentId },
+          json: { port: input.port },
+        }),
+      );
+    },
+    async unsharePreviewPort(input) {
+      return transport.readJson(
+        transport.api.v1.environments[":id"].previews.unshare.$post({
+          param: { id: input.environmentId },
+          json: { port: input.port },
+        }),
+      );
+    },
+    async bypassPreviewProtection(input) {
+      return transport.readJson(
+        transport.api.v1.environments[":id"].previews.bypass.$post({
+          param: { id: input.environmentId },
+          json: { providerId: input.providerId, secret: input.secret },
+        }),
       );
     },
     async simulatorStatus(input) {

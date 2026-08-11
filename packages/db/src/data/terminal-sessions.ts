@@ -1,5 +1,6 @@
-import { and, asc, eq, inArray, isNull } from "drizzle-orm";
+import { and, asc, eq, inArray, isNotNull, isNull } from "drizzle-orm";
 import type {
+  TerminalRestartPolicy,
   TerminalSessionCloseReason,
   TerminalSessionStatus,
 } from "@bb/domain";
@@ -18,8 +19,14 @@ export interface CreateTerminalSessionInput {
   environmentId: string | null;
   hostId: string;
   initialCwd: string;
+  launchCommand?: string | null;
+  devServerPort?: number | null;
   now?: number;
   rows: number;
+  restartPolicy?: TerminalRestartPolicy;
+  supervisionAttempt?: number;
+  supervisionDesired?: boolean;
+  supervisionId?: string | null;
   status: TerminalSessionStatus;
   threadId: string | null;
   title: string;
@@ -147,6 +154,16 @@ export interface MarkDaemonTerminalSessionsDisconnectedArgs {
   now?: number;
 }
 
+export interface SetTerminalSupervisionDesiredArgs {
+  desired: boolean;
+  now?: number;
+  supervisionId: string;
+}
+
+export interface DisableAllTerminalSupervisionArgs {
+  now?: number;
+}
+
 const DAEMON_OWNED_TERMINAL_STATUSES: TerminalSessionStatus[] = [
   "starting",
   "running",
@@ -171,8 +188,14 @@ export function createTerminalSession(
       daemonSessionId: input.daemonSessionId,
       title: input.title,
       initialCwd: input.initialCwd,
+      launchCommand: input.launchCommand ?? null,
+      devServerPort: input.devServerPort ?? null,
       cols: input.cols,
       rows: input.rows,
+      restartPolicy: input.restartPolicy ?? "never",
+      supervisionId: input.supervisionId ?? null,
+      supervisionDesired: input.supervisionDesired ?? false,
+      supervisionAttempt: input.supervisionAttempt ?? 0,
       status: input.status,
       exitCode: null,
       closeReason: null,
@@ -182,6 +205,75 @@ export function createTerminalSession(
     })
     .returning()
     .get();
+}
+
+export function getDesiredTerminalSessionBySupervisionId(
+  db: TerminalSessionReadConnection,
+  supervisionId: string,
+): TerminalSessionRow | null {
+  return (
+    db
+      .select()
+      .from(terminalSessions)
+      .where(
+        and(
+          eq(terminalSessions.supervisionId, supervisionId),
+          eq(terminalSessions.supervisionDesired, true),
+        ),
+      )
+      .orderBy(asc(terminalSessions.createdAt), asc(terminalSessions.id))
+      .get() ?? null
+  );
+}
+
+export function listDesiredTerminalSessionsByHost(
+  db: TerminalSessionReadConnection,
+  hostId: string,
+): TerminalSessionRow[] {
+  return db
+    .select()
+    .from(terminalSessions)
+    .where(
+      and(
+        eq(terminalSessions.hostId, hostId),
+        eq(terminalSessions.supervisionDesired, true),
+        isNotNull(terminalSessions.supervisionId),
+        isNotNull(terminalSessions.launchCommand),
+      ),
+    )
+    .orderBy(asc(terminalSessions.createdAt), asc(terminalSessions.id))
+    .all();
+}
+
+export function setTerminalSupervisionDesired(
+  db: TerminalSessionWriteConnection,
+  args: SetTerminalSupervisionDesiredArgs,
+): TerminalSessionRow[] {
+  return db
+    .update(terminalSessions)
+    .set({
+      supervisionDesired: args.desired,
+      updatedAt: args.now ?? Date.now(),
+    })
+    .where(eq(terminalSessions.supervisionId, args.supervisionId))
+    .returning()
+    .all();
+}
+
+export function disableAllTerminalSupervision(
+  db: TerminalSessionWriteConnection,
+  args: DisableAllTerminalSupervisionArgs = {},
+): TerminalSessionRow[] {
+  return db
+    .update(terminalSessions)
+    .set({
+      restartPolicy: "never",
+      supervisionDesired: false,
+      updatedAt: args.now ?? Date.now(),
+    })
+    .where(eq(terminalSessions.supervisionDesired, true))
+    .returning()
+    .all();
 }
 
 export function listTerminalSessionsByThread(

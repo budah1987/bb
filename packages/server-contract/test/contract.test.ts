@@ -16,6 +16,7 @@ import {
   createPublicApiClient,
   createThreadRequestSchema,
   environmentActionRequestSchema,
+  startEnvironmentDevServerRequestSchema,
   baseBranchSpecSchema,
   gitBranchNameSchema,
   reorderPinnedThreadRequestSchema,
@@ -334,6 +335,24 @@ describe("environment workspace response contract", () => {
     ).toBe(false);
   });
 
+  it("types a busy workspace update error", () => {
+    expect(
+      contract.environmentActionApiErrorSchema.parse({
+        code: "environment_busy",
+        message:
+          "Stop active conversations in this workspace before updating from main",
+        details: {
+          kind: "workspace_busy",
+          action: "update_from_main",
+          reason: "active_threads",
+        },
+      }),
+    ).toMatchObject({
+      code: "environment_busy",
+      details: { kind: "workspace_busy", reason: "active_threads" },
+    });
+  });
+
   it("uses explicit diff outcomes instead of nullable parallel fields", () => {
     expect(
       contract.environmentDiffResponseSchema.safeParse({
@@ -553,6 +572,34 @@ describe("git branch name contract", () => {
   });
 });
 
+describe("development server contracts", () => {
+  it("requires a port placeholder and a non-privileged preferred port", () => {
+    expect(
+      startEnvironmentDevServerRequestSchema.safeParse({
+        command: "pnpm dev -- --port {port}",
+        preferredPort: 4173,
+        threadId: "thr_1",
+        title: "Web",
+      }).success,
+    ).toBe(true);
+    expect(
+      startEnvironmentDevServerRequestSchema.safeParse({
+        command: "pnpm dev",
+        threadId: "thr_1",
+        title: "Web",
+      }).success,
+    ).toBe(false);
+    expect(
+      startEnvironmentDevServerRequestSchema.safeParse({
+        command: "pnpm dev -- --port {port}",
+        preferredPort: 80,
+        threadId: "thr_1",
+        title: "Web",
+      }).success,
+    ).toBe(false);
+  });
+});
+
 describe("public terminal contracts", () => {
   it("allows threadless terminal session responses", () => {
     expect(
@@ -562,6 +609,9 @@ describe("public terminal contracts", () => {
         environmentId: "env_1",
         hostId: "host_1",
         title: "Terminal 1",
+        launchCommand: null,
+        devServerPort: null,
+        restartPolicy: "never",
         initialCwd: "/tmp/workspace",
         cols: 80,
         rows: 24,
@@ -595,6 +645,27 @@ describe("public terminal contracts", () => {
         type: "resize",
         cols: TERMINAL_COLS_MAX,
         rows: TERMINAL_ROWS_MAX + 1,
+      }).success,
+    ).toBe(false);
+  });
+
+  it("limits restart policies to named command terminals", () => {
+    expect(
+      createTerminalRequestSchema.safeParse({
+        cols: 80,
+        rows: 24,
+        restartPolicy: "until_stopped",
+        start: { mode: "command", command: "pnpm dev" },
+        target: { kind: "thread", threadId: "thr_1" },
+        title: "Web dev server",
+      }).success,
+    ).toBe(true);
+    expect(
+      createTerminalRequestSchema.safeParse({
+        cols: 80,
+        rows: 24,
+        restartPolicy: "until_stopped",
+        target: { kind: "thread", threadId: "thr_1" },
       }).success,
     ).toBe(false);
   });
@@ -963,6 +1034,13 @@ describe("server-contract canonical schemas", () => {
 
     expect(
       environmentActionRequestSchema.parse({
+        action: "update_from_main",
+        options: {},
+      }),
+    ).toEqual({ action: "update_from_main", options: {} });
+
+    expect(
+      environmentActionRequestSchema.parse({
         action: "pull_request_create",
         options: {
           baseBranch: "main",
@@ -1119,6 +1197,37 @@ describe("server-contract canonical schemas", () => {
     ).toEqual({
       rows: [],
     });
+  });
+
+  it("validates repository manager settings and optional run focus", () => {
+    expect(
+      contract.projectManagerSettingsSchema.parse({
+        enabled: true,
+        providerId: "codex",
+        model: "gpt-5.4-mini",
+        reasoningLevel: "medium",
+        serviceTier: "default",
+        permissionMode: "auto",
+      }),
+    ).toMatchObject({ enabled: true, providerId: "codex" });
+    expect(contract.runProjectManagerRequestSchema.parse({})).toEqual({});
+    expect(() =>
+      contract.updateProjectManagerSettingsRequestSchema.parse({}),
+    ).toThrow("At least one field must be provided");
+    expect(
+      contract.updateProjectManagerSettingsRequestSchema.parse({
+        providerId: "  codex  ",
+        model: "  gpt-5.4-mini  ",
+      }),
+    ).toEqual({ providerId: "codex", model: "gpt-5.4-mini" });
+    expect(() =>
+      contract.updateProjectManagerSettingsRequestSchema.parse({
+        providerId: "   ",
+      }),
+    ).toThrow();
+    expect(() =>
+      contract.updateProjectManagerSettingsRequestSchema.parse({ model: "\t" }),
+    ).toThrow();
   });
 
   it("normalizes the deprecated writable alias without widening readonly", () => {

@@ -1255,6 +1255,18 @@ const STAGED_CONNECT_MACHINE_ID_COLUMN = "_bb_connect_machine_id_pending";
 const STAGED_GITHUB_ACCOUNT_LOGIN_COLUMN = "_bb_github_account_login_pending";
 const STAGED_PROJECT_GITHUB_ACCOUNT_LOGIN_COLUMN =
   "_bb_project_github_account_login_pending";
+const STAGED_DEV_SERVER_RESTART_POLICY_COLUMN =
+  "_bb_dev_server_restart_policy_pending";
+const STAGED_TERMINAL_LAUNCH_COMMAND_COLUMN =
+  "_bb_terminal_launch_command_pending";
+const STAGED_TERMINAL_RESTART_POLICY_COLUMN =
+  "_bb_terminal_restart_policy_pending";
+
+interface StagedDurableTerminalColumns {
+  devServerRestartPolicy: boolean;
+  launchCommand: boolean;
+  restartPolicy: boolean;
+}
 
 function stageExistingConnectMachineIdColumn(
   db: DbConnection,
@@ -1382,6 +1394,119 @@ function restoreStagedProjectGithubAccountLoginColumn(db: DbConnection): void {
     `UPDATE projects SET github_account_login = ${STAGED_PROJECT_GITHUB_ACCOUNT_LOGIN_COLUMN};
      ALTER TABLE projects DROP COLUMN ${STAGED_PROJECT_GITHUB_ACCOUNT_LOGIN_COLUMN};`,
   );
+}
+
+function stageExistingDurableTerminalColumns(
+  db: DbConnection,
+  migrationsFolder: string,
+): StagedDurableTerminalColumns | null {
+  if (!tableExists(db, "__drizzle_migrations")) {
+    return null;
+  }
+
+  const migration = requireExpectedAppliedMigration(
+    readExpectedAppliedMigrations(migrationsFolder),
+    "0092_repository_operations_dev_servers",
+  );
+  if (readAppliedMigrationCreatedAts(db).has(migration.createdAt)) {
+    return null;
+  }
+
+  const staged: StagedDurableTerminalColumns = {
+    devServerRestartPolicy:
+      tableExists(db, "app_settings") &&
+      columnExists(db, "app_settings", "dev_server_restart_policy"),
+    launchCommand:
+      tableExists(db, "terminal_sessions") &&
+      columnExists(db, "terminal_sessions", "launch_command"),
+    restartPolicy:
+      tableExists(db, "terminal_sessions") &&
+      columnExists(db, "terminal_sessions", "restart_policy"),
+  };
+
+  if (staged.devServerRestartPolicy) {
+    db.$client.exec(
+      `ALTER TABLE app_settings RENAME COLUMN dev_server_restart_policy TO ${STAGED_DEV_SERVER_RESTART_POLICY_COLUMN}`,
+    );
+  }
+  if (staged.launchCommand) {
+    db.$client.exec(
+      `ALTER TABLE terminal_sessions RENAME COLUMN launch_command TO ${STAGED_TERMINAL_LAUNCH_COMMAND_COLUMN}`,
+    );
+  }
+  if (staged.restartPolicy) {
+    db.$client.exec(
+      `ALTER TABLE terminal_sessions RENAME COLUMN restart_policy TO ${STAGED_TERMINAL_RESTART_POLICY_COLUMN}`,
+    );
+  }
+
+  return staged;
+}
+
+function restoreStagedDurableTerminalColumns(
+  db: DbConnection,
+  staged: StagedDurableTerminalColumns,
+): void {
+  if (
+    staged.devServerRestartPolicy &&
+    columnExists(db, "app_settings", STAGED_DEV_SERVER_RESTART_POLICY_COLUMN)
+  ) {
+    if (!columnExists(db, "app_settings", "dev_server_restart_policy")) {
+      db.$client.exec(
+        `ALTER TABLE app_settings RENAME COLUMN ${STAGED_DEV_SERVER_RESTART_POLICY_COLUMN} TO dev_server_restart_policy`,
+      );
+    } else {
+      db.$client.exec(
+        `UPDATE app_settings SET dev_server_restart_policy = ${STAGED_DEV_SERVER_RESTART_POLICY_COLUMN};
+         ALTER TABLE app_settings DROP COLUMN ${STAGED_DEV_SERVER_RESTART_POLICY_COLUMN};`,
+      );
+    }
+  }
+  if (
+    staged.launchCommand &&
+    columnExists(db, "terminal_sessions", STAGED_TERMINAL_LAUNCH_COMMAND_COLUMN)
+  ) {
+    if (!columnExists(db, "terminal_sessions", "launch_command")) {
+      db.$client.exec(
+        `ALTER TABLE terminal_sessions RENAME COLUMN ${STAGED_TERMINAL_LAUNCH_COMMAND_COLUMN} TO launch_command`,
+      );
+    } else {
+      db.$client.exec(
+        `UPDATE terminal_sessions SET launch_command = ${STAGED_TERMINAL_LAUNCH_COMMAND_COLUMN};
+         ALTER TABLE terminal_sessions DROP COLUMN ${STAGED_TERMINAL_LAUNCH_COMMAND_COLUMN};`,
+      );
+    }
+  }
+  if (
+    staged.restartPolicy &&
+    columnExists(db, "terminal_sessions", STAGED_TERMINAL_RESTART_POLICY_COLUMN)
+  ) {
+    if (!columnExists(db, "terminal_sessions", "restart_policy")) {
+      db.$client.exec(
+        `ALTER TABLE terminal_sessions RENAME COLUMN ${STAGED_TERMINAL_RESTART_POLICY_COLUMN} TO restart_policy`,
+      );
+    } else {
+      db.$client.exec(
+        `UPDATE terminal_sessions SET restart_policy = ${STAGED_TERMINAL_RESTART_POLICY_COLUMN};
+         ALTER TABLE terminal_sessions DROP COLUMN ${STAGED_TERMINAL_RESTART_POLICY_COLUMN};`,
+      );
+    }
+  }
+  if (
+    (staged.launchCommand || staged.restartPolicy) &&
+    columnExists(db, "terminal_sessions", "supervision_id") &&
+    columnExists(db, "terminal_sessions", "supervision_desired") &&
+    columnExists(db, "terminal_sessions", "restart_policy") &&
+    columnExists(db, "terminal_sessions", "launch_command")
+  ) {
+    db.$client.exec(
+      `UPDATE terminal_sessions
+       SET supervision_id = id, supervision_desired = true
+       WHERE restart_policy = 'until_stopped'
+         AND launch_command IS NOT NULL
+         AND status IN ('starting', 'running', 'disconnected')`,
+    );
+  }
 }
 
 function repairNotesMigrationAfterLegacyProjectMigration(
@@ -1616,6 +1741,10 @@ export function migrate(db: DbConnection, options: MigrateOptions = {}): void {
     );
     const stagedProjectGithubAccountLogin =
       stageExistingProjectGithubAccountLoginColumn(db, migrationsFolder);
+    const stagedDurableTerminalColumns = stageExistingDurableTerminalColumns(
+      db,
+      migrationsFolder,
+    );
     repairNotesMigrationAfterLegacyProjectMigration(db, migrationsFolder);
     try {
       drizzleMigrate(db, { migrationsFolder });
@@ -1626,6 +1755,9 @@ export function migrate(db: DbConnection, options: MigrateOptions = {}): void {
       }
       if (stagedProjectGithubAccountLogin) {
         restoreStagedProjectGithubAccountLoginColumn(db);
+      }
+      if (stagedDurableTerminalColumns) {
+        restoreStagedDurableTerminalColumns(db, stagedDurableTerminalColumns);
       }
     }
     applyReorderedCleanupMigrations(db, migrationsFolder);

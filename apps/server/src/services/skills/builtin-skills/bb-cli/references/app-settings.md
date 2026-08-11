@@ -3,6 +3,16 @@
 Server-backed preferences in Settings. They are persisted on the server, so
 every window and client sees the same value.
 
+## Dev servers
+
+- `devServerRestartPolicy` defaults to `until_stopped`. Named command terminals
+  restart after exits, app restarts, or daemon restarts until the user stops
+  them. Turning it off disarms existing restore intent without stopping running
+  commands. Turning it on applies to newly created named commands.
+- Set it with
+  `bb settings general devServerRestartPolicy <until-stopped|never>`.
+- Ordinary shell terminals never restart automatically.
+
 ## Caffeinate (macOS only)
 
 - Keeps the Mac awake while bb is running: when enabled, the server asks the

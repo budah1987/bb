@@ -54,6 +54,8 @@ function makeTerminalSession(overrides: Record<string, JsonValue> = {}) {
     environmentId: "env_test",
     hostId: "host_test",
     title: "Terminal 1",
+    launchCommand: null,
+    restartPolicy: "never",
     initialCwd: "/workspace",
     cols: 100,
     rows: 30,
@@ -173,6 +175,57 @@ describe("@bb/sdk", () => {
         }),
         method: "POST",
         url: "http://bb.test/api/v1/environments/env_remote/simulator/control",
+      },
+    ]);
+  });
+
+  it("maps repository manager show, settings, and run requests", async () => {
+    const settings = {
+      enabled: true,
+      providerId: "codex",
+      model: "gpt-5.4-mini",
+      reasoningLevel: "medium",
+      serviceTier: "default",
+      permissionMode: "auto",
+    } as const;
+    const queue = createFetchQueue([
+      { body: settings },
+      { body: { ...settings, enabled: false } },
+      { body: { id: "thread_manager" } },
+    ]);
+    const sdk = createBbSdk({
+      transport: createHttpTransport({
+        baseUrl: "http://bb.test",
+        fetch: queue.fetch,
+        runtime: "node",
+      }),
+    });
+
+    await sdk.projects.manager.show({ projectId: "project_1" });
+    await sdk.projects.manager.settings({
+      projectId: "project_1",
+      enabled: false,
+    });
+    await sdk.projects.manager.run({
+      projectId: "project_1",
+      prompt: "Review release risk",
+    });
+
+    expect(queue.requests).toEqual([
+      {
+        bodyText: undefined,
+        method: "GET",
+        url: "http://bb.test/api/v1/projects/project_1/manager",
+      },
+      {
+        bodyText: JSON.stringify({ enabled: false }),
+        method: "PATCH",
+        url: "http://bb.test/api/v1/projects/project_1/manager/settings",
+      },
+      {
+        bodyText: JSON.stringify({ prompt: "Review release risk" }),
+        method: "POST",
+        url: "http://bb.test/api/v1/projects/project_1/manager/run",
       },
     ]);
   });
@@ -911,6 +964,50 @@ describe("@bb/sdk", () => {
     ]);
   });
 
+  it("creates a supervised named command terminal", async () => {
+    const queue = createFetchQueue([
+      {
+        body: makeTerminalSession({
+          launchCommand: "pnpm dev",
+          restartPolicy: "until_stopped",
+          title: "Web dev server",
+        }),
+        status: 201,
+      },
+    ]);
+    const sdk = createBbSdk({
+      transport: createHttpTransport({
+        baseUrl: "http://bb.test",
+        fetch: queue.fetch,
+        runtime: "node",
+      }),
+    });
+
+    await sdk.terminals.create({
+      cols: 80,
+      restartPolicy: "until_stopped",
+      rows: 24,
+      scope: { kind: "thread", threadId: "thr_remote" },
+      start: { mode: "command", command: "pnpm dev" },
+      title: "Web dev server",
+    });
+
+    expect(queue.requests).toEqual([
+      {
+        bodyText: JSON.stringify({
+          cols: 80,
+          rows: 24,
+          restartPolicy: "until_stopped",
+          start: { mode: "command", command: "pnpm dev" },
+          target: { kind: "thread", threadId: "thr_remote" },
+          title: "Web dev server",
+        }),
+        method: "POST",
+        url: "http://bb.test/api/v1/terminals",
+      },
+    ]);
+  });
+
   it("rejects mixed terminal scope selectors before transport", async () => {
     const queue = createFetchQueue([]);
     const sdk = createBbSdk({
@@ -1048,6 +1145,88 @@ describe("@bb/sdk", () => {
         bodyText: undefined,
         method: "GET",
         url: "http://bb.test/api/v1/environments/env_feature/previews",
+      },
+    ]);
+  });
+
+  it("routes development server and preview actions through the HTTP transport", async () => {
+    const queue = createFetchQueue([
+      { body: { id: "term_dev" } },
+      { body: { port: 4173, url: "https://host--4173.getbb.app" } },
+      { body: { port: 4173, shared: false } },
+      { body: { url: "https://feature.vercel.app/?bypass=1" } },
+      { body: { action: "restart", containerId: "container-1" } },
+    ]);
+    const sdk = createBbSdk({
+      transport: createHttpTransport({
+        baseUrl: "http://bb.test",
+        fetch: queue.fetch,
+        runtime: "node",
+      }),
+    });
+
+    await sdk.environments.startDevServer({
+      command: "pnpm dev -- --port {port}",
+      environmentId: "env_feature",
+      preferredPort: 4173,
+      threadId: "thr_feature",
+      title: "Web",
+    });
+    await sdk.environments.sharePreviewPort({
+      environmentId: "env_feature",
+      port: 4173,
+    });
+    await sdk.environments.unsharePreviewPort({
+      environmentId: "env_feature",
+      port: 4173,
+    });
+    await sdk.environments.bypassPreviewProtection({
+      environmentId: "env_feature",
+      providerId: "github:Preview",
+      secret: "secret-value",
+    });
+    await sdk.environments.dockerControl({
+      action: "restart",
+      containerId: "container-1",
+      environmentId: "env_feature",
+    });
+
+    expect(queue.requests).toEqual([
+      {
+        bodyText: JSON.stringify({
+          command: "pnpm dev -- --port {port}",
+          preferredPort: 4173,
+          threadId: "thr_feature",
+          title: "Web",
+        }),
+        method: "POST",
+        url: "http://bb.test/api/v1/environments/env_feature/dev-servers/start",
+      },
+      {
+        bodyText: JSON.stringify({ port: 4173 }),
+        method: "POST",
+        url: "http://bb.test/api/v1/environments/env_feature/previews/share",
+      },
+      {
+        bodyText: JSON.stringify({ port: 4173 }),
+        method: "POST",
+        url: "http://bb.test/api/v1/environments/env_feature/previews/unshare",
+      },
+      {
+        bodyText: JSON.stringify({
+          providerId: "github:Preview",
+          secret: "secret-value",
+        }),
+        method: "POST",
+        url: "http://bb.test/api/v1/environments/env_feature/previews/bypass",
+      },
+      {
+        bodyText: JSON.stringify({
+          action: "restart",
+          containerId: "container-1",
+        }),
+        method: "POST",
+        url: "http://bb.test/api/v1/environments/env_feature/docker-control",
       },
     ]);
   });

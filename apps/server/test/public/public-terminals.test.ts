@@ -752,6 +752,7 @@ describe("public terminal routes", () => {
     const body = terminalSessionSchema.parse(await readJson(response));
     expect(body).toMatchObject({
       initialCwd: "/tmp/terminal-workspace",
+      launchCommand: null,
       status: "running",
       title: "zsh",
     });
@@ -769,6 +770,7 @@ describe("public terminal routes", () => {
         rows: 30,
         start: { mode: "command", command: "pnpm dev" },
         target: { kind: "thread", threadId: fixture.thread.id },
+        title: "Web dev server",
       }),
     });
     const openMessage = await waitForDaemonMessage(fixture.socket);
@@ -790,6 +792,13 @@ describe("public terminal routes", () => {
     acknowledgeTerminalOpen(fixture, openMessage);
     const response = await responsePromise;
     expect(response.status).toBe(201);
+    expect(terminalSessionSchema.parse(await readJson(response))).toMatchObject(
+      {
+        launchCommand: "pnpm dev",
+        restartPolicy: "until_stopped",
+        title: "Web dev server",
+      },
+    );
   });
 
   it("sends input to a running terminal over the daemon session", async () => {
@@ -1295,6 +1304,317 @@ describe("public terminal routes", () => {
     );
   });
 
+  it("restores named dev servers after a daemon restart", async () => {
+    const fixture = await createTerminalRouteFixture();
+    harnesses.push(fixture.harness);
+    const stored = createTerminalSession(fixture.harness.db, {
+      cols: 80,
+      daemonSessionId: fixture.session.id,
+      environmentId: fixture.environment.id,
+      hostId: fixture.host.id,
+      initialCwd: "/tmp/terminal-workspace",
+      launchCommand: "pnpm dev",
+      restartPolicy: "until_stopped",
+      rows: 24,
+      status: "running",
+      supervisionDesired: true,
+      supervisionId: "supervisor-restore",
+      threadId: fixture.thread.id,
+      title: "Web dev server",
+    });
+    fixture.harness.deps.terminalSessions.handleDaemonSessionClosed({
+      sessionId: fixture.session.id,
+    });
+    const replacement = seedHostSession(fixture.harness.deps, {
+      id: fixture.host.id,
+    });
+    const replacementSocket = createFakeDaemonSocket();
+
+    onDaemonSocketOpen(fixture.harness.deps, {
+      hostId: fixture.host.id,
+      sessionId: replacement.session.id,
+      socket: replacementSocket,
+    });
+
+    expect(await waitForDaemonMessage(replacementSocket)).toMatchObject({
+      type: "connect-shares.replace",
+    });
+    expect(await waitForDaemonMessage(replacementSocket, 1)).toMatchObject({
+      type: "terminal.close",
+      terminalId: stored.id,
+    });
+    await vi.waitFor(() => {
+      expect(
+        readDaemonMessages(replacementSocket).some(
+          (message) => message.type === "terminal.open",
+        ),
+      ).toBe(true);
+    });
+    const openMessage = readDaemonMessages(replacementSocket).find(
+      (message) => message.type === "terminal.open",
+    );
+    if (openMessage === undefined) {
+      throw new Error("Expected terminal.open");
+    }
+    expect(openMessage).toMatchObject({
+      type: "terminal.open",
+      start: { mode: "command", command: "pnpm dev" },
+    });
+    if (openMessage.type !== "terminal.open") {
+      throw new Error(`Expected terminal.open, received ${openMessage.type}`);
+    }
+    fixture.harness.deps.terminalSessions.handleDaemonTerminalMessage({
+      hostId: fixture.host.id,
+      sessionId: replacement.session.id,
+      message: {
+        type: "terminal.opened",
+        requestId: openMessage.requestId,
+        terminalId: openMessage.terminalId,
+        shell: "/bin/zsh",
+        title: "Web dev server",
+        initialCwd: "/tmp/terminal-workspace",
+        cols: 80,
+        rows: 24,
+      },
+    });
+
+    await vi.waitFor(() => {
+      expect(
+        listTerminalSessionsByThread(fixture.harness.db, fixture.thread.id),
+      ).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ id: stored.id, status: "exited" }),
+          expect.objectContaining({
+            id: openMessage.terminalId,
+            launchCommand: "pnpm dev",
+            restartPolicy: "until_stopped",
+            status: "running",
+          }),
+        ]),
+      );
+    });
+  });
+
+  it("retries a supervised dev server after an unexpected process exit", async () => {
+    const fixture = await createTerminalRouteFixture();
+    harnesses.push(fixture.harness);
+    const stored = createTerminalSession(fixture.harness.db, {
+      cols: 80,
+      daemonSessionId: fixture.session.id,
+      environmentId: fixture.environment.id,
+      hostId: fixture.host.id,
+      initialCwd: "/tmp/terminal-workspace",
+      launchCommand: "pnpm dev",
+      restartPolicy: "until_stopped",
+      rows: 24,
+      status: "running",
+      supervisionDesired: true,
+      supervisionId: "supervisor-process-exit",
+      threadId: fixture.thread.id,
+      title: "Web dev server",
+    });
+
+    fixture.harness.deps.terminalSessions.handleDaemonTerminalMessage({
+      hostId: fixture.host.id,
+      sessionId: fixture.session.id,
+      message: {
+        type: "terminal.exited",
+        terminalId: stored.id,
+        exitCode: 1,
+        closeReason: "process-exit",
+      },
+    });
+
+    const openMessage = await waitForDaemonMessage(fixture.socket);
+    expect(openMessage).toMatchObject({
+      type: "terminal.open",
+      start: { mode: "command", command: "pnpm dev" },
+    });
+    if (openMessage.type !== "terminal.open") {
+      throw new Error(`Expected terminal.open, received ${openMessage.type}`);
+    }
+    acknowledgeTerminalOpen(fixture, openMessage);
+
+    await vi.waitFor(() => {
+      expect(
+        getTerminalSession(fixture.harness.db, { terminalId: stored.id }),
+      ).toMatchObject({ supervisionDesired: false });
+      expect(
+        getTerminalSession(fixture.harness.db, {
+          terminalId: openMessage.terminalId,
+        }),
+      ).toMatchObject({
+        status: "running",
+        supervisionAttempt: 1,
+        supervisionDesired: true,
+        supervisionId: "supervisor-process-exit",
+      });
+    });
+  });
+
+  it("keeps retry intent after a transient restore open failure", async () => {
+    const fixture = await createTerminalRouteFixture();
+    harnesses.push(fixture.harness);
+    createTerminalSession(fixture.harness.db, {
+      cols: 80,
+      daemonSessionId: null,
+      environmentId: fixture.environment.id,
+      hostId: fixture.host.id,
+      initialCwd: "/tmp/terminal-workspace",
+      launchCommand: "pnpm dev",
+      restartPolicy: "until_stopped",
+      rows: 24,
+      status: "exited",
+      supervisionDesired: true,
+      supervisionId: "supervisor-open-retry",
+      threadId: fixture.thread.id,
+      title: "Web dev server",
+    });
+
+    fixture.harness.deps.terminalSessions.expireDisconnectedHostTerminals({
+      daemonSessionId: fixture.session.id,
+      hostId: fixture.host.id,
+    });
+    const failedOpen = await waitForDaemonMessage(fixture.socket);
+    if (failedOpen.type !== "terminal.open") {
+      throw new Error(`Expected terminal.open, received ${failedOpen.type}`);
+    }
+    fixture.harness.deps.terminalSessions.handleDaemonTerminalMessage({
+      hostId: fixture.host.id,
+      sessionId: fixture.session.id,
+      message: {
+        type: "terminal.error",
+        requestId: failedOpen.requestId,
+        terminalId: failedOpen.terminalId,
+        code: "terminal_open_failed",
+        message: "temporary spawn failure",
+      },
+    });
+
+    const retryOpen = await waitForDaemonMessage(fixture.socket, 1);
+    expect(retryOpen).toMatchObject({
+      type: "terminal.open",
+      start: { mode: "command", command: "pnpm dev" },
+    });
+    if (retryOpen.type !== "terminal.open") {
+      throw new Error(`Expected terminal.open, received ${retryOpen.type}`);
+    }
+    acknowledgeTerminalOpen(fixture, retryOpen);
+
+    expect(
+      getTerminalSession(fixture.harness.db, {
+        terminalId: failedOpen.terminalId,
+      }),
+    ).toMatchObject({ supervisionDesired: false });
+    await vi.waitFor(() => {
+      expect(
+        getTerminalSession(fixture.harness.db, {
+          terminalId: retryOpen.terminalId,
+        }),
+      ).toMatchObject({
+        status: "running",
+        supervisionAttempt: 2,
+        supervisionDesired: true,
+      });
+    });
+  });
+
+  it("does not restore a dev server after the user stops it", async () => {
+    const fixture = await createTerminalRouteFixture();
+    harnesses.push(fixture.harness);
+    const stored = createTerminalSession(fixture.harness.db, {
+      cols: 80,
+      daemonSessionId: fixture.session.id,
+      environmentId: fixture.environment.id,
+      hostId: fixture.host.id,
+      initialCwd: "/tmp/terminal-workspace",
+      launchCommand: "pnpm dev",
+      restartPolicy: "until_stopped",
+      rows: 24,
+      status: "running",
+      supervisionDesired: true,
+      supervisionId: "supervisor-stop",
+      threadId: fixture.thread.id,
+      title: "Web dev server",
+    });
+    fixture.harness.deps.terminalSessions.handleDaemonSessionClosed({
+      sessionId: fixture.session.id,
+    });
+
+    await fixture.harness.deps.terminalSessions.closeTerminal({
+      payload: { mode: "force", reason: "user" },
+      terminalId: stored.id,
+    });
+
+    const replacement = seedHostSession(fixture.harness.deps, {
+      id: fixture.host.id,
+    });
+    const replacementSocket = createFakeDaemonSocket();
+    onDaemonSocketOpen(fixture.harness.deps, {
+      hostId: fixture.host.id,
+      sessionId: replacement.session.id,
+      socket: replacementSocket,
+    });
+
+    expect(await waitForDaemonMessage(replacementSocket)).toMatchObject({
+      type: "connect-shares.replace",
+    });
+    await new Promise((resolve) => setTimeout(resolve, 25));
+    expect(
+      readDaemonMessages(replacementSocket).some(
+        (message) => message.type === "terminal.open",
+      ),
+    ).toBe(false);
+    expect(
+      getTerminalSession(fixture.harness.db, { terminalId: stored.id }),
+    ).toMatchObject({ closeReason: "user", status: "exited" });
+  });
+
+  it("does not restore a named command with restart policy never", async () => {
+    const fixture = await createTerminalRouteFixture();
+    harnesses.push(fixture.harness);
+    const stored = createTerminalSession(fixture.harness.db, {
+      cols: 80,
+      daemonSessionId: fixture.session.id,
+      environmentId: fixture.environment.id,
+      hostId: fixture.host.id,
+      initialCwd: "/tmp/terminal-workspace",
+      launchCommand: "pnpm dev",
+      restartPolicy: "never",
+      rows: 24,
+      status: "running",
+      threadId: fixture.thread.id,
+      title: "Web dev server",
+    });
+    fixture.harness.deps.terminalSessions.handleDaemonSessionClosed({
+      sessionId: fixture.session.id,
+    });
+
+    const replacement = seedHostSession(fixture.harness.deps, {
+      id: fixture.host.id,
+    });
+    const replacementSocket = createFakeDaemonSocket();
+    onDaemonSocketOpen(fixture.harness.deps, {
+      hostId: fixture.host.id,
+      sessionId: replacement.session.id,
+      socket: replacementSocket,
+    });
+
+    expect(await waitForDaemonMessage(replacementSocket)).toMatchObject({
+      type: "connect-shares.replace",
+    });
+    expect(await waitForDaemonMessage(replacementSocket, 1)).toMatchObject({
+      type: "terminal.close",
+      terminalId: stored.id,
+    });
+    await new Promise((resolve) => setTimeout(resolve, 25));
+    expect(
+      readDaemonMessages(replacementSocket).some(
+        (message) => message.type === "terminal.open",
+      ),
+    ).toBe(false);
+  });
+
   it("marks running terminals disconnected when their daemon socket closes", async () => {
     const fixture = await createTerminalRouteFixture();
     harnesses.push(fixture.harness);
@@ -1446,7 +1766,10 @@ describe("public terminal routes", () => {
       environmentId: fixture.environment.id,
       hostId: fixture.host.id,
       initialCwd: "/tmp/terminal-workspace",
+      launchCommand: "pnpm dev",
+      devServerPort: 4173,
       rows: 30,
+      restartPolicy: "until_stopped",
       status: "running",
       threadId: fixture.thread.id,
       title: "Terminal 1",
@@ -1464,6 +1787,10 @@ describe("public terminal routes", () => {
     if (openMessage.type !== "terminal.open") {
       throw new Error(`Expected terminal.open, received ${openMessage.type}`);
     }
+    expect(openMessage.start).toEqual({
+      mode: "command",
+      command: "pnpm dev",
+    });
     expect(
       getTerminalSession(fixture.harness.db, { terminalId: stored.id }),
     ).toMatchObject({ status: "running" });
@@ -1500,6 +1827,8 @@ describe("public terminal routes", () => {
     );
     expect(firstReplacement.id).toBe(openMessage.terminalId);
     expect(secondReplacement.id).toBe(openMessage.terminalId);
+    expect(firstReplacement.devServerPort).toBe(4173);
+    expect(secondReplacement.devServerPort).toBe(4173);
     expect(
       readDaemonMessages(fixture.socket).filter(
         (message) => message.type === "terminal.open",

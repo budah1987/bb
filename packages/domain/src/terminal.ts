@@ -15,12 +15,11 @@ export const terminalSessionStatusValues = [
   "disconnected",
   "exited",
 ] as const;
-export const terminalSessionStatusSchema = z.enum(
-  terminalSessionStatusValues,
-);
-export type TerminalSessionStatus = z.infer<
-  typeof terminalSessionStatusSchema
->;
+export const terminalSessionStatusSchema = z.enum(terminalSessionStatusValues);
+export type TerminalSessionStatus = z.infer<typeof terminalSessionStatusSchema>;
+
+export const terminalRestartPolicySchema = z.enum(["never", "until_stopped"]);
+export type TerminalRestartPolicy = z.infer<typeof terminalRestartPolicySchema>;
 
 export function isActiveTerminalSessionStatus(
   status: TerminalSessionStatus,
@@ -124,12 +123,16 @@ export function readTerminalOutputLines(text: string): string[] {
   return [...reader.push(text), ...reader.flush()];
 }
 
-export const terminalColsSchema = z.number().int().positive().max(
-  TERMINAL_COLS_MAX,
-);
-export const terminalRowsSchema = z.number().int().positive().max(
-  TERMINAL_ROWS_MAX,
-);
+export const terminalColsSchema = z
+  .number()
+  .int()
+  .positive()
+  .max(TERMINAL_COLS_MAX);
+export const terminalRowsSchema = z
+  .number()
+  .int()
+  .positive()
+  .max(TERMINAL_ROWS_MAX);
 export const terminalDataBase64Schema = z
   .string()
   .min(1)

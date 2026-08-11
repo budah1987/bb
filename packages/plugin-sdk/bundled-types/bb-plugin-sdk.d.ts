@@ -18,6 +18,10 @@ import { Context } from 'hono';
  */
 declare const appSettingsSchema: z$1.ZodObject<{
     caffeinate: z$1.ZodBoolean;
+    devServerRestartPolicy: z$1.ZodEnum<{
+        never: "never";
+        until_stopped: "until_stopped";
+    }>;
     showKeyboardHints: z$1.ZodBoolean;
     steerActiveThreadOnEnter: z$1.ZodBoolean;
     showUnhandledProviderEvents: z$1.ZodBoolean;
@@ -2639,6 +2643,60 @@ declare const projectBranchesResponseSchema: z$1.ZodObject<{
     defaultWorktreeBaseBranch: z$1.ZodNullable<z$1.ZodString>;
 }, z$1.core.$strip>;
 type ProjectBranchesResponse = z$1.infer<typeof projectBranchesResponseSchema>;
+declare const projectManagerSettingsSchema: z$1.ZodObject<{
+    enabled: z$1.ZodBoolean;
+    providerId: z$1.ZodString;
+    model: z$1.ZodString;
+    reasoningLevel: z$1.ZodEnum<{
+        none: "none";
+        low: "low";
+        medium: "medium";
+        high: "high";
+        xhigh: "xhigh";
+        ultracode: "ultracode";
+        max: "max";
+        ultra: "ultra";
+    }>;
+    serviceTier: z$1.ZodEnum<{
+        default: "default";
+        fast: "fast";
+    }>;
+    permissionMode: z$1.ZodEnum<{
+        auto: "auto";
+        "accept-edits": "accept-edits";
+        full: "full";
+    }>;
+}, z$1.core.$strict>;
+type ProjectManagerSettings = z$1.infer<typeof projectManagerSettingsSchema>;
+declare const updateProjectManagerSettingsRequestSchema: z$1.ZodObject<{
+    enabled: z$1.ZodOptional<z$1.ZodBoolean>;
+    providerId: z$1.ZodOptional<z$1.ZodString>;
+    model: z$1.ZodOptional<z$1.ZodString>;
+    reasoningLevel: z$1.ZodOptional<z$1.ZodEnum<{
+        none: "none";
+        low: "low";
+        medium: "medium";
+        high: "high";
+        xhigh: "xhigh";
+        ultracode: "ultracode";
+        max: "max";
+        ultra: "ultra";
+    }>>;
+    serviceTier: z$1.ZodOptional<z$1.ZodEnum<{
+        default: "default";
+        fast: "fast";
+    }>>;
+    permissionMode: z$1.ZodOptional<z$1.ZodEnum<{
+        auto: "auto";
+        "accept-edits": "accept-edits";
+        full: "full";
+    }>>;
+}, z$1.core.$strict>;
+type UpdateProjectManagerSettingsRequest = z$1.infer<typeof updateProjectManagerSettingsRequestSchema>;
+declare const runProjectManagerRequestSchema: z$1.ZodObject<{
+    prompt: z$1.ZodOptional<z$1.ZodString>;
+}, z$1.core.$strict>;
+type RunProjectManagerRequest = z$1.infer<typeof runProjectManagerRequestSchema>;
 declare const promptHistoryQuerySchema: z$1.ZodObject<{
     limit: z$1.ZodOptional<z$1.ZodString>;
 }, z$1.core.$strip>;
@@ -3237,10 +3295,19 @@ declare const environmentDockerActivityResponseSchema: z$1.ZodDiscriminatedUnion
     outcome: z$1.ZodLiteral<"unavailable">;
 }, z$1.core.$strict>], "outcome">;
 type EnvironmentDockerActivityResponse = z$1.infer<typeof environmentDockerActivityResponseSchema>;
+declare const environmentDockerControlResponseSchema: z$1.ZodObject<{
+    action: z$1.ZodEnum<{
+        restart: "restart";
+        stop: "stop";
+    }>;
+    containerId: z$1.ZodString;
+}, z$1.core.$strict>;
+type EnvironmentDockerControlResponse = z$1.infer<typeof environmentDockerControlResponseSchema>;
 declare const environmentPreviewsResponseSchema: z$1.ZodObject<{
     issues: z$1.ZodArray<z$1.ZodObject<{
         message: z$1.ZodString;
         source: z$1.ZodEnum<{
+            terminal: "terminal";
             docker: "docker";
             github: "github";
         }>;
@@ -3260,7 +3327,10 @@ declare const environmentPreviewsResponseSchema: z$1.ZodObject<{
         }>;
         label: z$1.ZodString;
         logUrl: z$1.ZodNullable<z$1.ZodString>;
+        port: z$1.ZodNullable<z$1.ZodNumber>;
+        shared: z$1.ZodBoolean;
         source: z$1.ZodEnum<{
+            terminal: "terminal";
             docker: "docker";
             github: "github";
         }>;
@@ -3275,6 +3345,20 @@ declare const environmentPreviewsResponseSchema: z$1.ZodObject<{
     }, z$1.core.$strict>>;
 }, z$1.core.$strict>;
 type EnvironmentPreviewsResponse = z$1.infer<typeof environmentPreviewsResponseSchema>;
+declare const environmentPreviewShareResponseSchema: z$1.ZodObject<{
+    port: z$1.ZodNumber;
+    url: z$1.ZodString;
+}, z$1.core.$strict>;
+type EnvironmentPreviewShareResponse = z$1.infer<typeof environmentPreviewShareResponseSchema>;
+declare const environmentPreviewUnshareResponseSchema: z$1.ZodObject<{
+    port: z$1.ZodNumber;
+    shared: z$1.ZodLiteral<false>;
+}, z$1.core.$strict>;
+type EnvironmentPreviewUnshareResponse = z$1.infer<typeof environmentPreviewUnshareResponseSchema>;
+declare const environmentPreviewBypassResponseSchema: z$1.ZodObject<{
+    url: z$1.ZodString;
+}, z$1.core.$strict>;
+type EnvironmentPreviewBypassResponse = z$1.infer<typeof environmentPreviewBypassResponseSchema>;
 declare const environmentDiffQuerySchema: z$1.ZodDiscriminatedUnion<[z$1.ZodObject<{
     target: z$1.ZodLiteral<"uncommitted">;
 }, z$1.core.$strip>, z$1.ZodObject<{
@@ -3351,8 +3435,8 @@ declare const environmentArchiveThreadsResponseSchema: z$1.ZodObject<{
 type EnvironmentArchiveThreadsResponse = z$1.infer<typeof environmentArchiveThreadsResponseSchema>;
 declare const pullRequestMergeMethodSchema: z$1.ZodEnum<{
     merge: "merge";
-    rebase: "rebase";
     squash: "squash";
+    rebase: "rebase";
 }>;
 type PullRequestMergeMethod = z$1.infer<typeof pullRequestMergeMethodSchema>;
 declare const commitActionResponseSchema: z$1.ZodObject<{
@@ -3386,6 +3470,22 @@ declare const publishToMainActionResponseSchema: z$1.ZodObject<{
     preservedTargetChangesCommitSha: z$1.ZodNullable<z$1.ZodString>;
 }, z$1.core.$strip>;
 type PublishToMainActionResponse = z$1.infer<typeof publishToMainActionResponseSchema>;
+declare const updateFromMainActionResponseSchema: z$1.ZodObject<{
+    ok: z$1.ZodLiteral<true>;
+    action: z$1.ZodLiteral<"update_from_main">;
+    message: z$1.ZodString;
+    outcome: z$1.ZodEnum<{
+        updated: "updated";
+        already_current: "already_current";
+    }>;
+    sourceBranch: z$1.ZodString;
+    targetBranch: z$1.ZodLiteral<"main">;
+    previousSha: z$1.ZodString;
+    currentSha: z$1.ZodString;
+    targetSha: z$1.ZodString;
+    rebasedCommitCount: z$1.ZodNumber;
+}, z$1.core.$strip>;
+type UpdateFromMainActionResponse = z$1.infer<typeof updateFromMainActionResponseSchema>;
 declare const pullRequestMetadataActionResponseSchema: z$1.ZodObject<{
     ok: z$1.ZodLiteral<true>;
     action: z$1.ZodLiteral<"pull_request_metadata">;
@@ -3507,8 +3607,8 @@ declare const pullRequestMergeActionResponseSchema: z$1.ZodObject<{
     action: z$1.ZodLiteral<"pull_request_merge">;
     method: z$1.ZodEnum<{
         merge: "merge";
-        rebase: "rebase";
         squash: "squash";
+        rebase: "rebase";
     }>;
     message: z$1.ZodString;
 }, z$1.core.$strip>;
@@ -5389,6 +5489,43 @@ declare const hostDaemonCommandRegistry: {
         localTargetSha: z$1.ZodNullable<z$1.ZodString>;
         conflictFiles: z$1.ZodArray<z$1.ZodString>;
     }, z$1.core.$strict>], "outcome">, "settled", false>;
+    "workspace.update_from_target": HostDaemonCommandDescriptor<"workspace.update_from_target", z$1.ZodObject<{
+        environmentId: z$1.ZodString;
+        workspaceContext: z$1.ZodObject<{
+            workspacePath: z$1.ZodString;
+            workspaceProvisionType: z$1.ZodEnum<{
+                unmanaged: "unmanaged";
+                "managed-worktree": "managed-worktree";
+                personal: "personal";
+            }>;
+        }, z$1.core.$strip>;
+        type: z$1.ZodLiteral<"workspace.update_from_target">;
+        targetBranch: z$1.ZodString;
+    }, z$1.core.$strict>, z$1.ZodDiscriminatedUnion<[z$1.ZodObject<{
+        outcome: z$1.ZodEnum<{
+            updated: "updated";
+            already_current: "already_current";
+        }>;
+        sourceBranch: z$1.ZodString;
+        targetBranch: z$1.ZodString;
+        previousSha: z$1.ZodString;
+        currentSha: z$1.ZodString;
+        targetSha: z$1.ZodString;
+        rebasedCommitCount: z$1.ZodNumber;
+    }, z$1.core.$strict>, z$1.ZodObject<{
+        outcome: z$1.ZodLiteral<"blocked">;
+        reason: z$1.ZodEnum<{
+            source_detached: "source_detached";
+            source_dirty: "source_dirty";
+            source_is_target: "source_is_target";
+            rebase_conflict: "rebase_conflict";
+        }>;
+        sourceBranch: z$1.ZodNullable<z$1.ZodString>;
+        targetBranch: z$1.ZodString;
+        previousSha: z$1.ZodNullable<z$1.ZodString>;
+        targetSha: z$1.ZodNullable<z$1.ZodString>;
+        conflictFiles: z$1.ZodArray<z$1.ZodString>;
+    }, z$1.core.$strict>], "outcome">, "settled", false>;
     "workspace.rename": HostDaemonCommandDescriptor<"workspace.rename", z$1.ZodDiscriminatedUnion<[z$1.ZodObject<{
         environmentId: z$1.ZodString;
         workspaceContext: z$1.ZodObject<{
@@ -6647,6 +6784,37 @@ declare const hostDaemonCommandRegistry: {
             message: z$1.ZodString;
         }, z$1.core.$strict>;
     }, z$1.core.$strict>], "outcome">, "onlineRpc", true>;
+    "workspace.find_available_port": HostDaemonCommandDescriptor<"workspace.find_available_port", z$1.ZodObject<{
+        environmentId: z$1.ZodString;
+        workspaceContext: z$1.ZodObject<{
+            workspacePath: z$1.ZodString;
+            workspaceProvisionType: z$1.ZodEnum<{
+                unmanaged: "unmanaged";
+                "managed-worktree": "managed-worktree";
+                personal: "personal";
+            }>;
+        }, z$1.core.$strip>;
+        type: z$1.ZodLiteral<"workspace.find_available_port">;
+        preferredPort: z$1.ZodNumber;
+        candidateCount: z$1.ZodDefault<z$1.ZodNumber>;
+    }, z$1.core.$strict>, z$1.ZodObject<{
+        port: z$1.ZodNumber;
+    }, z$1.core.$strict>, "onlineRpc", true>;
+    "workspace.port_status": HostDaemonCommandDescriptor<"workspace.port_status", z$1.ZodObject<{
+        environmentId: z$1.ZodString;
+        workspaceContext: z$1.ZodObject<{
+            workspacePath: z$1.ZodString;
+            workspaceProvisionType: z$1.ZodEnum<{
+                unmanaged: "unmanaged";
+                "managed-worktree": "managed-worktree";
+                personal: "personal";
+            }>;
+        }, z$1.core.$strip>;
+        type: z$1.ZodLiteral<"workspace.port_status">;
+        port: z$1.ZodNumber;
+    }, z$1.core.$strict>, z$1.ZodObject<{
+        isListening: z$1.ZodBoolean;
+    }, z$1.core.$strict>, "onlineRpc", true>;
     "workspace.docker_mounts": HostDaemonCommandDescriptor<"workspace.docker_mounts", z$1.ZodObject<{
         environmentId: z$1.ZodString;
         workspaceContext: z$1.ZodObject<{
@@ -6701,6 +6869,29 @@ declare const hostDaemonCommandRegistry: {
         }>;
         message: z$1.ZodString;
     }, z$1.core.$strict>], "outcome">, "onlineRpc", true>;
+    "workspace.docker_control": HostDaemonCommandDescriptor<"workspace.docker_control", z$1.ZodObject<{
+        environmentId: z$1.ZodString;
+        workspaceContext: z$1.ZodObject<{
+            workspacePath: z$1.ZodString;
+            workspaceProvisionType: z$1.ZodEnum<{
+                unmanaged: "unmanaged";
+                "managed-worktree": "managed-worktree";
+                personal: "personal";
+            }>;
+        }, z$1.core.$strip>;
+        type: z$1.ZodLiteral<"workspace.docker_control">;
+        action: z$1.ZodEnum<{
+            restart: "restart";
+            stop: "stop";
+        }>;
+        containerId: z$1.ZodString;
+    }, z$1.core.$strict>, z$1.ZodObject<{
+        action: z$1.ZodEnum<{
+            restart: "restart";
+            stop: "stop";
+        }>;
+        containerId: z$1.ZodString;
+    }, z$1.core.$strict>, "onlineRpc", false>;
     "workspace.docker_path_activity": HostDaemonCommandDescriptor<"workspace.docker_path_activity", z$1.ZodObject<{
         environmentId: z$1.ZodString;
         workspaceContext: z$1.ZodObject<{
@@ -7288,8 +7479,8 @@ declare const pluginApplyUpdateResultSchema: z$1.ZodObject<{
         display: z$1.ZodString;
     }, z$1.core.$strip>>;
     outcome: z$1.ZodEnum<{
-        current: "current";
         updated: "updated";
+        current: "current";
         "rolled-back": "rolled-back";
     }>;
     detail: z$1.ZodOptional<z$1.ZodString>;
@@ -7909,6 +8100,10 @@ type OnboardingTelemetryEvent = z$1.infer<typeof onboardingTelemetryEventSchema>
 declare const systemConfigResponseSchema: z$1.ZodObject<{
     generalSettings: z$1.ZodObject<{
         caffeinate: z$1.ZodBoolean;
+        devServerRestartPolicy: z$1.ZodEnum<{
+            never: "never";
+            until_stopped: "until_stopped";
+        }>;
         showKeyboardHints: z$1.ZodBoolean;
         steerActiveThreadOnEnter: z$1.ZodBoolean;
         showUnhandledProviderEvents: z$1.ZodBoolean;
@@ -8334,6 +8529,12 @@ declare const terminalSessionSchema: z$1.ZodObject<{
     environmentId: z$1.ZodNullable<z$1.ZodString>;
     hostId: z$1.ZodString;
     title: z$1.ZodString;
+    launchCommand: z$1.ZodNullable<z$1.ZodString>;
+    devServerPort: z$1.ZodNullable<z$1.ZodNumber>;
+    restartPolicy: z$1.ZodEnum<{
+        never: "never";
+        until_stopped: "until_stopped";
+    }>;
     initialCwd: z$1.ZodString;
     cols: z$1.ZodNumber;
     rows: z$1.ZodNumber;
@@ -8365,6 +8566,12 @@ declare const terminalListResponseSchema: z$1.ZodObject<{
         environmentId: z$1.ZodNullable<z$1.ZodString>;
         hostId: z$1.ZodString;
         title: z$1.ZodString;
+        launchCommand: z$1.ZodNullable<z$1.ZodString>;
+        devServerPort: z$1.ZodNullable<z$1.ZodNumber>;
+        restartPolicy: z$1.ZodEnum<{
+            never: "never";
+            until_stopped: "until_stopped";
+        }>;
         initialCwd: z$1.ZodString;
         cols: z$1.ZodNumber;
         rows: z$1.ZodNumber;
@@ -8399,6 +8606,11 @@ declare const createTerminalRequestSchema: z$1.ZodObject<{
         mode: z$1.ZodLiteral<"command">;
         command: z$1.ZodString;
     }, z$1.core.$strict>], "mode">>;
+    restartPolicy: z$1.ZodOptional<z$1.ZodEnum<{
+        never: "never";
+        until_stopped: "until_stopped";
+    }>>;
+    devServerPort: z$1.ZodOptional<z$1.ZodNumber>;
     target: z$1.ZodDiscriminatedUnion<[z$1.ZodObject<{
         kind: z$1.ZodLiteral<"thread">;
         threadId: z$1.ZodString;
@@ -12748,8 +12960,25 @@ interface EnvironmentDockerProvenanceArgs extends EnvironmentActionArgs {
 interface EnvironmentDockerActivityArgs extends EnvironmentActionArgs {
     signal?: AbortSignal;
 }
+interface EnvironmentDockerControlArgs extends EnvironmentActionArgs {
+    action: "restart" | "stop";
+    containerId: string;
+}
 interface EnvironmentPreviewsArgs extends EnvironmentActionArgs {
     signal?: AbortSignal;
+}
+interface EnvironmentStartDevServerArgs extends EnvironmentActionArgs {
+    command: string;
+    preferredPort?: number;
+    threadId: string;
+    title: string;
+}
+interface EnvironmentPreviewPortArgs extends EnvironmentActionArgs {
+    port: number;
+}
+interface EnvironmentPreviewBypassArgs extends EnvironmentActionArgs {
+    providerId: string;
+    secret: string;
 }
 type EnvironmentDiffArgs = EnvironmentDiffQuery & {
     environmentId: string;
@@ -12780,6 +13009,7 @@ interface EnvironmentSquashMergeArgs {
 interface EnvironmentPublishToMainArgs extends EnvironmentActionArgs {
     preserveTargetChanges?: boolean;
 }
+type EnvironmentUpdateFromMainArgs = EnvironmentActionArgs;
 interface EnvironmentPullRequestMergeArgs {
     environmentId: string;
     method: PullRequestMergeMethod;
@@ -12820,10 +13050,16 @@ type EnvironmentPullRequestResult = EnvironmentPullRequestResponse;
 type EnvironmentRenameResult = Environment;
 type EnvironmentSquashMergeResult = SquashMergeActionResponse;
 type EnvironmentPublishToMainResult = PublishToMainActionResponse;
+type EnvironmentUpdateFromMainResult = UpdateFromMainActionResponse;
 type EnvironmentStatusResult = EnvironmentStatusResponse;
 type EnvironmentDockerProvenanceResult = EnvironmentDockerProvenanceResponse;
 type EnvironmentDockerActivityResult = EnvironmentDockerActivityResponse;
+type EnvironmentDockerControlResult = EnvironmentDockerControlResponse;
 type EnvironmentPreviewsResult = EnvironmentPreviewsResponse;
+type EnvironmentStartDevServerResult = TerminalSession;
+type EnvironmentPreviewShareResult = EnvironmentPreviewShareResponse;
+type EnvironmentPreviewUnshareResult = EnvironmentPreviewUnshareResponse;
+type EnvironmentPreviewBypassResult = EnvironmentPreviewBypassResponse;
 type EnvironmentUpdateResult = Environment;
 type EnvironmentSimulatorStatusResult = SimulatorStatusResponse;
 type EnvironmentSimulatorAttachResult = SimulatorAttachResponse;
@@ -12842,9 +13078,14 @@ interface EnvironmentsArea {
     diffPatch(args: EnvironmentDiffPatchArgs): Promise<EnvironmentDiffPatchResult>;
     dockerProvenance(args: EnvironmentDockerProvenanceArgs): Promise<EnvironmentDockerProvenanceResult>;
     dockerActivity(args: EnvironmentDockerActivityArgs): Promise<EnvironmentDockerActivityResult>;
+    dockerControl(args: EnvironmentDockerControlArgs): Promise<EnvironmentDockerControlResult>;
     get(args: EnvironmentGetArgs): Promise<EnvironmentGetResult>;
     pullRequest(args: EnvironmentGetArgs): Promise<EnvironmentPullRequestResult>;
     previews(args: EnvironmentPreviewsArgs): Promise<EnvironmentPreviewsResult>;
+    startDevServer(args: EnvironmentStartDevServerArgs): Promise<EnvironmentStartDevServerResult>;
+    sharePreviewPort(args: EnvironmentPreviewPortArgs): Promise<EnvironmentPreviewShareResult>;
+    unsharePreviewPort(args: EnvironmentPreviewPortArgs): Promise<EnvironmentPreviewUnshareResult>;
+    bypassPreviewProtection(args: EnvironmentPreviewBypassArgs): Promise<EnvironmentPreviewBypassResult>;
     createPullRequest(args: EnvironmentPullRequestCreateArgs): Promise<EnvironmentCreatePullRequestResult>;
     generatePullRequestMetadata(args: EnvironmentPullRequestMetadataArgs): Promise<EnvironmentPullRequestMetadataResult>;
     rename(args: EnvironmentRenameArgs): Promise<EnvironmentRenameResult>;
@@ -12854,6 +13095,7 @@ interface EnvironmentsArea {
     paths(args: EnvironmentPathsArgs): Promise<EnvironmentPathsResult>;
     squashMerge(args: EnvironmentSquashMergeArgs): Promise<EnvironmentSquashMergeResult>;
     publishToMain(args: EnvironmentPublishToMainArgs): Promise<EnvironmentPublishToMainResult>;
+    updateFromMain(args: EnvironmentUpdateFromMainArgs): Promise<EnvironmentUpdateFromMainResult>;
     status(args: EnvironmentStatusArgs): Promise<EnvironmentStatusResult>;
     simulatorStatus(args: EnvironmentActionArgs): Promise<EnvironmentSimulatorStatusResult>;
     simulatorAttach(args: EnvironmentSimulatorAttachArgs): Promise<EnvironmentSimulatorAttachResult>;
@@ -13093,6 +13335,16 @@ interface ProjectDefaultExecutionOptionsArgs {
     projectId: string;
     signal?: AbortSignal;
 }
+interface ProjectManagerShowArgs {
+    projectId: string;
+    signal?: AbortSignal;
+}
+interface ProjectManagerSettingsArgs extends UpdateProjectManagerSettingsRequest {
+    projectId: string;
+}
+interface ProjectManagerRunArgs extends RunProjectManagerRequest {
+    projectId: string;
+}
 interface ProjectAttachmentFileLike {
     arrayBuffer(): Promise<ArrayBuffer>;
     readonly name: string;
@@ -13186,6 +13438,11 @@ interface ProjectsArea {
     files(args: ProjectFilesArgs): Promise<ProjectFilesResult>;
     get(args: ProjectGetArgs): Promise<ProjectGetResult>;
     list(args?: ProjectListArgs): Promise<ProjectListResult>;
+    manager: {
+        show(args: ProjectManagerShowArgs): Promise<ProjectManagerSettings>;
+        settings(args: ProjectManagerSettingsArgs): Promise<ProjectManagerSettings>;
+        run(args: ProjectManagerRunArgs): Promise<ThreadResponse>;
+    };
     paths(args: ProjectPathsArgs): Promise<ProjectPathsResult>;
     promptHistory(args: ProjectPromptHistoryArgs): Promise<ProjectPromptHistoryResult>;
     reorder(args: ProjectReorderArgs): Promise<ProjectReorderResult>;
@@ -13668,6 +13925,8 @@ interface TerminalListArgs {
 interface TerminalCreateArgs {
     cols: number;
     rows: number;
+    devServerPort?: CreateTerminalRequest["devServerPort"];
+    restartPolicy?: CreateTerminalRequest["restartPolicy"];
     scope: TerminalCreateScope;
     start?: CreateTerminalRequest["start"];
     title?: string;
@@ -13716,11 +13975,11 @@ interface TerminalsArea {
     output(args: TerminalOutputArgs): Promise<TerminalOutputResult>;
     rename(args: TerminalRenameArgs): Promise<TerminalRenameResult>;
     /**
-     * Replace a terminal with a shell at the same scope, size, and title.
+     * Replace a terminal at the same scope, size, and title.
      * The server serializes concurrent restarts and opens the replacement before
      * closing the old session, so a failed open leaves the old terminal running.
-     * The original command is not replayed because terminal sessions do not
-     * persist launch commands. The replacement has a new terminal ID.
+     * Named command terminals replay their saved command. Shell terminals open
+     * a new shell. The replacement has a new terminal ID.
      */
     restart(args: TerminalRestartArgs): Promise<TerminalRestartResult>;
     resize(args: TerminalResizeArgs): Promise<TerminalResizeResult>;

@@ -4,9 +4,12 @@ import { migrate } from "../../src/migrate.js";
 import { noopNotifier } from "../../src/notifier.js";
 import {
   createTerminalSession,
+  disableAllTerminalSupervision,
+  getDesiredTerminalSessionBySupervisionId,
   getThreadlessTerminalSessionForEnvironment,
   listThreadlessTerminalSessionsByEnvironment,
   listTerminalSessionsByThread,
+  listDesiredTerminalSessionsByHost,
   listVisibleTerminalSessionsByThread,
   listVisibleThreadlessTerminalSessionsByEnvironment,
   markDaemonTerminalSessionsDisconnected,
@@ -15,6 +18,7 @@ import {
   markTerminalSessionUserInput,
   markTerminalSessionRunning,
   markThreadTerminalSessionsExited,
+  setTerminalSupervisionDesired,
 } from "../../src/data/terminal-sessions.js";
 import { createEnvironment } from "../../src/data/environments.js";
 import { upsertHost } from "../../src/data/hosts.js";
@@ -119,6 +123,90 @@ function createStartingThreadlessTerminal(fixture: TerminalSessionFixture) {
 }
 
 describe("terminal sessions", () => {
+  it("persists durable launch metadata for a supervised command", () => {
+    const fixture = setup();
+    const terminal = createTerminalSession(fixture.db, {
+      cols: 80,
+      daemonSessionId: fixture.session.id,
+      environmentId: fixture.environment.id,
+      hostId: fixture.host.id,
+      initialCwd: "/tmp/workspace",
+      launchCommand: "pnpm dev",
+      restartPolicy: "until_stopped",
+      rows: 24,
+      status: "running",
+      threadId: fixture.thread.id,
+      title: "Web dev server",
+    });
+
+    expect(terminal).toMatchObject({
+      launchCommand: "pnpm dev",
+      restartPolicy: "until_stopped",
+    });
+  });
+
+  it("persists and disables a supervised command intent", () => {
+    const fixture = setup();
+    const terminal = createTerminalSession(fixture.db, {
+      cols: 80,
+      daemonSessionId: null,
+      environmentId: fixture.environment.id,
+      hostId: fixture.host.id,
+      initialCwd: "/tmp/workspace",
+      launchCommand: "pnpm dev",
+      restartPolicy: "until_stopped",
+      rows: 24,
+      status: "exited",
+      supervisionAttempt: 2,
+      supervisionDesired: true,
+      supervisionId: "supervisor-1",
+      threadId: fixture.thread.id,
+      title: "Web dev server",
+    });
+
+    expect(
+      getDesiredTerminalSessionBySupervisionId(fixture.db, "supervisor-1"),
+    ).toMatchObject({ id: terminal.id, supervisionAttempt: 2 });
+    expect(listDesiredTerminalSessionsByHost(fixture.db, fixture.host.id)).toEqual([
+      expect.objectContaining({ id: terminal.id }),
+    ]);
+
+    setTerminalSupervisionDesired(fixture.db, {
+      desired: false,
+      supervisionId: "supervisor-1",
+    });
+    expect(
+      getDesiredTerminalSessionBySupervisionId(fixture.db, "supervisor-1"),
+    ).toBeNull();
+  });
+
+  it("turns every desired supervision policy into never", () => {
+    const fixture = setup();
+    const terminal = createTerminalSession(fixture.db, {
+      cols: 80,
+      daemonSessionId: fixture.session.id,
+      environmentId: fixture.environment.id,
+      hostId: fixture.host.id,
+      initialCwd: "/tmp/workspace",
+      launchCommand: "pnpm dev",
+      restartPolicy: "until_stopped",
+      rows: 24,
+      status: "running",
+      supervisionDesired: true,
+      supervisionId: "supervisor-1",
+      threadId: fixture.thread.id,
+      title: "Web dev server",
+    });
+
+    expect(disableAllTerminalSupervision(fixture.db)).toEqual([
+      expect.objectContaining({
+        id: terminal.id,
+        restartPolicy: "never",
+        supervisionDesired: false,
+      }),
+    ]);
+  });
+
   it("keeps threadless environment terminals out of thread terminal queries", () => {
     const fixture = setup();
     const threadTerminal = createStartingTerminal(fixture);

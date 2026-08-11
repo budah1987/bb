@@ -2,6 +2,7 @@ import { Command } from "commander";
 import type {
   CommitActionResponse,
   PublishToMainActionResponse,
+  UpdateFromMainActionResponse,
   SquashMergeActionResponse,
 } from "@bb/server-contract";
 import type {
@@ -45,8 +46,33 @@ interface EnvironmentDockerActivityCommandOptions {
   json?: boolean;
 }
 
+interface EnvironmentDockerControlCommandOptions {
+  action: "restart" | "stop";
+  container: string;
+  json?: boolean;
+}
+
 interface EnvironmentPreviewsCommandOptions {
   json?: boolean;
+}
+
+interface EnvironmentDevServerStartCommandOptions {
+  command: string;
+  json?: boolean;
+  port?: string;
+  thread: string;
+  title: string;
+}
+
+interface EnvironmentPreviewPortCommandOptions {
+  json?: boolean;
+  port: string;
+}
+
+interface EnvironmentPreviewBypassCommandOptions {
+  json?: boolean;
+  provider: string;
+  secretEnv: string;
 }
 
 interface EnvironmentBranchesCommandOptions {
@@ -510,6 +536,31 @@ export function registerEnvironmentCommands(
     );
 
   environment
+    .command("docker-control <id>")
+    .description("Restart or stop an environment Docker container")
+    .requiredOption("--container <id>", "Docker container ID")
+    .requiredOption("--action <action>", "restart or stop")
+    .option("--json", "Print machine-readable JSON output")
+    .action(
+      action(
+        async (id: string, opts: EnvironmentDockerControlCommandOptions) => {
+          if (opts.action !== "restart" && opts.action !== "stop") {
+            throw new Error("--action must be restart or stop.");
+          }
+          const result = await createCliBbSdk(
+            getUrl(),
+          ).environments.dockerControl({
+            action: opts.action,
+            containerId: opts.container,
+            environmentId: id,
+          });
+          if (outputJson(opts, result)) return;
+          console.log(`${result.action} requested for ${result.containerId}`);
+        },
+      ),
+    );
+
+  environment
     .command("previews <id>")
     .description("Show local and deployment previews")
     .option("--json", "Print machine-readable JSON output")
@@ -531,6 +582,102 @@ export function registerEnvironmentCommands(
           console.log(`${issue.source}: ${issue.message}`);
         }
       }),
+    );
+
+  environment
+    .command("dev-server-start <id>")
+    .description("Start a durable development server")
+    .requiredOption("--thread <id>", "Owning thread")
+    .requiredOption("--title <title>", "Server title")
+    .requiredOption(
+      "--command <command>",
+      "Launch command containing the {port} placeholder",
+    )
+    .option("--port <port>", "Preferred port")
+    .option("--json", "Print machine-readable JSON output")
+    .action(
+      action(
+        async (id: string, opts: EnvironmentDevServerStartCommandOptions) => {
+          const result = await createCliBbSdk(
+            getUrl(),
+          ).environments.startDevServer({
+            command: opts.command,
+            environmentId: id,
+            ...(opts.port === undefined
+              ? {}
+              : { preferredPort: parseDevServerPort(opts.port) }),
+            threadId: opts.thread,
+            title: opts.title,
+          });
+          if (outputJson(opts, result)) return;
+          console.log(
+            `Started ${result.title} on port ${result.devServerPort ?? "unknown"} (${result.id})`,
+          );
+        },
+      ),
+    );
+
+  for (const operation of ["share", "unshare"] as const) {
+    environment
+      .command(`preview-${operation} <id>`)
+      .description(
+        operation === "share"
+          ? "Share a local preview port"
+          : "Stop sharing a local preview port",
+      )
+      .requiredOption("--port <port>", "Local preview port")
+      .option("--json", "Print machine-readable JSON output")
+      .action(
+        action(
+          async (id: string, opts: EnvironmentPreviewPortCommandOptions) => {
+            const sdk = createCliBbSdk(getUrl());
+            const input = {
+              environmentId: id,
+              port: parseDevServerPort(opts.port),
+            };
+            const result =
+              operation === "share"
+                ? await sdk.environments.sharePreviewPort(input)
+                : await sdk.environments.unsharePreviewPort(input);
+            if (outputJson(opts, result)) return;
+            console.log(
+              operation === "share"
+                ? `Shared port ${result.port}: ${"url" in result ? result.url : ""}`
+                : `Stopped sharing port ${result.port}`,
+            );
+          },
+        ),
+      );
+  }
+
+  environment
+    .command("preview-bypass <id>")
+    .description("Create a Vercel protection-bypass preview URL")
+    .requiredOption("--provider <id>", "Preview provider ID")
+    .option(
+      "--secret-env <name>",
+      "Environment variable containing the bypass secret",
+      "VERCEL_AUTOMATION_BYPASS_SECRET",
+    )
+    .option("--json", "Print machine-readable JSON output")
+    .action(
+      action(
+        async (id: string, opts: EnvironmentPreviewBypassCommandOptions) => {
+          const secret = process.env[opts.secretEnv]?.trim();
+          if (!secret) {
+            throw new Error(`${opts.secretEnv} is not set.`);
+          }
+          const result = await createCliBbSdk(
+            getUrl(),
+          ).environments.bypassPreviewProtection({
+            environmentId: id,
+            providerId: opts.provider,
+            secret,
+          });
+          if (outputJson(opts, result)) return;
+          console.log(result.url);
+        },
+      ),
     );
 
   environment
@@ -914,6 +1061,25 @@ export function registerEnvironmentCommands(
     );
 
   environment
+    .command("update-from-main <id>")
+    .description("Rebase a clean managed worktree onto the latest origin/main")
+    .option("--json", "Print machine-readable JSON output")
+    .action(
+      action(async (id: string, opts: { json?: boolean }) => {
+        const result: UpdateFromMainActionResponse = await createCliBbSdk(
+          getUrl(),
+        ).environments.updateFromMain({ environmentId: id });
+        if (outputJson(opts, result)) return;
+        if (result.outcome === "already_current") {
+          console.log(`${result.sourceBranch} already includes origin/main`);
+          return;
+        }
+        console.log(`Updated ${result.sourceBranch} from origin/main`);
+        console.log(`Commit: ${result.currentSha}`);
+      }),
+    );
+
+  environment
     .command("archive-threads <id>")
     .description("Archive every active thread in an environment")
     .option("--json", "Print machine-readable JSON output")
@@ -1090,4 +1256,12 @@ export function registerEnvironmentCommands(
         console.log(result.message);
       }),
     );
+}
+
+function parseDevServerPort(value: string): number {
+  const port = Number(value);
+  if (!Number.isInteger(port) || port < 1024 || port > 65535) {
+    throw new Error("Port must be an integer between 1024 and 65535.");
+  }
+  return port;
 }

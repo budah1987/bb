@@ -60,8 +60,8 @@ export function RenameProjectDialog({
           <DialogHeader>
             <DialogTitle>Rename repository</DialogTitle>
             <DialogDescription>
-              Changes only the name shown in this sidebar. The repository
-              itself stays unchanged.
+              Changes only the name shown in this sidebar. The repository itself
+              stays unchanged.
             </DialogDescription>
           </DialogHeader>
           <label className="block space-y-1.5 text-xs font-medium text-foreground">
@@ -186,7 +186,11 @@ export function ProjectIconDialog({
             onChange={(event) => setQuery(event.target.value)}
           />
         </div>
-        <div className="conductor-icon-grid-scroll" role="listbox" aria-label="Icons">
+        <div
+          className="conductor-icon-grid-scroll"
+          role="listbox"
+          aria-label="Icons"
+        >
           {isEmpty ? (
             <p className="px-1 py-6 text-center text-xs text-muted-foreground">
               No matches.
@@ -207,7 +211,9 @@ export function ProjectIconDialog({
                         className="conductor-icon-cell"
                         data-selected={selected || undefined}
                         title={glyph.name}
-                        onClick={() => pick({ kind: "glyph", name: glyph.name })}
+                        onClick={() =>
+                          pick({ kind: "glyph", name: glyph.name })
+                        }
                       >
                         <ProjectGlyphIcon
                           name={glyph.name}

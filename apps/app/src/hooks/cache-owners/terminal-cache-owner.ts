@@ -1,5 +1,8 @@
 import type { QueryClient } from "@tanstack/react-query";
-import type { TerminalListResponse, TerminalSession } from "@bb/server-contract";
+import type {
+  TerminalListResponse,
+  TerminalSession,
+} from "@bb/server-contract";
 import {
   allTerminalsQueryKeyPrefix,
   terminalsQueryKey,
@@ -13,6 +16,11 @@ interface TerminalSessionCacheArgs {
 
 interface CloseTerminalSessionCacheArgs extends TerminalSessionCacheArgs {
   terminalId: string;
+}
+
+interface InvalidateTerminalScopesArgs {
+  queryClient: QueryClient;
+  scopes: TerminalQueryScope[];
 }
 
 function upsertTerminalSession(
@@ -102,4 +110,21 @@ export function applyTerminalSessionClose({
   queryClient.invalidateQueries({
     queryKey: allTerminalsQueryKeyPrefix(),
   });
+}
+
+export function applyTerminalSessionsInvalidate(
+  queryClient: QueryClient,
+): void {
+  queryClient.invalidateQueries({
+    queryKey: allTerminalsQueryKeyPrefix(),
+  });
+}
+
+export function invalidateTerminalScopes({
+  queryClient,
+  scopes,
+}: InvalidateTerminalScopesArgs): void {
+  for (const scope of scopes) {
+    queryClient.invalidateQueries({ queryKey: terminalsQueryKey(scope) });
+  }
 }

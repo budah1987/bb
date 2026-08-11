@@ -11649,6 +11649,7 @@ interface EnvironmentsArea {
     squashMerge(args: EnvironmentSquashMergeArgs): Promise<EnvironmentSquashMergeResult>;
     status(args: EnvironmentStatusArgs): Promise<EnvironmentStatusResult>;
     update(args: EnvironmentUpdateArgs): Promise<EnvironmentUpdateResult>;
+    updateFromMain(args: { environmentId: string }): Promise<unknown>;
 }
 
 /**
@@ -11962,6 +11963,33 @@ interface ProjectsArea {
     files(args: ProjectFilesArgs): Promise<ProjectFilesResult>;
     get(args: ProjectGetArgs): Promise<ProjectGetResult>;
     list(args?: ProjectListArgs): Promise<ProjectListResult>;
+    manager: {
+        show(args: { projectId: string; signal?: AbortSignal }): Promise<{
+            enabled: boolean;
+            providerId: string;
+            model: string;
+            reasoningLevel: ReasoningLevel;
+            serviceTier: ServiceTier;
+            permissionMode: PermissionMode;
+        }>;
+        settings(args: {
+            projectId: string;
+            enabled?: boolean;
+            providerId?: string;
+            model?: string;
+            reasoningLevel?: ReasoningLevel;
+            serviceTier?: ServiceTier;
+            permissionMode?: PermissionMode;
+        }): Promise<{
+            enabled: boolean;
+            providerId: string;
+            model: string;
+            reasoningLevel: ReasoningLevel;
+            serviceTier: ServiceTier;
+            permissionMode: PermissionMode;
+        }>;
+        run(args: { projectId: string; prompt?: string }): Promise<ThreadResponse>;
+    };
     paths(args: ProjectPathsArgs): Promise<ProjectPathsResult>;
     promptHistory(args: ProjectPromptHistoryArgs): Promise<ProjectPromptHistoryResult>;
     reorder(args: ProjectReorderArgs): Promise<ProjectReorderResult>;

@@ -3,6 +3,7 @@ import {
   terminalColsSchema,
   terminalDataBase64Schema,
   terminalRowsSchema,
+  terminalRestartPolicySchema,
   terminalSessionCloseReasonSchema,
   terminalSessionStatusSchema,
 } from "@bb/domain";
@@ -13,6 +14,9 @@ export const terminalSessionSchema = z.object({
   environmentId: z.string().min(1).nullable(),
   hostId: z.string().min(1),
   title: z.string().min(1),
+  launchCommand: z.string().min(1).nullable(),
+  devServerPort: z.number().int().min(1024).max(65535).nullable(),
+  restartPolicy: terminalRestartPolicySchema,
   initialCwd: z.string().min(1),
   cols: terminalColsSchema,
   rows: terminalRowsSchema,
@@ -102,10 +106,25 @@ export const createTerminalRequestSchema = z
           .strict(),
       ])
       .optional(),
+    restartPolicy: terminalRestartPolicySchema.optional(),
+    devServerPort: z.number().int().min(1024).max(65535).optional(),
     target: terminalCreateTargetSchema,
     title: z.string().trim().min(1).max(200).optional(),
   })
-  .strict();
+  .strict()
+  .superRefine((request, context) => {
+    if (
+      (request.restartPolicy !== undefined ||
+        request.devServerPort !== undefined) &&
+      (request.start?.mode !== "command" || request.title === undefined)
+    ) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message:
+          "restartPolicy and devServerPort require a command terminal with an explicit title",
+      });
+    }
+  });
 export type CreateTerminalRequest = z.infer<typeof createTerminalRequestSchema>;
 
 export const closeTerminalRequestSchema = z

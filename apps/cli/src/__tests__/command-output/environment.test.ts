@@ -89,6 +89,11 @@ describe("bb environment command output", () => {
     expect(help).toContain("docker-provenance [options] <id>");
     expect(help).toContain("docker-activity [options] <id>");
     expect(help).toContain("previews [options] <id>");
+    expect(help).toContain("dev-server-start [options] <id>");
+    expect(help).toContain("preview-share [options] <id>");
+    expect(help).toContain("preview-unshare [options] <id>");
+    expect(help).toContain("preview-bypass [options] <id>");
+    expect(help).toContain("docker-control [options] <id>");
     expect(help).toContain("branches [options] <id>");
     expect(help).toContain("paths [options] <id>");
     expect(help).toContain("diff [options] <id>");
@@ -263,6 +268,8 @@ describe("bb environment command output", () => {
             kind: "deployment",
             label: "Preview",
             logUrl: "https://github.com/get-bb/bb/actions/runs/1",
+            port: null,
+            shared: false,
             source: "github",
             state: "ready",
             updatedAt: "2026-08-09T12:00:00Z",
@@ -275,6 +282,47 @@ describe("bb environment command output", () => {
     await runCommand(["environment", "previews", "env-feature"], register);
     expect(collectLogLines(vi.mocked(console.log))).toContain(
       "Preview\tdeployment\tready\thttps://preview.example.com",
+    );
+  });
+
+  it("bb environment dev-server-start forwards the port template", async () => {
+    const post = vi.fn(async () => ({
+      devServerPort: 4173,
+      id: "term-dev",
+      title: "Web",
+    }));
+    stubServerApi({
+      "v1.environments.:id.dev-servers.start.$post": post,
+    });
+
+    await runCommand(
+      [
+        "environment",
+        "dev-server-start",
+        "env-feature",
+        "--thread",
+        "thr-feature",
+        "--title",
+        "Web",
+        "--command",
+        "pnpm dev -- --port {port}",
+        "--port",
+        "4173",
+      ],
+      register,
+    );
+
+    expect(post).toHaveBeenCalledWith({
+      param: { id: "env-feature" },
+      json: {
+        command: "pnpm dev -- --port {port}",
+        preferredPort: 4173,
+        threadId: "thr-feature",
+        title: "Web",
+      },
+    });
+    expect(collectLogLines(vi.mocked(console.log))).toContain(
+      "Started Web on port 4173 (term-dev)",
     );
   });
 
@@ -885,6 +933,32 @@ describe("bb environment command output", () => {
         action: "publish_to_main",
         options: { preserveTargetChanges: true },
       },
+    });
+  });
+
+  it("bb environment update-from-main posts the explicit update action", async () => {
+    const post = vi.fn(async () => ({
+      ok: true,
+      action: "update_from_main",
+      message: "Rebased workspace onto the latest main changes",
+      outcome: "updated",
+      sourceBranch: "feature/update",
+      targetBranch: "main",
+      previousSha: "previous-sha",
+      currentSha: "current-sha",
+      targetSha: "target-sha",
+      rebasedCommitCount: 2,
+    }));
+    stubServerApi({ "v1.environments.:id.actions.$post": post });
+
+    await runCommand(
+      ["environment", "update-from-main", "env-update-main"],
+      register,
+    );
+
+    expect(post).toHaveBeenCalledWith({
+      param: { id: "env-update-main" },
+      json: { action: "update_from_main", options: {} },
     });
   });
 
