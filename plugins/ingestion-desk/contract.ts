@@ -92,9 +92,29 @@ export const outputSchema = z
   })
   .strict();
 
+export const briefingActionSchema = z
+  .object({
+    action: z.string().trim().min(1).max(2_000),
+    owner: z.string().trim().min(1).max(240).nullable(),
+  })
+  .strict();
+
+export const meetingBriefingSchema = z
+  .object({
+    decisions: z.array(z.string().trim().min(1).max(2_000)).max(100),
+    insights: z.array(z.string().trim().min(1).max(2_000)).max(100),
+    actions: z.array(briefingActionSchema).max(100),
+    risks: z.array(z.string().trim().min(1).max(2_000)).max(100),
+    openQuestions: z.array(z.string().trim().min(1).max(2_000)).max(100),
+    uncertainties: z.array(z.string().trim().min(1).max(2_000)).max(100),
+    projectEffects: z.array(z.string().trim().min(1).max(2_000)).max(100),
+  })
+  .strict();
+
 export const draftSchema = z
   .object({
     markdown: z.string(),
+    briefing: meetingBriefingSchema,
     outputs: z.array(outputSchema).max(100),
     draftThreadId: z.string().nullable(),
     reviewedAt: z.string().nullable(),
@@ -157,6 +177,14 @@ export const createCaseInputSchema = z
   })
   .strict();
 
+export const ingestMeetingInputSchema = z
+  .object({
+    projectId: z.string().min(1).nullable().default(null),
+    context: z.string().trim().max(10_000).default(""),
+    sources: z.array(sourceInputSchema).min(1).max(20),
+  })
+  .strict();
+
 export const updateCaseInputSchema = z
   .object({
     caseId: z.string().startsWith("ing_"),
@@ -178,8 +206,20 @@ export const caseIdInputSchema = z
 export const submitDraftInputSchema = z
   .object({
     caseId: z.string().startsWith("ing_"),
+    title: z.string().trim().min(1).max(240),
+    summary: z.string().trim().min(1).max(10_000),
+    details: ingestionDetailsSchema,
     markdown: z.string().trim().min(1).max(1_000_000),
+    briefing: meetingBriefingSchema,
     outputs: z.array(outputSchema).min(1).max(100),
+  })
+  .strict();
+
+export const reviseCaseInputSchema = z
+  .object({
+    caseId: z.string().startsWith("ing_"),
+    title: z.string().trim().min(1).max(240),
+    details: ingestionDetailsSchema,
   })
   .strict();
 
@@ -192,11 +232,16 @@ export const publishCaseInputSchema = z
 
 export const ingestionRpcContract = defineRpcContract({
   bootstrap: { input: bootstrapInputSchema, output: bootstrapOutputSchema },
+  ingestMeeting: {
+    input: ingestMeetingInputSchema,
+    output: ingestionCaseSchema,
+  },
   createCase: { input: createCaseInputSchema, output: ingestionCaseSchema },
   updateCase: { input: updateCaseInputSchema, output: ingestionCaseSchema },
   addSource: { input: addSourceInputSchema, output: ingestionCaseSchema },
   startDraft: { input: caseIdInputSchema, output: ingestionCaseSchema },
   submitDraft: { input: submitDraftInputSchema, output: ingestionCaseSchema },
+  reviseCase: { input: reviseCaseInputSchema, output: ingestionCaseSchema },
   refreshCase: { input: caseIdInputSchema, output: ingestionCaseSchema },
   publishCase: { input: publishCaseInputSchema, output: ingestionCaseSchema },
 });
@@ -206,5 +251,7 @@ export type IngestionDetails = z.infer<typeof ingestionDetailsSchema>;
 export type IngestionSourceInput = z.input<typeof sourceInputSchema>;
 export type IngestionSource = z.infer<typeof ingestionSourceSchema>;
 export type IngestionOutput = z.infer<typeof outputSchema>;
+export type MeetingBriefing = z.infer<typeof meetingBriefingSchema>;
+export type ProjectSummary = z.infer<typeof projectSummarySchema>;
 export type GitParity = z.infer<typeof gitParitySchema>;
 export type IngestionRpcContract = typeof ingestionRpcContract;

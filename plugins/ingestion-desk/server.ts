@@ -8,6 +8,7 @@ import {
   addSourceInputSchema,
   caseIdInputSchema,
   createCaseInputSchema,
+  ingestMeetingInputSchema,
   ingestionRpcContract,
   publishCaseInputSchema,
   submitDraftInputSchema,
@@ -57,7 +58,7 @@ function draftPrompt(caseItem: IngestionCase): string {
       return `## ${source.label} (${source.kind}, ${source.authority})\n${body}`;
     })
     .join("\n\n");
-  return `Ingest this material into the Vault worktree. First call bb_ingestion_get_case with this exact caseId: ${caseItem.id}. Read every captured source in that response. Open linked sources with the available connected source tools. Then inspect the Vault's existing meeting, project, and person conventions. Make the actual Markdown file changes needed for a canonical meeting record and any related indexes or profiles. Preserve source provenance in the generated notes. State uncertainty clearly. Do not commit or push; BB will review and publish the worktree. After the file changes are complete, call bb_ingestion_submit_draft with this exact caseId: ${caseItem.id}, a concise Markdown review summary, and every changed Vault path.\n\nTitle: ${caseItem.title}\n\nSource previews:\n\n${sources}`;
+  return `Process this meeting inside Ingestion Desk. This hidden task must replace the old Meeting Ingestion task. First call bb_ingestion_get_case with this exact caseId: ${caseItem.id}. Read every captured source. Treat Granola notes and transcripts as one meeting. Open Google Drive links with connected Google Drive tools. Use GitHub links as project context. Inspect the Vault's meeting, project, person, and synthesis conventions. Infer the meeting title, date, Vault project, people, meeting type, and speaker names. State every uncertainty clearly. Create the full Vault package: verbatim raw sources, canonical synthesis, project links and indexes, people updates, project guidance, and synthesis log updates. Do not commit or push. Then call bb_ingestion_submit_draft once with this exact caseId: ${caseItem.id}. Supply the inferred title, summary, details, structured briefing, review Markdown, and every changed Vault path. The briefing must include decisions, insights, actions with owners, risks, open questions, uncertainties, and project effects.\n\nOptional user context:\n${caseItem.summary || "None provided"}\n\nSource previews:\n\n${sources}`;
 }
 
 async function projectSummaries(bb: BbPluginApi) {
@@ -106,24 +107,71 @@ export default async function plugin(bb: BbPluginApi) {
         },
       },
       title: `Draft ingestion: ${caseItem.title}`,
+      visibility: "hidden",
       prompt: draftPrompt(caseItem),
     });
     return changed(store.beginDraft(caseId, child.id));
   };
 
   const submitDraft = (
-    caseId: string,
-    markdown: string,
-    outputs: Array<{ path: string; summary: string }>,
+    input: Parameters<IngestionStore["submitDraft"]>[1] & { caseId: string },
     threadId?: string,
   ) =>
     changed(
-      store.submitDraft(caseId, {
-        markdown,
-        outputs,
+      store.submitDraft(input.caseId, {
+        title: input.title,
+        summary: input.summary,
+        details: input.details,
+        markdown: input.markdown,
+        briefing: input.briefing,
+        outputs: input.outputs,
         ...(threadId === undefined ? {} : { threadId }),
       }),
     );
+
+  const ingestMeeting = async (input: {
+    projectId: string | null;
+    context: string;
+    sources: Parameters<IngestionStore["createMeeting"]>[0]["sources"];
+  }) => {
+    const projects = await projectSummaries(bb);
+    const projectId = input.projectId ?? projects[0]?.id;
+    if (projectId === undefined)
+      throw new Error("Add a BB project with a Vault source before ingestion");
+    if (!projects.some((project) => project.id === projectId))
+      throw new Error("The selected BB project is unavailable");
+    const created = changed(
+      store.createMeeting({
+        projectId,
+        context: input.context,
+        sources: input.sources,
+      }),
+    );
+    return startDraft(created.id, { projectId });
+  };
+
+  const revise = async (
+    caseId: string,
+    input: { title: string; details: IngestionCase["details"] },
+  ) => {
+    const existing = store.get(caseId);
+    const threadId = existing.draft?.draftThreadId;
+    if (threadId === null || threadId === undefined)
+      throw new Error("This meeting has no processing task");
+    const revising = changed(store.beginRevision(caseId, input));
+    await bb.sdk.threads.send({
+      threadId,
+      mode: "auto",
+      input: [
+        {
+          type: "text",
+          mentions: [],
+          text: `Apply these approved corrections to every proposed Vault file. Then call bb_ingestion_submit_draft again with a fully updated briefing and output list.\n\nTitle: ${input.title}\nDate: ${input.details.date ?? "Unknown"}\nVault project: ${input.details.project ?? "Unknown"}\nPeople: ${input.details.attendees.join(", ") || "Unknown"}\nMeeting type: ${input.details.meetingType ?? "Unknown"}`,
+        },
+      ],
+    });
+    return revising;
+  };
 
   const publish = async (caseId: string, preserveLocalChanges = false) => {
     const caseItem = store.markPublishing(caseId, preserveLocalChanges);
@@ -173,6 +221,7 @@ export default async function plugin(bb: BbPluginApi) {
         projects: await projectSummaries(bb),
       };
     },
+    ingestMeeting,
     createCase(input) {
       return changed(store.create(input));
     },
@@ -187,7 +236,13 @@ export default async function plugin(bb: BbPluginApi) {
       return startDraft(caseId, { projectId: store.get(caseId).projectId });
     },
     submitDraft(input) {
-      return submitDraft(input.caseId, input.markdown, input.outputs);
+      return submitDraft(input);
+    },
+    reviseCase(input) {
+      return revise(input.caseId, {
+        title: input.title,
+        details: input.details,
+      });
     },
     refreshCase({ caseId }) {
       return store.get(caseId);
@@ -205,11 +260,43 @@ export default async function plugin(bb: BbPluginApi) {
         projectId: context.projectId ?? store.get(caseId).projectId,
         threadId: context.threadId,
       }),
-    submitDraft: (caseId, markdown, outputs) =>
-      submitDraft(caseId, markdown, outputs),
+    ingestMeeting,
+    submitDraft: (caseId, markdown, outputs) => {
+      const existing = store.get(caseId);
+      return submitDraft({
+        caseId,
+        title: existing.title,
+        summary: existing.summary || "Meeting ingestion draft",
+        details: existing.details,
+        markdown,
+        briefing: {
+          decisions: [],
+          insights: [],
+          actions: [],
+          risks: [],
+          openQuestions: [],
+          uncertainties: [],
+          projectEffects: [],
+        },
+        outputs,
+      });
+    },
     publish,
   });
 
+  bb.agents.registerTool({
+    name: "bb_ingestion_ingest_meeting",
+    description:
+      "Start one complete meeting ingestion from unclassified notes, transcripts, files, or links.",
+    parameters: ingestMeetingInputSchema,
+    async execute(input) {
+      try {
+        return result(await ingestMeeting(input));
+      } catch (error) {
+        return failure(error);
+      }
+    },
+  });
   bb.agents.registerTool({
     name: "bb_ingestion_create_case",
     description:
@@ -257,12 +344,7 @@ export default async function plugin(bb: BbPluginApi) {
     execute(input, context) {
       try {
         return result(
-          submitDraft(
-            input.caseId,
-            input.markdown,
-            input.outputs,
-            context.threadId,
-          ),
+          submitDraft(input, context.threadId),
         );
       } catch (error) {
         return failure(error);
@@ -284,6 +366,7 @@ export default async function plugin(bb: BbPluginApi) {
   });
   bb.agents.configure(() => ({
     tools: [
+      "bb_ingestion_ingest_meeting",
       "bb_ingestion_create_case",
       "bb_ingestion_add_source",
       "bb_ingestion_get_case",
@@ -292,6 +375,6 @@ export default async function plugin(bb: BbPluginApi) {
     ],
     skills: [],
     instructions:
-      "Use Ingestion Desk for meeting and document inputs. Submit drafts with bb_ingestion_submit_draft before publication.",
+      "Use bb_ingestion_ingest_meeting for new meeting material. Ingestion Desk handles review and publication.",
   }));
 }

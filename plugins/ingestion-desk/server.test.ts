@@ -3,6 +3,31 @@ import { createFakePluginHost } from "@bb/plugin-sdk/testing";
 import plugin from "./server.js";
 import { bootstrapOutputSchema, ingestionCaseSchema } from "./contract.js";
 
+function draftInput(caseId: string, markdown = "# Plan") {
+  return {
+    caseId,
+    title: "Planning meeting",
+    summary: "The team agreed on the publishing plan.",
+    details: {
+      date: "2026-08-06",
+      project: "Warehouse2",
+      attendees: ["Amir", "Spencer Pitts"],
+      meetingType: "Working session",
+    },
+    markdown,
+    briefing: {
+      decisions: ["Publish after review."],
+      insights: ["The project needs one canonical meeting record."],
+      actions: [{ action: "Publish the plan.", owner: "Amir" }],
+      risks: [],
+      openQuestions: [],
+      uncertainties: [],
+      projectEffects: ["Add the decision to project guidance."],
+    },
+    outputs: [{ path: "meetings/plan.md", summary: "Canonical note" }],
+  };
+}
+
 describe("Ingestion Desk", () => {
   const hosts: Array<ReturnType<typeof createFakePluginHost>["harness"]> = [];
 
@@ -34,6 +59,7 @@ describe("Ingestion Desk", () => {
         },
         threads: {
           spawn: async () => ({ id: "thr_draft" }) as never,
+          send: async () => ({ ok: true }) as never,
           get: async () =>
             ({ id: "thr_draft", environmentId: "env_vault" }) as never,
         },
@@ -75,6 +101,45 @@ describe("Ingestion Desk", () => {
         },
       }),
     ).rejects.toThrow(/already attached/i);
+  });
+
+  it("starts one hidden processing task for a complete meeting intake", async () => {
+    const harness = await createHarness();
+    const meeting = ingestionCaseSchema.parse(
+      await harness.callRpc("ingestMeeting", {
+        projectId: "proj_vault",
+        context: "Spencer discussed the Warehouse2 allocation table.",
+        sources: [
+          {
+            kind: "granola_paste",
+            label: "Granola notes",
+            authority: "primary",
+            url: null,
+            content: "Enhanced notes",
+          },
+          {
+            kind: "pasted",
+            label: "Transcript",
+            authority: "primary",
+            url: null,
+            content: "Meeting transcript",
+          },
+        ],
+      }),
+    );
+    expect(meeting).toMatchObject({
+      status: "drafting",
+      summary: "Spencer discussed the Warehouse2 allocation table.",
+    });
+    expect(meeting.sources.map((source) => source.label).sort()).toEqual([
+      "Granola notes",
+      "Transcript",
+    ]);
+    expect(harness.sdk.callsTo("threads.spawn")).toHaveLength(1);
+    expect(harness.sdk.callsTo("threads.spawn")[0]?.[0]).toMatchObject({
+      visibility: "hidden",
+      projectId: "proj_vault",
+    });
   });
 
   it("runs drafting through a child thread and accepts only that thread's draft", async () => {
@@ -119,6 +184,7 @@ describe("Ingestion Desk", () => {
     ).rejects.toThrow(/before drafting starts/i);
     expect(harness.sdk.callsTo("threads.spawn")).toHaveLength(1);
     expect(harness.sdk.callsTo("threads.spawn")[0]?.[0]).toMatchObject({
+      visibility: "hidden",
       environment: {
         type: "host",
         hostId: "host_vault",
@@ -142,21 +208,13 @@ describe("Ingestion Desk", () => {
     });
     const rejected = await harness.callAgentTool(
       "bb_ingestion_submit_draft",
-      {
-        caseId: created.id,
-        markdown: "# Plan",
-        outputs: [{ path: "meetings/plan.md", summary: "Canonical note" }],
-      },
+      draftInput(created.id),
       { threadId: "thr_other" },
     );
     expect(rejected).toMatchObject({ isError: true });
     const submitted = await harness.callAgentTool(
       "bb_ingestion_submit_draft",
-      {
-        caseId: created.id,
-        markdown: "# Plan",
-        outputs: [{ path: "meetings/plan.md", summary: "Canonical note" }],
-      },
+      draftInput(created.id),
       { threadId: "thr_draft" },
     );
     const publishedDraft = JSON.parse(submitted as string) as {
@@ -165,7 +223,50 @@ describe("Ingestion Desk", () => {
     };
     expect(publishedDraft).toMatchObject({
       status: "ready",
+      title: "Planning meeting",
+      details: { project: "Warehouse2" },
       outputs: [{ path: "meetings/plan.md" }],
+    });
+  });
+
+  it("sends approved corrections back through the same hidden task", async () => {
+    const harness = await createHarness();
+    const drafting = ingestionCaseSchema.parse(
+      await harness.callRpc("ingestMeeting", {
+        projectId: "proj_vault",
+        context: "",
+        sources: [
+          {
+            kind: "granola_paste",
+            label: "Granola notes",
+            authority: "primary",
+            url: null,
+            content: "Meeting notes",
+          },
+        ],
+      }),
+    );
+    await harness.callAgentTool(
+      "bb_ingestion_submit_draft",
+      draftInput(drafting.id),
+      { threadId: "thr_draft" },
+    );
+    await expect(
+      harness.callRpc("reviseCase", {
+        caseId: drafting.id,
+        title: "Corrected allocation review",
+        details: {
+          date: "2026-08-07",
+          project: "Warehouse3",
+          attendees: ["Amir", "Spencer Pitts"],
+          meetingType: "Working session",
+        },
+      }),
+    ).resolves.toMatchObject({ status: "drafting" });
+    expect(harness.sdk.callsTo("threads.send")).toHaveLength(1);
+    expect(harness.sdk.callsTo("threads.send")[0]?.[0]).toMatchObject({
+      threadId: "thr_draft",
+      mode: "auto",
     });
   });
 
@@ -188,8 +289,7 @@ describe("Ingestion Desk", () => {
     await harness.callAgentTool(
       "bb_ingestion_submit_draft",
       {
-        caseId: created.id,
-        markdown: "# Decision",
+        ...draftInput(created.id, "# Decision"),
         outputs: [{ path: "decisions/direct-main.md", summary: "Decision" }],
       },
       { threadId: "thr_draft" },
@@ -268,8 +368,7 @@ describe("Ingestion Desk", () => {
     await harness.callAgentTool(
       "bb_ingestion_submit_draft",
       {
-        caseId: created.id,
-        markdown: "# Decision",
+        ...draftInput(created.id, "# Decision"),
         outputs: [{ path: "decisions/publish.md", summary: "Decision" }],
       },
       { threadId: "thr_draft" },
