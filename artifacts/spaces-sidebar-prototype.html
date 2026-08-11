@@ -1,0 +1,875 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>BB Spaces sidebar prototype</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --preview-canvas: oklch(0.955 0.004 92);
+      --preview-ink: oklch(0.25 0.009 72);
+      --preview-line: color-mix(in oklch, var(--preview-ink) 14%, var(--preview-canvas));
+      --preview-panel: color-mix(in oklch, var(--preview-ink) 3%, var(--preview-canvas));
+      --preview-scale: 1;
+      --frame-width: 1240px;
+      --frame-height: 760px;
+      font-family: "Inter Variable", Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    * { box-sizing: border-box; }
+    html { min-height: 100%; background: var(--preview-canvas); }
+    body {
+      min-height: 100vh;
+      margin: 0;
+      background:
+        linear-gradient(color-mix(in oklch, var(--preview-ink) 3%, transparent) 1px, transparent 1px),
+        linear-gradient(90deg, color-mix(in oklch, var(--preview-ink) 3%, transparent) 1px, transparent 1px),
+        var(--preview-canvas);
+      background-size: 24px 24px;
+      color: var(--preview-ink);
+      font-size: 14px;
+    }
+    button, input, select { font: inherit; }
+    button { color: inherit; }
+    button:focus-visible, input:focus-visible, select:focus-visible {
+      outline: 2px solid oklch(0.57 0.15 255);
+      outline-offset: 2px;
+    }
+    svg { display: block; fill: none; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; }
+
+    .prototype-bar {
+      position: sticky;
+      inset-block-start: 0;
+      z-index: 100;
+      display: flex;
+      min-height: 60px;
+      align-items: center;
+      gap: 16px;
+      padding: 8px max(12px, env(safe-area-inset-right)) 8px max(12px, env(safe-area-inset-left));
+      border-block-end: 1px solid var(--preview-line);
+      background: color-mix(in oklch, var(--preview-canvas) 93%, transparent);
+      backdrop-filter: blur(16px);
+    }
+    .prototype-title { min-width: 185px; }
+    .prototype-title strong { display: block; font-size: 13px; font-weight: 680; letter-spacing: -0.01em; }
+    .prototype-title span { display: block; margin-block-start: 2px; color: color-mix(in oklch, var(--preview-ink) 58%, var(--preview-canvas)); font-size: 11px; }
+    .prototype-controls { display: flex; min-width: 0; flex: 1; flex-wrap: wrap; align-items: center; gap: 6px 12px; }
+    .control-group { display: inline-flex; align-items: center; gap: 3px; }
+    .control-label { margin-inline-end: 3px; color: color-mix(in oklch, var(--preview-ink) 54%, var(--preview-canvas)); font-size: 10px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; }
+    .prototype-button, .prototype-select {
+      height: 30px;
+      border: 1px solid var(--preview-line);
+      border-radius: 6px;
+      background: color-mix(in oklch, var(--preview-canvas) 97%, var(--preview-ink));
+      color: var(--preview-ink);
+      font-size: 11px;
+      cursor: pointer;
+    }
+    .prototype-button { padding-inline: 9px; }
+    .prototype-select { padding-inline: 8px 26px; }
+    .prototype-button[aria-pressed="true"] { border-color: var(--preview-ink); background: var(--preview-ink); color: var(--preview-canvas); }
+    .prototype-hint { margin-inline-start: auto; max-width: 260px; color: color-mix(in oklch, var(--preview-ink) 58%, var(--preview-canvas)); font-size: 11px; line-height: 1.35; }
+
+    .mobile-note {
+      display: none;
+      padding: 9px 12px;
+      border-block-end: 1px solid var(--preview-line);
+      background: color-mix(in oklch, oklch(0.82 0.09 86) 15%, var(--preview-canvas));
+      color: color-mix(in oklch, var(--preview-ink) 77%, var(--preview-canvas));
+      font-size: 11px;
+      line-height: 1.4;
+    }
+
+    .preview-viewport { min-height: calc(100vh - 60px); overflow: auto; padding: 24px; }
+    .preview-mat {
+      width: calc(var(--frame-width) * var(--preview-scale));
+      height: calc(var(--frame-height) * var(--preview-scale));
+      margin: 0 auto;
+    }
+    .desktop-frame {
+      width: var(--frame-width);
+      height: var(--frame-height);
+      overflow: hidden;
+      border: 1px solid color-mix(in oklch, var(--preview-ink) 19%, var(--preview-canvas));
+      border-radius: 10px;
+      background: oklch(0.985 0.004 88);
+      box-shadow: 0 20px 52px oklch(0.2 0.01 80 / 0.14), 0 2px 5px oklch(0.2 0.01 80 / 0.08);
+      transform: scale(var(--preview-scale));
+      transform-origin: top left;
+    }
+
+    .bb-app {
+      --canvas: oklch(0.985 0.004 88);
+      --ink: oklch(0.29 0.008 70);
+      --space-color: oklch(0.66 0.10 150);
+      --sidebar: color-mix(in oklch, var(--space-color) 12%, var(--canvas));
+      --sidebar-foreground: var(--ink);
+      --sidebar-accent: color-mix(in oklch, var(--ink) 7.5%, var(--sidebar));
+      --sidebar-selected: color-mix(in oklch, var(--ink) 12%, var(--sidebar));
+      --sidebar-border: color-mix(in oklch, var(--ink) 13%, var(--sidebar));
+      --muted: color-mix(in oklch, var(--ink) 62%, var(--canvas));
+      --subtle: color-mix(in oklch, var(--ink) 46%, var(--canvas));
+      --line: color-mix(in oklch, var(--ink) 11%, var(--canvas));
+      --attention: oklch(0.72 0.13 80);
+      --working: oklch(0.62 0.12 243);
+      --success: oklch(0.61 0.12 145);
+      display: grid;
+      width: 100%;
+      height: 100%;
+      grid-template-columns: 286px minmax(0, 1fr);
+      background: var(--canvas);
+      color: var(--ink);
+      font-size: 13px;
+      transition: background-color 180ms cubic-bezier(0.25, 1, 0.5, 1);
+    }
+    .bb-app[data-theme="dark"] {
+      color-scheme: dark;
+      --canvas: oklch(0.18 0.008 75);
+      --ink: oklch(0.91 0.008 86);
+      --sidebar: color-mix(in oklch, var(--space-color) 13%, var(--canvas));
+      --sidebar-accent: color-mix(in oklch, var(--ink) 9%, var(--sidebar));
+      --sidebar-selected: color-mix(in oklch, var(--ink) 14%, var(--sidebar));
+      --sidebar-border: color-mix(in oklch, var(--ink) 16%, var(--sidebar));
+      --line: color-mix(in oklch, var(--ink) 13%, var(--canvas));
+      --muted: color-mix(in oklch, var(--ink) 65%, var(--canvas));
+      --subtle: color-mix(in oklch, var(--ink) 49%, var(--canvas));
+      --attention: oklch(0.79 0.12 80);
+      --working: oklch(0.74 0.10 243);
+      --success: oklch(0.72 0.11 145);
+    }
+
+    .sidebar {
+      position: relative;
+      display: flex;
+      min-width: 0;
+      flex-direction: column;
+      border-inline-end: 1px solid var(--sidebar-border);
+      background: var(--sidebar);
+      color: var(--sidebar-foreground);
+      transition: background-color 220ms cubic-bezier(0.25, 1, 0.5, 1), border-color 220ms cubic-bezier(0.25, 1, 0.5, 1);
+    }
+    .sidebar-chrome { display: grid; height: 48px; flex: 0 0 48px; grid-template-columns: 1fr auto; align-items: center; padding: 0 9px 0 78px; }
+    .traffic-lights { position: absolute; inset-block-start: 18px; inset-inline-start: 14px; display: flex; gap: 8px; }
+    .traffic-lights i { width: 11px; height: 11px; border-radius: 50%; background: color-mix(in oklch, var(--ink) 15%, var(--sidebar)); }
+    .history-controls { display: flex; gap: 1px; }
+    .chrome-button, .icon-button, .row-button, .space-button, .space-add, .segment-button {
+      border: 0;
+      background: transparent;
+      cursor: pointer;
+    }
+    .chrome-button, .icon-button { display: inline-grid; width: 30px; height: 30px; place-items: center; border-radius: 6px; color: var(--subtle); }
+    .chrome-button:hover, .icon-button:hover { background: var(--sidebar-accent); color: var(--ink); }
+    .sidebar-toggle { justify-self: start; }
+
+    .primary-actions { display: grid; gap: 3px; padding: 6px 8px 8px; }
+    .new-thread-row { display: flex; gap: 3px; }
+    .new-thread {
+      display: flex;
+      min-width: 0;
+      height: 32px;
+      flex: 1;
+      align-items: center;
+      gap: 8px;
+      padding: 0 8px;
+      border-radius: 6px;
+      text-align: start;
+    }
+    .new-thread:hover, .new-thread:focus-visible { background: var(--sidebar-accent); }
+    .new-thread .label { flex: 1; }
+    .shortcut { color: var(--subtle); font-size: 10px; font-variant-numeric: tabular-nums; }
+
+    .space-heading {
+      display: flex;
+      min-height: 42px;
+      align-items: center;
+      gap: 9px;
+      padding: 2px 11px 5px;
+    }
+    .space-heading-symbol { display: grid; width: 25px; height: 25px; place-items: center; border-radius: 7px; background: color-mix(in oklch, var(--space-color) 22%, var(--sidebar)); }
+    .space-heading-copy { min-width: 0; flex: 1; }
+    .space-heading-name { display: block; overflow: hidden; font-size: 14px; font-weight: 680; letter-spacing: -0.015em; text-overflow: ellipsis; white-space: nowrap; }
+    .space-heading-detail { display: block; margin-block-start: 1px; color: var(--subtle); font-size: 10px; }
+
+    .sidebar-scroll { min-height: 0; flex: 1; overflow: hidden auto; padding: 1px 8px 14px; scrollbar-width: thin; }
+    .section { display: grid; gap: 1px; margin-block-end: 10px; }
+    .section-header { display: flex; height: 28px; align-items: center; gap: 6px; padding: 0 5px; color: var(--subtle); font-size: 11px; font-weight: 650; }
+    .section-header .count { margin-inline-start: auto; font-size: 10px; font-variant-numeric: tabular-nums; }
+    .section-header .section-action { opacity: 0; }
+    .section-header:hover .section-action, .section-header:focus-within .section-action { opacity: 1; }
+    .section-action { display: grid; width: 23px; height: 23px; place-items: center; border: 0; border-radius: 5px; background: transparent; color: var(--subtle); }
+    .section-action:hover { background: var(--sidebar-accent); color: var(--ink); }
+
+    .nav-row {
+      position: relative;
+      display: flex;
+      width: 100%;
+      min-width: 0;
+      height: 29px;
+      align-items: center;
+      gap: 7px;
+      padding: 0 6px;
+      border: 0;
+      border-radius: 6px;
+      background: transparent;
+      color: inherit;
+      text-align: start;
+      cursor: pointer;
+    }
+    .nav-row:hover, .nav-row:focus-visible { background: var(--sidebar-accent); }
+    .nav-row.selected { background: var(--sidebar-selected); }
+    .nav-row .label { min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .nav-row.project { font-weight: 600; }
+    .nav-row.thread { padding-inline-start: 29px; color: color-mix(in oklch, var(--ink) 81%, var(--sidebar)); font-weight: 430; }
+    .nav-row.thread::before { position: absolute; inset-block: 0; inset-inline-start: 15px; width: 1px; background: var(--sidebar-border); content: ""; }
+    .nav-row.thread.child { padding-inline-start: 43px; }
+    .nav-row.thread.child::before { inset-inline-start: 29px; }
+    .row-icon { display: grid; width: 15px; height: 15px; flex: 0 0 15px; place-items: center; color: var(--subtle); }
+    .repo-glyph { width: 13px; height: 10px; border: 1.2px solid currentColor; border-radius: 2px; }
+    .status-dot { width: 6px; height: 6px; flex: 0 0 6px; border-radius: 50%; background: var(--subtle); }
+    .status-dot.working { background: var(--working); box-shadow: 0 0 0 2px color-mix(in oklch, var(--working) 15%, transparent); animation: breathe 1.8s cubic-bezier(0.65, 0, 0.35, 1) infinite; }
+    .status-dot.attention { background: var(--attention); }
+    .status-dot.ready { background: var(--success); }
+    .row-meta { flex: 0 0 auto; color: var(--subtle); font-size: 10px; }
+    .row-more { display: none; width: 22px; height: 22px; place-items: center; border: 0; border-radius: 5px; background: transparent; color: var(--subtle); }
+    .nav-row:hover .row-more, .nav-row:focus-within .row-more { display: grid; }
+    .nav-row:hover .row-meta, .nav-row:focus-within .row-meta { display: none; }
+
+    .machine-group, .manual-group { display: grid; gap: 1px; }
+    .group-label { display: flex; height: 29px; align-items: center; gap: 7px; padding: 0 6px; color: color-mix(in oklch, var(--ink) 78%, var(--sidebar)); font-weight: 600; }
+    .group-label small { margin-inline-start: auto; color: var(--subtle); font-size: 10px; font-weight: 500; }
+
+    .empty-state { display: grid; min-height: 180px; place-items: center; padding: 24px; text-align: center; }
+    .empty-state strong { display: block; margin-block-end: 4px; font-size: 12px; }
+    .empty-state p { max-width: 180px; margin: 0; color: var(--subtle); font-size: 11px; line-height: 1.45; }
+
+    .space-dock-wrap {
+      flex: 0 0 auto;
+      margin-inline: 8px;
+      padding: 8px 0 5px;
+      border-block-start: 1px solid color-mix(in oklch, var(--ink) 8%, var(--sidebar));
+    }
+    .space-dock {
+      display: flex;
+      min-height: 34px;
+      align-items: center;
+      gap: 4px;
+      overflow-x: auto;
+      scrollbar-width: none;
+    }
+    .space-dock::-webkit-scrollbar { display: none; }
+    .space-button, .space-add {
+      position: relative;
+      display: grid;
+      width: 32px;
+      height: 32px;
+      flex: 0 0 32px;
+      place-items: center;
+      border-radius: 7px;
+      color: color-mix(in oklch, var(--ink) 72%, var(--sidebar));
+    }
+    .space-button:hover, .space-button:focus-visible, .space-add:hover, .space-add:focus-visible { background: var(--sidebar-accent); color: var(--ink); }
+    .space-button[aria-selected="true"] { background: var(--sidebar-selected); color: var(--ink); }
+    .space-button[aria-selected="true"]::after { position: absolute; inset-inline: 8px; inset-block-end: -5px; height: 2px; border-radius: 99px; background: var(--space-color); content: ""; }
+    .space-button .space-number { position: absolute; inset-block-start: -3px; inset-inline-end: -2px; display: grid; min-width: 13px; height: 13px; place-items: center; border: 1px solid var(--sidebar-border); border-radius: 5px; background: var(--sidebar); color: var(--subtle); font-size: 8px; font-weight: 750; }
+    .space-button .attention-mark { position: absolute; inset-block-start: 2px; inset-inline-end: 2px; width: 5px; height: 5px; border-radius: 50%; background: var(--attention); box-shadow: 0 0 0 1.5px var(--sidebar); }
+    .space-add { margin-inline-start: auto; color: var(--subtle); }
+    .space-button.drop-target { background: color-mix(in oklch, var(--space-color) 22%, var(--sidebar)); outline: 2px solid var(--space-color); outline-offset: -2px; }
+
+    .sidebar-footer { display: flex; height: 43px; flex: 0 0 43px; align-items: center; gap: 3px; padding: 5px 8px 7px; }
+    .sidebar-footer .icon-button { color: var(--subtle); }
+    .footer-spacer { flex: 1; }
+    .usage-chip { display: inline-flex; height: 24px; align-items: center; gap: 5px; padding-inline: 7px; border: 1px solid var(--sidebar-border); border-radius: 99px; color: var(--subtle); font-size: 9px; }
+    .usage-ring { width: 9px; height: 9px; border: 2px solid color-mix(in oklch, var(--ink) 18%, var(--sidebar)); border-block-start-color: var(--ink); border-radius: 50%; }
+
+    .workspace { display: flex; min-width: 0; flex-direction: column; background: var(--canvas); transition: background-color 180ms cubic-bezier(0.25, 1, 0.5, 1); }
+    .workspace-header { display: grid; min-height: 48px; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 12px; padding: 6px 10px 6px 16px; border-block-end: 1px solid var(--line); }
+    .thread-identity { min-width: 0; }
+    .thread-context { display: flex; min-width: 0; align-items: center; gap: 5px; color: var(--muted); font-size: 10px; }
+    .thread-context strong { color: var(--ink); font-weight: 650; }
+    .thread-title { margin-block-start: 2px; overflow: hidden; font-size: 13px; font-weight: 450; text-overflow: ellipsis; white-space: nowrap; }
+    .workspace-actions { display: flex; align-items: center; gap: 3px; }
+    .workspace-actions .icon-button { color: var(--muted); }
+    .open-in { display: inline-flex; height: 28px; align-items: center; gap: 5px; padding-inline: 8px; border: 1px solid var(--line); border-radius: 6px; background: transparent; font-size: 10px; }
+    .open-in:hover { background: color-mix(in oklch, var(--ink) 5%, var(--canvas)); }
+
+    .workspace-body { display: grid; min-height: 0; flex: 1; grid-template-columns: minmax(0, 1fr) 284px; }
+    .conversation { display: flex; min-width: 0; flex-direction: column; border-inline-end: 1px solid var(--line); }
+    .timeline { min-height: 0; flex: 1; overflow: hidden; }
+    .timeline-inner { width: min(690px, calc(100% - 80px)); margin: 0 auto; padding: 44px 0 20px; }
+    .message { margin-block-end: 26px; color: color-mix(in oklch, var(--ink) 90%, var(--canvas)); font-size: 12px; line-height: 1.58; }
+    .message.user { width: min(520px, 84%); margin-inline-start: auto; padding: 11px 13px; border-radius: 11px; background: color-mix(in oklch, var(--ink) 4.5%, var(--canvas)); }
+    .message-role { margin-block-end: 6px; color: var(--muted); font-size: 10px; font-weight: 650; }
+    .message p { margin: 0; }
+    .work-block { display: grid; grid-template-columns: 18px minmax(0, 1fr) auto; align-items: center; gap: 7px; margin-block-start: 12px; padding: 7px 0; border-block: 1px solid var(--line); color: var(--muted); font-size: 10px; }
+    .work-block .status-dot { justify-self: center; }
+    .composer-wrap { padding: 0 24px 18px; }
+    .composer { width: min(690px, 100%); margin: 0 auto; overflow: hidden; border: 1px solid var(--line); border-radius: 11px; background: var(--canvas); box-shadow: 0 1px 3px oklch(0.2 0.01 80 / 0.05); }
+    .composer-input { min-height: 52px; padding: 12px 13px; color: var(--subtle); font-size: 12px; }
+    .composer-bar { display: flex; height: 36px; align-items: center; gap: 3px; padding: 0 6px; }
+    .composer-bar .icon-button { width: 27px; height: 27px; color: var(--muted); }
+    .model-name { margin-inline-start: auto; color: var(--muted); font-size: 10px; }
+    .send-button { display: grid; width: 27px; height: 27px; place-items: center; border: 0; border-radius: 7px; background: var(--ink); color: var(--canvas); }
+
+    .right-panel { display: flex; min-width: 0; flex-direction: column; }
+    .panel-tabs { display: flex; height: 41px; align-items: center; gap: 2px; padding: 5px 7px; border-block-end: 1px solid var(--line); }
+    .panel-tab { height: 27px; padding-inline: 8px; border: 0; border-radius: 6px; background: transparent; color: var(--muted); font-size: 10px; }
+    .panel-tab.selected { background: color-mix(in oklch, var(--ink) 6%, var(--canvas)); color: var(--ink); }
+    .diff-summary { padding: 15px 14px 9px; }
+    .diff-summary strong { display: block; font-size: 12px; }
+    .diff-summary span { display: block; margin-block-start: 3px; color: var(--muted); font-size: 10px; }
+    .file-list { display: grid; padding: 0 8px; }
+    .file-row { display: flex; height: 31px; align-items: center; gap: 7px; padding: 0 6px; border-radius: 6px; font-size: 10px; }
+    .file-row:hover { background: color-mix(in oklch, var(--ink) 5%, var(--canvas)); }
+    .file-row span:first-of-type { min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .file-delta { color: var(--success); font-variant-numeric: tabular-nums; }
+
+    .space-transition-forward .sidebar-scroll, .space-transition-forward .workspace-body { animation: enter-forward 220ms cubic-bezier(0.25, 1, 0.5, 1); }
+    .space-transition-back .sidebar-scroll, .space-transition-back .workspace-body { animation: enter-back 220ms cubic-bezier(0.25, 1, 0.5, 1); }
+    @keyframes enter-forward { from { opacity: 0; transform: translateX(10px); } to { opacity: 1; transform: none; } }
+    @keyframes enter-back { from { opacity: 0; transform: translateX(-10px); } to { opacity: 1; transform: none; } }
+    @keyframes breathe { 50% { opacity: 0.45; } }
+
+    .toast {
+      position: fixed;
+      inset-inline-start: 50%;
+      inset-block-end: max(18px, env(safe-area-inset-bottom));
+      z-index: 300;
+      max-width: min(360px, calc(100vw - 24px));
+      padding: 9px 12px;
+      border: 1px solid var(--preview-line);
+      border-radius: 8px;
+      background: var(--preview-ink);
+      color: var(--preview-canvas);
+      font-size: 11px;
+      opacity: 0;
+      pointer-events: none;
+      transform: translate(-50%, 8px);
+      transition: opacity 130ms cubic-bezier(0.25, 1, 0.5, 1), transform 180ms cubic-bezier(0.25, 1, 0.5, 1);
+    }
+    .toast.visible { opacity: 1; transform: translate(-50%, 0); }
+
+    dialog {
+      width: min(380px, calc(100vw - 28px));
+      padding: 0;
+      border: 1px solid var(--preview-line);
+      border-radius: 11px;
+      background: oklch(0.985 0.004 88);
+      color: oklch(0.29 0.008 70);
+      box-shadow: 0 24px 64px oklch(0.2 0.01 80 / 0.22);
+    }
+    dialog::backdrop { background: oklch(0.18 0.01 75 / 0.28); backdrop-filter: blur(2px); }
+    .dialog-header { display: flex; align-items: center; justify-content: space-between; padding: 14px 15px 11px; border-block-end: 1px solid var(--preview-line); }
+    .dialog-header strong { font-size: 13px; }
+    .dialog-close { display: grid; width: 30px; height: 30px; place-items: center; border: 0; border-radius: 6px; background: transparent; }
+    .dialog-close:hover { background: color-mix(in oklch, var(--preview-ink) 6%, var(--preview-canvas)); }
+    .space-form { display: grid; gap: 13px; padding: 15px; }
+    .field { display: grid; gap: 5px; }
+    .field label { font-size: 10px; font-weight: 700; }
+    .field input { height: 36px; padding-inline: 10px; border: 1px solid var(--preview-line); border-radius: 7px; background: var(--preview-canvas); color: var(--preview-ink); }
+    .symbol-options, .color-options { display: flex; flex-wrap: wrap; gap: 6px; }
+    .choice { display: grid; width: 38px; height: 38px; place-items: center; border: 1px solid var(--preview-line); border-radius: 8px; background: var(--preview-canvas); cursor: pointer; }
+    .choice[aria-pressed="true"] { border-color: var(--preview-ink); box-shadow: 0 0 0 1px var(--preview-ink); }
+    .color-choice { border-radius: 50%; }
+    .dialog-actions { display: flex; justify-content: flex-end; gap: 7px; padding-block-start: 3px; }
+    .dialog-button { height: 34px; padding-inline: 12px; border: 1px solid var(--preview-line); border-radius: 7px; background: var(--preview-canvas); }
+    .dialog-button.primary { border-color: var(--preview-ink); background: var(--preview-ink); color: var(--preview-canvas); }
+
+    .project-menu {
+      position: fixed;
+      z-index: 250;
+      display: none;
+      width: 185px;
+      padding: 4px;
+      border: 1px solid var(--preview-line);
+      border-radius: 8px;
+      background: var(--preview-canvas);
+      color: var(--preview-ink);
+      box-shadow: 0 14px 38px oklch(0.2 0.01 80 / 0.18);
+    }
+    .project-menu.visible { display: grid; }
+    .project-menu button { display: flex; height: 31px; align-items: center; gap: 7px; padding-inline: 8px; border: 0; border-radius: 5px; background: transparent; text-align: start; font-size: 10px; }
+    .project-menu button:hover, .project-menu button:focus-visible { background: color-mix(in oklch, var(--preview-ink) 6%, var(--preview-canvas)); }
+    .project-menu .menu-label { padding: 6px 8px 4px; color: color-mix(in oklch, var(--preview-ink) 52%, var(--preview-canvas)); font-size: 9px; font-weight: 700; text-transform: uppercase; }
+
+    @media (max-width: 720px) {
+      .prototype-bar { align-items: flex-start; flex-direction: column; gap: 7px; padding-block: 9px; }
+      .prototype-title { min-width: 0; }
+      .prototype-title span { display: none; }
+      .prototype-controls { width: 100%; gap: 6px; }
+      .prototype-hint { display: none; }
+      .mobile-note { display: block; }
+      .preview-viewport { min-height: calc(100vh - 125px); padding: 12px; }
+    }
+
+    @media (pointer: coarse) {
+      .prototype-button, .prototype-select { height: 38px; }
+      .space-button::before, .space-add::before { position: absolute; inset: -6px; content: ""; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+    }
+  </style>
+</head>
+<body>
+  <header class="prototype-bar">
+    <div class="prototype-title">
+      <strong>BB Spaces sidebar</strong>
+      <span>Interactive desktop concept · production code is unchanged</span>
+    </div>
+    <div class="prototype-controls" aria-label="Prototype controls">
+      <div class="control-group">
+        <span class="control-label">Zoom</span>
+        <button class="prototype-button" id="fitButton" type="button" aria-pressed="true">Fit</button>
+        <button class="prototype-button" id="zoomButton" type="button" aria-pressed="false">75%</button>
+        <button class="prototype-button" id="actualButton" type="button" aria-pressed="false">100%</button>
+      </div>
+      <div class="control-group">
+        <span class="control-label">View</span>
+        <select class="prototype-select" id="surfaceSelect" aria-label="Sidebar surface">
+          <option value="threads">Threads</option>
+          <option value="tools">Tools</option>
+          <option value="settings">Settings</option>
+        </select>
+      </div>
+      <div class="control-group">
+        <span class="control-label">Organize</span>
+        <select class="prototype-select" id="modeSelect" aria-label="Thread organization">
+          <option value="project">By project</option>
+          <option value="machine">By machine</option>
+          <option value="manual">Manually</option>
+        </select>
+      </div>
+      <button class="prototype-button" id="themeButton" type="button" aria-pressed="false">Dark</button>
+      <div class="prototype-hint">Try Space icons, Shift+wheel, ⌘⇧1–3, project menus, dragging, and the + button.</div>
+    </div>
+  </header>
+  <div class="mobile-note">This is a fixed 1240 × 760 desktop canvas. Use 75% for detail, then scroll horizontally.</div>
+
+  <main class="preview-viewport" id="previewViewport">
+    <div class="preview-mat" id="previewMat">
+      <section class="desktop-frame" aria-label="BB desktop application preview">
+        <div class="bb-app" id="bbApp" data-theme="light">
+          <aside class="sidebar" id="sidebar" aria-label="Application sidebar">
+            <div class="traffic-lights" aria-hidden="true"><i></i><i></i><i></i></div>
+            <div class="sidebar-chrome">
+              <button class="chrome-button sidebar-toggle" type="button" aria-label="Toggle sidebar">
+                <svg width="16" height="16" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16"/></svg>
+              </button>
+              <div class="history-controls">
+                <button class="chrome-button" type="button" aria-label="Back"><svg width="14" height="14" viewBox="0 0 24 24"><path d="m15 18-6-6 6-6"/></svg></button>
+                <button class="chrome-button" type="button" aria-label="Forward"><svg width="14" height="14" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></svg></button>
+              </div>
+            </div>
+
+            <div class="primary-actions">
+              <div class="new-thread-row">
+                <button class="row-button new-thread" type="button">
+                  <svg width="15" height="15" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
+                  <span class="label">New thread</span><span class="shortcut">⌘N</span>
+                </button>
+                <button class="icon-button" type="button" aria-label="Search threads"><svg width="15" height="15" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg></button>
+              </div>
+            </div>
+
+            <div class="space-heading">
+              <span class="space-heading-symbol" id="spaceHeadingSymbol" aria-hidden="true">⌘</span>
+              <span class="space-heading-copy"><span class="space-heading-name" id="spaceHeadingName">BB Product</span><span class="space-heading-detail" id="spaceHeadingDetail">3 projects · project view</span></span>
+              <button class="icon-button" id="spaceEditButton" type="button" aria-label="Edit current Space"><svg width="14" height="14" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1" fill="currentColor" stroke="none"/><circle cx="19" cy="12" r="1" fill="currentColor" stroke="none"/></svg></button>
+            </div>
+
+            <div class="sidebar-scroll" id="sidebarContent">
+              <section class="section">
+                <div class="section-header"><svg width="13" height="13" viewBox="0 0 24 24"><path d="m14 4 6 6-3 2-4 7-2-2-2 4-1-1 4-2-2-2 7-4z"/></svg><span>Pinned</span><span class="count">2</span></div>
+                <button class="nav-row thread" type="button"><i class="status-dot attention" aria-hidden="true"></i><span class="label">Release checklist</span><span class="row-meta">Global</span></button>
+                <button class="nav-row thread" type="button"><i class="status-dot ready" aria-hidden="true"></i><span class="label">BB product direction</span><span class="row-meta">Global</span></button>
+              </section>
+              <section class="section">
+                <div class="section-header"><span>Projects</span><span class="count">3</span><button class="section-action" type="button" aria-label="Display options">•••</button></div>
+                <div class="project-block">
+                  <div class="nav-row project" role="button" tabindex="0"><span class="row-icon"><i class="repo-glyph"></i></span><span class="label">bb</span><span class="row-meta">2</span></div>
+                  <button class="nav-row thread selected" type="button"><i class="status-dot working" aria-hidden="true"></i><span class="label">Plan Arc-style Spaces</span><span class="row-meta">now</span></button>
+                  <button class="nav-row thread" type="button"><i class="status-dot ready" aria-hidden="true"></i><span class="label">Review sidebar information density</span><span class="row-meta">8m</span></button>
+                </div>
+                <div class="project-block">
+                  <div class="nav-row project" role="button" tabindex="0"><span class="row-icon"><i class="repo-glyph"></i></span><span class="label">bb-desktop</span><span class="row-meta">1</span></div>
+                  <button class="nav-row thread" type="button"><i class="status-dot attention" aria-hidden="true"></i><span class="label">Window restoration behavior</span><span class="row-meta">24m</span></button>
+                </div>
+                <div class="project-block">
+                  <div class="nav-row project" role="button" tabindex="0"><span class="row-icon"><i class="repo-glyph"></i></span><span class="label">product-notes</span><span class="row-meta">1</span></div>
+                  <button class="nav-row thread" type="button"><i class="status-dot ready" aria-hidden="true"></i><span class="label">Spaces design brief</span><span class="row-meta">1h</span></button>
+                </div>
+              </section>
+            </div>
+
+            <div class="space-dock-wrap">
+              <div class="space-dock" id="spaceDock" role="tablist" aria-label="Spaces">
+                <button class="space-button" type="button" role="tab" aria-selected="true" aria-label="BB Product, Space 1"><span aria-hidden="true">⌘</span><span class="space-number" aria-hidden="true">1</span></button>
+                <button class="space-button" type="button" role="tab" aria-selected="false" aria-label="Infrastructure, Space 2"><span aria-hidden="true">◇</span><span class="space-number" aria-hidden="true">2</span><i class="attention-mark" aria-hidden="true"></i></button>
+                <button class="space-button" type="button" role="tab" aria-selected="false" aria-label="Personal, Space 3"><span aria-hidden="true">✦</span><span class="space-number" aria-hidden="true">3</span></button>
+                <button class="space-add" type="button" aria-label="New Space"><svg width="14" height="14" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button>
+              </div>
+            </div>
+
+            <footer class="sidebar-footer">
+              <button class="icon-button" id="settingsButton" type="button" aria-label="Settings"><svg width="15" height="15" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06-2.83 2.83-.06-.06A1.7 1.7 0 0 0 15 19.4a1.7 1.7 0 0 0-1 .6 1.7 1.7 0 0 0-.4 1.1V21h-4v-.1A1.7 1.7 0 0 0 8.6 19.4a1.7 1.7 0 0 0-1.88.34l-.06.06-2.83-2.83.06-.06A1.7 1.7 0 0 0 4.2 15a1.7 1.7 0 0 0-.6-1 1.7 1.7 0 0 0-1.1-.4H2v-4h.5A1.7 1.7 0 0 0 4.2 8.6a1.7 1.7 0 0 0-.34-1.88l-.06-.06 2.83-2.83.06.06A1.7 1.7 0 0 0 8.6 4.2a1.7 1.7 0 0 0 1-.6A1.7 1.7 0 0 0 10 2.5V2h4v.5a1.7 1.7 0 0 0 1 1.7 1.7 1.7 0 0 0 1.88-.34l.06-.06 2.83 2.83-.06.06A1.7 1.7 0 0 0 19.4 8.6a1.7 1.7 0 0 0 .6 1 1.7 1.7 0 0 0 1.1.4h.9v4h-.9a1.7 1.7 0 0 0-1.7 1Z"/></svg></button>
+              <button class="icon-button" type="button" aria-label="Report bug"><svg width="15" height="15" viewBox="0 0 24 24"><path d="M8 2h8M9 9h6M5 13h14M7 5h10l2 5v6a7 7 0 0 1-14 0v-6zM3 7l3 2M21 7l-3 2M3 19l3-2M21 19l-3-2"/></svg></button>
+              <span class="footer-spacer"></span>
+              <span class="usage-chip"><i class="usage-ring"></i> 82%</span>
+            </footer>
+          </aside>
+
+          <section class="workspace" aria-label="Thread workspace">
+            <header class="workspace-header">
+              <div class="thread-identity">
+                <div class="thread-context"><strong id="workspaceProject">bb</strong><span>/</span><span id="workspaceBranch">feature/spaces</span></div>
+                <div class="thread-title" id="workspaceTitle">Plan Arc-style Spaces for the side panel</div>
+              </div>
+              <div class="workspace-actions">
+                <button class="open-in" type="button"><svg width="13" height="13" viewBox="0 0 24 24"><path d="m16 3 5 5-5 5M21 8H10a6 6 0 0 0-6 6v7"/></svg>Open In</button>
+                <button class="icon-button" type="button" aria-label="Toggle panel"><svg width="15" height="15" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M15 4v16"/></svg></button>
+                <button class="icon-button" type="button" aria-label="More actions"><svg width="15" height="15" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1" fill="currentColor" stroke="none"/><circle cx="19" cy="12" r="1" fill="currentColor" stroke="none"/></svg></button>
+              </div>
+            </header>
+            <div class="workspace-body">
+              <div class="conversation">
+                <div class="timeline"><div class="timeline-inner">
+                  <article class="message user"><div class="message-role">You</div><p>Make Spaces feel native to BB, with project movement and fast keyboard switching.</p></article>
+                  <article class="message"><div class="message-role">Codex</div><p>The Space dock stays fixed across each sidebar style. The current Space controls the project filter, color, route, and split state.</p><div class="work-block"><i class="status-dot working"></i><span>Inspecting sidebar organization modes</span><span>12s</span></div></article>
+                  <article class="message user"><div class="message-role">You</div><p>Keep pins and sections global.</p></article>
+                </div></div>
+                <div class="composer-wrap"><div class="composer"><div class="composer-input">Message Codex</div><div class="composer-bar"><button class="icon-button" type="button" aria-label="Attach"><svg width="14" height="14" viewBox="0 0 24 24"><path d="m21 11-8.5 8.5a6 6 0 0 1-8.5-8.5L13 2a4 4 0 0 1 5.7 5.7L9.7 16.7a2 2 0 0 1-2.8-2.8L15 5.8"/></svg></button><span class="model-name">GPT-5.6 Sol · High</span><button class="send-button" type="button" aria-label="Send"><svg width="14" height="14" viewBox="0 0 24 24"><path d="M12 19V5M6 11l6-6 6 6"/></svg></button></div></div></div>
+              </div>
+              <aside class="right-panel" aria-label="Secondary panel">
+                <div class="panel-tabs"><button class="panel-tab selected" type="button">Changes</button><button class="panel-tab" type="button">Terminal</button></div>
+                <div class="diff-summary"><strong>Working changes</strong><span>5 files · +184 −27</span></div>
+                <div class="file-list">
+                  <div class="file-row"><svg width="13" height="13" viewBox="0 0 24 24"><path d="M5 3h10l4 4v14H5zM15 3v5h5"/></svg><span>AppSidebar.tsx</span><span class="file-delta">+68</span></div>
+                  <div class="file-row"><svg width="13" height="13" viewBox="0 0 24 24"><path d="M5 3h10l4 4v14H5zM15 3v5h5"/></svg><span>SpaceSwitcher.tsx</span><span class="file-delta">+74</span></div>
+                  <div class="file-row"><svg width="13" height="13" viewBox="0 0 24 24"><path d="M5 3h10l4 4v14H5zM15 3v5h5"/></svg><span>theme.css</span><span class="file-delta">+24</span></div>
+                  <div class="file-row"><svg width="13" height="13" viewBox="0 0 24 24"><path d="M5 3h10l4 4v14H5zM15 3v5h5"/></svg><span>app-keybindings.ts</span><span class="file-delta">+18</span></div>
+                </div>
+              </aside>
+            </div>
+          </section>
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <dialog id="spaceDialog">
+    <div class="dialog-header"><strong>Create Space</strong><button class="dialog-close" id="dialogClose" type="button" aria-label="Close"><svg width="15" height="15" viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div>
+    <form class="space-form" id="spaceForm" method="dialog">
+      <div class="field"><label for="spaceNameInput">Name</label><input id="spaceNameInput" name="name" value="Experiments" maxlength="30" required /></div>
+      <div class="field"><label>Icon</label><div class="symbol-options" id="symbolOptions"></div></div>
+      <div class="field"><label>Side panel color</label><div class="color-options" id="colorOptions"></div></div>
+      <div class="dialog-actions"><button class="dialog-button" id="dialogCancel" type="button">Cancel</button><button class="dialog-button primary" type="submit">Create Space</button></div>
+    </form>
+  </dialog>
+
+  <div class="project-menu" id="projectMenu" role="menu"></div>
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+  <script>
+    const FRAME_WIDTH = 1240;
+    const FRAME_HEIGHT = 760;
+    const spaces = [
+      {
+        id: "product", name: "BB Product", symbol: "⌘", color: "oklch(0.66 0.10 150)", attention: false,
+        projects: [
+          { id: "bb", name: "bb", threads: [{ name: "Plan Arc-style Spaces", status: "working", meta: "now", selected: true }, { name: "Review sidebar information density", status: "ready", meta: "8m" }] },
+          { id: "desktop", name: "bb-desktop", threads: [{ name: "Window restoration behavior", status: "attention", meta: "24m" }] },
+          { id: "docs", name: "product-notes", threads: [{ name: "Spaces design brief", status: "ready", meta: "1h" }] }
+        ],
+        workspace: { project: "bb", branch: "feature/spaces", title: "Plan Arc-style Spaces for the side panel" }
+      },
+      {
+        id: "infra", name: "Infrastructure", symbol: "◇", color: "oklch(0.67 0.09 64)", attention: true,
+        projects: [
+          { id: "deploy", name: "bb-deploy", threads: [{ name: "Investigate daemon reconnects", status: "attention", meta: "2m", selected: true }, { name: "Release 0.38.0", status: "working", meta: "6m" }] },
+          { id: "observability", name: "observability", threads: [{ name: "Reduce noisy terminal events", status: "ready", meta: "42m" }] }
+        ],
+        workspace: { project: "bb-deploy", branch: "fix/daemon-reconnect", title: "Investigate host daemon reconnects" }
+      },
+      {
+        id: "personal", name: "Personal", symbol: "✦", color: "oklch(0.63 0.09 327)", attention: false,
+        projects: [
+          { id: "personal-project", name: "Personal", threads: [{ name: "Plan the week", status: "ready", meta: "Tue", selected: true }, { name: "Reading list", status: "ready", meta: "Fri" }] }
+        ],
+        workspace: { project: "Personal", branch: "personal workspace", title: "Plan the week" }
+      }
+    ];
+    const globalPinned = [
+      { name: "Release checklist", status: "attention", meta: "Global" },
+      { name: "BB product direction", status: "ready", meta: "Global" }
+    ];
+    const symbols = ["⌘", "◇", "✦", "△", "◎", "⚑", "◫", "↗"];
+    const colors = [
+      "oklch(0.66 0.10 150)", "oklch(0.67 0.09 64)", "oklch(0.63 0.09 327)",
+      "oklch(0.65 0.08 243)", "oklch(0.68 0.09 28)", "oklch(0.65 0.08 195)"
+    ];
+
+    const bbApp = document.getElementById("bbApp");
+    const sidebar = document.getElementById("sidebar");
+    const sidebarContent = document.getElementById("sidebarContent");
+    const spaceDock = document.getElementById("spaceDock");
+    const surfaceSelect = document.getElementById("surfaceSelect");
+    const modeSelect = document.getElementById("modeSelect");
+    const spaceDialog = document.getElementById("spaceDialog");
+    const projectMenu = document.getElementById("projectMenu");
+    const toast = document.getElementById("toast");
+    let activeSpaceIndex = 0;
+    let selectedSymbol = symbols[3];
+    let selectedColor = colors[5];
+    let wheelTotal = 0;
+    let wheelLocked = false;
+    let toastTimer = 0;
+
+    const icon = {
+      pin: '<svg width="13" height="13" viewBox="0 0 24 24"><path d="m14 4 6 6-3 2-4 7-2-2-2 4-1-1 4-2-2-2 7-4z"/></svg>',
+      folder: '<svg width="13" height="13" viewBox="0 0 24 24"><path d="M3 7h7l2 2h9v10H3z"/></svg>',
+      machine: '<svg width="13" height="13" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="14" rx="2"/><path d="M8 22h8M12 18v4"/></svg>',
+      section: '<svg width="13" height="13" viewBox="0 0 24 24"><path d="M4 5h16M4 12h10M4 19h13"/></svg>',
+      tools: '<svg width="14" height="14" viewBox="0 0 24 24"><path d="m14 6 4-4 4 4-4 4zM3 13h8v8H3zM15 14h7M18.5 10.5v7"/></svg>',
+      settings: '<svg width="14" height="14" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19 12a7 7 0 0 0-.1-1l2-1-2-4-2 1a8 8 0 0 0-2-1l-.3-2h-5L9 6a8 8 0 0 0-2 1L5 6l-2 4 2 1a7 7 0 0 0 0 2l-2 1 2 4 2-1a8 8 0 0 0 2 1l.4 2h5l.5-2a8 8 0 0 0 2-1l2 1 2-4-2-1a7 7 0 0 0 .1-1Z"/></svg>'
+    };
+
+    function escapeHtml(value) {
+      return String(value).replace(/[&<>'"]/g, character => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" })[character]);
+    }
+
+    function showToast(message) {
+      clearTimeout(toastTimer);
+      toast.textContent = message;
+      toast.classList.add("visible");
+      toastTimer = setTimeout(() => toast.classList.remove("visible"), 1900);
+    }
+
+    function statusDot(status) {
+      return `<i class="status-dot ${escapeHtml(status)}" aria-hidden="true"></i>`;
+    }
+
+    function threadRow(thread, child = false) {
+      return `<button class="nav-row thread${child ? " child" : ""}${thread.selected ? " selected" : ""}" type="button">${statusDot(thread.status)}<span class="label">${escapeHtml(thread.name)}</span><span class="row-meta">${escapeHtml(thread.meta)}</span></button>`;
+    }
+
+    function projectRows(space) {
+      return space.projects.map(project => `
+        <div class="project-block" draggable="true" data-project-id="${escapeHtml(project.id)}">
+          <div class="nav-row project" role="button" tabindex="0"><span class="row-icon"><i class="repo-glyph"></i></span><span class="label">${escapeHtml(project.name)}</span><span class="row-meta">${project.threads.length}</span><button class="row-more" type="button" aria-label="Project actions" data-project-menu="${escapeHtml(project.id)}">•••</button></div>
+          ${project.threads.map(thread => threadRow(thread)).join("")}
+        </div>`).join("");
+    }
+
+    function machineRows(space) {
+      const groups = [
+        { name: "Amir’s MacBook", projects: space.projects.filter((_, index) => index % 2 === 0) },
+        { name: "Build machine", projects: space.projects.filter((_, index) => index % 2 === 1) }
+      ].filter(group => group.projects.length > 0);
+      return groups.map(group => `<div class="machine-group"><div class="group-label">${icon.machine}<span>${escapeHtml(group.name)}</span><small>${group.projects.reduce((total, project) => total + project.threads.length, 0)}</small></div>${group.projects.flatMap(project => project.threads.map(thread => threadRow({ ...thread, name: `${project.name} · ${thread.name}` }))).join("")}</div>`).join("");
+    }
+
+    function manualRows(space) {
+      const allThreads = space.projects.flatMap(project => project.threads.map(thread => ({ ...thread, name: `${project.name} · ${thread.name}` })));
+      const review = allThreads.filter((_, index) => index % 2 === 0);
+      const active = allThreads.filter((_, index) => index % 2 === 1);
+      return `<div class="manual-group"><div class="group-label">${icon.section}<span>In progress</span><small>${active.length}</small></div>${active.map(thread => threadRow(thread)).join("")}</div><div class="manual-group"><div class="group-label">${icon.section}<span>Review</span><small>${review.length}</small></div>${review.map(thread => threadRow(thread)).join("")}</div>`;
+    }
+
+    function renderThreads(space) {
+      const pinnedRows = globalPinned.map(thread => `<button class="nav-row thread" type="button">${statusDot(thread.status)}<span class="label">${escapeHtml(thread.name)}</span><span class="row-meta">${escapeHtml(thread.meta)}</span></button>`).join("");
+      const mode = modeSelect.value;
+      const body = mode === "machine" ? machineRows(space) : mode === "manual" ? manualRows(space) : projectRows(space);
+      sidebarContent.innerHTML = `<section class="section"><div class="section-header">${icon.pin}<span>Pinned</span><span class="count">${globalPinned.length}</span></div>${pinnedRows}</section><section class="section"><div class="section-header"><span>${mode === "project" ? "Projects" : mode === "machine" ? "Machines" : "Threads"}</span><span class="count">${space.projects.length}</span><button class="section-action" type="button" aria-label="Display options">•••</button></div>${body || '<div class="empty-state"><div><strong>No projects in this Space</strong><p>Move a project here or create one from New thread.</p></div></div>'}</section>`;
+      bindProjectInteractions();
+    }
+
+    function renderTools() {
+      sidebarContent.innerHTML = `<section class="section"><div class="section-header">Tools</div><button class="nav-row selected" type="button">${icon.tools}<span class="label">Installed</span><span class="row-meta">14</span></button><button class="nav-row" type="button">${icon.section}<span class="label">Skills</span><span class="row-meta">92</span></button><button class="nav-row" type="button">${icon.machine}<span class="label">Machines</span><span class="row-meta">2</span></button></section><section class="section"><div class="section-header">Plugins</div><button class="nav-row" type="button"><span class="row-icon">◈</span><span class="label">Conductor workspaces</span></button><button class="nav-row" type="button"><span class="row-icon">M</span><span class="label">Markdown editor</span></button></section>`;
+    }
+
+    function renderSettings() {
+      sidebarContent.innerHTML = `<section class="section"><div class="section-header">Settings</div><button class="nav-row selected" type="button">${icon.settings}<span class="label">General</span></button><button class="nav-row" type="button">${icon.machine}<span class="label">Machines</span></button><button class="nav-row" type="button">${icon.tools}<span class="label">Plugins</span></button><button class="nav-row" type="button"><span class="row-icon">⌨</span><span class="label">Keyboard</span></button><button class="nav-row" type="button"><span class="row-icon">◐</span><span class="label">Appearance</span></button></section>`;
+    }
+
+    function renderSidebar() {
+      const space = spaces[activeSpaceIndex];
+      document.getElementById("spaceHeadingName").textContent = space.name;
+      document.getElementById("spaceHeadingSymbol").textContent = space.symbol;
+      const modeLabel = modeSelect.options[modeSelect.selectedIndex].text.toLowerCase();
+      document.getElementById("spaceHeadingDetail").textContent = `${space.projects.length} project${space.projects.length === 1 ? "" : "s"} · ${modeLabel}`;
+      if (surfaceSelect.value === "tools") renderTools();
+      else if (surfaceSelect.value === "settings") renderSettings();
+      else renderThreads(space);
+    }
+
+    function renderDock() {
+      spaceDock.innerHTML = spaces.map((space, index) => `<button class="space-button" type="button" role="tab" aria-selected="${index === activeSpaceIndex}" aria-label="${escapeHtml(space.name)}, Space ${index + 1}" title="${escapeHtml(space.name)} · ${navigator.platform.includes("Mac") ? "⌘⇧" : "Ctrl+Shift+"}${index + 1}" data-space-index="${index}"><span aria-hidden="true">${escapeHtml(space.symbol)}</span>${index < 9 ? `<span class="space-number" aria-hidden="true">${index + 1}</span>` : ""}${space.attention ? '<i class="attention-mark" aria-hidden="true"></i>' : ""}</button>`).join("") + `<button class="space-add" id="spaceAdd" type="button" aria-label="New Space" title="New Space"><svg width="14" height="14" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button>`;
+      [...spaceDock.querySelectorAll(".space-button")].forEach((button, index) => {
+        button.tabIndex = index === activeSpaceIndex ? 0 : -1;
+        button.addEventListener("click", () => switchSpace(index));
+        button.addEventListener("keydown", event => {
+          if (!["ArrowLeft", "ArrowRight"].includes(event.key)) return;
+          event.preventDefault();
+          const next = Math.max(0, Math.min(spaces.length - 1, index + (event.key === "ArrowRight" ? 1 : -1)));
+          spaceDock.querySelector(`[data-space-index="${next}"]`)?.focus();
+        });
+        button.addEventListener("dragover", event => { event.preventDefault(); button.classList.add("drop-target"); });
+        button.addEventListener("dragleave", () => button.classList.remove("drop-target"));
+        button.addEventListener("drop", event => {
+          event.preventDefault();
+          button.classList.remove("drop-target");
+          const projectId = event.dataTransfer.getData("text/project-id");
+          if (projectId) moveProject(projectId, index);
+        });
+      });
+      document.getElementById("spaceAdd").addEventListener("click", openCreateDialog);
+    }
+
+    function renderWorkspace() {
+      const workspace = spaces[activeSpaceIndex].workspace;
+      document.getElementById("workspaceProject").textContent = workspace.project;
+      document.getElementById("workspaceBranch").textContent = workspace.branch;
+      document.getElementById("workspaceTitle").textContent = workspace.title;
+    }
+
+    function switchSpace(index) {
+      if (index < 0 || index >= spaces.length || index === activeSpaceIndex) return;
+      const direction = index > activeSpaceIndex ? "forward" : "back";
+      activeSpaceIndex = index;
+      bbApp.style.setProperty("--space-color", spaces[index].color);
+      bbApp.classList.remove("space-transition-forward", "space-transition-back");
+      void bbApp.offsetWidth;
+      bbApp.classList.add(direction === "forward" ? "space-transition-forward" : "space-transition-back");
+      renderDock();
+      renderSidebar();
+      renderWorkspace();
+    }
+
+    function bindProjectInteractions() {
+      sidebarContent.querySelectorAll(".project-block").forEach(block => {
+        block.addEventListener("dragstart", event => {
+          event.dataTransfer.effectAllowed = "move";
+          event.dataTransfer.setData("text/project-id", block.dataset.projectId);
+          showToast("Drop the project on a Space icon");
+        });
+      });
+      sidebarContent.querySelectorAll("[data-project-menu]").forEach(button => {
+        button.addEventListener("click", event => {
+          event.stopPropagation();
+          openProjectMenu(button.dataset.projectMenu, button.getBoundingClientRect());
+        });
+      });
+    }
+
+    function openProjectMenu(projectId, rect) {
+      projectMenu.innerHTML = `<div class="menu-label">Move to Space</div>${spaces.map((space, index) => `<button type="button" role="menuitem" data-move-space="${index}" ${index === activeSpaceIndex ? "disabled" : ""}><span>${escapeHtml(space.symbol)}</span><span>${escapeHtml(space.name)}</span></button>`).join("")}`;
+      projectMenu.style.left = `${Math.min(window.innerWidth - 198, rect.right + 4)}px`;
+      projectMenu.style.top = `${Math.min(window.innerHeight - 190, rect.top)}px`;
+      projectMenu.classList.add("visible");
+      projectMenu.querySelectorAll("[data-move-space]").forEach(button => button.addEventListener("click", () => {
+        moveProject(projectId, Number(button.dataset.moveSpace));
+        projectMenu.classList.remove("visible");
+      }));
+      projectMenu.querySelector("button:not([disabled])")?.focus();
+    }
+
+    function moveProject(projectId, destinationIndex) {
+      if (destinationIndex === activeSpaceIndex) return;
+      const source = spaces[activeSpaceIndex];
+      const projectIndex = source.projects.findIndex(project => project.id === projectId);
+      if (projectIndex < 0) return;
+      const [project] = source.projects.splice(projectIndex, 1);
+      spaces[destinationIndex].projects.push(project);
+      showToast(`${project.name} moved to ${spaces[destinationIndex].name}`);
+      renderSidebar();
+    }
+
+    function openCreateDialog() {
+      document.getElementById("spaceNameInput").value = "Experiments";
+      selectedSymbol = symbols[3];
+      selectedColor = colors[5];
+      renderDialogChoices();
+      spaceDialog.showModal();
+      setTimeout(() => document.getElementById("spaceNameInput").select(), 0);
+    }
+
+    function renderDialogChoices() {
+      document.getElementById("symbolOptions").innerHTML = symbols.map(symbol => `<button class="choice" type="button" aria-pressed="${symbol === selectedSymbol}" data-symbol="${escapeHtml(symbol)}">${escapeHtml(symbol)}</button>`).join("");
+      document.getElementById("colorOptions").innerHTML = colors.map(color => `<button class="choice color-choice" type="button" aria-label="Choose color" aria-pressed="${color === selectedColor}" data-color="${color}" style="background:${color}"></button>`).join("");
+      document.querySelectorAll("[data-symbol]").forEach(button => button.addEventListener("click", () => { selectedSymbol = button.dataset.symbol; renderDialogChoices(); }));
+      document.querySelectorAll("[data-color]").forEach(button => button.addEventListener("click", () => { selectedColor = button.dataset.color; renderDialogChoices(); }));
+    }
+
+    function setPreviewScale(mode) {
+      let scale = 1;
+      if (mode === "fit") {
+        const available = Math.max(300, document.getElementById("previewViewport").clientWidth - 24);
+        scale = Math.min(1, available / FRAME_WIDTH);
+      } else if (mode === "zoom") scale = 0.75;
+      document.documentElement.style.setProperty("--preview-scale", scale.toFixed(4));
+      document.getElementById("fitButton").setAttribute("aria-pressed", String(mode === "fit"));
+      document.getElementById("zoomButton").setAttribute("aria-pressed", String(mode === "zoom"));
+      document.getElementById("actualButton").setAttribute("aria-pressed", String(mode === "actual"));
+      document.body.dataset.zoomMode = mode;
+    }
+
+    document.getElementById("fitButton").addEventListener("click", () => setPreviewScale("fit"));
+    document.getElementById("zoomButton").addEventListener("click", () => setPreviewScale("zoom"));
+    document.getElementById("actualButton").addEventListener("click", () => setPreviewScale("actual"));
+    document.getElementById("themeButton").addEventListener("click", event => {
+      const dark = bbApp.dataset.theme !== "dark";
+      bbApp.dataset.theme = dark ? "dark" : "light";
+      event.currentTarget.setAttribute("aria-pressed", String(dark));
+      event.currentTarget.textContent = dark ? "Light" : "Dark";
+    });
+    surfaceSelect.addEventListener("change", renderSidebar);
+    modeSelect.addEventListener("change", renderSidebar);
+    document.getElementById("settingsButton").addEventListener("click", () => { surfaceSelect.value = "settings"; renderSidebar(); });
+    document.getElementById("spaceEditButton").addEventListener("click", () => showToast("Edit Space would open here"));
+    document.getElementById("dialogClose").addEventListener("click", () => spaceDialog.close());
+    document.getElementById("dialogCancel").addEventListener("click", () => spaceDialog.close());
+    document.getElementById("spaceForm").addEventListener("submit", event => {
+      event.preventDefault();
+      const name = document.getElementById("spaceNameInput").value.trim();
+      if (!name) return;
+      spaces.push({ id: `space-${Date.now()}`, name, symbol: selectedSymbol, color: selectedColor, attention: false, projects: [], workspace: { project: "New Space", branch: "No project selected", title: "Start a new thread" } });
+      spaceDialog.close();
+      renderDock();
+      switchSpace(spaces.length - 1);
+      showToast(`${name} created`);
+    });
+    document.addEventListener("pointerdown", event => { if (!projectMenu.contains(event.target)) projectMenu.classList.remove("visible"); });
+    document.addEventListener("keydown", event => {
+      if (event.shiftKey && (event.metaKey || event.ctrlKey) && /^[1-9]$/.test(event.key)) {
+        const index = Number(event.key) - 1;
+        if (spaces[index]) { event.preventDefault(); switchSpace(index); }
+      }
+      if (event.key === "Escape") projectMenu.classList.remove("visible");
+    });
+    sidebar.addEventListener("wheel", event => {
+      if (!event.shiftKey || wheelLocked) return;
+      const delta = Math.abs(event.deltaY) >= Math.abs(event.deltaX) ? event.deltaY : event.deltaX;
+      if (delta === 0) return;
+      if (wheelTotal !== 0 && Math.sign(wheelTotal) !== Math.sign(delta)) wheelTotal = 0;
+      wheelTotal += delta;
+      if (Math.abs(wheelTotal) < 42) return;
+      const next = activeSpaceIndex + (wheelTotal > 0 ? 1 : -1);
+      wheelTotal = 0;
+      if (next < 0 || next >= spaces.length) return;
+      event.preventDefault();
+      wheelLocked = true;
+      switchSpace(next);
+      setTimeout(() => { wheelLocked = false; }, 420);
+    }, { passive: false });
+    window.addEventListener("resize", () => { if (document.body.dataset.zoomMode === "fit") setPreviewScale("fit"); });
+
+    bbApp.style.setProperty("--space-color", spaces[0].color);
+    renderDock();
+    renderSidebar();
+    renderWorkspace();
+    setPreviewScale("fit");
+  </script>
+</body>
+</html>

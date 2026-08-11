@@ -81,12 +81,8 @@ describe("GithubWorkflowDialog", () => {
       branches: ["main", "feature/shipments"],
     });
 
-    fireEvent.click(
-      screen.getByRole("radio", { name: "feature/shipments" }),
-    );
-    fireEvent.click(
-      screen.getByRole("button", { name: "Create worktree" }),
-    );
+    fireEvent.click(screen.getByRole("radio", { name: "feature/shipments" }));
+    fireEvent.click(screen.getByRole("button", { name: "Create worktree" }));
 
     expect(onApply).toHaveBeenCalledWith({
       projectId: "proj_console",
@@ -114,12 +110,8 @@ describe("GithubWorkflowDialog", () => {
         .getByRole("radio", { name: /Pull request/u })
         .hasAttribute("disabled"),
     ).toBe(true);
-    fireEvent.click(
-      screen.getByRole("radio", { name: "feature/shipments" }),
-    );
-    fireEvent.click(
-      screen.getByRole("button", { name: "Create worktree" }),
-    );
+    fireEvent.click(screen.getByRole("radio", { name: "feature/shipments" }));
+    fireEvent.click(screen.getByRole("button", { name: "Create worktree" }));
 
     expect(onApply).toHaveBeenCalledWith({
       projectId: "proj_ecto",
@@ -139,9 +131,7 @@ describe("GithubWorkflowDialog", () => {
     fireEvent.click(
       screen.getByRole("radio", { name: /#17.*Improve navigation/u }),
     );
-    fireEvent.click(
-      screen.getByRole("button", { name: "Create worktree" }),
-    );
+    fireEvent.click(screen.getByRole("button", { name: "Create worktree" }));
 
     expect(onApply).toHaveBeenCalledWith({
       projectId: "proj_console",

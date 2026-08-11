@@ -21,6 +21,7 @@ export {
   createPendingInteractionId,
   createBrowserAnnotationId,
   createProjectId,
+  createSpaceId,
   createPromptHistoryEntryId,
   createProjectSourceId,
   createTerminalSessionId,

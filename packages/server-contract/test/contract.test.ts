@@ -398,6 +398,24 @@ describe("environment workspace response contract", () => {
       }).success,
     ).toBe(true);
   });
+
+  it("types a busy workspace update error", () => {
+    expect(
+      contract.environmentActionApiErrorSchema.parse({
+        code: "environment_busy",
+        message:
+          "Stop active conversations in this workspace before updating from main",
+        details: {
+          kind: "workspace_busy",
+          action: "update_from_main",
+          reason: "active_threads",
+        },
+      }),
+    ).toMatchObject({
+      code: "environment_busy",
+      details: { kind: "workspace_busy", reason: "active_threads" },
+    });
+  });
 });
 
 describe("git branch name contract", () => {

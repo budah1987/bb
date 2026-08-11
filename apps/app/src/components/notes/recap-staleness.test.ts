@@ -35,11 +35,15 @@ describe("resolveRecapStaleness", () => {
   });
 
   it("treats sequence zero as a real sequence, not a missing one", () => {
-    expect(resolveRecapStaleness({ recapSourceSeq: 0, currentSeq: 0 })).toEqual({
-      kind: "current",
-    });
-    expect(resolveRecapStaleness({ recapSourceSeq: 0, currentSeq: 3 })).toEqual({
-      kind: "stale",
-    });
+    expect(resolveRecapStaleness({ recapSourceSeq: 0, currentSeq: 0 })).toEqual(
+      {
+        kind: "current",
+      },
+    );
+    expect(resolveRecapStaleness({ recapSourceSeq: 0, currentSeq: 3 })).toEqual(
+      {
+        kind: "stale",
+      },
+    );
   });
 });

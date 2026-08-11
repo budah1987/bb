@@ -56,10 +56,7 @@ function createFs(seed: Buffer | null = null): ConnectCredentialCacheFs & {
 describe("createConnectCredentialCache", () => {
   it("does not access the keychain when no cached credential exists", async () => {
     const encryption = createEncryption();
-    const isEncryptionAvailable = vi.spyOn(
-      encryption,
-      "isEncryptionAvailable",
-    );
+    const isEncryptionAvailable = vi.spyOn(encryption, "isEncryptionAvailable");
     const cache = createConnectCredentialCache({
       encryption,
       fs: createFs(),

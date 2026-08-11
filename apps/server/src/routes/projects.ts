@@ -85,6 +85,7 @@ import {
   normalizeBranchQuery,
   parseBranchListLimit,
 } from "./branch-list-query.js";
+import { buildSpaceResponses } from "./spaces.js";
 import { parseFileListLimit } from "./file-list-query.js";
 import { parseSafeRelativeRoutePath } from "./relative-route-path.js";
 import { resolveSkillCatalog } from "../services/skills/skill-catalog.js";
@@ -353,6 +354,7 @@ function buildSidebarBootstrapResponse(deps: AppDeps) {
   }
   return {
     sections: listThreadSections(deps.db),
+    spaces: buildSpaceResponses(deps),
     projects: buildProjectsWithThreadsResponseFromRows(
       deps,
       listPublicProjects(deps.db),

@@ -19,9 +19,7 @@ interface TabIdentity {
   id: string;
 }
 
-function terminalSession(
-  overrides: TerminalSessionOverrides,
-): TerminalSession {
+function terminalSession(overrides: TerminalSessionOverrides): TerminalSession {
   return {
     id: "term_1",
     threadId: "thr_1",
@@ -302,9 +300,7 @@ describe("terminalPanelTabs", () => {
       terminalSessions: [terminalSession({ id: "term_1" })],
     });
 
-    expect(tabIds(nextState.secondary.tabs)).toEqual([
-      "terminal:term_1:none",
-    ]);
+    expect(tabIds(nextState.secondary.tabs)).toEqual(["terminal:term_1:none"]);
     expect(nextState.secondary.activeTabId).toBeNull();
   });
 

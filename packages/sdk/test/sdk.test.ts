@@ -440,6 +440,57 @@ describe("@bb/sdk", () => {
     );
   });
 
+  it("maps repository manager show, settings, and run requests", async () => {
+    const settings = {
+      enabled: true,
+      providerId: "codex",
+      model: "gpt-5.4-mini",
+      reasoningLevel: "medium",
+      serviceTier: "default",
+      permissionMode: "auto",
+    } as const;
+    const queue = createFetchQueue([
+      { body: settings },
+      { body: { ...settings, enabled: false } },
+      { body: { id: "thread_manager" } },
+    ]);
+    const sdk = createBbSdk({
+      transport: createHttpTransport({
+        baseUrl: "http://bb.test",
+        fetch: queue.fetch,
+        runtime: "node",
+      }),
+    });
+
+    await sdk.projects.manager.show({ projectId: "project_1" });
+    await sdk.projects.manager.settings({
+      projectId: "project_1",
+      enabled: false,
+    });
+    await sdk.projects.manager.run({
+      projectId: "project_1",
+      prompt: "Review release risk",
+    });
+
+    expect(queue.requests).toEqual([
+      {
+        bodyText: undefined,
+        method: "GET",
+        url: "http://bb.test/api/v1/projects/project_1/manager",
+      },
+      {
+        bodyText: JSON.stringify({ enabled: false }),
+        method: "PATCH",
+        url: "http://bb.test/api/v1/projects/project_1/manager/settings",
+      },
+      {
+        bodyText: JSON.stringify({ prompt: "Review release risk" }),
+        method: "POST",
+        url: "http://bb.test/api/v1/projects/project_1/manager/run",
+      },
+    ]);
+  });
+
   it("sends a complete appearance selection through the theme transport", async () => {
     const appearance = {
       themeId: "nord",

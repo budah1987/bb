@@ -21,6 +21,22 @@ export type {
 } from "./projects.js";
 
 export {
+  createSpace,
+  deleteSpace,
+  ensureDefaultSpace,
+  listSpaces,
+  moveProjectToSpace,
+  updateSpace,
+} from "./spaces.js";
+export type {
+  CreateSpaceInput,
+  DeleteSpaceResult,
+  SpaceRow,
+  SpaceWithProjects,
+  UpdateSpaceInput,
+} from "./spaces.js";
+
+export {
   createThreadSection,
   deleteThreadSection,
   getThreadSectionById,
@@ -56,6 +72,14 @@ export {
   listProjectExecutionDefaultsByProjectIds,
   upsertProjectExecutionDefaults,
 } from "./project-execution-defaults.js";
+export {
+  getProjectManagerSettings,
+  upsertProjectManagerSettings,
+} from "./project-manager-settings.js";
+export type {
+  StoredProjectManagerSettings,
+  UpsertProjectManagerSettingsArgs,
+} from "./project-manager-settings.js";
 export type {
   GetProjectExecutionDefaultsArgs,
   ListProjectExecutionDefaultsByProjectIdsArgs,

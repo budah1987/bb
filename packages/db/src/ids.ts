@@ -20,6 +20,10 @@ export function createProjectId(): string {
   return createId("proj");
 }
 
+export function createSpaceId(): string {
+  return createId("space");
+}
+
 export function createProjectSourceId(): string {
   return createId("src");
 }
