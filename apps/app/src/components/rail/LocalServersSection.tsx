@@ -4,6 +4,15 @@ import type {
   TerminalSession,
 } from "@bb/server-contract";
 import { Button } from "@bb/shared-ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@bb/shared-ui/dialog";
+import { Input } from "@bb/shared-ui/input";
 import { cn } from "@bb/shared-ui/lib/utils";
 import {
   useEnvironment,
@@ -17,6 +26,14 @@ import {
   useThreadTerminals,
 } from "@/hooks/queries/thread-terminal-queries";
 import { useThread } from "@/hooks/queries/thread-queries";
+import {
+  useControlEnvironmentDocker,
+  useStartEnvironmentDevServer,
+} from "@/hooks/mutations/environment-mutations";
+import { useSendThreadMessage } from "@/hooks/mutations/thread-runtime-mutations";
+import { getMutationErrorMessage } from "@/lib/mutation-errors";
+import { sdk } from "@/lib/sdk";
+import { appToast } from "@/components/ui/app-toast";
 import {
   useOpenFixedLocalServersPanel,
   useSetFixedRightTerminalActiveTerminal,
@@ -125,6 +142,7 @@ export function LocalServerRow({
   onOpen,
   onRestart,
   onRetry,
+  onSendToAgent,
   onStop,
   server,
   status,
@@ -136,6 +154,7 @@ export function LocalServerRow({
   onOpen: (terminalId: string) => void;
   onRestart: (terminalId: string) => void;
   onRetry: (operation: TerminalOperationKind, terminalId: string) => void;
+  onSendToAgent: (server: LocalServerDisplay) => void;
   onStop: (terminalId: string) => void;
   server: LocalServerDisplay;
   status: LocalServerStatus;
@@ -162,6 +181,21 @@ export function LocalServerRow({
           isDestructive
           text={`Started in ${server.initialCwd}`}
           title={`Started in ${server.initialCwd}. Expected ${environmentPath ?? "the thread environment"}.`}
+        />
+      ) : null}
+      {server.state === "disconnected" ? (
+        <RowDetail
+          action={{
+            label: "Send to agent",
+            onSelect: () => onSendToAgent(server),
+          }}
+          isDestructive
+          text={
+            server.exitCode === null
+              ? "Server disconnected"
+              : `Server exited with code ${server.exitCode}`
+          }
+          title="Send the command and recent terminal output to the agent."
         />
       ) : null}
       <div
@@ -224,18 +258,28 @@ export function LocalServerRow({
 }
 
 function DockerServiceRow({
+  controlsDisabled,
   freshness,
   onOpen,
   onRecheck,
+  onRepair,
+  onRestart,
+  onStop,
   service,
   status,
 }: {
+  controlsDisabled: boolean;
   freshness: DockerServiceFreshness | null;
   onOpen: () => void;
   onRecheck: () => void;
+  onRepair: () => void;
+  onRestart: () => void;
+  onStop: () => void;
   service: EnvironmentDockerService;
   status: LocalServerStatus;
 }) {
+  const [isStopConfirmationVisible, setIsStopConfirmationVisible] =
+    useState(false);
   const isShared = isSharedDockerService(service);
   const needsRecheck =
     service.checkoutStatus === "wrong_checkout" ||
@@ -262,7 +306,16 @@ function DockerServiceRow({
         />
       ) : needsRecheck ? (
         <RowDetail
-          action={{ label: "Recheck", onSelect: onRecheck }}
+          action={{
+            label:
+              service.checkoutStatus === "wrong_checkout"
+                ? "Send to agent"
+                : "Recheck",
+            onSelect:
+              service.checkoutStatus === "wrong_checkout"
+                ? onRepair
+                : onRecheck,
+          }}
           isDestructive={
             service.checkoutStatus === "wrong_checkout" ||
             freshness === "missing_build"
@@ -283,6 +336,38 @@ function DockerServiceRow({
           }
         />
       ) : null}
+      {isShared ? null : (
+        <div className="flex min-h-10 items-center justify-end gap-1 px-2 text-xs">
+          <button
+            type="button"
+            className="min-h-10 min-w-10 rounded px-2 text-muted-foreground transition-[color,scale] duration-150 hover:text-foreground active:scale-[0.96] disabled:opacity-50"
+            disabled={controlsDisabled}
+            onClick={onRestart}
+          >
+            Restart
+          </button>
+          <button
+            type="button"
+            className="min-h-10 min-w-10 rounded px-2 text-destructive transition-[opacity,scale] duration-150 active:scale-[0.96] disabled:opacity-50"
+            disabled={controlsDisabled}
+            onClick={() => {
+              if (!isStopConfirmationVisible) {
+                setIsStopConfirmationVisible(true);
+                return;
+              }
+              setIsStopConfirmationVisible(false);
+              onStop();
+            }}
+            aria-label={
+              isStopConfirmationVisible
+                ? `Confirm stop ${service.name}`
+                : `Stop ${service.name}`
+            }
+          >
+            {isStopConfirmationVisible ? "Confirm" : "Stop"}
+          </button>
+        </div>
+      )}
     </div>
   );
 }
@@ -308,6 +393,11 @@ export function LocalServersSection({
   threadId,
 }: LocalServersSectionProps) {
   const [isExpanded, setIsExpanded] = useState(true);
+  const [isStartDialogOpen, setIsStartDialogOpen] = useState(false);
+  const [serverTitle, setServerTitle] = useState("Dev server");
+  const [serverCommand, setServerCommand] = useState(
+    "pnpm dev -- --port {port}",
+  );
   const threadQuery = useThread(threadId, { enabled });
   const environmentId = threadQuery.data?.environmentId;
   const environmentQuery = useEnvironment(environmentId, { enabled });
@@ -332,6 +422,9 @@ export function LocalServersSection({
   );
   const closeTerminal = useCloseTerminal();
   const restartTerminal = useRestartTerminal();
+  const startDevServer = useStartEnvironmentDevServer();
+  const controlDocker = useControlEnvironmentDocker();
+  const sendThreadMessage = useSendThreadMessage();
   const operationLock = useRef<TerminalOperation | null>(null);
   const [operation, setOperation] = useState<TerminalOperation | null>(null);
   const [operationError, setOperationError] = useState<{
@@ -376,7 +469,7 @@ export function LocalServersSection({
 
   const serverRows = servers.map((server) => ({
     server,
-    status: resolveTerminalServerStatus(server.state),
+    status: resolveTerminalServerStatus(server.state, server.devServerPort),
   }));
   const serviceRows = services.map((service) => ({
     freshness: freshnessByServiceId.get(service.id) ?? null,
@@ -463,6 +556,119 @@ export function LocalServersSection({
     },
     [closeTerminal, restartTerminal],
   );
+  const startServer = useCallback(async () => {
+    if (!environmentId || !serverTitle.trim() || !serverCommand.trim()) return;
+    const session = await startDevServer.mutateAsync({
+      command: serverCommand.trim(),
+      environmentId,
+      threadId,
+      title: serverTitle.trim(),
+    });
+    setIsStartDialogOpen(false);
+    openTerminal(session.id);
+  }, [
+    environmentId,
+    openTerminal,
+    serverCommand,
+    serverTitle,
+    startDevServer,
+    threadId,
+  ]);
+  const sendServerFailureToAgent = useCallback(
+    async (server: LocalServerDisplay) => {
+      try {
+        const output = await sdk.terminals.output({
+          terminalId: server.id,
+          tailBytes: 12_000,
+        });
+        const byteChunks = output.chunks.map((chunk) => {
+          const binary = atob(chunk.dataBase64);
+          return Uint8Array.from(binary, (character) =>
+            character.charCodeAt(0),
+          );
+        });
+        const totalBytes = byteChunks.reduce(
+          (total, chunk) => total + chunk.byteLength,
+          0,
+        );
+        const bytes = new Uint8Array(totalBytes);
+        let offset = 0;
+        for (const chunk of byteChunks) {
+          bytes.set(chunk, offset);
+          offset += chunk.byteLength;
+        }
+        const log = new TextDecoder().decode(bytes).slice(-12_000);
+        await sendThreadMessage.mutateAsync({
+          id: threadId,
+          input: [
+            {
+              type: "text",
+              mentions: [],
+              text: [
+                `The development server \`${server.title}\` stopped. Diagnose and fix it.`,
+                `Command: \`${server.command.replaceAll("`", "\\`")}\``,
+                `Exit code: ${server.exitCode ?? "unknown"}`,
+                "",
+                "Recent terminal output:",
+                "```text",
+                log || "No terminal output was captured.",
+                "```",
+              ].join("\n"),
+            },
+          ],
+          mode: "queue-if-active",
+        });
+        appToast.success("Server failure sent to agent");
+      } catch (error) {
+        appToast.error("Could not send this failure", {
+          description: getMutationErrorMessage({
+            error,
+            fallbackMessage: "Try again.",
+          }),
+        });
+      }
+    },
+    [sendThreadMessage, threadId],
+  );
+  const environmentPath = environmentQuery.data?.path ?? null;
+  const sendDockerRepairToAgent = useCallback(
+    async (service: EnvironmentDockerService) => {
+      if (environmentPath === null) return;
+      try {
+        await sendThreadMessage.mutateAsync({
+          id: threadId,
+          input: [
+            {
+              type: "text",
+              mentions: [],
+              text: [
+                `The Docker service \`${service.name}\` uses the wrong checkout. Diagnose and repair it.`,
+                `Expected checkout: \`${environmentPath.replaceAll("`", "\\`")}\``,
+                `Detected checkout: \`${(service.ownerCheckoutRoot ?? "unknown").replaceAll("`", "\\`")}\``,
+                `Container: \`${service.id}\``,
+                "",
+                "Mounted paths:",
+                ...service.mounts.map(
+                  (mount) =>
+                    `- \`${mount.source.replaceAll("`", "\\`")}\` → \`${mount.destination.replaceAll("`", "\\`")}\``,
+                ),
+              ].join("\n"),
+            },
+          ],
+          mode: "queue-if-active",
+        });
+        appToast.success("Docker repair sent to agent");
+      } catch (error) {
+        appToast.error("Could not send this repair", {
+          description: getMutationErrorMessage({
+            error,
+            fallbackMessage: "Try again.",
+          }),
+        });
+      }
+    },
+    [environmentPath, sendThreadMessage, threadId],
+  );
 
   return (
     <RailSection
@@ -505,6 +711,17 @@ export function LocalServersSection({
         </p>
       ) : (
         <div className="flex min-w-0 flex-col">
+          <div className="flex min-h-10 items-center justify-end px-2">
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              className="h-8 px-2 text-xs active:scale-[0.96]"
+              onClick={() => setIsStartDialogOpen(true)}
+            >
+              Start server
+            </Button>
+          </div>
           {serverRows.map((row) => (
             <LocalServerRow
               key={row.server.id}
@@ -528,6 +745,7 @@ export function LocalServersSection({
               onRetry={(kind, terminalId) =>
                 runTerminalOperation({ kind, terminalId })
               }
+              onSendToAgent={(server) => void sendServerFailureToAgent(server)}
               onStop={(terminalId) =>
                 runTerminalOperation({ kind: "stop", terminalId })
               }
@@ -538,9 +756,27 @@ export function LocalServersSection({
           {serviceRows.map((row) => (
             <DockerServiceRow
               key={`docker:${row.service.id}`}
+              controlsDisabled={controlDocker.isPending}
               freshness={row.freshness}
               onOpen={openLocalServersPanel}
               onRecheck={recheckDocker}
+              onRepair={() => void sendDockerRepairToAgent(row.service)}
+              onRestart={() => {
+                if (!environmentId) return;
+                controlDocker.mutate({
+                  action: "restart",
+                  containerId: row.service.id,
+                  environmentId,
+                });
+              }}
+              onStop={() => {
+                if (!environmentId) return;
+                controlDocker.mutate({
+                  action: "stop",
+                  containerId: row.service.id,
+                  environmentId,
+                });
+              }}
               service={row.service}
               status={row.status}
             />
@@ -572,6 +808,64 @@ export function LocalServersSection({
           ) : null}
         </div>
       )}
+      <Dialog open={isStartDialogOpen} onOpenChange={setIsStartDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Start development server</DialogTitle>
+            <DialogDescription>
+              BB selects an available port and replaces every {"{port}"}
+              placeholder before launch.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <Input
+              aria-label="Server title"
+              value={serverTitle}
+              onChange={(event) => setServerTitle(event.target.value)}
+              placeholder="Dev server"
+            />
+            <Input
+              aria-label="Server command"
+              value={serverCommand}
+              onChange={(event) => setServerCommand(event.target.value)}
+              placeholder="pnpm dev -- --port {port}"
+            />
+            {!serverCommand.includes("{port}") ? (
+              <p role="alert" className="text-xs text-destructive">
+                Add the {"{port}"} placeholder to the command.
+              </p>
+            ) : null}
+            {startDevServer.error ? (
+              <p role="alert" className="text-xs text-destructive">
+                {getMutationErrorMessage({
+                  error: startDevServer.error,
+                  fallbackMessage: "Could not start this server.",
+                })}
+              </p>
+            ) : null}
+          </div>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setIsStartDialogOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              disabled={
+                startDevServer.isPending ||
+                !serverCommand.includes("{port}") ||
+                !serverTitle.trim()
+              }
+              onClick={() => void startServer()}
+            >
+              {startDevServer.isPending ? "Starting…" : "Start"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </RailSection>
   );
 }

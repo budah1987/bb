@@ -352,6 +352,26 @@ export type EnvironmentDockerActivityResponse = z.infer<
   typeof environmentDockerActivityResponseSchema
 >;
 
+export const environmentDockerControlRequestSchema = z
+  .object({
+    action: z.enum(["restart", "stop"]),
+    containerId: z.string().regex(/^[a-f0-9]{12,64}$/u),
+  })
+  .strict();
+export type EnvironmentDockerControlRequest = z.infer<
+  typeof environmentDockerControlRequestSchema
+>;
+
+export const environmentDockerControlResponseSchema = z
+  .object({
+    action: z.enum(["restart", "stop"]),
+    containerId: z.string().min(1),
+  })
+  .strict();
+export type EnvironmentDockerControlResponse = z.infer<
+  typeof environmentDockerControlResponseSchema
+>;
+
 export const environmentPreviewProviderSchema = z
   .object({
     environment: z.string().min(1).nullable(),
@@ -361,7 +381,9 @@ export const environmentPreviewProviderSchema = z
     kind: z.enum(["local", "deployment"]),
     label: z.string().min(1),
     logUrl: z.string().url().nullable(),
-    source: z.enum(["docker", "github"]),
+    port: z.number().int().min(1).max(65535).nullable(),
+    shared: z.boolean(),
+    source: z.enum(["docker", "github", "terminal"]),
     state: z.enum(["ready", "building", "failed", "unknown"]),
     updatedAt: z.string().min(1).nullable(),
     url: z.string().url().nullable(),
@@ -377,7 +399,7 @@ export const environmentPreviewsResponseSchema = z
       z
         .object({
           message: z.string().min(1),
-          source: z.enum(["docker", "github"]),
+          source: z.enum(["docker", "github", "terminal"]),
         })
         .strict(),
     ),
@@ -386,6 +408,60 @@ export const environmentPreviewsResponseSchema = z
   .strict();
 export type EnvironmentPreviewsResponse = z.infer<
   typeof environmentPreviewsResponseSchema
+>;
+
+export const startEnvironmentDevServerRequestSchema = z
+  .object({
+    command: z.string().trim().min(1).max(10_000),
+    preferredPort: z.number().int().min(1024).max(65535).optional(),
+    threadId: z.string().min(1),
+    title: z.string().trim().min(1).max(200),
+  })
+  .strict()
+  .refine((request) => request.command.includes("{port}"), {
+    message: "command must include the {port} placeholder",
+    path: ["command"],
+  });
+export type StartEnvironmentDevServerRequest = z.infer<
+  typeof startEnvironmentDevServerRequestSchema
+>;
+
+export const environmentPreviewPortRequestSchema = z
+  .object({ port: z.number().int().min(1).max(65535) })
+  .strict();
+export type EnvironmentPreviewPortRequest = z.infer<
+  typeof environmentPreviewPortRequestSchema
+>;
+
+export const environmentPreviewShareResponseSchema = z
+  .object({ port: z.number().int().min(1).max(65535), url: z.string().url() })
+  .strict();
+export type EnvironmentPreviewShareResponse = z.infer<
+  typeof environmentPreviewShareResponseSchema
+>;
+
+export const environmentPreviewUnshareResponseSchema = z
+  .object({ port: z.number().int().min(1).max(65535), shared: z.literal(false) })
+  .strict();
+export type EnvironmentPreviewUnshareResponse = z.infer<
+  typeof environmentPreviewUnshareResponseSchema
+>;
+
+export const environmentPreviewBypassRequestSchema = z
+  .object({
+    providerId: z.string().min(1),
+    secret: z.string().trim().min(1).max(4096),
+  })
+  .strict();
+export type EnvironmentPreviewBypassRequest = z.infer<
+  typeof environmentPreviewBypassRequestSchema
+>;
+
+export const environmentPreviewBypassResponseSchema = z
+  .object({ url: z.string().url() })
+  .strict();
+export type EnvironmentPreviewBypassResponse = z.infer<
+  typeof environmentPreviewBypassResponseSchema
 >;
 
 export const environmentDiffQuerySchema = z.discriminatedUnion("target", [

@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "db0a1899-2f8a-4c16-97a3-ae74fc85bbce",
+  "id": "716b50c2-de67-4207-a9e6-89501055242a",
   "prevId": "9cb5d121-89a0-4f93-b3bd-f4bdbbe93143",
   "tables": {
     "app_settings": {
@@ -2765,6 +2765,13 @@
         "launch_command": {
           "name": "launch_command",
           "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "dev_server_port": {
+          "name": "dev_server_port",
+          "type": "integer",
           "primaryKey": false,
           "notNull": false,
           "autoincrement": false

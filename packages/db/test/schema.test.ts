@@ -136,6 +136,7 @@ describe("db rebuild schema", () => {
         "updated_at",
         "last_user_input_at",
         "launch_command",
+        "dev_server_port",
         "restart_policy",
         "supervision_id",
         "supervision_desired",

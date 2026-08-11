@@ -329,6 +329,7 @@ interface GetTerminalArgs {
 
 interface TerminalCreatePayload {
   cols: number;
+  devServerPort?: CreateTerminalRequest["devServerPort"];
   rows: number;
   restartPolicy?: CreateTerminalRequest["restartPolicy"];
   start?: NonNullable<CreateTerminalRequest["start"]>;
@@ -521,6 +522,7 @@ export function toTerminalSession(row: TerminalSessionRow): TerminalSession {
     hostId: row.hostId,
     title: row.title,
     launchCommand: row.launchCommand,
+    devServerPort: row.devServerPort,
     restartPolicy: row.restartPolicy,
     initialCwd: row.initialCwd,
     cols: row.cols,
@@ -719,6 +721,7 @@ export class TerminalSessionLifecycle {
         hostId: launchTarget.hostId,
         initialCwd: launchTarget.initialCwd,
         launchCommand: isNamedCommand ? start.command : null,
+        devServerPort: isNamedCommand ? (args.payload.devServerPort ?? null) : null,
         rows: args.payload.rows,
         restartPolicy,
         status: "starting",
@@ -1343,6 +1346,7 @@ export class TerminalSessionLifecycle {
       await this.createTerminalForTarget({
         payload: {
           cols: session.cols,
+          devServerPort: session.devServerPort ?? undefined,
           rows: session.rows,
           restartPolicy: session.restartPolicy,
           start: { mode: "command", command: session.launchCommand },

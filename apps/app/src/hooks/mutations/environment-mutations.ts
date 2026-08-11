@@ -7,8 +7,12 @@ import type {
 } from "@bb/server-contract";
 import { sdk } from "@/lib/sdk";
 import type { RequestEnvironmentActionMutationRequest } from "./mutation-request-types";
-import { invalidateEnvironmentActionQueries } from "../cache-owners/environment-cache-effects";
+import {
+  invalidateEnvironmentActionQueries,
+  invalidateEnvironmentPreviewQueries,
+} from "../cache-owners/environment-cache-effects";
 import { applyEnvironmentUpdateResult } from "../cache-owners/environment-workspace-cache-owner";
+import { invalidateTerminalScopes } from "../cache-owners/terminal-cache-owner";
 import {
   beginArchiveEnvironmentThreadsTransaction,
   rollbackArchiveEnvironmentThreadsTransaction,
@@ -163,6 +167,77 @@ export function useUpdateEnvironment() {
     },
     onSuccess: (environment: Environment) => {
       applyEnvironmentUpdateResult({ environment, queryClient });
+    },
+  });
+}
+
+export function useStartEnvironmentDevServer() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: sdk.environments.startDevServer,
+    onSuccess: (_session, input) => {
+      invalidateTerminalScopes({
+        queryClient,
+        scopes: [
+          {
+            kind: "environment",
+            environmentId: input.environmentId,
+          },
+          {
+            kind: "thread",
+            threadId: input.threadId,
+          },
+        ],
+      });
+      invalidateEnvironmentPreviewQueries({
+        environmentId: input.environmentId,
+        queryClient,
+      });
+    },
+  });
+}
+
+export function useShareEnvironmentPreviewPort() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: sdk.environments.sharePreviewPort,
+    onSuccess: (_result, input) =>
+      invalidateEnvironmentPreviewQueries({
+        environmentId: input.environmentId,
+        queryClient,
+      }),
+  });
+}
+
+export function useUnshareEnvironmentPreviewPort() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: sdk.environments.unsharePreviewPort,
+    onSuccess: (_result, input) =>
+      invalidateEnvironmentPreviewQueries({
+        environmentId: input.environmentId,
+        queryClient,
+      }),
+  });
+}
+
+export function useBypassEnvironmentPreviewProtection() {
+  return useMutation({ mutationFn: sdk.environments.bypassPreviewProtection });
+}
+
+export function useControlEnvironmentDocker() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: sdk.environments.dockerControl,
+    onSettled: (_result, _error, input) => {
+      invalidateEnvironmentActionQueries({
+        environmentId: input.environmentId,
+        queryClient,
+      });
+      invalidateEnvironmentPreviewQueries({
+        environmentId: input.environmentId,
+        queryClient,
+      });
     },
   });
 }

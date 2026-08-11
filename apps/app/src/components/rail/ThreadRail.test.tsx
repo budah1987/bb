@@ -45,6 +45,20 @@ vi.mock("./LocalServersSection", () => ({
   ),
 }));
 
+vi.mock("./BranchHealthSection", () => ({
+  BranchHealthSection: ({
+    enabled,
+    threadId,
+  }: {
+    enabled: boolean;
+    threadId: string;
+  }) => (
+    <div data-testid="branch-health-section" data-enabled={enabled}>
+      {threadId}
+    </div>
+  ),
+}));
+
 vi.mock("./PreviewSection", () => ({
   PreviewSection: ({
     enabled,
@@ -103,6 +117,9 @@ describe("ThreadRail", () => {
       "thr_1",
     );
     expect(screen.getByTestId("preview-section").textContent).toBe("thr_1");
+    expect(screen.getByTestId("branch-health-section").textContent).toBe(
+      "thr_1",
+    );
     expect(screen.getByTestId("plugin-rail-sections").textContent).toBe(
       "thr_1",
     );
@@ -110,6 +127,7 @@ describe("ThreadRail", () => {
       "notes-panel",
       "local-servers-section",
       "preview-section",
+      "branch-health-section",
       "plugin-rail-sections",
     ]) {
       expect(screen.getByTestId(testId).getAttribute("data-enabled")).toBe(
@@ -157,6 +175,7 @@ describe("ThreadRail", () => {
       "notes-panel",
       "local-servers-section",
       "preview-section",
+      "branch-health-section",
       "plugin-rail-sections",
     ]) {
       expect(screen.getByTestId(testId).getAttribute("data-enabled")).toBe(

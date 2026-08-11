@@ -273,6 +273,7 @@ function dropLatestFeatureSchema(db: DbConnection): void {
   dropColumnIfPresent(db, "terminal_sessions", "supervision_id");
   dropColumnIfPresent(db, "terminal_sessions", "launch_command");
   dropColumnIfPresent(db, "terminal_sessions", "restart_policy");
+  dropColumnIfPresent(db, "terminal_sessions", "dev_server_port");
 }
 
 function dropRewindAddedTables(db: DbConnection): void {
@@ -3856,6 +3857,9 @@ describe("migrate", () => {
         .run();
       db.$client
         .prepare("ALTER TABLE terminal_sessions DROP COLUMN supervision_id")
+        .run();
+      db.$client
+        .prepare("ALTER TABLE terminal_sessions DROP COLUMN dev_server_port")
         .run();
 
       migrate(db);

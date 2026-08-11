@@ -6,6 +6,7 @@ import { PANEL_COLLAPSE_TRANSITION_CLASS } from "@/components/secondary-panel/pa
 import { useStandaloneCompactPwa } from "@/hooks/useStandaloneCompactPwa";
 import { useIsRailVisible } from "@/lib/rail-visibility";
 import { LocalServersSection } from "./LocalServersSection";
+import { BranchHealthSection } from "./BranchHealthSection";
 import { PreviewSection } from "./PreviewSection";
 import { RailPanelTitle } from "./RailPanelTitle";
 import { RAIL_SECTION_STACK_CLASS } from "./railStyleTokens";
@@ -129,6 +130,10 @@ export function ThreadRail({ threadId }: ThreadRailProps) {
             <div className={RAIL_SECTION_STACK_CLASS}>
               {/* Keep section state for the exit animation, but pause hidden work. */}
               <LocalServersSection
+                threadId={threadId}
+                enabled={isRailVisible}
+              />
+              <BranchHealthSection
                 threadId={threadId}
                 enabled={isRailVisible}
               />

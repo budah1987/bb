@@ -20,6 +20,7 @@ export interface CreateTerminalSessionInput {
   hostId: string;
   initialCwd: string;
   launchCommand?: string | null;
+  devServerPort?: number | null;
   now?: number;
   rows: number;
   restartPolicy?: TerminalRestartPolicy;
@@ -188,6 +189,7 @@ export function createTerminalSession(
       title: input.title,
       initialCwd: input.initialCwd,
       launchCommand: input.launchCommand ?? null,
+      devServerPort: input.devServerPort ?? null,
       cols: input.cols,
       rows: input.rows,
       restartPolicy: input.restartPolicy ?? "never",

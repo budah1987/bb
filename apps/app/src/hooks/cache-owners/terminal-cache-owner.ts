@@ -18,6 +18,11 @@ interface CloseTerminalSessionCacheArgs extends TerminalSessionCacheArgs {
   terminalId: string;
 }
 
+interface InvalidateTerminalScopesArgs {
+  queryClient: QueryClient;
+  scopes: TerminalQueryScope[];
+}
+
 function upsertTerminalSession(
   current: TerminalListResponse | undefined,
   session: TerminalSession,
@@ -113,4 +118,13 @@ export function applyTerminalSessionsInvalidate(
   queryClient.invalidateQueries({
     queryKey: allTerminalsQueryKeyPrefix(),
   });
+}
+
+export function invalidateTerminalScopes({
+  queryClient,
+  scopes,
+}: InvalidateTerminalScopesArgs): void {
+  for (const scope of scopes) {
+    queryClient.invalidateQueries({ queryKey: terminalsQueryKey(scope) });
+  }
 }

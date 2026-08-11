@@ -15,6 +15,7 @@ function terminalSession(overrides: Partial<TerminalSession>): TerminalSession {
     hostId: "host_1",
     title: "Terminal",
     launchCommand: null,
+    devServerPort: null,
     restartPolicy: "never",
     initialCwd: "/workspace",
     cols: 100,

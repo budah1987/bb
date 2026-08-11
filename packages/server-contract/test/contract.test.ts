@@ -16,6 +16,7 @@ import {
   createPublicApiClient,
   createThreadRequestSchema,
   environmentActionRequestSchema,
+  startEnvironmentDevServerRequestSchema,
   baseBranchSpecSchema,
   gitBranchNameSchema,
   reorderPinnedThreadRequestSchema,
@@ -571,6 +572,34 @@ describe("git branch name contract", () => {
   });
 });
 
+describe("development server contracts", () => {
+  it("requires a port placeholder and a non-privileged preferred port", () => {
+    expect(
+      startEnvironmentDevServerRequestSchema.safeParse({
+        command: "pnpm dev -- --port {port}",
+        preferredPort: 4173,
+        threadId: "thr_1",
+        title: "Web",
+      }).success,
+    ).toBe(true);
+    expect(
+      startEnvironmentDevServerRequestSchema.safeParse({
+        command: "pnpm dev",
+        threadId: "thr_1",
+        title: "Web",
+      }).success,
+    ).toBe(false);
+    expect(
+      startEnvironmentDevServerRequestSchema.safeParse({
+        command: "pnpm dev -- --port {port}",
+        preferredPort: 80,
+        threadId: "thr_1",
+        title: "Web",
+      }).success,
+    ).toBe(false);
+  });
+});
+
 describe("public terminal contracts", () => {
   it("allows threadless terminal session responses", () => {
     expect(
@@ -581,6 +610,7 @@ describe("public terminal contracts", () => {
         hostId: "host_1",
         title: "Terminal 1",
         launchCommand: null,
+        devServerPort: null,
         restartPolicy: "never",
         initialCwd: "/tmp/workspace",
         cols: 80,

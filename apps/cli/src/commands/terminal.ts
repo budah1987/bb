@@ -42,6 +42,7 @@ interface TerminalStartOptions
   attach?: boolean;
   command?: string;
   cols?: string;
+  devServerPort?: string;
   rows?: string;
   restartPolicy?: string;
   title?: string;
@@ -121,6 +122,7 @@ export function registerTerminalCommands(
       )
       .option("--cols <n>", "Initial terminal columns")
       .option("--rows <n>", "Initial terminal rows")
+      .option("--dev-server-port <port>", "Local HTTP port owned by this command")
       .option(
         "--restart-policy <policy>",
         "Named command restart policy: never or until-stopped",
@@ -136,6 +138,10 @@ export function registerTerminalCommands(
       });
       const session = await sdk.terminals.create({
         cols: parsePositiveInteger(opts.cols, DEFAULT_COLS, "--cols"),
+        devServerPort:
+          opts.devServerPort === undefined
+            ? undefined
+            : parsePort(opts.devServerPort, "--dev-server-port"),
         rows: parsePositiveInteger(opts.rows, DEFAULT_ROWS, "--rows"),
         restartPolicy: parseTerminalRestartPolicy(opts.restartPolicy),
         scope: await resolveTerminalCreateScope(opts, getUrl()),
@@ -345,6 +351,14 @@ function parseTerminalRestartPolicy(
     return "until_stopped";
   }
   throw new Error("--restart-policy must be never or until-stopped.");
+}
+
+function parsePort(value: string, flag: string): number {
+  const port = Number(value);
+  if (!Number.isInteger(port) || port < 1024 || port > 65535) {
+    throw new Error(`${flag} must be an integer between 1024 and 65535.`);
+  }
+  return port;
 }
 
 function addTerminalScopeOptions(command: Command): Command {

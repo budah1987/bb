@@ -20,6 +20,7 @@ List and create require exactly one explicit scope:
   bb terminal create --thread <thread-id> --command "pnpm dev"
   bb terminal create --environment <environment-id>
   bb terminal create --machine <id-or-name> [--cwd <path>]
+    --dev-server-port <port>             Mark the command as a preview server
     --host <id-or-name>                   Alias for --machine
     --title <title>                       Display title
     --restart-policy <policy>             `never` or `until-stopped`; named commands only

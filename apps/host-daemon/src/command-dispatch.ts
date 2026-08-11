@@ -92,8 +92,15 @@ import {
   resolveWorkspaceForCommand,
   workspaceResolutionFailureFromError,
 } from "./workspace-resolution.js";
-import { inspectWorkspaceDockerMounts } from "./command-handlers/docker-mounts.js";
+import {
+  controlWorkspaceDockerContainer,
+  inspectWorkspaceDockerMounts,
+} from "./command-handlers/docker-mounts.js";
 import { inspectWorkspaceDockerPathActivity } from "./command-handlers/docker-path-activity.js";
+import {
+  findAvailableWorkspacePort,
+  readWorkspacePortStatus,
+} from "./command-handlers/workspace-ports.js";
 import { discoverWorkspaceGithubDeployments } from "./command-handlers/github-deployments.js";
 import {
   SimulatorManagerError,
@@ -699,6 +706,28 @@ const onlineRpcHandlers: OnlineRpcHandlerMap = {
       };
     }
   },
+  "workspace.find_available_port": async (command, options) => {
+    await requireResolvedWorkspaceForCommand({
+      dataDir: options.dataDir,
+      environmentId: command.environmentId,
+      requireGit: false,
+      requireManagedWorktree: false,
+      runtimeManager: options.runtimeManager,
+      workspaceContext: command.workspaceContext,
+    });
+    return findAvailableWorkspacePort(command);
+  },
+  "workspace.port_status": async (command, options) => {
+    await requireResolvedWorkspaceForCommand({
+      dataDir: options.dataDir,
+      environmentId: command.environmentId,
+      requireGit: false,
+      requireManagedWorktree: false,
+      runtimeManager: options.runtimeManager,
+      workspaceContext: command.workspaceContext,
+    });
+    return readWorkspacePortStatus(command.port);
+  },
   "workspace.docker_mounts": async (command, options) => {
     const resolution = await resolveWorkspaceForCommand({
       dataDir: options.dataDir,
@@ -716,6 +745,28 @@ const onlineRpcHandlers: OnlineRpcHandlerMap = {
       };
     }
     return inspectWorkspaceDockerMounts({
+      env: providerCliEnvFromShellEnv(options.runtimeManager.getShellEnv()),
+      workspacePath: command.workspaceContext.workspacePath,
+    });
+  },
+  "workspace.docker_control": async (command, options) => {
+    const resolution = await resolveWorkspaceForCommand({
+      dataDir: options.dataDir,
+      environmentId: command.environmentId,
+      requireGit: true,
+      requireManagedWorktree: false,
+      runtimeManager: options.runtimeManager,
+      workspaceContext: command.workspaceContext,
+    });
+    if (!resolution.ok) {
+      throw new ExpectedCommandDispatchError(
+        resolution.failure.code,
+        resolution.failure.message,
+      );
+    }
+    return controlWorkspaceDockerContainer({
+      action: command.action,
+      containerId: command.containerId,
       env: providerCliEnvFromShellEnv(options.runtimeManager.getShellEnv()),
       workspacePath: command.workspaceContext.workspacePath,
     });

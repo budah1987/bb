@@ -34,6 +34,16 @@ message agents, or inspect projects, providers, and environments.
   freshness for mounted Docker builds.
 - Use `bb environment previews <id> --json` to inspect local and deployment
   preview providers.
+- Use `bb environment dev-server-start <id> --thread <thread-id> --title <title>
+--command '<command with {port}>'` to select a free port and start a durable
+  server.
+- Use `bb environment preview-share <id> --port <port>` and
+  `preview-unshare` to control Connect access for one preview.
+- Use `bb environment docker-control <id> --container <id> --action restart`
+  to control a Docker service that uses this repository.
+- Use `bb environment preview-bypass <id> --provider <id>` when a Vercel
+  preview needs its automation bypass secret. The CLI reads
+  `VERCEL_AUTOMATION_BYPASS_SECRET` by default and does not store it.
 - To make a repo work with bb worktrees, run `bb guide environments`. It
   documents the repo-level `.bb-env-setup.sh` setup hook and the
   `.worktreeinclude` file.
@@ -470,6 +480,7 @@ For review or fix pipelines, get the environment ID from
   explicit host ID; terminal commands never silently fall back to primary.
 - Start a server with
   `bb terminal create --thread <thread-id> --title "pnpm dev" --command "pnpm dev"`.
+  Add `--dev-server-port <port>` when the command serves a preview on that port.
   Named commands use the saved `devServerRestartPolicy`, which defaults to
   `until_stopped`. Override it with `--restart-policy never` when needed.
 - All existing-session operations need only the terminal ID. Use

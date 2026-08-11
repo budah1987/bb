@@ -8,6 +8,9 @@ import { LocalServerRow } from "./LocalServersSection";
 afterEach(cleanup);
 
 const server = {
+  command: "pnpm dev",
+  devServerPort: 3000,
+  exitCode: null,
   id: "term_1",
   initialCwd: "/worktrees/feature",
   state: "running" as const,
@@ -27,6 +30,7 @@ function renderRow(
     onOpen: vi.fn(),
     onRestart: vi.fn(),
     onRetry: vi.fn(),
+    onSendToAgent: vi.fn(),
     onStop: vi.fn(),
     server,
     status,
@@ -85,5 +89,22 @@ describe("LocalServerRow actions", () => {
     );
     fireEvent.click(screen.getByRole("button", { name: "Retry" }));
     expect(onRetry).toHaveBeenCalledWith("restart", "term_1");
+  });
+
+  it("sends a disconnected server failure to the agent", () => {
+    const onSendToAgent = vi.fn();
+    const disconnected = {
+      ...server,
+      exitCode: 1,
+      state: "disconnected" as const,
+    };
+    renderRow({
+      onSendToAgent,
+      server: disconnected,
+      status: resolveTerminalServerStatus(disconnected.state),
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Send to agent" }));
+    expect(onSendToAgent).toHaveBeenCalledWith(disconnected);
   });
 });

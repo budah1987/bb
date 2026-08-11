@@ -19,6 +19,8 @@ function provider(
     kind: "local",
     label: "Local",
     logUrl: null,
+    port: 5173,
+    shared: true,
     source: "docker",
     state: "ready",
     updatedAt: null,

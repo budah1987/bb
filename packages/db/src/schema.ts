@@ -915,6 +915,7 @@ export const terminalSessions = sqliteTable(
     ),
     title: text("title").notNull(),
     launchCommand: text("launch_command"),
+    devServerPort: integer("dev_server_port"),
     restartPolicy: text("restart_policy")
       .$type<TerminalRestartPolicy>()
       .notNull()

@@ -590,6 +590,12 @@ const ONLINE_RPC_RESPONSE_RESULT_FIXTURES: OnlineRpcResponseResultFixtures = {
       },
     ],
   },
+  "workspace.docker_control": {
+    action: "restart",
+    containerId: "abcdef123456",
+  },
+  "workspace.find_available_port": { port: 3012 },
+  "workspace.port_status": { isListening: true },
   "workspace.docker_path_activity": {
     outcome: "available",
     paths: [
@@ -1245,12 +1251,9 @@ describe("host-daemon local schemas", () => {
 });
 
 describe("host-daemon command schemas", () => {
-  // Version 89 makes the ACP adapter mint turn-qualified fileChange item ids.
-  // An enrolled daemon on an older build still emits session-scoped counters
-  // that collide across resumed sessions, so it must update before it reports
-  // more file edits. Versions 90 and 91 add direct publication payloads.
-  it("uses protocol version 91 for turn-qualified file changes and direct publishing", () => {
-    expect(HOST_DAEMON_PROTOCOL_VERSION).toBe(92);
+  // Version 93 adds workspace port checks and Docker controls.
+  it("uses protocol version 93 for environment management commands", () => {
+    expect(HOST_DAEMON_PROTOCOL_VERSION).toBe(93);
   });
 
   it("binds Plan cancellation to a required turn id and typed result", () => {

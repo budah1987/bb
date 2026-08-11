@@ -19,6 +19,7 @@ const session: TerminalSession = {
   hostId: "host_1",
   title: "Terminal",
   launchCommand: null,
+  devServerPort: null,
   restartPolicy: "never",
   initialCwd: "/workspace",
   cols: 100,
