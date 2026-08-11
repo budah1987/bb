@@ -717,6 +717,7 @@ export class TerminalSessionLifecycle {
       return createTerminalSession(tx, {
         cols: args.payload.cols,
         daemonSessionId: daemonSession.id,
+        devServerPort: args.payload.devServerPort,
         environmentId: launchTarget.environmentId,
         hostId: launchTarget.hostId,
         initialCwd: launchTarget.initialCwd,
@@ -1349,6 +1350,7 @@ export class TerminalSessionLifecycle {
       await this.createTerminalForTarget({
         payload: {
           cols: session.cols,
+          devServerPort: session.devServerPort ?? undefined,
           rows: session.rows,
           restartPolicy: session.restartPolicy,
           start: { mode: "command", command: session.launchCommand },

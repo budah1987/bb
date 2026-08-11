@@ -140,6 +140,7 @@ describe("db rebuild schema", () => {
         "supervision_id",
         "supervision_desired",
         "supervision_attempt",
+        "dev_server_port",
       ]);
     } finally {
       closeConnection(db);

@@ -1767,6 +1767,7 @@ describe("public terminal routes", () => {
       hostId: fixture.host.id,
       initialCwd: "/tmp/terminal-workspace",
       launchCommand: "pnpm dev",
+      devServerPort: 4173,
       rows: 30,
       restartPolicy: "until_stopped",
       status: "running",

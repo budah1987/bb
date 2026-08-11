@@ -3574,6 +3574,7 @@ export function RootComposeView() {
       worktreeDisabledReason: projectSourceWorktreeUnavailable
         ? PROJECT_SOURCE_WORKTREE_DISABLED_REASON
         : null,
+      hidden: isEnvironmentLocked,
       disabled: isForkDraft || isEnvironmentLocked,
       ...(isProjectless
         ? {}

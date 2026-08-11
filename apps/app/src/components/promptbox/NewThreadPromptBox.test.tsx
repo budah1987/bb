@@ -102,6 +102,35 @@ describe("ThreadEnvSlot", () => {
 
     expect(screen.queryByText("Unknown checkout")).toBeNull();
   });
+
+  it("hides workspace controls when a tab fixes the target workspace", () => {
+    render(
+      <ThreadEnvSlot
+        environment={{
+          value: `host:${host.id}:local`,
+          onChange: vi.fn(),
+          sources,
+          host,
+          hidden: true,
+          isLocal: true,
+        }}
+        branch={{
+          value: null,
+          currentBranch: null,
+          isNew: false,
+          options: [],
+          onChange: vi.fn(),
+        }}
+        worktree={{
+          options: [],
+          value: null,
+          onChange: vi.fn(),
+        }}
+      />,
+    );
+
+    expect(screen.queryByRole("button", { name: "Environment" })).toBeNull();
+  });
 });
 
 describe("ProjectlessMachineSlot", () => {

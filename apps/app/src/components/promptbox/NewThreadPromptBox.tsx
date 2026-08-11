@@ -97,6 +97,8 @@ export interface NewThreadEnvironmentConfig {
    * Caller signals the project has no worktree envs available. */
   reuseDisabled?: boolean;
   worktreeDisabledReason?: string | null;
+  /** Hides workspace controls when the caller has already fixed the target. */
+  hidden?: boolean;
   disabled?: boolean;
 }
 
@@ -470,6 +472,7 @@ export function ThreadEnvSlot({
     () => parseEnvironmentValue(environment.value),
     [environment.value],
   );
+  if (environment.hidden) return null;
   const branchMenuKind = getBranchPickerMenuKind({ parsedEnvironment });
   const showBranchPicker =
     parsedEnvironment?.type === "host" && branch.hidden !== true;
@@ -602,6 +605,8 @@ export interface NewThreadConnectedEnvironmentConfig {
    * disabled — caller signals the project has no worktree envs available. */
   reuseDisabled?: boolean;
   worktreeDisabledReason?: string | null;
+  /** Hides workspace controls when the caller has already fixed the target. */
+  hidden?: boolean;
   disabled?: boolean;
 }
 

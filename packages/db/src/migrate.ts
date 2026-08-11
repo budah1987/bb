@@ -1261,6 +1261,8 @@ const STAGED_TERMINAL_LAUNCH_COMMAND_COLUMN =
   "_bb_terminal_launch_command_pending";
 const STAGED_TERMINAL_RESTART_POLICY_COLUMN =
   "_bb_terminal_restart_policy_pending";
+const STAGED_TERMINAL_DEV_SERVER_PORT_COLUMN =
+  "_bb_terminal_dev_server_port_pending";
 
 interface StagedDurableTerminalColumns {
   devServerRestartPolicy: boolean;
@@ -1509,6 +1511,54 @@ function restoreStagedDurableTerminalColumns(
   }
 }
 
+function stageExistingTerminalDevServerPort(
+  db: DbConnection,
+  migrationsFolder: string,
+): boolean {
+  if (
+    !tableExists(db, "__drizzle_migrations") ||
+    !tableExists(db, "terminal_sessions")
+  ) {
+    return false;
+  }
+  const migration = requireExpectedAppliedMigration(
+    readExpectedAppliedMigrations(migrationsFolder),
+    "0096_hard_toro",
+  );
+  if (readAppliedMigrationCreatedAts(db).has(migration.createdAt)) {
+    return false;
+  }
+  if (!columnExists(db, "terminal_sessions", "dev_server_port")) {
+    return false;
+  }
+  db.$client.exec(
+    `ALTER TABLE terminal_sessions RENAME COLUMN dev_server_port TO ${STAGED_TERMINAL_DEV_SERVER_PORT_COLUMN}`,
+  );
+  return true;
+}
+
+function restoreStagedTerminalDevServerPort(db: DbConnection): void {
+  if (
+    !columnExists(
+      db,
+      "terminal_sessions",
+      STAGED_TERMINAL_DEV_SERVER_PORT_COLUMN,
+    )
+  ) {
+    return;
+  }
+  if (!columnExists(db, "terminal_sessions", "dev_server_port")) {
+    db.$client.exec(
+      `ALTER TABLE terminal_sessions RENAME COLUMN ${STAGED_TERMINAL_DEV_SERVER_PORT_COLUMN} TO dev_server_port`,
+    );
+    return;
+  }
+  db.$client.exec(
+    `UPDATE terminal_sessions SET dev_server_port = ${STAGED_TERMINAL_DEV_SERVER_PORT_COLUMN};
+     ALTER TABLE terminal_sessions DROP COLUMN ${STAGED_TERMINAL_DEV_SERVER_PORT_COLUMN};`,
+  );
+}
+
 function repairNotesMigrationAfterLegacyProjectMigration(
   db: DbConnection,
   migrationsFolder: string,
@@ -1745,6 +1795,10 @@ export function migrate(db: DbConnection, options: MigrateOptions = {}): void {
       db,
       migrationsFolder,
     );
+    const stagedTerminalDevServerPort = stageExistingTerminalDevServerPort(
+      db,
+      migrationsFolder,
+    );
     repairNotesMigrationAfterLegacyProjectMigration(db, migrationsFolder);
     try {
       drizzleMigrate(db, { migrationsFolder });
@@ -1758,6 +1812,9 @@ export function migrate(db: DbConnection, options: MigrateOptions = {}): void {
       }
       if (stagedDurableTerminalColumns) {
         restoreStagedDurableTerminalColumns(db, stagedDurableTerminalColumns);
+      }
+      if (stagedTerminalDevServerPort) {
+        restoreStagedTerminalDevServerPort(db);
       }
     }
     applyReorderedCleanupMigrations(db, migrationsFolder);

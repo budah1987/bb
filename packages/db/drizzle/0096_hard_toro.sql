@@ -1,0 +1,1 @@
+ALTER TABLE `terminal_sessions` ADD `dev_server_port` integer;

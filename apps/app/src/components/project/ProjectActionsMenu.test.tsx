@@ -125,7 +125,7 @@ describe("ProjectActionsMenu", () => {
     );
 
     expect(
-      await screen.findByRole("menuitem", { name: "Add to Space" }),
+      await screen.findByRole("menuitem", { name: "Move to Space" }),
     ).not.toBeNull();
   });
 
@@ -145,7 +145,7 @@ describe("ProjectActionsMenu", () => {
     fireEvent.contextMenu(screen.getByRole("button", { name: "Project row" }));
 
     expect(
-      await screen.findByRole("menuitem", { name: "Add to Space" }),
+      await screen.findByRole("menuitem", { name: "Move to Space" }),
     ).not.toBeNull();
   });
 });

@@ -145,7 +145,7 @@ export const DEFAULT_APP_KEYBINDINGS: AppDefaultKeybindings = [
   // while keeping the shorter Mod chord on desktop.
   ...numberedChatBindings(THREAD_JUMP_APP_COMMAND_IDS, mainWithoutModal),
   ...SPACE_JUMP_APP_COMMAND_IDS.map((command, index) =>
-    binding(command, String(index + 1), { mod: true, shift: true }, {
+    binding(command, String(index + 1), { alt: true }, {
       ...mainWithoutModal,
       desktopOnly: true,
     }),
