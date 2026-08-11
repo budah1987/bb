@@ -1,7 +1,7 @@
 import { HugeiconsIcon, type IconSvgElement } from "@hugeicons/react";
 import type { SpaceIcon } from "@bb/domain";
 
-const EXTENDED_SPACE_ICONS: Partial<Record<SpaceIcon, IconSvgElement>> = {
+const EXTENDED_SPACE_ICONS: Partial<Record<string, IconSvgElement>> = {
   app: [
     [
       "path",

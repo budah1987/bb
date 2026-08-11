@@ -522,6 +522,7 @@ export function toTerminalSession(row: TerminalSessionRow): TerminalSession {
     hostId: row.hostId,
     title: row.title,
     launchCommand: row.launchCommand,
+    devServerPort: row.devServerPort,
     restartPolicy: row.restartPolicy,
     initialCwd: row.initialCwd,
     cols: row.cols,

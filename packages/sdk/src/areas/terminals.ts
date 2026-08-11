@@ -62,6 +62,7 @@ export interface TerminalListArgs {
 
 export interface TerminalCreateArgs {
   cols: number;
+  devServerPort?: CreateTerminalRequest["devServerPort"];
   rows: number;
   restartPolicy?: CreateTerminalRequest["restartPolicy"];
   scope: TerminalCreateScope;

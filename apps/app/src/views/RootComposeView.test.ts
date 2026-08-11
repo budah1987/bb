@@ -263,6 +263,7 @@ function makeTerminalSession(
     updatedAt: 1,
     lastUserInputAt: null,
     ...overrides,
+    devServerPort: overrides.devServerPort ?? null,
   };
 }
 

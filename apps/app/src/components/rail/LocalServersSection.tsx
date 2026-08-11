@@ -142,6 +142,7 @@ export function LocalServerRow({
   onOpen,
   onRestart,
   onRetry,
+  onSendToAgent,
   onStop,
   server,
   status,
@@ -153,6 +154,7 @@ export function LocalServerRow({
   onOpen: (terminalId: string) => void;
   onRestart: (terminalId: string) => void;
   onRetry: (operation: TerminalOperationKind, terminalId: string) => void;
+  onSendToAgent: (server: LocalServerDisplay) => void;
   onStop: (terminalId: string) => void;
   server: LocalServerDisplay;
   status: LocalServerStatus;
@@ -179,6 +181,21 @@ export function LocalServerRow({
           isDestructive
           text={`Started in ${server.initialCwd}`}
           title={`Started in ${server.initialCwd}. Expected ${environmentPath ?? "the thread environment"}.`}
+        />
+      ) : null}
+      {server.state === "disconnected" ? (
+        <RowDetail
+          action={{
+            label: "Send to agent",
+            onSelect: () => onSendToAgent(server),
+          }}
+          isDestructive
+          text={
+            server.exitCode === null
+              ? "Server disconnected"
+              : `Server exited with code ${server.exitCode}`
+          }
+          title="Send the command and recent terminal output to the agent."
         />
       ) : null}
       <div
@@ -405,6 +422,9 @@ export function LocalServersSection({
   );
   const closeTerminal = useCloseTerminal();
   const restartTerminal = useRestartTerminal();
+  const startDevServer = useStartEnvironmentDevServer();
+  const controlDocker = useControlEnvironmentDocker();
+  const sendThreadMessage = useSendThreadMessage();
   const operationLock = useRef<TerminalOperation | null>(null);
   const [operation, setOperation] = useState<TerminalOperation | null>(null);
   const [operationError, setOperationError] = useState<{
@@ -536,6 +556,119 @@ export function LocalServersSection({
     },
     [closeTerminal, restartTerminal],
   );
+  const startServer = useCallback(async () => {
+    if (!environmentId || !serverTitle.trim() || !serverCommand.trim()) return;
+    const session = await startDevServer.mutateAsync({
+      command: serverCommand.trim(),
+      environmentId,
+      threadId,
+      title: serverTitle.trim(),
+    });
+    setIsStartDialogOpen(false);
+    openTerminal(session.id);
+  }, [
+    environmentId,
+    openTerminal,
+    serverCommand,
+    serverTitle,
+    startDevServer,
+    threadId,
+  ]);
+  const sendServerFailureToAgent = useCallback(
+    async (server: LocalServerDisplay) => {
+      try {
+        const output = await sdk.terminals.output({
+          terminalId: server.id,
+          tailBytes: 12_000,
+        });
+        const byteChunks = output.chunks.map((chunk) => {
+          const binary = atob(chunk.dataBase64);
+          return Uint8Array.from(binary, (character) =>
+            character.charCodeAt(0),
+          );
+        });
+        const totalBytes = byteChunks.reduce(
+          (total, chunk) => total + chunk.byteLength,
+          0,
+        );
+        const bytes = new Uint8Array(totalBytes);
+        let offset = 0;
+        for (const chunk of byteChunks) {
+          bytes.set(chunk, offset);
+          offset += chunk.byteLength;
+        }
+        const log = new TextDecoder().decode(bytes).slice(-12_000);
+        await sendThreadMessage.mutateAsync({
+          id: threadId,
+          input: [
+            {
+              type: "text",
+              mentions: [],
+              text: [
+                `The development server \`${server.title}\` stopped. Diagnose and fix it.`,
+                `Command: \`${server.command.replaceAll("`", "\\`")}\``,
+                `Exit code: ${server.exitCode ?? "unknown"}`,
+                "",
+                "Recent terminal output:",
+                "```text",
+                log || "No terminal output was captured.",
+                "```",
+              ].join("\n"),
+            },
+          ],
+          mode: "queue-if-active",
+        });
+        appToast.success("Server failure sent to agent");
+      } catch (error) {
+        appToast.error("Could not send this failure", {
+          description: getMutationErrorMessage({
+            error,
+            fallbackMessage: "Try again.",
+          }),
+        });
+      }
+    },
+    [sendThreadMessage, threadId],
+  );
+  const environmentPath = environmentQuery.data?.path ?? null;
+  const sendDockerRepairToAgent = useCallback(
+    async (service: EnvironmentDockerService) => {
+      if (environmentPath === null) return;
+      try {
+        await sendThreadMessage.mutateAsync({
+          id: threadId,
+          input: [
+            {
+              type: "text",
+              mentions: [],
+              text: [
+                `The Docker service \`${service.name}\` uses the wrong checkout. Diagnose and repair it.`,
+                `Expected checkout: \`${environmentPath.replaceAll("`", "\\`")}\``,
+                `Detected checkout: \`${(service.ownerCheckoutRoot ?? "unknown").replaceAll("`", "\\`")}\``,
+                `Container: \`${service.id}\``,
+                "",
+                "Mounted paths:",
+                ...service.mounts.map(
+                  (mount) =>
+                    `- \`${mount.source.replaceAll("`", "\\`")}\` → \`${mount.destination.replaceAll("`", "\\`")}\``,
+                ),
+              ].join("\n"),
+            },
+          ],
+          mode: "queue-if-active",
+        });
+        appToast.success("Docker repair sent to agent");
+      } catch (error) {
+        appToast.error("Could not send this repair", {
+          description: getMutationErrorMessage({
+            error,
+            fallbackMessage: "Try again.",
+          }),
+        });
+      }
+    },
+    [environmentPath, sendThreadMessage, threadId],
+  );
 
   return (
     <RailSection
@@ -612,6 +745,7 @@ export function LocalServersSection({
               onRetry={(kind, terminalId) =>
                 runTerminalOperation({ kind, terminalId })
               }
+              onSendToAgent={(server) => void sendServerFailureToAgent(server)}
               onStop={(terminalId) =>
                 runTerminalOperation({ kind: "stop", terminalId })
               }

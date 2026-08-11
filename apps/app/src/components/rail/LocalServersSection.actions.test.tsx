@@ -8,6 +8,9 @@ import { LocalServerRow } from "./LocalServersSection";
 afterEach(cleanup);
 
 const server = {
+  command: "pnpm dev",
+  devServerPort: 5173,
+  exitCode: null,
   id: "term_1",
   initialCwd: "/worktrees/feature",
   state: "running" as const,
@@ -27,6 +30,7 @@ function renderRow(
     onOpen: vi.fn(),
     onRestart: vi.fn(),
     onRetry: vi.fn(),
+    onSendToAgent: vi.fn(),
     onStop: vi.fn(),
     server,
     status,

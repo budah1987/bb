@@ -15,6 +15,7 @@ export const terminalSessionSchema = z.object({
   hostId: z.string().min(1),
   title: z.string().min(1),
   launchCommand: z.string().min(1).nullable(),
+  devServerPort: z.number().int().min(1024).max(65535).nullable(),
   restartPolicy: terminalRestartPolicySchema,
   initialCwd: z.string().min(1),
   cols: terminalColsSchema,
@@ -106,19 +107,21 @@ export const createTerminalRequestSchema = z
       ])
       .optional(),
     restartPolicy: terminalRestartPolicySchema.optional(),
+    devServerPort: z.number().int().min(1024).max(65535).optional(),
     target: terminalCreateTargetSchema,
     title: z.string().trim().min(1).max(200).optional(),
   })
   .strict()
   .superRefine((request, context) => {
     if (
-      request.restartPolicy !== undefined &&
+      (request.restartPolicy !== undefined ||
+        request.devServerPort !== undefined) &&
       (request.start?.mode !== "command" || request.title === undefined)
     ) {
       context.addIssue({
         code: z.ZodIssueCode.custom,
         message:
-          "restartPolicy requires a command terminal with an explicit title",
+          "restartPolicy and devServerPort require a command terminal with an explicit title",
       });
     }
   });

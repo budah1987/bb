@@ -26,6 +26,7 @@ function terminalSession(overrides: Partial<TerminalSession>): TerminalSession {
     updatedAt: 1,
     lastUserInputAt: null,
     ...overrides,
+    devServerPort: overrides.devServerPort ?? null,
   };
 }
 

@@ -12,6 +12,7 @@ import {
   applyTerminalSessionUpsert,
   applyTerminalSessionsInvalidate,
 } from "../cache-owners/terminal-cache-owner";
+import { invalidateEnvironmentPreviewQueries } from "../cache-owners/environment-cache-effects";
 import { terminalsQueryKey, type TerminalQueryScope } from "./query-keys";
 import { requireEnabledQueryArg } from "./query-helpers";
 import { REALTIME_OWNED_NO_FOCUS_QUERY_POLICY } from "./query-policies";
@@ -252,17 +253,6 @@ export function useRestartTerminal() {
         });
       }
     },
-  });
-}
-
-export function useRestartTerminal() {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    meta: { errorMessage: "Failed to restart terminal." },
-    mutationFn: ({ terminalId }: { terminalId: string }) =>
-      sdk.terminals.restart({ terminalId }),
-    onSuccess: () => applyTerminalSessionsInvalidate(queryClient),
   });
 }
 

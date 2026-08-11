@@ -5,6 +5,7 @@ import { PluginThreadRailSections } from "@/components/plugin/PluginThreadRailSe
 import { PANEL_COLLAPSE_TRANSITION_CLASS } from "@/components/secondary-panel/panelTransitionTokens";
 import { useStandaloneCompactPwa } from "@/hooks/useStandaloneCompactPwa";
 import { useIsRailVisible } from "@/lib/rail-visibility";
+import { BranchHealthSection } from "./BranchHealthSection";
 import { LocalServersSection } from "./LocalServersSection";
 import { FeedbackReviewSection } from "./FeedbackReviewSection";
 import { PreviewSection } from "./PreviewSection";

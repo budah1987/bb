@@ -151,7 +151,6 @@ import {
 } from "./BuiltInSidebarSection";
 import { ReorderableSidebarSectionOrderList } from "./ReorderableSidebarSectionOrderList";
 import { useSidebarModeSectionOrder } from "./useSidebarModeSectionOrder";
-import { filterSidebarThreadsForSpace } from "./spaceThreads";
 import {
   resolveThreadTitleDisplayText,
   type ThreadTitleMentionResources,

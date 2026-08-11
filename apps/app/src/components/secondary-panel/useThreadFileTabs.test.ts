@@ -77,6 +77,7 @@ function terminalSession(overrides: TerminalSessionOverrides): TerminalSession {
     updatedAt: 1,
     lastUserInputAt: null,
     ...overrides,
+    devServerPort: overrides.devServerPort ?? null,
   };
 }
 

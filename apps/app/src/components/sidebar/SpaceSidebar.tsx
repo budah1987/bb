@@ -39,7 +39,7 @@ const SPACE_ICON_NAMES: Record<SpaceIcon, IconName> = {
   workflow: "Workflow",
 };
 
-const SPACE_COLOR_CSS: Record<SpaceColor, string> = {
+export const SPACE_COLOR_CSS: Record<SpaceColor, string> = {
   sage: "var(--success)",
   amber: "var(--warning)",
   mulberry: "var(--pr-merged)",
@@ -51,6 +51,10 @@ const SPACE_COLOR_CSS: Record<SpaceColor, string> = {
 
 export function getSpaceIconName(icon: SpaceIcon): IconName {
   return SPACE_ICON_NAMES[icon];
+}
+
+export function SpaceIconGlyph({ icon }: { icon: SpaceIcon }) {
+  return <Icon name={getSpaceIconName(icon)} />;
 }
 
 export function getSpaceSidebarStyle(color: SpaceColor): CSSProperties {

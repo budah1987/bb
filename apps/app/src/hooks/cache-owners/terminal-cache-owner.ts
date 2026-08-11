@@ -119,3 +119,12 @@ export function applyTerminalSessionsInvalidate(
     queryKey: allTerminalsQueryKeyPrefix(),
   });
 }
+
+export function invalidateTerminalScopes({
+  queryClient,
+  scopes,
+}: InvalidateTerminalScopesArgs): void {
+  for (const scope of scopes) {
+    queryClient.invalidateQueries({ queryKey: terminalsQueryKey(scope) });
+  }
+}
