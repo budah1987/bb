@@ -1228,6 +1228,29 @@ const workspaceDockerMountsCommandSchema = hostDaemonWorkspaceTargetSchema
   })
   .strict();
 
+const workspaceDockerControlCommandSchema = hostDaemonWorkspaceTargetSchema
+  .extend({
+    type: z.literal("workspace.docker_control"),
+    action: z.enum(["restart", "stop"]),
+    containerId: z.string().regex(/^[a-f0-9]{12,64}$/u),
+  })
+  .strict();
+
+const workspaceFindAvailablePortCommandSchema = hostDaemonWorkspaceTargetSchema
+  .extend({
+    type: z.literal("workspace.find_available_port"),
+    preferredPort: z.number().int().min(1024).max(65535),
+    candidateCount: z.number().int().min(1).max(100).default(20),
+  })
+  .strict();
+
+const workspacePortStatusCommandSchema = hostDaemonWorkspaceTargetSchema
+  .extend({
+    type: z.literal("workspace.port_status"),
+    port: z.number().int().min(1).max(65535),
+  })
+  .strict();
+
 const workspaceDockerPathActivityCommandSchema = hostDaemonWorkspaceTargetSchema
   .extend({
     type: z.literal("workspace.docker_path_activity"),
@@ -1471,6 +1494,18 @@ const workspaceDockerMountsResultSchema = z.discriminatedUnion("outcome", [
     })
     .strict(),
 ]);
+
+const workspaceDockerControlResultSchema = z
+  .object({ action: z.enum(["restart", "stop"]), containerId: z.string() })
+  .strict();
+
+const workspaceFindAvailablePortResultSchema = z
+  .object({ port: z.number().int().min(1024).max(65535) })
+  .strict();
+
+const workspacePortStatusResultSchema = z
+  .object({ isListening: z.boolean() })
+  .strict();
 
 const dockerPathActivitySchema = z
   .object({
@@ -2705,6 +2740,24 @@ export const hostDaemonCommandRegistry = {
     flushEventsBeforeResult: false,
     envLane: "read",
   }),
+  "workspace.find_available_port": defineHostDaemonCommandDescriptor({
+    type: "workspace.find_available_port",
+    schema: workspaceFindAvailablePortCommandSchema,
+    resultSchema: workspaceFindAvailablePortResultSchema,
+    transport: "onlineRpc",
+    retryable: true,
+    flushEventsBeforeResult: false,
+    envLane: "read",
+  }),
+  "workspace.port_status": defineHostDaemonCommandDescriptor({
+    type: "workspace.port_status",
+    schema: workspacePortStatusCommandSchema,
+    resultSchema: workspacePortStatusResultSchema,
+    transport: "onlineRpc",
+    retryable: true,
+    flushEventsBeforeResult: false,
+    envLane: "read",
+  }),
   "workspace.docker_mounts": defineHostDaemonCommandDescriptor({
     type: "workspace.docker_mounts",
     schema: workspaceDockerMountsCommandSchema,
@@ -2713,6 +2766,15 @@ export const hostDaemonCommandRegistry = {
     retryable: true,
     flushEventsBeforeResult: false,
     envLane: "read",
+  }),
+  "workspace.docker_control": defineHostDaemonCommandDescriptor({
+    type: "workspace.docker_control",
+    schema: workspaceDockerControlCommandSchema,
+    resultSchema: workspaceDockerControlResultSchema,
+    transport: "onlineRpc",
+    retryable: false,
+    flushEventsBeforeResult: false,
+    envLane: "write",
   }),
   "workspace.docker_path_activity": defineHostDaemonCommandDescriptor({
     type: "workspace.docker_path_activity",

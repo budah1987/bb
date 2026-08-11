@@ -42,6 +42,7 @@ interface TerminalStartOptions
   attach?: boolean;
   command?: string;
   cols?: string;
+  devServerPort?: string;
   rows?: string;
   restartPolicy?: string;
   title?: string;
@@ -136,6 +137,10 @@ export function registerTerminalCommands(
       });
       const session = await sdk.terminals.create({
         cols: parsePositiveInteger(opts.cols, DEFAULT_COLS, "--cols"),
+        devServerPort:
+          opts.devServerPort === undefined
+            ? undefined
+            : parsePort(opts.devServerPort, "--dev-server-port"),
         rows: parsePositiveInteger(opts.rows, DEFAULT_ROWS, "--rows"),
         restartPolicy: parseTerminalRestartPolicy(opts.restartPolicy),
         scope: await resolveTerminalCreateScope(opts, getUrl()),

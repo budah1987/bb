@@ -226,6 +226,31 @@ export function useCloseTerminal() {
         session,
         terminalId: variables.terminalId,
       });
+      if (session.environmentId !== null) {
+        invalidateEnvironmentPreviewQueries({
+          environmentId: session.environmentId,
+          queryClient,
+        });
+      }
+    },
+  });
+}
+
+export function useRestartTerminal() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    meta: { errorMessage: "Failed to restart terminal." },
+    mutationFn: ({ terminalId }: { terminalId: string }) =>
+      sdk.terminals.restart({ terminalId }),
+    onSuccess: (session: TerminalSession) => {
+      applyTerminalSessionsInvalidate(queryClient);
+      if (session.environmentId !== null) {
+        invalidateEnvironmentPreviewQueries({
+          environmentId: session.environmentId,
+          queryClient,
+        });
+      }
     },
   });
 }

@@ -1826,6 +1826,8 @@ describe("public terminal routes", () => {
     );
     expect(firstReplacement.id).toBe(openMessage.terminalId);
     expect(secondReplacement.id).toBe(openMessage.terminalId);
+    expect(firstReplacement.devServerPort).toBe(4173);
+    expect(secondReplacement.devServerPort).toBe(4173);
     expect(
       readDaemonMessages(fixture.socket).filter(
         (message) => message.type === "terminal.open",

@@ -45,6 +45,20 @@ vi.mock("./LocalServersSection", () => ({
   ),
 }));
 
+vi.mock("./BranchHealthSection", () => ({
+  BranchHealthSection: ({
+    enabled,
+    threadId,
+  }: {
+    enabled: boolean;
+    threadId: string;
+  }) => (
+    <div data-testid="branch-health-section" data-enabled={enabled}>
+      {threadId}
+    </div>
+  ),
+}));
+
 vi.mock("./PreviewSection", () => ({
   PreviewSection: ({
     enabled,

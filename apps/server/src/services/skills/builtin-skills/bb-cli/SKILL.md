@@ -34,6 +34,16 @@ message agents, or inspect projects, providers, and environments.
   freshness for mounted Docker builds.
 - Use `bb environment previews <id> --json` to inspect local and deployment
   preview providers.
+- Use `bb environment dev-server-start <id> --thread <thread-id> --title <title>
+--command '<command with {port}>'` to select a free port and start a durable
+  server.
+- Use `bb environment preview-share <id> --port <port>` and
+  `preview-unshare` to control Connect access for one preview.
+- Use `bb environment docker-control <id> --container <id> --action restart`
+  to control a Docker service that uses this repository.
+- Use `bb environment preview-bypass <id> --provider <id>` when a Vercel
+  preview needs its automation bypass secret. The CLI reads
+  `VERCEL_AUTOMATION_BYPASS_SECRET` by default and does not store it.
 - To make a repo work with bb worktrees, run `bb guide environments`. It
   documents the repo-level `.bb-env-setup.sh` setup hook and the
   `.worktreeinclude` file.
@@ -173,6 +183,15 @@ message agents, or inspect projects, providers, and environments.
   machines only when more than one is enrolled.
 - `bb skill cli-skills-status` reports per machine whether the installed copy is
   `installed`, `outdated`, `missing`, or `unknown` (disconnected or unreachable).
+
+## Spaces
+
+- Use `bb space list --json` to inspect Spaces and their project membership.
+- Create a Space with `bb space create --name <name> --icon <icon> --color <color>`.
+- Update all Space appearance fields with `bb space edit <id> --name <name> --icon <icon> --color <color>`.
+- Move one project with `bb space move-project <space-id> <project-id>`.
+- Delete a Space with `bb space delete <id>`. Use `--move-projects-to <id>` when it contains projects.
+- Run `bb guide spaces` for accepted icon and color values.
 
 ## Spawning Threads
 

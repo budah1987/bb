@@ -115,9 +115,9 @@ export function ThreadRail({ threadId }: ThreadRailProps) {
         data-state={isRailVisible ? "open" : "closed"}
         className={cn(
           "relative flex max-h-full w-full min-h-0 flex-col overflow-hidden",
-          // bb conveys elevation with border + shadow over a canvas-flush
-          // surface (see theme.css) — the same vocabulary as its popovers.
-          "rounded-xl border border-border bg-popover text-popover-foreground shadow-lg",
+          // The border carries the separation. Keep the shadow quiet so the
+          // rail reads as product chrome instead of a glowing overlay.
+          "rounded-[14px] border border-border bg-popover text-popover-foreground shadow-sm",
           "transition-[transform,opacity] motion-reduce:transition-none",
           PANEL_COLLAPSE_TRANSITION_CLASS,
           isRailVisible
@@ -131,6 +131,10 @@ export function ThreadRail({ threadId }: ThreadRailProps) {
             <div className={RAIL_SECTION_STACK_CLASS}>
               {/* Keep section state for the exit animation, but pause hidden work. */}
               <LocalServersSection
+                threadId={threadId}
+                enabled={isRailVisible}
+              />
+              <BranchHealthSection
                 threadId={threadId}
                 enabled={isRailVisible}
               />

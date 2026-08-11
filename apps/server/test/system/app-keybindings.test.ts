@@ -221,13 +221,14 @@ describe("app keybindings", () => {
           when: { all: ["mainSurface", "modelPickerOpen"], none: [] },
         },
       ]);
-      // No other default binding may use Alt, so the cycle chords cannot be
-      // shadowed by an earlier binding for the same chord.
+      // Other Alt bindings must use different keys, so the cycle chords cannot
+      // be shadowed by an earlier binding for the same chord.
       expect(
         assignedDefaultKeybindings
           .filter((binding) => binding.shortcut.alt)
           .map((binding) => binding.command),
       ).toEqual([
+        ...SPACE_JUMP_APP_COMMAND_IDS,
         "modelPicker.cycleModel",
         "modelPicker.cycleReasoning",
         "modelPicker.cycleModel",

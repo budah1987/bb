@@ -1,10 +1,13 @@
-import type { Thread } from "@bb/domain";
+import { PERSONAL_PROJECT_ID, type Thread } from "@bb/domain";
 import type { ReactNode } from "react";
 import {
   ContextMenu,
   ContextMenuContent,
   ContextMenuItem,
   ContextMenuSeparator,
+  ContextMenuSub,
+  ContextMenuSubContent,
+  ContextMenuSubTrigger,
   ContextMenuTrigger,
 } from "@bb/shared-ui/context-menu";
 import {
@@ -12,6 +15,9 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "@bb/shared-ui/dropdown-menu";
 import { Icon, type IconName } from "@bb/shared-ui/icon";
@@ -20,6 +26,7 @@ import { COARSE_POINTER_ICON_SIZE_CLASS } from "@bb/shared-ui/coarse-pointer-siz
 import { useIsCompactViewport } from "@bb/shared-ui/hooks/use-compact-viewport";
 import { cn } from "@bb/shared-ui/lib/utils";
 import { getThreadReadToggleAction } from "@/components/sidebar/threadReadState";
+import { useSpaceActions } from "@/components/sidebar/SpaceActionsContext";
 import { useThreadActions } from "./ThreadActionsProvider";
 
 interface ThreadActionsMenuBaseProps {
@@ -131,6 +138,66 @@ function ThreadActionMenuSeparator({
   );
 }
 
+function ThreadProjectSpaceSubmenu({
+  projectId,
+  surface,
+}: {
+  projectId: string;
+  surface: ThreadActionsMenuSurface;
+}) {
+  const spaceActions = useSpaceActions();
+
+  if (
+    projectId === PERSONAL_PROJECT_ID ||
+    !spaceActions ||
+    spaceActions.spaces.length < 2
+  ) {
+    return null;
+  }
+
+  if (surface === "context") {
+    return (
+      <ContextMenuSub>
+        <ContextMenuSubTrigger>
+          <Icon name="Layers" aria-hidden="true" />
+          Add project to Space
+        </ContextMenuSubTrigger>
+        <ContextMenuSubContent>
+          {spaceActions.spaces.map((space) => (
+            <ContextMenuItem
+              key={space.id}
+              disabled={space.projectIds.includes(projectId)}
+              onSelect={() => spaceActions.moveProject(projectId, space.id)}
+            >
+              {space.name}
+            </ContextMenuItem>
+          ))}
+        </ContextMenuSubContent>
+      </ContextMenuSub>
+    );
+  }
+
+  return (
+    <DropdownMenuSub>
+      <DropdownMenuSubTrigger>
+        <Icon name="Layers" aria-hidden="true" />
+        Add project to Space
+      </DropdownMenuSubTrigger>
+      <DropdownMenuSubContent>
+        {spaceActions.spaces.map((space) => (
+          <DropdownMenuItem
+            key={space.id}
+            disabled={space.projectIds.includes(projectId)}
+            onSelect={() => spaceActions.moveProject(projectId, space.id)}
+          >
+            {space.name}
+          </DropdownMenuItem>
+        ))}
+      </DropdownMenuSubContent>
+    </DropdownMenuSub>
+  );
+}
+
 function ThreadActionsMenuItems({
   thread,
   canDelete = true,
@@ -232,6 +299,10 @@ function ThreadActionsMenuItems({
           Rename workspace
         </ThreadActionMenuItem>
       ) : null}
+      <ThreadProjectSpaceSubmenu
+        projectId={thread.projectId}
+        surface={surface}
+      />
       {showSeparators ? <ThreadActionMenuSeparator surface={surface} /> : null}
       <ThreadActionMenuItem
         surface={surface}

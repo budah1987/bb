@@ -8,6 +8,7 @@ import {
   environmentFilePreviewQueryKeyPrefix,
   environmentMergeBaseBranchesQueryKeyPrefix,
   environmentPathsQueryKeyPrefix,
+  environmentPreviewsQueryKey,
   environmentWorkspaceFilesQueryKeyPrefix,
   environmentWorkStatusQueryKeyPrefix,
   systemExecutionOptionsEnvironmentQueryKeyPrefix,
@@ -77,4 +78,13 @@ export function invalidateEnvironmentWorkspaceStateQueries({
     }),
   });
   removeEnvironmentDiffPatchQueries({ environmentId, queryClient });
+}
+
+export function invalidateEnvironmentPreviewQueries({
+  environmentId,
+  queryClient,
+}: EnvironmentArg): void {
+  queryClient.invalidateQueries({
+    queryKey: environmentPreviewsQueryKey(environmentId),
+  });
 }

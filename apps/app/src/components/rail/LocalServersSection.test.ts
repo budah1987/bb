@@ -12,6 +12,7 @@ function terminal(overrides: Partial<TerminalSession> = {}): TerminalSession {
     closeReason: null,
     cols: 80,
     createdAt: 1,
+    devServerPort: null,
     environmentId: "env_1",
     exitCode: null,
     hostId: "host_1",

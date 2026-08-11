@@ -16,6 +16,7 @@ import {
   createPublicApiClient,
   createThreadRequestSchema,
   environmentActionRequestSchema,
+  startEnvironmentDevServerRequestSchema,
   baseBranchSpecSchema,
   gitBranchNameSchema,
   reorderPinnedThreadRequestSchema,
@@ -584,6 +585,34 @@ describe("git branch name contract", () => {
       contract.environmentDiffQuerySchema.safeParse({
         target: "all",
         mergeBaseBranch: "origin/main lock",
+      }).success,
+    ).toBe(false);
+  });
+});
+
+describe("development server contracts", () => {
+  it("requires a port placeholder and a non-privileged preferred port", () => {
+    expect(
+      startEnvironmentDevServerRequestSchema.safeParse({
+        command: "pnpm dev -- --port {port}",
+        preferredPort: 4173,
+        threadId: "thr_1",
+        title: "Web",
+      }).success,
+    ).toBe(true);
+    expect(
+      startEnvironmentDevServerRequestSchema.safeParse({
+        command: "pnpm dev",
+        threadId: "thr_1",
+        title: "Web",
+      }).success,
+    ).toBe(false);
+    expect(
+      startEnvironmentDevServerRequestSchema.safeParse({
+        command: "pnpm dev -- --port {port}",
+        preferredPort: 80,
+        threadId: "thr_1",
+        title: "Web",
       }).success,
     ).toBe(false);
   });

@@ -151,6 +151,7 @@ import {
 } from "./BuiltInSidebarSection";
 import { ReorderableSidebarSectionOrderList } from "./ReorderableSidebarSectionOrderList";
 import { useSidebarModeSectionOrder } from "./useSidebarModeSectionOrder";
+import { filterSidebarThreadsForSpace } from "./spaceThreads";
 import {
   resolveThreadTitleDisplayText,
   type ThreadTitleMentionResources,
@@ -1977,7 +1978,7 @@ function ProjectListComponent({
   const pinnedSection: BuiltInSidebarSectionOptions = {
     activity: getCollapsedChildActivity(pinnedSectionThreads, draftThreadIds),
     collapsedThreads: pinnedSectionThreads,
-    label: "Pinned",
+    label: "Focus",
     content: pinnedSectionContent,
     actions: renderSectionDisplayOptions("pinned"),
     actionsOpen: isSectionDisplayOptionsOpen("pinned"),

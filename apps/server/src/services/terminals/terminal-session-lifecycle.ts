@@ -329,6 +329,7 @@ interface GetTerminalArgs {
 
 interface TerminalCreatePayload {
   cols: number;
+  devServerPort?: CreateTerminalRequest["devServerPort"];
   rows: number;
   restartPolicy?: CreateTerminalRequest["restartPolicy"];
   start?: NonNullable<CreateTerminalRequest["start"]>;
@@ -921,6 +922,10 @@ export class TerminalSessionLifecycle {
     const replacement = await this.createTerminal({
       payload: {
         cols: current.cols,
+        devServerPort:
+          current.launchCommand === null
+            ? undefined
+            : (current.devServerPort ?? undefined),
         rows: current.rows,
         restartPolicy:
           current.launchCommand === null ? undefined : current.restartPolicy,

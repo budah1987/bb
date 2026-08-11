@@ -88,6 +88,14 @@ export type {
   ListProjectExecutionDefaultsByProjectIdsArgs,
   UpsertProjectExecutionDefaultsArgs,
 } from "./project-execution-defaults.js";
+export {
+  getProjectManagerSettings,
+  upsertProjectManagerSettings,
+} from "./project-manager-settings.js";
+export type {
+  StoredProjectManagerSettings,
+  UpsertProjectManagerSettingsArgs,
+} from "./project-manager-settings.js";
 
 export {
   createProjectSource,

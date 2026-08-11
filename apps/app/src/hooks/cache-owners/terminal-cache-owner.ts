@@ -18,6 +18,11 @@ interface CloseTerminalSessionCacheArgs extends TerminalSessionCacheArgs {
   terminalId: string;
 }
 
+interface InvalidateTerminalScopesArgs {
+  queryClient: QueryClient;
+  scopes: TerminalQueryScope[];
+}
+
 function upsertTerminalSession(
   current: TerminalListResponse | undefined,
   session: TerminalSession,

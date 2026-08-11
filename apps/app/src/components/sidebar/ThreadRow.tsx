@@ -74,6 +74,7 @@ import { useThreadTitleDisplayText } from "@/components/thread/ThreadTitleMentio
 import { pluginIconName } from "@/components/plugin/PluginIcon";
 import { usePluginThreadRowStatus } from "@/lib/plugin-thread-row-status";
 import { useArchivingThreadIds } from "@/components/thread/ThreadActionsProvider";
+import { SidebarThreadPullRequest } from "./SidebarThreadPullRequest";
 
 interface ThreadRowBaseOptions {
   depth: number;
@@ -592,9 +593,11 @@ function ThreadRowComponent({
     SIDEBAR_ROW_BASE_CLASS,
     !isArchiving && LIST_HOVER_TRANSITION,
     parentOptions?.stickyLevel === undefined && "relative",
-    options.isCompact
-      ? COARSE_POINTER_COMPACT_ROW_HEIGHT_CLASS
-      : COARSE_POINTER_ROW_HEIGHT_CLASS,
+    thread.environmentId !== null
+      ? "h-auto min-h-10 py-1.5"
+      : options.isCompact
+        ? COARSE_POINTER_COMPACT_ROW_HEIGHT_CLASS
+        : COARSE_POINTER_ROW_HEIGHT_CLASS,
     showActive
       ? SIDEBAR_ROW_SELECTED_STATE_CLASS
       : SIDEBAR_ROW_INTERACTIVE_STATE_CLASS,
@@ -645,8 +648,16 @@ function ThreadRowComponent({
         className="absolute inset-0 rounded-md outline-none ring-sidebar-ring focus-visible:ring-2"
       />
       <span className="flex min-w-0 flex-1 items-center gap-1.5">
-        <span className="min-w-0 truncate" title={labelTitle}>
-          <SidebarThreadTitle title={visibleTitle} />
+        <span
+          className="grid min-w-0 flex-1 grid-rows-[auto_auto] gap-px"
+          title={labelTitle}
+        >
+          <span className="min-w-0 truncate leading-4">
+            <SidebarThreadTitle title={visibleTitle} />
+          </span>
+          {thread.environmentId ? (
+            <SidebarThreadPullRequest environmentId={thread.environmentId} />
+          ) : null}
         </span>
         {parentOptions && hasChildren ? (
           <SidebarChildToggleChevron

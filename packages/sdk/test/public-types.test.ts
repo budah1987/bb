@@ -240,6 +240,7 @@ type ExpectedRealtimeKey = "subscribe";
 
 type ExpectedEnvironmentsKey =
   | "archiveThreads"
+  | "bypassPreviewProtection"
   | "commit"
   | "createPullRequest"
   | "diff"
@@ -248,6 +249,7 @@ type ExpectedEnvironmentsKey =
   | "diffFiles"
   | "diffPatch"
   | "dockerActivity"
+  | "dockerControl"
   | "dockerProvenance"
   | "generatePullRequestMetadata"
   | "get"
@@ -269,6 +271,9 @@ type ExpectedEnvironmentsKey =
   | "simulatorScreenshot"
   | "simulatorStatus"
   | "simulatorStop"
+  | "sharePreviewPort"
+  | "startDevServer"
+  | "unsharePreviewPort"
   | "update";
 
 type ExpectedFilesKey =

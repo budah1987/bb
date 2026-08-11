@@ -1301,6 +1301,88 @@ describe("@bb/sdk", () => {
     ]);
   });
 
+  it("routes development server and preview actions through the HTTP transport", async () => {
+    const queue = createFetchQueue([
+      { body: { id: "term_dev" } },
+      { body: { port: 4173, url: "https://host--4173.getbb.app" } },
+      { body: { port: 4173, shared: false } },
+      { body: { url: "https://feature.vercel.app/?bypass=1" } },
+      { body: { action: "restart", containerId: "container-1" } },
+    ]);
+    const sdk = createBbSdk({
+      transport: createHttpTransport({
+        baseUrl: "http://bb.test",
+        fetch: queue.fetch,
+        runtime: "node",
+      }),
+    });
+
+    await sdk.environments.startDevServer({
+      command: "pnpm dev -- --port {port}",
+      environmentId: "env_feature",
+      preferredPort: 4173,
+      threadId: "thr_feature",
+      title: "Web",
+    });
+    await sdk.environments.sharePreviewPort({
+      environmentId: "env_feature",
+      port: 4173,
+    });
+    await sdk.environments.unsharePreviewPort({
+      environmentId: "env_feature",
+      port: 4173,
+    });
+    await sdk.environments.bypassPreviewProtection({
+      environmentId: "env_feature",
+      providerId: "github:Preview",
+      secret: "secret-value",
+    });
+    await sdk.environments.dockerControl({
+      action: "restart",
+      containerId: "container-1",
+      environmentId: "env_feature",
+    });
+
+    expect(queue.requests).toEqual([
+      {
+        bodyText: JSON.stringify({
+          command: "pnpm dev -- --port {port}",
+          preferredPort: 4173,
+          threadId: "thr_feature",
+          title: "Web",
+        }),
+        method: "POST",
+        url: "http://bb.test/api/v1/environments/env_feature/dev-servers/start",
+      },
+      {
+        bodyText: JSON.stringify({ port: 4173 }),
+        method: "POST",
+        url: "http://bb.test/api/v1/environments/env_feature/previews/share",
+      },
+      {
+        bodyText: JSON.stringify({ port: 4173 }),
+        method: "POST",
+        url: "http://bb.test/api/v1/environments/env_feature/previews/unshare",
+      },
+      {
+        bodyText: JSON.stringify({
+          providerId: "github:Preview",
+          secret: "secret-value",
+        }),
+        method: "POST",
+        url: "http://bb.test/api/v1/environments/env_feature/previews/bypass",
+      },
+      {
+        bodyText: JSON.stringify({
+          action: "restart",
+          containerId: "container-1",
+        }),
+        method: "POST",
+        url: "http://bb.test/api/v1/environments/env_feature/docker-control",
+      },
+    ]);
+  });
+
   it("generates pull request metadata through the environment action transport", async () => {
     const response = {
       ok: true,

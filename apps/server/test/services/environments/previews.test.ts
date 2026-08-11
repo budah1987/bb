@@ -1,5 +1,90 @@
 import { describe, expect, it, vi } from "vitest";
-import { probePreviewFramePolicy } from "../../../src/services/environments/previews.js";
+import {
+  buildVercelProtectionBypassUrl,
+  probePreviewFramePolicy,
+  terminalOutputHasActiveBuildError,
+} from "../../../src/services/environments/previews.js";
+
+function terminalOutput(text: string) {
+  return {
+    chunks: [
+      {
+        dataBase64: Buffer.from(text).toString("base64"),
+        seq: 1,
+      },
+    ],
+    nextSeq: 2,
+    truncated: false,
+  };
+}
+
+describe("terminalOutputHasActiveBuildError", () => {
+  it("detects a Vite HMR error after the last successful build", () => {
+    expect(
+      terminalOutputHasActiveBuildError(
+        terminalOutput(
+          "ready in 200 ms\n[vite] Internal server error: Cannot resolve module",
+        ),
+      ),
+    ).toBe(true);
+  });
+
+  it("does not treat an HMR failure line as a recovery", () => {
+    expect(
+      terminalOutputHasActiveBuildError(
+        terminalOutput("ready in 200 ms\nHMR update failed"),
+      ),
+    ).toBe(true);
+  });
+
+  it("clears the error after a later successful HMR update", () => {
+    expect(
+      terminalOutputHasActiveBuildError(
+        terminalOutput(
+          "[vite] Internal server error: Cannot resolve module\n[vite] hmr update /src/App.tsx",
+        ),
+      ),
+    ).toBe(false);
+  });
+
+  it("does not treat ordinary stderr text as a build failure", () => {
+    expect(
+      terminalOutputHasActiveBuildError(
+        terminalOutput(
+          "Warning: experimental feature enabled\nready in 200 ms",
+        ),
+      ),
+    ).toBe(false);
+  });
+});
+
+describe("buildVercelProtectionBypassUrl", () => {
+  it("adds the automation secret and iframe cookie request", () => {
+    const result = buildVercelProtectionBypassUrl(
+      "https://feature.vercel.app/path?view=full",
+      "secret value",
+    );
+
+    if (result === null) throw new Error("Expected a bypass URL");
+    const url = new URL(result);
+    expect(url.searchParams.get("view")).toBe("full");
+    expect(url.searchParams.get("x-vercel-protection-bypass")).toBe(
+      "secret value",
+    );
+    expect(url.searchParams.get("x-vercel-set-bypass-cookie")).toBe(
+      "samesitenone",
+    );
+  });
+
+  it("rejects non-Vercel and non-HTTPS preview URLs", () => {
+    expect(
+      buildVercelProtectionBypassUrl("https://preview.example.com", "secret"),
+    ).toBeNull();
+    expect(
+      buildVercelProtectionBypassUrl("http://feature.vercel.app", "secret"),
+    ).toBeNull();
+  });
+});
 
 describe("probePreviewFramePolicy", () => {
   it("reports an allowlisted deployment that permits framing", async () => {

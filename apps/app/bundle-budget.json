@@ -13,6 +13,8 @@
     "noise, tight enough that a barrel regression cannot hide inside it. Lower",
     "them when a change wins headroom. Raising one is a deliberate decision",
     "that needs a reason in the pull request, not a routine edit.",
+    "The August 2026 environment controls baseline is 1694.7 KB raw and",
+    "445.0 KB Brotli. These limits keep the documented 3% headroom.",
     "",
     "There is deliberately no per-chunk limit. Parse and compile cost scales",
     "with the total bytes on the boot path, not with how they are divided, so",

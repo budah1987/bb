@@ -49,6 +49,7 @@ export type BBSdkRealtimeSocketFactory = BbRealtimeSocketFactory;
 export type BBSdkRealtimeSocketMessageEvent = BbRealtimeSocketMessageEvent;
 export type BBSdkStatusArea = BbSdk["status"];
 export type BBSdkSkillsArea = BbSdk["skills"];
+export type BBSdkSpacesArea = BbSdk["spaces"];
 export type BBSdkTerminalsArea = BbSdk["terminals"];
 export type BBSdkThread = ThreadGetResult;
 export type BBSdkThreadsArea = BbSdk["threads"];

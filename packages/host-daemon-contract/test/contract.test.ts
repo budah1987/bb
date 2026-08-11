@@ -594,6 +594,12 @@ const ONLINE_RPC_RESPONSE_RESULT_FIXTURES: OnlineRpcResponseResultFixtures = {
       },
     ],
   },
+  "workspace.docker_control": {
+    action: "restart",
+    containerId: "abcdef123456",
+  },
+  "workspace.find_available_port": { port: 3012 },
+  "workspace.port_status": { isListening: true },
   "workspace.docker_path_activity": {
     outcome: "available",
     paths: [

@@ -3,6 +3,14 @@ import type { EnvironmentPreviewProvider } from "@bb/server-contract";
 import { Button } from "@bb/shared-ui/button";
 import { Icon } from "@bb/shared-ui/icon";
 import { Input } from "@bb/shared-ui/input";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@bb/shared-ui/dialog";
 import { cn } from "@bb/shared-ui/lib/utils";
 import { useEnvironmentPreviews } from "@/hooks/queries/environment-queries";
 import {
@@ -10,6 +18,14 @@ import {
   resolvePreviewProviderStatus,
 } from "@/lib/preview-provider-status";
 import { statusTierClassName } from "@/lib/status-tier";
+import {
+  useBypassEnvironmentPreviewProtection,
+  useShareEnvironmentPreviewPort,
+  useUnshareEnvironmentPreviewPort,
+} from "@/hooks/mutations/environment-mutations";
+import { copyToClipboardWithToast } from "@/lib/clipboard";
+import { appToast } from "@/components/ui/app-toast";
+import { getMutationErrorMessage } from "@/lib/mutation-errors";
 
 /**
  * Everything a preview needs to be useful, minus the one capability that would
@@ -61,12 +77,20 @@ function PreviewMessage({
 
 function PreviewToolbar({
   now,
+  onBypass,
+  onCopy,
   onReload,
+  onShare,
+  onUnshare,
   provider,
 }: {
   /** When the provider list was fetched; a build's age is measured from there. */
   now: number;
+  onBypass: () => void;
+  onCopy: () => void;
   onReload: () => void;
+  onShare: () => void;
+  onUnshare: () => void;
   provider: EnvironmentPreviewProvider;
 }) {
   const status = resolvePreviewProviderStatus({ now, provider });
@@ -99,16 +123,50 @@ function PreviewToolbar({
         {status.label}
       </span>
       {provider.url === null ? null : (
-        <a
-          href={provider.url}
-          target="_blank"
-          rel="noreferrer noopener"
-          aria-label="Open in browser"
-          className="inline-flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground outline-none hover:bg-state-hover focus-visible:ring-1 focus-visible:ring-ring"
-        >
-          <Icon name="ExternalLink" aria-hidden className="size-4" />
-        </a>
+        <>
+          <Button
+            type="button"
+            size="icon"
+            variant="ghost"
+            aria-label="Copy preview address"
+            onClick={onCopy}
+          >
+            <Icon name="Copy" aria-hidden className="size-4" />
+          </Button>
+          <a
+            href={provider.url}
+            target="_blank"
+            rel="noreferrer noopener"
+            aria-label="Open in browser"
+            className="inline-flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground outline-none hover:bg-state-hover focus-visible:ring-1 focus-visible:ring-ring"
+          >
+            <Icon name="ExternalLink" aria-hidden className="size-4" />
+          </a>
+        </>
       )}
+      {provider.kind === "local" && provider.port !== null ? (
+        <Button
+          type="button"
+          size="sm"
+          variant="ghost"
+          className="h-7 px-2 text-xs active:scale-[0.96]"
+          onClick={provider.shared ? onUnshare : onShare}
+        >
+          {provider.shared ? "Unshare" : "Share"}
+        </Button>
+      ) : null}
+      {provider.source === "github" &&
+      provider.url?.includes(".vercel.app") ? (
+        <Button
+          type="button"
+          size="sm"
+          variant="ghost"
+          className="h-7 px-2 text-xs active:scale-[0.96]"
+          onClick={onBypass}
+        >
+          Bypass
+        </Button>
+      ) : null}
     </div>
   );
 }
@@ -135,6 +193,11 @@ export function PreviewPanel({
   // Bumping the key remounts the frame, which reloads cross-origin content the
   // panel is not allowed to reach into and call `location.reload()` on.
   const [reloadNonce, setReloadNonce] = useState(0);
+  const [isBypassDialogOpen, setIsBypassDialogOpen] = useState(false);
+  const [bypassSecret, setBypassSecret] = useState("");
+  const sharePort = useShareEnvironmentPreviewPort();
+  const unsharePort = useUnshareEnvironmentPreviewPort();
+  const bypassProtection = useBypassEnvironmentPreviewProtection();
   const reload = useCallback(() => {
     setReloadNonce((current) => current + 1);
   }, []);
@@ -174,11 +237,78 @@ export function PreviewPanel({
     );
   }
 
+  const share = async () => {
+    if (environmentId === null || provider.port === null) return;
+    try {
+      const result = await sharePort.mutateAsync({
+        environmentId,
+        port: provider.port,
+      });
+      await copyToClipboardWithToast(result.url, {
+        successMessage: "Shared URL copied",
+      });
+    } catch (error) {
+      appToast.error("Could not share this preview", {
+        description: getMutationErrorMessage({
+          error,
+          fallbackMessage: "Try again.",
+        }),
+      });
+    }
+  };
+  const unshare = async () => {
+    if (environmentId === null || provider.port === null) return;
+    try {
+      await unsharePort.mutateAsync({
+        environmentId,
+        port: provider.port,
+      });
+      appToast.success("Preview sharing stopped");
+    } catch (error) {
+      appToast.error("Could not stop sharing", {
+        description: getMutationErrorMessage({
+          error,
+          fallbackMessage: "Try again.",
+        }),
+      });
+    }
+  };
+  const openBypassedPreview = async () => {
+    if (environmentId === null || !bypassSecret.trim()) return;
+    try {
+      const result = await bypassProtection.mutateAsync({
+        environmentId,
+        providerId: provider.id,
+        secret: bypassSecret.trim(),
+      });
+      setBypassSecret("");
+      setIsBypassDialogOpen(false);
+      window.open(result.url, "_blank", "noopener,noreferrer");
+    } catch (error) {
+      appToast.error("Could not open the protected preview", {
+        description: getMutationErrorMessage({
+          error,
+          fallbackMessage: "Check the bypass secret.",
+        }),
+      });
+    }
+  };
+
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <PreviewToolbar
         now={previewsQuery.dataUpdatedAt}
+        onBypass={() => setIsBypassDialogOpen(true)}
+        onCopy={() => {
+          if (provider.url !== null) {
+            void copyToClipboardWithToast(provider.url, {
+              successMessage: "Preview URL copied",
+            });
+          }
+        }}
         onReload={reload}
+        onShare={() => void share()}
+        onUnshare={() => void unshare()}
         provider={provider}
       />
       {canFramePreviewProvider(provider) && provider.url !== null ? (
@@ -198,6 +328,42 @@ export function PreviewPanel({
           {resolveUnframedMessage(provider)}
         </PreviewMessage>
       )}
+      <Dialog
+        open={isBypassDialogOpen}
+        onOpenChange={setIsBypassDialogOpen}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Open protected Vercel preview</DialogTitle>
+            <DialogDescription>
+              BB uses this secret once. The secret is not saved.
+            </DialogDescription>
+          </DialogHeader>
+          <Input
+            type="password"
+            autoComplete="off"
+            aria-label="Vercel protection bypass secret"
+            value={bypassSecret}
+            onChange={(event) => setBypassSecret(event.target.value)}
+          />
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setIsBypassDialogOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              disabled={!bypassSecret.trim() || bypassProtection.isPending}
+              onClick={() => void openBypassedPreview()}
+            >
+              {bypassProtection.isPending ? "Opening…" : "Open preview"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -260,3 +260,42 @@ export async function inspectWorkspaceDockerMounts({
 
   return { outcome: "available", containers, workspaceGit };
 }
+
+export async function controlWorkspaceDockerContainer(args: {
+  action: "restart" | "stop";
+  containerId: string;
+  env: NodeJS.ProcessEnv;
+  run?: DockerMountCommandRunner;
+  workspacePath: string;
+}): Promise<{ action: "restart" | "stop"; containerId: string }> {
+  const run = args.run ?? defaultRun;
+  const inspected = await inspectWorkspaceDockerMounts({
+    env: args.env,
+    run,
+    workspacePath: args.workspacePath,
+  });
+  const container =
+    inspected.outcome === "available"
+      ? inspected.containers.find(
+          (candidate) => candidate.id === args.containerId,
+        )
+      : undefined;
+  const belongsToRepository =
+    inspected.outcome === "available" &&
+    container !== undefined &&
+    (container.composeWorkingDirGit?.commonDir ===
+      inspected.workspaceGit.commonDir ||
+      container.mounts.some(
+        (mount) =>
+          mount.sourceGit?.commonDir === inspected.workspaceGit.commonDir,
+      ));
+  if (
+    inspected.outcome !== "available" ||
+    container === undefined ||
+    !belongsToRepository
+  ) {
+    throw new Error("The Docker container does not belong to this environment");
+  }
+  await run("docker", [args.action, args.containerId], { env: args.env });
+  return { action: args.action, containerId: args.containerId };
+}
