@@ -128,9 +128,13 @@ describe("ConductorSidebar", () => {
       },
     );
 
-    expect(
-      await screen.findByText("feature/sidebar · ↑2 ↓1 · 4 changes · PR #82 ✓"),
-    ).toBeDefined();
+    const card = await screen.findByRole("button", {
+      name: /feature\/sidebar.*↑2.*↓1.*4 changes.*PR #82 ✓/u,
+    });
+    expect(within(card).getByText("feature/sidebar")).toBeDefined();
+    expect(within(card).getByText("↑2 ↓1")).toBeDefined();
+    expect(within(card).getByText("4 changes")).toBeDefined();
+    expect(within(card).getByText("PR #82 ✓")).toBeDefined();
   });
 
   it("shows one-off threads with live attention states and native navigation", async () => {

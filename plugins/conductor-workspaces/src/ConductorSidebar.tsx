@@ -156,27 +156,62 @@ function pullRequestLabel(pullRequest: PluginSidebarPullRequest): string {
   return [`PR #${pullRequest.number}`, detail].filter(Boolean).join(" ");
 }
 
-function workspaceGitLabel(
-  summary: WorkspaceGitSummary | null,
-  pullRequest: PluginSidebarPullRequest | null,
-): string | null {
-  const parts: string[] = [];
-  if (summary?.gitAvailable) {
-    const divergence = [
-      summary.aheadCount > 0 ? `↑${summary.aheadCount}` : null,
-      summary.behindCount > 0 ? `↓${summary.behindCount}` : null,
-    ]
-      .filter(Boolean)
-      .join(" ");
-    if (divergence) parts.push(divergence);
-    parts.push(
-      summary.changedFiles === 0
-        ? "Clean"
-        : `${summary.changedFiles} change${summary.changedFiles === 1 ? "" : "s"}`,
-    );
-  }
-  if (pullRequest) parts.push(pullRequestLabel(pullRequest));
-  return parts.length > 0 ? parts.join(" · ") : null;
+function WorkspaceMetadata({
+  branchLabel,
+  summary,
+  pullRequest,
+}: {
+  branchLabel: string;
+  summary: WorkspaceGitSummary | null;
+  pullRequest: PluginSidebarPullRequest | null;
+}) {
+  const divergence = summary?.gitAvailable
+    ? [
+        summary.aheadCount > 0 ? `↑${summary.aheadCount}` : null,
+        summary.behindCount > 0 ? `↓${summary.behindCount}` : null,
+      ].filter(Boolean)
+    : [];
+  const changedFiles = summary?.gitAvailable
+    ? summary.changedFiles === 0
+      ? "Clean"
+      : `${summary.changedFiles} change${summary.changedFiles === 1 ? "" : "s"}`
+    : null;
+
+  return (
+    <span className="conductor-workspace-meta">
+      <span className="conductor-workspace-meta-item" data-kind="branch">
+        <Icon name="GitBranch" aria-hidden className="size-3" />
+        <span className="truncate">{branchLabel}</span>
+      </span>
+      {divergence.length > 0 ? (
+        <span className="conductor-workspace-meta-item" data-kind="divergence">
+          {divergence.join(" ")}
+        </span>
+      ) : null}
+      {changedFiles ? (
+        <span
+          className="conductor-workspace-meta-item"
+          data-kind={summary?.changedFiles === 0 ? "clean" : "changes"}
+        >
+          <Icon
+            name={summary?.changedFiles === 0 ? "Check" : "FileDiff"}
+            aria-hidden
+            className="size-3"
+          />
+          {changedFiles}
+        </span>
+      ) : null}
+      {pullRequest ? (
+        <span
+          className="conductor-workspace-meta-item"
+          data-kind="pull-request"
+        >
+          <Icon name="GitPullRequest" aria-hidden className="size-3" />
+          {pullRequestLabel(pullRequest)}
+        </span>
+      ) : null}
+    </span>
+  );
 }
 
 interface GithubAccountOption {
@@ -730,7 +765,9 @@ function WorkspaceRow({
   const target = pickWorkspaceThread(workspace, activeThreadId);
   const pullRequestState = useSidebarThreadPullRequest(target?.id ?? "");
   const pullRequest = pullRequestState.pullRequest;
-  const gitLabel = workspaceGitLabel(gitSummary, pullRequest);
+  const branchLabel =
+    workspace.branchName ??
+    `${workspace.threads.length} conversation${workspace.threads.length === 1 ? "" : "s"}`;
   const isActive = workspace.threads.some(
     (thread) => thread.id === activeThreadId,
   );
@@ -781,33 +818,21 @@ function WorkspaceRow({
         signal={signal}
         label={statusLabel ? `${statusLabel} workspace` : undefined}
       />
-      <span className="min-w-0 flex-1 text-left">
+      <span className="conductor-workspace-copy">
         <span
           className={
             focused
-              ? "block truncate text-sm font-medium text-sidebar-foreground"
-              : "block truncate text-xs font-medium text-sidebar-foreground"
+              ? "conductor-workspace-title conductor-workspace-title--focused"
+              : "conductor-workspace-title"
           }
         >
           {workspace.title}
         </span>
-        <span
-          className={
-            focused
-              ? "flex min-w-0 items-center gap-1 text-xs text-muted-foreground"
-              : "flex min-w-0 items-center gap-1 text-2xs text-muted-foreground"
-          }
-        >
-          <span className="min-w-0 flex-1 truncate">
-            {[
-              workspace.branchName ??
-                `${workspace.threads.length} conversation${workspace.threads.length === 1 ? "" : "s"}`,
-              gitLabel,
-            ]
-              .filter(Boolean)
-              .join(" · ")}
-          </span>
-        </span>
+        <WorkspaceMetadata
+          branchLabel={branchLabel}
+          summary={gitSummary}
+          pullRequest={pullRequest}
+        />
       </span>
       <SignalStatus signal={signal} />
       {showJumpShortcut && jumpShortcut ? (
