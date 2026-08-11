@@ -29,10 +29,12 @@ const mockDraftThreadIds = vi.hoisted(() => ({
 }));
 const mockArchiveEnvironmentThreads = vi.hoisted(() => vi.fn());
 const mockEnvironmentStatus = vi.hoisted(() => vi.fn());
+const mockEnvironmentPullRequest = vi.hoisted(() => vi.fn());
 
 vi.mock("@/lib/sdk", () => ({
   sdk: {
     environments: {
+      pullRequest: mockEnvironmentPullRequest,
       status: mockEnvironmentStatus,
     },
   },
@@ -140,22 +142,27 @@ function renderProjectRow(
   isCollapsed = false,
 ) {
   const onToggleEnvironmentCollapsed = vi.fn();
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
   const result = render(
-    <MemoryRouter>
-      <ProjectRow
-        project={makeProject()}
-        threadListState={threadListState}
-        isActive={isActive}
-        isCollapsed={isCollapsed}
-        compareThreads={() => 0}
-        collapsedThreadIds={new Set()}
-        collapsedEnvironmentIds={collapsedEnvironmentIds}
-        isLocalPathInvalid={false}
-        onToggleProjectCollapsed={onToggleProjectCollapsed}
-        onToggleThreadCollapsed={vi.fn()}
-        onToggleEnvironmentCollapsed={onToggleEnvironmentCollapsed}
-      />
-    </MemoryRouter>,
+    <QueryClientProvider client={queryClient}>
+      <MemoryRouter>
+        <ProjectRow
+          project={makeProject()}
+          threadListState={threadListState}
+          isActive={isActive}
+          isCollapsed={isCollapsed}
+          compareThreads={() => 0}
+          collapsedThreadIds={new Set()}
+          collapsedEnvironmentIds={collapsedEnvironmentIds}
+          isLocalPathInvalid={false}
+          onToggleProjectCollapsed={onToggleProjectCollapsed}
+          onToggleThreadCollapsed={vi.fn()}
+          onToggleEnvironmentCollapsed={onToggleEnvironmentCollapsed}
+        />
+      </MemoryRouter>
+    </QueryClientProvider>,
   );
   return { ...result, onToggleEnvironmentCollapsed, onToggleProjectCollapsed };
 }
@@ -179,6 +186,7 @@ describe("ProjectRow interactions", () => {
         workingTree: { hasUncommittedChanges: false },
       },
     });
+    mockEnvironmentPullRequest.mockResolvedValue({ outcome: "unavailable" });
     mockArchiveEnvironmentThreads.mockResolvedValue({
       ok: true,
       archivedThreadIds: ["thr_worktree_a", "thr_worktree_b"],
@@ -191,7 +199,7 @@ describe("ProjectRow interactions", () => {
     vi.clearAllMocks();
   });
 
-  it("places the project disclosure after its label and keeps root threads flush", () => {
+  it("places the project disclosure before its icon and keeps root threads flush", () => {
     const result = renderProjectRow(vi.fn(), {
       status: "ready",
       threads: [makeThread()],
@@ -201,12 +209,17 @@ describe("ProjectRow interactions", () => {
       name: "Collapse Test project section",
     });
     const label = screen.getByTitle("Test project");
+    const icon = result.container.querySelector('[data-icon="FolderGit"]');
     const threadLink = result.container.querySelector(
       '[data-sidebar-thread-id="thr_test"]',
     );
 
     expect(
-      label.compareDocumentPosition(disclosure) &
+      disclosure.compareDocumentPosition(icon as Node) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).not.toBe(0);
+    expect(
+      (icon as Node).compareDocumentPosition(label) &
         Node.DOCUMENT_POSITION_FOLLOWING,
     ).not.toBe(0);
     expect(

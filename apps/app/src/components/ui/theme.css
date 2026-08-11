@@ -328,6 +328,13 @@
   }
 }
 
+:root {
+  /* Shared transitions.dev card-resize vocabulary. Disclosure components use
+   * the same timing so nested panels never move at competing speeds. */
+  --resize-dur: 300ms;
+  --resize-ease: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
 :root,
 .light {
   color-scheme: light;
