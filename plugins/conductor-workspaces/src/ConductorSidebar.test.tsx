@@ -192,6 +192,7 @@ describe("ConductorSidebar", () => {
       name: "Threads",
     });
     const repoSection = screen.getByRole("region", { name: "BB" });
+    expect(repoSection.getAttribute("data-expanded")).toBe("true");
     expect(
       repoSection.compareDocumentPosition(threadsSection) &
         Node.DOCUMENT_POSITION_FOLLOWING,

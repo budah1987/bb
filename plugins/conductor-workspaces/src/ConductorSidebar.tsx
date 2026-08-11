@@ -1129,6 +1129,7 @@ function ProjectSection({
       ref={setNodeRef}
       style={style}
       className="conductor-project-sortable min-w-0"
+      data-expanded={!collapsed || undefined}
       data-dragging={isDragging || undefined}
       data-drop-target={isDropTarget || undefined}
       aria-label={projectLabel}
@@ -1211,7 +1212,7 @@ function ProjectSection({
           )}
           strategy={verticalListSortingStrategy}
         >
-          <div className="space-y-0.5">
+          <div className="conductor-workspace-list space-y-0.5">
             {project.workspaces.map((workspace) => (
               <WorkspaceRow
                 key={workspace.key}
@@ -1303,7 +1304,7 @@ function FocusSection({
           items={workspaces.map((workspace) => workspaceDndId(workspace.key))}
           strategy={verticalListSortingStrategy}
         >
-          <div className="space-y-0.5">
+          <div className="conductor-workspace-list space-y-0.5">
             {workspaces.map((workspace) => (
               <WorkspaceRow
                 key={workspace.key}

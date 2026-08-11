@@ -936,6 +936,27 @@
   background: transparent;
 }
 
+.conductor-project-sortable[data-expanded] {
+  padding: 0.25rem;
+  border-radius: 0.75rem;
+  background: color-mix(in oklch, var(--sidebar-accent) 42%, var(--canvas));
+  box-shadow:
+    inset 0 0 0 1px color-mix(in oklch, var(--sidebar-border) 88%, transparent),
+    0 1px 2px color-mix(in oklab, var(--ink) 6%, transparent);
+}
+
+.conductor-project-sortable[data-expanded] .conductor-section-header {
+  min-height: 2.25rem;
+  padding-inline: 0.125rem;
+}
+
+.conductor-project-sortable[data-expanded]
+  .conductor-section-content-inner
+  > .conductor-workspace-list {
+  display: grid;
+  gap: 0.25rem;
+}
+
 .conductor-project-sortable[data-dragging] {
   z-index: 20;
 }
