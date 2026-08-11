@@ -229,6 +229,7 @@ const Sidebar = React.forwardRef<
     },
     ref,
   ) => {
+    const isStandaloneCompactPwa = useStandaloneCompactPwa();
     const {
       isCompactViewport,
       state,
@@ -319,7 +320,12 @@ const Sidebar = React.forwardRef<
               data-sidebar-suppress-open-animation={
                 suppressMobileOpenAnimation ? "true" : undefined
               }
-              className="fixed inset-0 z-40 bg-black/80 data-[state=closed]:pointer-events-none [&[data-sidebar-suppress-open-animation=true][data-state=open]]:![animation:none]"
+              className={cn(
+                "fixed inset-0 z-40 data-[state=closed]:pointer-events-none [&[data-sidebar-suppress-open-animation=true][data-state=open]]:![animation:none]",
+                isStandaloneCompactPwa
+                  ? "bg-black/55 backdrop-blur-[1px]"
+                  : "bg-black/80",
+              )}
               style={mobileBackdropStyle}
             />
             <DrawerPrimitive.Content
@@ -340,7 +346,7 @@ const Sidebar = React.forwardRef<
                 side === "left" ? "left-0" : "right-0",
                 variant === "floating" || variant === "inset"
                   ? "p-2"
-                  : "border-border-seam data-[vaul-drawer-direction=left]:border-r data-[vaul-drawer-direction=right]:border-l",
+                  : "border-border-seam shadow-2xl data-[vaul-drawer-direction=left]:border-r data-[vaul-drawer-direction=right]:border-l",
                 className,
               )}
               style={
