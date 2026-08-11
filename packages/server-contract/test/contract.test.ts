@@ -16,6 +16,7 @@ import {
   createPublicApiClient,
   createThreadRequestSchema,
   environmentActionRequestSchema,
+  startEnvironmentDevServerRequestSchema,
   baseBranchSpecSchema,
   gitBranchNameSchema,
   reorderPinnedThreadRequestSchema,
@@ -571,6 +572,34 @@ describe("git branch name contract", () => {
   });
 });
 
+describe("development server contracts", () => {
+  it("requires a port placeholder and a non-privileged preferred port", () => {
+    expect(
+      startEnvironmentDevServerRequestSchema.safeParse({
+        command: "pnpm dev -- --port {port}",
+        preferredPort: 4173,
+        threadId: "thr_1",
+        title: "Web",
+      }).success,
+    ).toBe(true);
+    expect(
+      startEnvironmentDevServerRequestSchema.safeParse({
+        command: "pnpm dev",
+        threadId: "thr_1",
+        title: "Web",
+      }).success,
+    ).toBe(false);
+    expect(
+      startEnvironmentDevServerRequestSchema.safeParse({
+        command: "pnpm dev -- --port {port}",
+        preferredPort: 80,
+        threadId: "thr_1",
+        title: "Web",
+      }).success,
+    ).toBe(false);
+  });
+});
+
 describe("public terminal contracts", () => {
   it("allows threadless terminal session responses", () => {
     expect(
@@ -580,6 +609,9 @@ describe("public terminal contracts", () => {
         environmentId: "env_1",
         hostId: "host_1",
         title: "Terminal 1",
+        launchCommand: null,
+        devServerPort: null,
+        restartPolicy: "never",
         initialCwd: "/tmp/workspace",
         cols: 80,
         rows: 24,
@@ -613,6 +645,27 @@ describe("public terminal contracts", () => {
         type: "resize",
         cols: TERMINAL_COLS_MAX,
         rows: TERMINAL_ROWS_MAX + 1,
+      }).success,
+    ).toBe(false);
+  });
+
+  it("limits restart policies to named command terminals", () => {
+    expect(
+      createTerminalRequestSchema.safeParse({
+        cols: 80,
+        rows: 24,
+        restartPolicy: "until_stopped",
+        start: { mode: "command", command: "pnpm dev" },
+        target: { kind: "thread", threadId: "thr_1" },
+        title: "Web dev server",
+      }).success,
+    ).toBe(true);
+    expect(
+      createTerminalRequestSchema.safeParse({
+        cols: 80,
+        rows: 24,
+        restartPolicy: "until_stopped",
+        target: { kind: "thread", threadId: "thr_1" },
       }).success,
     ).toBe(false);
   });

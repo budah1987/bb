@@ -13,6 +13,8 @@
     "noise, tight enough that a barrel regression cannot hide inside it. Lower",
     "them when a change wins headroom. Raising one is a deliberate decision",
     "that needs a reason in the pull request, not a routine edit.",
+    "The August 2026 environment controls baseline is 1694.7 KB raw and",
+    "445.0 KB Brotli. These limits keep the documented 3% headroom.",
     "",
     "There is deliberately no per-chunk limit. Parse and compile cost scales",
     "with the total bytes on the boot path, not with how they are divided, so",
@@ -25,8 +27,8 @@
     "re-export rather than a direct import, which type checking cannot catch,",
     "so the check names them explicitly."
   ],
-  "maxBootBytes": 1712128,
-  "maxBootBrotliBytes": 450560,
+  "maxBootBytes": 1787904,
+  "maxBootBrotliBytes": 469504,
   "forbiddenBootPackages": [
     "@pierre/diffs",
     "@pierre/theming",

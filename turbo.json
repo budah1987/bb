@@ -255,6 +255,10 @@
       "dependsOn": ["//#ensure-native-modules", "@bb/plugin-sdk#build", "topo"],
       "inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/vitest.shared.ts"]
     },
+    "bb-plugin-ingestion-desk#test": {
+      "dependsOn": ["//#ensure-native-modules", "@bb/plugin-sdk#build", "topo"],
+      "inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/vitest.shared.ts"]
+    },
     "smoke:tarball": {
       "dependsOn": ["build"],
       "cache": false,

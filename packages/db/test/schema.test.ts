@@ -103,7 +103,7 @@ describe("db rebuild schema", () => {
     closeConnection(db);
   });
 
-  it("does not persist terminal runtime-only columns", () => {
+  it("persists launch metadata but not terminal runtime state", () => {
     const db = createConnection(":memory:");
     migrate(db);
 
@@ -135,6 +135,12 @@ describe("db rebuild schema", () => {
         "created_at",
         "updated_at",
         "last_user_input_at",
+        "launch_command",
+        "dev_server_port",
+        "restart_policy",
+        "supervision_id",
+        "supervision_desired",
+        "supervision_attempt",
       ]);
     } finally {
       closeConnection(db);

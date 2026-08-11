@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  controlWorkspaceDockerContainer,
   inspectWorkspaceDockerMounts,
   type DockerMountCommandRunner,
 } from "./docker-mounts.js";
@@ -145,5 +146,116 @@ describe("inspectWorkspaceDockerMounts", () => {
       reason: "docker_not_installed",
       message: "Docker is not installed on this host.",
     });
+  });
+});
+
+describe("controlWorkspaceDockerContainer", () => {
+  it("controls only containers tied to the current repository", async () => {
+    const commands: string[] = [];
+    const inspectJson = JSON.stringify([
+      {
+        Id: "container-1",
+        Name: "/api",
+        Config: { Image: "example/api", Labels: null },
+        State: { Status: "running" },
+        Mounts: [
+          {
+            Type: "bind",
+            Source: "/repo-feature/dist",
+            Destination: "/app/dist",
+            RW: true,
+          },
+        ],
+        NetworkSettings: { Ports: {} },
+      },
+    ]);
+    const run: DockerMountCommandRunner = async (command, args) => {
+      const key = [command, ...args].join(" ");
+      commands.push(key);
+      if (key === "docker ps --all --quiet") {
+        return { stdout: "container-1\n" };
+      }
+      if (key === "docker inspect container-1") {
+        return { stdout: inspectJson };
+      }
+      if (key === "docker restart container-1") {
+        return { stdout: "container-1\n" };
+      }
+      if (command === "git") {
+        if (args.includes("--show-toplevel")) {
+          return { stdout: "/repo-feature\n" };
+        }
+        if (args.includes("--git-common-dir")) {
+          return { stdout: "/repo-main/.git\n" };
+        }
+        return { stdout: "feature\n" };
+      }
+      throw new Error(`Unexpected command: ${key}`);
+    };
+
+    await expect(
+      controlWorkspaceDockerContainer({
+        action: "restart",
+        containerId: "container-1",
+        env: {},
+        run,
+        workspacePath: "/repo-feature",
+      }),
+    ).resolves.toEqual({ action: "restart", containerId: "container-1" });
+    expect(commands).toContain("docker restart container-1");
+  });
+
+  it("rejects a container from another repository", async () => {
+    const inspectJson = JSON.stringify([
+      {
+        Id: "container-foreign",
+        Name: "/foreign",
+        Config: { Image: "example/foreign", Labels: null },
+        State: { Status: "running" },
+        Mounts: [
+          {
+            Type: "bind",
+            Source: "/foreign/dist",
+            Destination: "/app/dist",
+            RW: true,
+          },
+        ],
+        NetworkSettings: { Ports: {} },
+      },
+    ]);
+    const run: DockerMountCommandRunner = async (command, args) => {
+      const key = [command, ...args].join(" ");
+      if (key === "docker ps --all --quiet") {
+        return { stdout: "container-foreign\n" };
+      }
+      if (key === "docker inspect container-foreign") {
+        return { stdout: inspectJson };
+      }
+      if (command === "git") {
+        const target = args[1];
+        if (args.includes("--show-toplevel")) {
+          return {
+            stdout: `${target === "/foreign/dist" ? "/foreign" : "/repo-feature"}\n`,
+          };
+        }
+        if (args.includes("--git-common-dir")) {
+          return {
+            stdout: `${target === "/foreign/dist" ? "/foreign/.git" : "/repo-main/.git"}\n`,
+          };
+        }
+        return { stdout: "feature\n" };
+      }
+      throw new Error(`Unexpected command: ${key}`);
+    };
+
+    await expect(
+      controlWorkspaceDockerContainer({
+        action: "stop",
+        containerId: "container-foreign",
+        env: {},
+        run,
+        workspacePath: "/repo-feature",
+      }),
+    ).rejects.toThrow("does not belong to this environment");
   });
 });

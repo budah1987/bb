@@ -175,6 +175,9 @@ export interface GeneralSettingsSectionProps {
   caffeinateAvailable: boolean;
   caffeinateDisabled: boolean;
   caffeinateEnabled: boolean;
+  devServerRestartPolicy: "never" | "until_stopped";
+  devServerRestartPolicyDisabled: boolean;
+  onDevServerRestartPolicyChange: (policy: "never" | "until_stopped") => void;
   onReplayOnboarding: () => void;
   desktopBrowserAvailable: boolean;
   onCaffeinateChange: (enabled: boolean) => void;
@@ -490,6 +493,34 @@ const UNHANDLED_PROVIDER_EVENTS_SETTING_LABEL =
 const CAFFEINATE_SETTING_LABEL = "Caffeinate";
 const STEER_ACTIVE_THREAD_ON_ENTER_SETTING_LABEL =
   "Steer running threads on Enter";
+const KEEP_DEV_SERVERS_RUNNING_SETTING_LABEL = "Keep named dev servers running";
+
+export function DevServerRestartPolicySettingsControl({
+  disabled,
+  policy,
+  onPolicyChange,
+}: {
+  disabled: boolean;
+  policy: "never" | "until_stopped";
+  onPolicyChange: (policy: "never" | "until_stopped") => void;
+}) {
+  return (
+    <SettingsWithControl
+      label={KEEP_DEV_SERVERS_RUNNING_SETTING_LABEL}
+      description="Restores supervised named servers after exits and bb restarts. Off disarms current servers; on applies to new servers."
+    >
+      <Switch
+        checked={policy === "until_stopped"}
+        disabled={disabled}
+        onCheckedChange={(checked) =>
+          onPolicyChange(checked ? "until_stopped" : "never")
+        }
+        aria-label={KEEP_DEV_SERVERS_RUNNING_SETTING_LABEL}
+        className="relative transition-transform after:absolute after:-inset-x-2 after:-inset-y-3 after:content-[''] active:scale-[0.96] motion-reduce:transition-none"
+      />
+    </SettingsWithControl>
+  );
+}
 
 export function RootComposeBehaviorSettingsControl({
   navigateToThreadAfterCreate,
@@ -773,9 +804,12 @@ export function GeneralSettingsSection({
   caffeinateAvailable,
   caffeinateDisabled,
   caffeinateEnabled,
+  devServerRestartPolicy,
+  devServerRestartPolicyDisabled,
   desktopBrowserAvailable,
   navigateToThreadAfterCreate,
   onCaffeinateChange,
+  onDevServerRestartPolicyChange,
   onNavigateToThreadAfterCreateChange,
   onOpenLinksInAppBrowserChange,
   onRewriteLocalhostLinksChange,
@@ -808,6 +842,12 @@ export function GeneralSettingsSection({
           disabled={steerActiveThreadOnEnterDisabled}
           enabled={steerActiveThreadOnEnter}
           onEnabledChange={onSteerActiveThreadOnEnterChange}
+        />
+
+        <DevServerRestartPolicySettingsControl
+          disabled={devServerRestartPolicyDisabled}
+          policy={devServerRestartPolicy}
+          onPolicyChange={onDevServerRestartPolicyChange}
         />
 
         {caffeinateAvailable ? (
@@ -1197,6 +1237,11 @@ export function SettingsView() {
             updateGeneralSettingsMutation.isPending
           }
           caffeinateEnabled={generalSettings.caffeinate}
+          devServerRestartPolicy={generalSettings.devServerRestartPolicy}
+          devServerRestartPolicyDisabled={
+            systemConfigQuery.data === undefined ||
+            updateGeneralSettingsMutation.isPending
+          }
           desktopBrowserAvailable={desktopBrowserAvailable}
           navigateToThreadAfterCreate={navigateToThreadAfterCreate}
           openLinksInAppBrowser={openLinksInAppBrowser}
@@ -1212,6 +1257,12 @@ export function SettingsView() {
             updateGeneralSettingsMutation.mutate({
               ...generalSettings,
               caffeinate: enabled,
+            })
+          }
+          onDevServerRestartPolicyChange={(devServerRestartPolicy) =>
+            updateGeneralSettingsMutation.mutate({
+              ...generalSettings,
+              devServerRestartPolicy,
             })
           }
           onNavigateToThreadAfterCreateChange={setNavigateToThreadAfterCreate}

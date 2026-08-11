@@ -49,6 +49,9 @@ export type LocalServerState =
   | "wrong_checkout";
 
 export interface LocalServerDisplay {
+  command: string;
+  devServerPort: number | null;
+  exitCode: number | null;
   id: string;
   initialCwd: string;
   state: LocalServerState;
@@ -76,6 +79,7 @@ export function isNamedLocalServerTerminal(session: TerminalSession): boolean {
   const normalizedTitle = session.title.trim().toLowerCase();
   return (
     isVisibleTerminalSessionStatus(session.status) &&
+    session.launchCommand !== null &&
     !GENERIC_TERMINAL_TITLES.has(normalizedTitle) &&
     !/^terminal \d+$/u.test(normalizedTitle)
   );
@@ -95,6 +99,9 @@ export function buildLocalServerDisplay(
 
   return {
     id: session.id,
+    command: session.launchCommand ?? "",
+    devServerPort: session.devServerPort,
+    exitCode: session.exitCode,
     initialCwd: session.initialCwd,
     state,
     title: session.title,
@@ -103,6 +110,7 @@ export function buildLocalServerDisplay(
 
 export function resolveTerminalServerStatus(
   state: LocalServerState,
+  port: number | null = null,
 ): LocalServerStatus {
   switch (state) {
     case "wrong_checkout":
@@ -121,14 +129,14 @@ export function resolveTerminalServerStatus(
       };
     case "starting":
       return {
-        label: "Starting",
+        label: port === null ? "Starting" : `Starting :${port}`,
         note: null,
         severity: "starting",
         tier: "warning",
       };
     case "running":
       return {
-        label: "Running",
+        label: port === null ? "Running" : `Running :${port}`,
         note: null,
         severity: "settled",
         tier: "success",
