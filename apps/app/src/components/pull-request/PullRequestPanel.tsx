@@ -19,6 +19,13 @@ import type {
 import { Button } from "@bb/shared-ui/button";
 import { Checkbox } from "@bb/shared-ui/checkbox";
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@bb/shared-ui/dialog";
+import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
@@ -86,6 +93,32 @@ export interface PullRequestPanelProps {
   selectedGithubAccountLogin: string | null;
   threadTitle: string;
   workspaceStatus: WorkspaceStatus | undefined;
+}
+
+type PullRequestCreateFormProps = Pick<
+  PullRequestPanelProps,
+  | "baseBranchOptions"
+  | "defaultBaseBranch"
+  | "isActionPending"
+  | "githubAccounts"
+  | "isGithubAccountLoading"
+  | "onCommitChanges"
+  | "onCreate"
+  | "onGenerateMetadata"
+  | "onGithubAccountChange"
+  | "onReviewChanges"
+  | "threadTitle"
+  | "selectedGithubAccountLogin"
+  | "workspaceStatus"
+>;
+
+export interface PullRequestCreateDialogProps extends Omit<
+  PullRequestCreateFormProps,
+  "onCreate"
+> {
+  onCreate: (input: PullRequestCreateInput) => Promise<boolean>;
+  onOpenChange: (open: boolean) => void;
+  open: boolean;
 }
 
 function GithubAccountPicker({
@@ -334,23 +367,9 @@ function CreatePullRequestForm({
   onReviewChanges,
   threadTitle,
   selectedGithubAccountLogin,
+  showHeader = true,
   workspaceStatus,
-}: Pick<
-  PullRequestPanelProps,
-  | "baseBranchOptions"
-  | "defaultBaseBranch"
-  | "isActionPending"
-  | "githubAccounts"
-  | "isGithubAccountLoading"
-  | "onCommitChanges"
-  | "onCreate"
-  | "onGenerateMetadata"
-  | "onGithubAccountChange"
-  | "onReviewChanges"
-  | "threadTitle"
-  | "selectedGithubAccountLogin"
-  | "workspaceStatus"
->) {
+}: PullRequestCreateFormProps & { showHeader?: boolean }) {
   const [title, setTitle] = useState(threadTitle);
   const [body, setBody] = useState("");
   const [baseBranch, setBaseBranch] = useState(defaultBaseBranch);
@@ -427,41 +446,62 @@ function CreatePullRequestForm({
   return (
     <form
       onSubmit={handleSubmit}
-      className="flex min-h-0 flex-1 flex-col overflow-y-auto px-4 pb-5 pt-4"
+      className={cn(
+        "flex min-h-0 flex-1 flex-col overflow-y-auto pb-5",
+        showHeader ? "px-4 pt-4" : "px-6 pt-5",
+      )}
     >
       <div className="mx-auto flex w-full max-w-xl flex-col gap-5">
-        <header className="space-y-1">
-          <div className="flex size-9 items-center justify-center rounded-lg bg-surface-raised text-foreground shadow-[0_1px_2px_color-mix(in_oklab,var(--ink)_10%,transparent)]">
-            <Icon name="GitPullRequest" className="size-4" aria-hidden="true" />
-          </div>
-          <h2 className="pt-2 text-base font-semibold text-foreground text-balance">
-            Create a pull request
-          </h2>
-          <p className="max-w-[58ch] text-sm leading-5 text-muted-foreground text-pretty">
-            BB will push{" "}
-            {currentBranch ? (
-              <strong className="font-medium text-foreground">
-                {currentBranch}
-              </strong>
-            ) : (
-              "this branch"
-            )}{" "}
-            to origin, then create the pull request.
-          </p>
-          {isGeneratingMetadata ? (
-            <p
-              className="flex items-center gap-1.5 pt-1 text-xs text-muted-foreground"
-              role="status"
-            >
+        {showHeader ? (
+          <header className="space-y-1">
+            <div className="flex size-9 items-center justify-center rounded-lg bg-surface-raised text-foreground shadow-[0_1px_2px_color-mix(in_oklab,var(--ink)_10%,transparent)]">
               <Icon
-                name="Spinner"
-                className="size-3 animate-spin"
+                name="GitPullRequest"
+                className="size-4"
                 aria-hidden="true"
               />
-              Drafting title and description…
+            </div>
+            <h2 className="pt-2 text-base font-semibold text-foreground text-balance">
+              Create a pull request
+            </h2>
+            <p className="max-w-[58ch] text-sm leading-5 text-muted-foreground text-pretty">
+              BB will push{" "}
+              {currentBranch ? (
+                <strong className="font-medium text-foreground">
+                  {currentBranch}
+                </strong>
+              ) : (
+                "this branch"
+              )}{" "}
+              to origin, then create the pull request.
             </p>
-          ) : null}
-        </header>
+            {isGeneratingMetadata ? (
+              <p
+                className="flex items-center gap-1.5 pt-1 text-xs text-muted-foreground"
+                role="status"
+              >
+                <Icon
+                  name="Spinner"
+                  className="size-3 animate-spin"
+                  aria-hidden="true"
+                />
+                Drafting title and description…
+              </p>
+            ) : null}
+          </header>
+        ) : isGeneratingMetadata ? (
+          <p
+            className="flex items-center gap-1.5 text-xs text-muted-foreground"
+            role="status"
+          >
+            <Icon
+              name="Spinner"
+              className="size-3 animate-spin"
+              aria-hidden="true"
+            />
+            Drafting title and description…
+          </p>
+        ) : null}
 
         {hasUncommittedChanges ? (
           <div className="rounded-lg bg-warning/10 px-3 py-3 text-warning-text">
@@ -579,6 +619,49 @@ function CreatePullRequestForm({
         </Button>
       </div>
     </form>
+  );
+}
+
+export function PullRequestCreateDialog({
+  onCreate,
+  onOpenChange,
+  open,
+  workspaceStatus,
+  ...formProps
+}: PullRequestCreateDialogProps) {
+  const currentBranch = workspaceStatus?.branch.currentBranch ?? null;
+  const handleCreate = (input: PullRequestCreateInput) => {
+    void onCreate(input).then((created) => {
+      if (created) {
+        onOpenChange(false);
+      }
+    });
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent
+        compactContentClassName="h-dvh max-h-dvh rounded-none"
+        className="flex max-h-[min(48rem,calc(100dvh-2rem))] max-w-[36rem] flex-col gap-0 overflow-hidden p-0 max-md:h-full max-md:max-h-none max-md:w-full"
+      >
+        <DialogHeader className="px-6 pt-6">
+          <div className="mb-2 flex size-9 items-center justify-center rounded-lg bg-surface-raised text-foreground shadow-[0_1px_2px_color-mix(in_oklab,var(--ink)_10%,transparent)]">
+            <Icon name="GitPullRequest" className="size-4" aria-hidden="true" />
+          </div>
+          <DialogTitle>Create a pull request</DialogTitle>
+          <DialogDescription>
+            BB will push {currentBranch ?? "this branch"} to origin, then create
+            the pull request.
+          </DialogDescription>
+        </DialogHeader>
+        <CreatePullRequestForm
+          {...formProps}
+          workspaceStatus={workspaceStatus}
+          onCreate={handleCreate}
+          showHeader={false}
+        />
+      </DialogContent>
+    </Dialog>
   );
 }
 

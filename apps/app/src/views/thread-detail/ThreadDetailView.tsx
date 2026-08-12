@@ -125,7 +125,11 @@ import {
   type ThreadRoutePathArgs,
 } from "@/lib/route-paths";
 import { useGitDiffPanel } from "@/components/secondary-panel/git-diff/useGitDiffPanel";
-import { ThreadDetailHeader } from "./ThreadDetailHeader";
+import {
+  ThreadDetailHeader,
+  type ThreadHeaderWorkflowAction,
+} from "./ThreadDetailHeader";
+import { resolveThreadHeaderGithubWorkflowStep } from "./thread-header-github-workflow";
 import { ThreadDetailPromptArea } from "./ThreadDetailPromptArea";
 import {
   type ContextBannerMergeBaseConfig,
@@ -171,10 +175,12 @@ import {
 } from "@/components/plugin/PluginPanelActions";
 import { PluginThreadPanelNavigationProvider } from "@/components/plugin/plugin-thread-panel-navigation";
 import {
+  PullRequestCreateDialog,
   PullRequestPanel,
   type PullRequestCreateInput,
   type PullRequestMetadataSuggestion,
 } from "@/components/pull-request/PullRequestPanel";
+import { getPullRequestAttentionDisplay } from "@/lib/pull-request-display";
 import { ThreadTimelineNavigationProvider } from "@/components/thread/timeline/ThreadTimelineNavigationContext";
 import { usePluginSlots } from "@/lib/plugin-slots";
 import { getFileExtension } from "@/lib/file-opener-preference";
@@ -865,6 +871,8 @@ function ThreadDetailViewInternal(props: ThreadDetailViewInternalProps) {
     pullRequestMergeMethodAtom,
   );
   const [isPostMergeArchivePromptOpen, setIsPostMergeArchivePromptOpen] =
+    useState(false);
+  const [isPullRequestCreateDialogOpen, setIsPullRequestCreateDialogOpen] =
     useState(false);
   const markThreadRead = useMarkThreadViewed();
   const updateEnvironment = useUpdateEnvironment();
@@ -1806,7 +1814,8 @@ function ThreadDetailViewInternal(props: ThreadDetailViewInternalProps) {
       isRetainedViewActive &&
       canUseGitUi &&
       environment !== undefined &&
-      openFixedSecondaryTab?.kind === "pull-request",
+      (openFixedSecondaryTab?.kind === "pull-request" ||
+        isPullRequestCreateDialogOpen),
   });
   const githubAccounts = githubAccountsQuery.data?.accounts ?? [];
   const selectedGithubAccountLogin =
@@ -1847,9 +1856,9 @@ function ThreadDetailViewInternal(props: ThreadDetailViewInternalProps) {
     ],
   );
   const handlePullRequestCreate = useCallback(
-    async (input: PullRequestCreateInput) => {
+    async (input: PullRequestCreateInput): Promise<boolean> => {
       const environmentId = thread?.environmentId;
-      if (!environmentId) return;
+      if (!environmentId) return false;
       const toastId = appToast.loading("Creating pull request");
       try {
         const response = await requestEnvironmentAction.mutateAsync({
@@ -1861,6 +1870,7 @@ function ThreadDetailViewInternal(props: ThreadDetailViewInternalProps) {
           throw new Error("Expected pull request create action response.");
         }
         appToast.success(response.message, { id: toastId });
+        return true;
       } catch (error) {
         appToast.error("Failed to create pull request", {
           id: toastId,
@@ -1869,6 +1879,7 @@ function ThreadDetailViewInternal(props: ThreadDetailViewInternalProps) {
             fallbackMessage: "Pull request was not created",
           }),
         });
+        return false;
       }
     },
     [requestEnvironmentAction, thread?.environmentId],
@@ -2723,20 +2734,92 @@ function ThreadDetailViewInternal(props: ThreadDetailViewInternalProps) {
           },
         }))
       : [];
+  const commitHeaderAction = gitActions.threadHeaderGitActions.find(
+    (action) => action.target.kind === "commit",
+  );
+  const headerGithubWorkflowStep = resolveThreadHeaderGithubWorkflowStep({
+    hasCommitAction: commitHeaderAction !== undefined,
+    hasCommittedUnmergedChanges:
+      workspaceStatus?.mergeBase?.hasCommittedUnmergedChanges === true,
+    isArchivedThread: thread.archivedAt !== null,
+    pullRequestResponse: pullRequestQuery.data,
+  });
+  const threadHeaderWorkflowActions: readonly ThreadHeaderWorkflowAction[] =
+    (() => {
+      switch (headerGithubWorkflowStep) {
+        case "commit":
+          return [
+            {
+              label: "Commit",
+              onSelect: () => {
+                if (commitHeaderAction) {
+                  gitActions.threadGitActionDialog.onOpen(
+                    commitHeaderAction.target,
+                  );
+                }
+              },
+            },
+          ];
+        case "create_pull_request":
+          return [
+            {
+              disabled: requestEnvironmentAction.isPending,
+              label: "Create PR",
+              onSelect: () => setIsPullRequestCreateDialogOpen(true),
+              tooltip: requestEnvironmentAction.isPending
+                ? "A GitHub action is in progress"
+                : undefined,
+            },
+          ];
+        case "merge_pull_request": {
+          const canMerge = pullRequest?.attention === "ready_to_merge";
+          const disabled = requestEnvironmentAction.isPending || !canMerge;
+          const tooltip = requestEnvironmentAction.isPending
+            ? "A GitHub action is in progress"
+            : pullRequest && !canMerge
+              ? getPullRequestAttentionDisplay(pullRequest).label
+              : undefined;
+          return (
+            [
+              { label: "Merge", method: "merge" },
+              { label: "Squash and merge", method: "squash" },
+              { label: "Rebase and merge", method: "rebase" },
+            ] as const
+          ).map(({ label, method }) => ({
+            disabled,
+            label,
+            onSelect: () => void handlePullRequestMerge(method),
+            tooltip,
+          }));
+        }
+        default:
+          if (
+            thread.archivedAt !== null ||
+            pullRequestQuery.data?.outcome === "available" ||
+            pullRequestQuery.data?.outcome === "absent"
+          ) {
+            return [];
+          }
+          return gitActions.threadHeaderGitActions.map((action) => ({
+            label: action.label,
+            onSelect: () =>
+              gitActions.threadGitActionDialog.onOpen(action.target),
+          }));
+      }
+    })();
   const responsiveGitActions: ThreadActionsMenuResponsiveAction[] =
-    gitActions.threadHeaderGitActions.map((action) => ({
+    threadHeaderWorkflowActions.map((action) => ({
+      disabled: action.disabled,
       icon: "GitBranch" as const,
       label: action.label,
-      onSelect: () => {
-        gitActions.threadGitActionDialog.onOpen(action.target);
-      },
+      onSelect: action.onSelect,
     }));
   const responsivePullRequestActions: ThreadActionsMenuResponsiveAction[] =
     canUseGitUi
       ? [
           {
             icon: "GitPullRequest" as const,
-            label: pullRequest ? "Pull request checks" : "Create pull request",
+            label: pullRequest ? "Pull request checks" : "Pull request details",
             onSelect: () => openSecondaryPanel("pull-request"),
           },
         ]
@@ -2788,7 +2871,6 @@ function ThreadDetailViewInternal(props: ThreadDetailViewInternalProps) {
         }
         isSecondaryPanelOpen={isSecondaryPanelOpen}
         onClosePane={onRequestClose ?? undefined}
-        onOpenThreadGitAction={gitActions.threadGitActionDialog.onOpen}
         onToggleSecondaryPanel={toggleSecondaryPanel}
         pluginActions={
           <PluginThreadHeaderActions
@@ -2804,7 +2886,7 @@ function ThreadDetailViewInternal(props: ThreadDetailViewInternalProps) {
               }
             : undefined
         }
-        threadHeaderGitActions={gitActions.threadHeaderGitActions}
+        threadHeaderWorkflowActions={threadHeaderWorkflowActions}
         threadTitle={threadTitle}
         workspaceOpenButton={workspaceOpenButton}
       />
@@ -3171,35 +3253,73 @@ function ThreadDetailViewInternal(props: ThreadDetailViewInternalProps) {
           }}
         />
         {canUseGitUi ? (
-          <ThreadGitActionDialog
-            target={gitActions.threadGitActionDialog.target}
-            branchName={threadBranchName}
-            worktreeName={threadWorktreeName}
-            worktreePath={threadWorktreePath}
-            gitStatusDisplay={threadGitStatusDisplay}
-            changedFilesSection={workingTreeChangedFilesSection}
-            hasUncommittedChanges={
-              workspaceStatus?.workingTree.hasUncommittedChanges === true
-            }
-            showMergeBaseDetails={showBranchComparisonUi}
-            mergeBaseBranch={effectiveMergeBaseBranch}
-            mergeBaseBranchOptions={mergeBaseBranchOptions}
-            mergeBaseBranchRef={selectedMergeBaseBranchRef}
-            mergeBaseRemoteBranchOptions={mergeBaseRemoteBranchOptions}
-            mergeBaseBranchOptionsLoading={isLoadingMergeBaseBranchOptions}
-            onMergeBaseBranchSearchQueryChange={setMergeBaseBranchSearchQuery}
-            onMergeBaseBranchChange={
-              showBranchComparisonUi ? handleMergeBaseBranchChange : undefined
-            }
-            onOpenChange={(open) => {
-              if (!open) {
-                gitActions.threadGitActionDialog.onClose();
+          <>
+            <PullRequestCreateDialog
+              baseBranchOptions={[
+                ...new Set([
+                  workspaceStatus?.branch.defaultBranch ?? "main",
+                  ...(mergeBaseBranchOptions ?? []),
+                ]),
+              ]}
+              defaultBaseBranch={
+                workspaceStatus?.branch.defaultBranch ?? "main"
               }
-            }}
-            onChangeTarget={gitActions.threadGitActionDialog.onOpen}
-            onCommit={gitActions.handleCommitThread}
-            onSquashMerge={gitActions.handleSquashMergeThread}
-          />
+              githubAccounts={githubAccounts}
+              isActionPending={
+                requestEnvironmentAction.isPending ||
+                pullRequestArchive.isPending ||
+                updateEnvironment.isPending
+              }
+              isGithubAccountLoading={githubAccountsQuery.isLoading}
+              onCommitChanges={() => {
+                setIsPullRequestCreateDialogOpen(false);
+                gitActions.threadGitActionDialog.onOpen({ kind: "commit" });
+              }}
+              onCreate={handlePullRequestCreate}
+              onGenerateMetadata={handleGeneratePullRequestMetadata}
+              onGithubAccountChange={(login) =>
+                void handleGithubAccountChange(login)
+              }
+              onOpenChange={setIsPullRequestCreateDialogOpen}
+              onReviewChanges={() => {
+                setIsPullRequestCreateDialogOpen(false);
+                openSecondaryPanelDiffPanel();
+              }}
+              open={isPullRequestCreateDialogOpen}
+              selectedGithubAccountLogin={selectedGithubAccountLogin}
+              threadTitle={threadTitle}
+              workspaceStatus={workspaceStatus}
+            />
+            <ThreadGitActionDialog
+              target={gitActions.threadGitActionDialog.target}
+              branchName={threadBranchName}
+              worktreeName={threadWorktreeName}
+              worktreePath={threadWorktreePath}
+              gitStatusDisplay={threadGitStatusDisplay}
+              changedFilesSection={workingTreeChangedFilesSection}
+              hasUncommittedChanges={
+                workspaceStatus?.workingTree.hasUncommittedChanges === true
+              }
+              showMergeBaseDetails={showBranchComparisonUi}
+              mergeBaseBranch={effectiveMergeBaseBranch}
+              mergeBaseBranchOptions={mergeBaseBranchOptions}
+              mergeBaseBranchRef={selectedMergeBaseBranchRef}
+              mergeBaseRemoteBranchOptions={mergeBaseRemoteBranchOptions}
+              mergeBaseBranchOptionsLoading={isLoadingMergeBaseBranchOptions}
+              onMergeBaseBranchSearchQueryChange={setMergeBaseBranchSearchQuery}
+              onMergeBaseBranchChange={
+                showBranchComparisonUi ? handleMergeBaseBranchChange : undefined
+              }
+              onOpenChange={(open) => {
+                if (!open) {
+                  gitActions.threadGitActionDialog.onClose();
+                }
+              }}
+              onChangeTarget={gitActions.threadGitActionDialog.onOpen}
+              onCommit={gitActions.handleCommitThread}
+              onSquashMerge={gitActions.handleSquashMergeThread}
+            />
+          </>
         ) : null}
         {threadWorktreeName ? (
           <PostMergeArchiveDialog

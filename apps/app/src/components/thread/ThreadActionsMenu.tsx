@@ -48,6 +48,7 @@ interface ThreadActionsMenuBaseProps {
 }
 
 export interface ThreadActionsMenuResponsiveAction {
+  disabled?: boolean;
   icon: IconName;
   label: string;
   onSelect: () => void | Promise<void>;
@@ -79,6 +80,7 @@ interface ThreadActionsMenuItemsProps extends ThreadActionsMenuBaseProps {
 interface ThreadActionMenuItemProps {
   children: ReactNode;
   className?: string;
+  disabled?: boolean;
   variant?: "default" | "destructive";
   icon: IconName;
   onSelect?: (event: Event) => void;
@@ -88,6 +90,7 @@ interface ThreadActionMenuItemProps {
 function ThreadActionMenuItem({
   children,
   className,
+  disabled,
   variant,
   icon,
   onSelect,
@@ -108,6 +111,7 @@ function ThreadActionMenuItem({
           variant === "destructive" &&
             "text-destructive focus:bg-destructive/15 focus:text-destructive data-[last-hovered]:bg-destructive/15 data-[last-hovered]:text-destructive",
         )}
+        disabled={disabled}
         onSelect={onSelect}
       >
         {content}
@@ -118,6 +122,7 @@ function ThreadActionMenuItem({
   return (
     <DropdownMenuItem
       className={className}
+      disabled={disabled}
       variant={variant}
       onSelect={onSelect}
     >
@@ -230,6 +235,7 @@ function ThreadActionsMenuItems({
               key={action.label}
               surface={surface}
               icon={action.icon}
+              disabled={action.disabled}
               onSelect={() => {
                 void action.onSelect();
               }}

@@ -9,7 +9,7 @@ import {
 import type { ThreadPullRequest, WorkspaceStatus } from "@bb/domain";
 import type { ComponentProps } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { PullRequestPanel } from "./PullRequestPanel";
+import { PullRequestCreateDialog, PullRequestPanel } from "./PullRequestPanel";
 
 vi.mock("@/components/pickers/BranchPicker", () => ({
   BranchPicker: ({
@@ -286,5 +286,43 @@ describe("PullRequestPanel", () => {
     );
     fireEvent.click(screen.getByRole("button", { name: "Archive workspace" }));
     expect(onArchive).toHaveBeenCalledOnce();
+  });
+});
+
+describe("PullRequestCreateDialog", () => {
+  it("creates a pull request without opening the right panel", async () => {
+    const onCreate = vi.fn(async () => true);
+    const onOpenChange = vi.fn();
+    render(
+      <PullRequestCreateDialog
+        baseBranchOptions={["main", "release"]}
+        defaultBaseBranch="main"
+        githubAccounts={[
+          { active: true, host: "github.com", login: "amirghst" },
+        ]}
+        isActionPending={false}
+        isGithubAccountLoading={false}
+        onCommitChanges={noop}
+        onCreate={onCreate}
+        onGenerateMetadata={async () => ({
+          body: "",
+          title: "Ship the PR workflow",
+        })}
+        onGithubAccountChange={noop}
+        onOpenChange={onOpenChange}
+        onReviewChanges={noop}
+        open
+        selectedGithubAccountLogin="amirghst"
+        threadTitle="Ship the PR workflow"
+        workspaceStatus={dirtyWorkspaceStatus}
+      />,
+    );
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Create pull request" }),
+    );
+
+    await waitFor(() => expect(onCreate).toHaveBeenCalledOnce());
+    await waitFor(() => expect(onOpenChange).toHaveBeenCalledWith(false));
   });
 });
