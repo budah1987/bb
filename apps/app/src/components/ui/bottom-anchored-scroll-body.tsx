@@ -16,6 +16,7 @@ import {
   threadTimelineScrollAnchorAtomFamily,
   type ScrollAnchor,
 } from "@/lib/thread-timeline-scroll-anchor.js";
+import { isOptimisticTimelineRowId } from "@/lib/optimistic-timeline-row.js";
 
 // BottomAnchoredScrollBody owns "follow the bottom" behavior for streaming
 // surfaces. It combines two mechanisms because neither is sufficient alone:
@@ -34,6 +35,7 @@ import {
 // input and pointer-drag scrolling before a non-bottom scroll event.
 
 export interface BottomAnchorContextValue {
+  anchorNextUserMessage: () => void;
   getScrollElement: () => HTMLElement | null;
   isAtBottom: boolean;
   scrollToBottom: () => void;
@@ -80,6 +82,7 @@ interface ElementVisibilityArgs {
 }
 
 const BOTTOM_ANCHOR_THRESHOLD_PX = 4;
+const SENT_MESSAGE_ANCHOR_OFFSET_PX = 16;
 const USER_SCROLL_INTENT_MS = 1_000;
 const SCROLLBAR_IDLE_DELAY_MS = 600;
 // ResizeObserver can fire before related flex/sidebar/prompt layout settles.
@@ -299,6 +302,11 @@ export function BottomAnchoredScrollBody({
     trailingTimeout: number | null;
   }>({ lastWriteAt: 0, trailingTimeout: null });
   const userDetachedFromBottomRef = useRef(false);
+  const pendingSentMessageAnchorRef = useRef(false);
+  const sentMessageAnchorFrameRef = useRef<number | null>(null);
+  const sentMessageTargetScrollTopRef = useRef<number | null>(null);
+  const sentMessageEndSpaceHeightRef = useRef(0);
+  const [sentMessageEndSpaceHeight, setSentMessageEndSpaceHeight] = useState(0);
   const [isAtBottom, setIsAtBottom] = useState(true);
 
   const getScrollElement = useCallback(() => scrollAreaRef.current, []);
@@ -370,6 +378,10 @@ export function BottomAnchoredScrollBody({
     userScrollIntentUntilRef.current = 0;
     pointerScrollIntentRef.current = false;
     userDetachedFromBottomRef.current = false;
+    pendingSentMessageAnchorRef.current = false;
+    sentMessageTargetScrollTopRef.current = null;
+    sentMessageEndSpaceHeightRef.current = 0;
+    setSentMessageEndSpaceHeight(0);
     shouldStickToBottomRef.current = true;
     setIsAtBottom(true);
     if (scrollArea) {
@@ -377,6 +389,66 @@ export function BottomAnchoredScrollBody({
     }
     queueBottomRestore();
   }, [cancelPendingScrollRestore, queueBottomRestore]);
+
+  const anchorNextUserMessage = useCallback(() => {
+    cancelPendingScrollRestore();
+    cancelQueuedRestore();
+    pendingSentMessageAnchorRef.current = true;
+    sentMessageTargetScrollTopRef.current = null;
+    userScrollIntentUntilRef.current = 0;
+    pointerScrollIntentRef.current = false;
+    userDetachedFromBottomRef.current = false;
+    shouldStickToBottomRef.current = false;
+    setIsAtBottom(false);
+  }, [cancelPendingScrollRestore, cancelQueuedRestore]);
+
+  useLayoutEffect(() => {
+    if (!pendingSentMessageAnchorRef.current) return;
+    const scrollArea = scrollAreaRef.current;
+    if (!scrollArea) return;
+    const rows = getScrollAnchorRows(scrollArea);
+    let sentMessage: HTMLElement | null = null;
+    for (let index = rows.length - 1; index >= 0; index -= 1) {
+      const row = rows[index];
+      if (row && isOptimisticTimelineRowId(row.dataset.timelineRowId ?? "")) {
+        sentMessage = row;
+        break;
+      }
+    }
+    if (!sentMessage) return;
+
+    pendingSentMessageAnchorRef.current = false;
+    const scrollAreaRect = scrollArea.getBoundingClientRect();
+    const messageRect = sentMessage.getBoundingClientRect();
+    const targetScrollTop = Math.max(
+      0,
+      scrollArea.scrollTop +
+        messageRect.top -
+        scrollAreaRect.top -
+        SENT_MESSAGE_ANCHOR_OFFSET_PX,
+    );
+    sentMessageTargetScrollTopRef.current = targetScrollTop;
+    const naturalScrollHeight =
+      scrollArea.scrollHeight - sentMessageEndSpaceHeightRef.current;
+    const nextEndSpaceHeight = Math.max(
+      0,
+      targetScrollTop + scrollArea.clientHeight - naturalScrollHeight,
+    );
+    sentMessageEndSpaceHeightRef.current = nextEndSpaceHeight;
+    setSentMessageEndSpaceHeight(nextEndSpaceHeight);
+
+    if (sentMessageAnchorFrameRef.current !== null) {
+      window.cancelAnimationFrame(sentMessageAnchorFrameRef.current);
+    }
+    sentMessageAnchorFrameRef.current = window.requestAnimationFrame(() => {
+      sentMessageAnchorFrameRef.current = null;
+      const behavior = window.matchMedia("(prefers-reduced-motion: reduce)")
+        .matches
+        ? "auto"
+        : "smooth";
+      scrollArea.scrollTo({ top: targetScrollTop, behavior });
+    });
+  }, [children, isAtBottom]);
 
   const scrollElementIntoView = useCallback(
     ({ element, options }: ScrollElementIntoViewArgs) => {
@@ -672,12 +744,35 @@ export function BottomAnchoredScrollBody({
     return true;
   }, [applyScrollRestore, queueBottomRestore]);
 
+  const syncSentMessageEndSpace = useCallback(() => {
+    const scrollArea = scrollAreaRef.current;
+    const targetScrollTop = sentMessageTargetScrollTopRef.current;
+    if (!scrollArea || targetScrollTop === null) return;
+    const naturalScrollHeight =
+      scrollArea.scrollHeight - sentMessageEndSpaceHeightRef.current;
+    const nextEndSpaceHeight = Math.max(
+      0,
+      targetScrollTop + scrollArea.clientHeight - naturalScrollHeight,
+    );
+    if (nextEndSpaceHeight === sentMessageEndSpaceHeightRef.current) return;
+    sentMessageEndSpaceHeightRef.current = nextEndSpaceHeight;
+    setSentMessageEndSpaceHeight(nextEndSpaceHeight);
+    if (nextEndSpaceHeight === 0) {
+      sentMessageTargetScrollTopRef.current = null;
+    }
+  }, []);
+
   const handleScrollAreaResize = useCallback(() => {
+    syncSentMessageEndSpace();
     // While a restore is pending, the ResizeObserver is the settle signal; the
     // bottom-restore is suppressed (stick-to-bottom is false) anyway.
     if (advancePendingScrollRestore()) return;
     queueBottomRestore();
-  }, [advancePendingScrollRestore, queueBottomRestore]);
+  }, [
+    advancePendingScrollRestore,
+    queueBottomRestore,
+    syncSentMessageEndSpace,
+  ]);
 
   // Begin restoring the saved scroll position on mount, before the listener
   // effect's `queueBottomRestore()` runs (a useEffect, which runs after layout
@@ -703,6 +798,7 @@ export function BottomAnchoredScrollBody({
 
   const bottomAnchorContextValue = useMemo<BottomAnchorContextValue>(
     () => ({
+      anchorNextUserMessage,
       getScrollElement,
       isAtBottom,
       scrollToBottom,
@@ -711,6 +807,7 @@ export function BottomAnchoredScrollBody({
       captureScrollAnchor,
     }),
     [
+      anchorNextUserMessage,
       getScrollElement,
       isAtBottom,
       scrollToBottom,
@@ -807,6 +904,10 @@ export function BottomAnchoredScrollBody({
         window.clearTimeout(scrollbarIdleTimeout);
       }
       scrollArea.removeAttribute("data-scrollbar-scrolling");
+      if (sentMessageAnchorFrameRef.current !== null) {
+        window.cancelAnimationFrame(sentMessageAnchorFrameRef.current);
+        sentMessageAnchorFrameRef.current = null;
+      }
       cancelQueuedRestore();
     };
   }, [
@@ -848,6 +949,12 @@ export function BottomAnchoredScrollBody({
               style={PAGE_SHELL_CONTENT_STYLE}
             >
               {children}
+              <div
+                aria-hidden
+                className="shrink-0"
+                data-sent-message-end-space=""
+                style={{ height: sentMessageEndSpaceHeight }}
+              />
               <div className="scroll-bottom-anchor" aria-hidden />
             </div>
             {footer ? (

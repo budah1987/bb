@@ -47,6 +47,7 @@ function createBottomAnchor(
   scrollElement = document.createElement("div"),
 ): BottomAnchorContextValue {
   return {
+    anchorNextUserMessage: vi.fn(),
     getScrollElement: () => scrollElement,
     isAtBottom: false,
     scrollToBottom: vi.fn(),
