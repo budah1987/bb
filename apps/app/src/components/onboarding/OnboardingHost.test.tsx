@@ -79,7 +79,7 @@ describe("OnboardingHost", () => {
     });
   });
 
-  it("shows onboarding when the experiment is on and setup is incomplete", () => {
+  it("shows onboarding when the experiment is on and setup is incomplete", async () => {
     mocks.useSystemConfig.mockReturnValue({
       data: {
         experiments: { ...defaultExperiments, newOnboarding: true },
@@ -89,7 +89,7 @@ describe("OnboardingHost", () => {
 
     render(<OnboardingHost />);
 
-    expect(screen.getByText("Onboarding flow")).toBeTruthy();
+    expect(await screen.findByText("Onboarding flow")).toBeTruthy();
     expect(mocks.useHostProviderCliStatus).toHaveBeenCalledWith({
       enabled: true,
       hostId: "host-1",

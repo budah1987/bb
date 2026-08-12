@@ -60,22 +60,6 @@ function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : "Simulator request failed.";
 }
 
-function savePngScreenshot(args: {
-  dataBase64: string;
-  deviceName: string;
-}): void {
-  const safeDeviceName = args.deviceName
-    .toLowerCase()
-    .replaceAll(/[^a-z0-9]+/gu, "-")
-    .replaceAll(/^-|-$/gu, "");
-  const link = document.createElement("a");
-  link.download = `${safeDeviceName || "ios-simulator"}-${Date.now()}.png`;
-  link.href = `data:image/png;base64,${args.dataBase64}`;
-  document.body.append(link);
-  link.click();
-  link.remove();
-}
-
 const SIMULATOR_TOOLBAR_BUTTON_CLASS =
   "flex size-9 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-[scale,background-color,color] duration-150 ease-out hover:bg-state-hover hover:text-foreground active:scale-[0.96] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-40 motion-reduce:transition-none";
 
@@ -86,7 +70,7 @@ function SimulatorToolbarButton({
   onClick,
 }: {
   disabled?: boolean;
-  icon: "Camera" | "Circle" | "Home" | "Maximize2" | "RotateCcw" | "Square";
+  icon: "Circle" | "Download" | "Maximize2" | "RotateCcw" | "Square";
   label: string;
   onClick: () => void;
 }) {
@@ -271,9 +255,11 @@ export function SimulatorTabContent({
   const screenshot = useMutation({
     mutationFn: () => sdk.environments.simulatorScreenshot({ environmentId }),
     onSuccess: (result) => {
-      savePngScreenshot({
-        dataBase64: result.dataBase64,
-        deviceName: status.data?.active?.deviceName ?? "iOS Simulator",
+      void import("./simulator-screenshot").then(({ savePngScreenshot }) => {
+        savePngScreenshot({
+          dataBase64: result.dataBase64,
+          deviceName: status.data?.active?.deviceName ?? "iOS Simulator",
+        });
       });
     },
   });
@@ -537,14 +523,14 @@ export function SimulatorTabContent({
             )}
           >
             <SimulatorToolbarButton
-              icon={presentation === "popout" ? "Home" : "Circle"}
+              icon="Circle"
               label="Home"
               onClick={() => sendControl({ kind: "button", button: "home" })}
             />
             {presentation === "popout" ? (
               <SimulatorToolbarButton
                 disabled={screenshot.isPending}
-                icon="Camera"
+                icon="Download"
                 label={
                   screenshot.isPending ? "Saving screenshot" : "Save screenshot"
                 }
@@ -613,7 +599,7 @@ export function SimulatorTabContent({
                       sendControl({ kind: "button", button: "side_button" })
                     }
                   >
-                    <Icon name="Power" aria-hidden />
+                    <Icon name="Circle" aria-hidden />
                     Side button
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />

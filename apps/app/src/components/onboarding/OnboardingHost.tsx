@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef } from "react";
+import { lazy, Suspense, useCallback, useEffect, useRef } from "react";
 import type { DiscoveredRepo } from "@bb/host-daemon-contract";
 import { useSystemConfig } from "@/hooks/queries/system-queries";
 import { useUpdateGeneralSettings } from "@/hooks/mutations/settings-mutations";
@@ -39,11 +39,13 @@ const CLI_KEY_BY_PROVIDER: Record<string, "codex" | "claudeCode" | "cursor"> = {
   "claude-code": "claudeCode",
   "acp-cursor": "cursor",
 };
-import {
-  OnboardingFlow,
-  type OnboardingAgentState,
-  type OnboardingUiEvent,
-} from "./OnboardingFlow";
+import type { OnboardingAgentState, OnboardingUiEvent } from "./OnboardingFlow";
+
+const OnboardingFlow = lazy(() =>
+  import("./OnboardingFlow").then((module) => ({
+    default: module.OnboardingFlow,
+  })),
+);
 
 /**
  * Decides whether first-run onboarding is showing, and owns its side effects:
@@ -202,12 +204,14 @@ export function OnboardingHost() {
   if (!shouldShow) return null;
 
   return (
-    <OnboardingFlow
-      installing={installingProviders}
-      onAddProjects={addProjects}
-      onClose={close}
-      onEvent={report}
-      onInstallAgent={installAgent}
-    />
+    <Suspense fallback={null}>
+      <OnboardingFlow
+        installing={installingProviders}
+        onAddProjects={addProjects}
+        onClose={close}
+        onEvent={report}
+        onInstallAgent={installAgent}
+      />
+    </Suspense>
   );
 }

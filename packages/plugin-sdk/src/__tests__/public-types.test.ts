@@ -35,6 +35,7 @@ const EXPECTED_BACKEND_ROOT_TYPE_EXPORTS = [
   "PluginBackground",
   "PluginBackgroundActivityItem",
   "PluginBackgroundActivityProvider",
+  "PluginClaudeCodeSessionConfiguration",
   "PluginCli",
   "PluginCliCommandInfo",
   "PluginCliContext",

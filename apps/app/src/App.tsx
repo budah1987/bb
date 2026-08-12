@@ -82,7 +82,6 @@ const SimulatorPopoutView = lazy(() =>
 );
 
 const SIMULATOR_POPOUT_ROUTE_PATH = "/simulator-popout/:environmentId";
-
 export function LegacyAutomationDetailRedirect() {
   const location = useLocation();
   const { projectId, automationId } = useParams<{

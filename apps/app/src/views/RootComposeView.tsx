@@ -75,7 +75,6 @@ import {
 import { BrowserTabDeck } from "@/components/secondary-panel/BrowserTabDeck";
 import type { BrowserAddressFocusRequest } from "@/components/secondary-panel/BrowserTabContent";
 import { NewTabPage } from "@/components/secondary-panel/NewTabPage";
-import { SimulatorTabContent } from "@/components/secondary-panel/SimulatorTabContent";
 import { EmptyStatePanel } from "@bb/shared-ui/empty-state";
 import { Icon } from "@bb/shared-ui/icon";
 import { PageShell } from "@/components/ui/page-shell.js";
@@ -183,6 +182,12 @@ import {
 } from "@/lib/fixed-panel-tabs";
 import { createNewTabFixedPanelTab } from "@/lib/fixed-panel-tabs-state";
 import type { ThreadSecondaryPanel as ThreadSecondaryPanelTab } from "@/lib/thread-secondary-panel";
+
+const SimulatorTabContent = lazy(() =>
+  import("@/components/secondary-panel/SimulatorTabContent").then((module) => ({
+    default: module.SimulatorTabContent,
+  })),
+);
 import {
   getFilePreviewLineRangeStart,
   type HostFileTabState,
@@ -3463,10 +3468,12 @@ export function RootComposeView() {
         showFileSearch={!isProjectless}
       />
     ) : activeSimulatorTab ? (
-      <SimulatorTabContent
-        environmentId={activeSimulatorTab.environmentId}
-        isActive={isSecondaryPanelOpen}
-      />
+      <Suspense fallback={null}>
+        <SimulatorTabContent
+          environmentId={activeSimulatorTab.environmentId}
+          isActive={isSecondaryPanelOpen}
+        />
+      </Suspense>
     ) : activeWorkspaceFilePath !== null &&
       activeWorkspaceFileEnvironmentId !== null ? (
       <WorkspaceFilePreviewTabContent

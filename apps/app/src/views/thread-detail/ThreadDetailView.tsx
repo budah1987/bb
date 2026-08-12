@@ -1,4 +1,12 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  lazy,
+  Suspense,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { useNavigate } from "react-router-dom";
 import { useAtom } from "jotai";
 import { atomWithStorage } from "jotai/utils";
@@ -165,7 +173,6 @@ import { NotesPanel } from "@/components/notes/NotesPanel";
 import { LocalServersPanel } from "@/components/secondary-panel/LocalServersPanel";
 import { PreviewPanel } from "@/components/secondary-panel/PreviewPanel";
 import { WorkspaceFilesRow } from "@/components/secondary-panel/ThreadMetadataContent";
-import { SimulatorTabContent } from "@/components/secondary-panel/SimulatorTabContent";
 import { resolveRightPanelFileVisual } from "@/components/secondary-panel/rightPanelFileVisuals";
 import { COARSE_POINTER_COMPACT_ICON_SIZE_CLASS } from "@bb/shared-ui/coarse-pointer-sizing";
 import { PluginIcon } from "@/components/plugin/PluginIcon";
@@ -271,6 +278,12 @@ import { useAppCommandHandler } from "@/components/commands/AppCommandProvider";
 import { DefaultPaneContextProvider, usePaneContext } from "./PaneContext";
 import { ThreadArchiveCommandHandler } from "./ThreadArchiveCommandHandler";
 import { ThreadRenameCommandHandler } from "./ThreadRenameCommandHandler";
+
+const SimulatorTabContent = lazy(() =>
+  import("@/components/secondary-panel/SimulatorTabContent").then((module) => ({
+    default: module.SimulatorTabContent,
+  })),
+);
 
 const EMPTY_PARENT_THREADS: readonly ThreadListEntry[] = [];
 const EMPTY_PROJECT_THREAD_SUBSET_FILTERS =
@@ -3008,10 +3021,12 @@ function ThreadDetailViewInternal(props: ThreadDetailViewInternalProps) {
       providerId={activePreviewTab.providerId}
     />
   ) : activeSimulatorTab ? (
-    <SimulatorTabContent
-      environmentId={activeSimulatorTab.environmentId}
-      isActive={isSecondaryPanelOpen}
-    />
+    <Suspense fallback={null}>
+      <SimulatorTabContent
+        environmentId={activeSimulatorTab.environmentId}
+        isActive={isSecondaryPanelOpen}
+      />
+    </Suspense>
   ) : activeWorkspaceFilePath ? (
     <WorkspaceFilePreviewTabContent
       activePath={activeWorkspaceFilePath}
