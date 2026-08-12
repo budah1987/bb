@@ -634,7 +634,9 @@ describe("bridge", () => {
       {},
     );
 
-    expect(options.settings).toEqual({ autoMemoryEnabled: true });
+    expect(options.settings).toEqual({
+      autoMemoryEnabled: true,
+    });
   });
 
   it("disables Claude auto-memory reads and writes", () => {
@@ -651,7 +653,30 @@ describe("bridge", () => {
       {},
     );
 
-    expect(options.settings).toEqual({ autoMemoryEnabled: false });
+    expect(options.settings).toEqual({
+      autoMemoryEnabled: false,
+    });
+  });
+
+  it("passes the configured native auto-compaction policy", () => {
+    const options = buildSessionOptions(
+      {
+        autoCompactEnabled: false,
+        autoCompactWindow: 380_000,
+        workflowsEnabled: false,
+        cwd: "/tmp/worktree",
+        instructionMode: "append",
+        permissionEscalation: "ask",
+        permissionMode: "default",
+        permissionScope: "workspace",
+      },
+      {},
+    );
+
+    expect(options.settings).toMatchObject({
+      autoCompactEnabled: false,
+      autoCompactWindow: 380_000,
+    });
   });
 
   it("leaves standard sessions on the default Claude tool preset", () => {

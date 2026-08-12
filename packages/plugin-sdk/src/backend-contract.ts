@@ -449,7 +449,25 @@ export interface PluginAgentConfiguration {
   instructions?: string;
 }
 
+/** Claude Code session flags contributed at thread/session resolution. */
+export interface PluginClaudeCodeSessionConfiguration {
+  /** Use Claude Code's native automatic context compaction. */
+  autoCompactEnabled: boolean;
+  /** Context-token window that triggers native automatic compaction. */
+  autoCompactWindow: number;
+}
+
 export interface PluginAgents {
+  /**
+   * Contribute Claude Code session flags at each thread/session boundary.
+   * Return null for providers or sessions this plugin does not configure.
+   * When several plugins contribute, the alphabetically first plugin id wins.
+   */
+  experimental_configureClaudeCodeSession(
+    provider: (
+      context: PluginAgentConfigurationContext,
+    ) => PluginClaudeCodeSessionConfiguration | null,
+  ): void;
   /**
    * Select this plugin's statically registered tools and manifest skills for
    * each thread/session resolution, with optional dynamic instructions. The

@@ -81,6 +81,8 @@ export interface ResolvePermissionEscalationArgs {
 }
 
 export interface ResolvedThreadRuntimeCommandConfig {
+  claudeCodeAutoCompactEnabled?: boolean;
+  claudeCodeAutoCompactWindow?: number;
   dynamicTools: DynamicTool[];
   injectedSkillSources: HostDaemonInjectedSkillSource[];
   instructionMode: InstructionMode;
@@ -314,6 +316,16 @@ export async function resolveThreadRuntimeCommandConfig(
     threadId: args.thread.id,
   });
   return {
+    ...(conditionalConfiguration.claudeCodeSessionConfiguration === null
+      ? {}
+      : {
+          claudeCodeAutoCompactEnabled:
+            conditionalConfiguration.claudeCodeSessionConfiguration
+              .autoCompactEnabled,
+          claudeCodeAutoCompactWindow:
+            conditionalConfiguration.claudeCodeSessionConfiguration
+              .autoCompactWindow,
+        }),
     dynamicTools,
     injectedSkillSources,
     instructionMode: "append",

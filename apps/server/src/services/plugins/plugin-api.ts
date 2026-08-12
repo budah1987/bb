@@ -18,6 +18,7 @@ import type {
   BbPluginApi,
   PluginAgentConfiguration,
   PluginAgentConfigurationContext,
+  PluginClaudeCodeSessionConfiguration,
   PluginAgentToolContext,
   PluginAgentToolExperimentalStatusLabels,
   PluginAgentToolResult,
@@ -69,6 +70,7 @@ export type {
   BbPluginApi,
   PluginAgentConfiguration,
   PluginAgentConfigurationContext,
+  PluginClaudeCodeSessionConfiguration,
   PluginAgentToolContentPart,
   PluginAgentToolContext,
   PluginAgentToolExperimentalStatusLabels,
@@ -421,6 +423,8 @@ export interface PluginApiHandle {
   agentTools: PluginAgentToolRecord[];
   /** Per-resolution selector from `bb.agents.configure` (at most one). */
   agentConfigurationProvider: PluginAgentConfigurationProvider | null;
+  /** Claude Code session flags from the experimental provider. */
+  claudeCodeSessionConfigurationProvider: PluginClaudeCodeSessionConfigurationProvider | null;
   /**
    * Dynamic thread-instructions provider from
    * `bb.agents.contributeInstructions` (at most one; null when none).
@@ -451,6 +455,11 @@ export type PluginInstructionProvider = (ctx: {
 export type PluginAgentConfigurationProvider = (
   context: PluginAgentConfigurationContext,
 ) => PluginAgentConfiguration;
+
+/** Provider registered by `bb.agents.experimental_configureClaudeCodeSession`. */
+export type PluginClaudeCodeSessionConfigurationProvider = (
+  context: PluginAgentConfigurationContext,
+) => PluginClaudeCodeSessionConfiguration | null;
 
 /** Duck-typed zod detection: plugin sources may carry their own zod copy,
  * so instanceof is useless — anything with safeParse is treated as zod. */
@@ -950,8 +959,24 @@ export function createPluginApi(options: {
   const agentTools: PluginAgentToolRecord[] = [];
   let agentConfigurationProvider: PluginAgentConfigurationProvider | null =
     null;
+  let claudeCodeSessionConfigurationProvider: PluginClaudeCodeSessionConfigurationProvider | null =
+    null;
   let instructionProvider: PluginInstructionProvider | null = null;
   const agents: PluginAgents = {
+    experimental_configureClaudeCodeSession(provider) {
+      assertLive();
+      if (claudeCodeSessionConfigurationProvider !== null) {
+        throw new Error(
+          "Claude Code session configuration is already registered",
+        );
+      }
+      if (typeof provider !== "function") {
+        throw new Error(
+          "experimental_configureClaudeCodeSession requires a provider function",
+        );
+      }
+      claudeCodeSessionConfigurationProvider = provider;
+    },
     configure(provider) {
       assertLive();
       if (agentConfigurationProvider !== null) {
@@ -1351,6 +1376,9 @@ export function createPluginApi(options: {
     agentTools,
     get agentConfigurationProvider() {
       return agentConfigurationProvider;
+    },
+    get claudeCodeSessionConfigurationProvider() {
+      return claudeCodeSessionConfigurationProvider;
     },
     get instructionProvider() {
       return instructionProvider;

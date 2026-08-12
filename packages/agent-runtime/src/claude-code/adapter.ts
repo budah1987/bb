@@ -1134,6 +1134,8 @@ export function createClaudeCodeProviderAdapter(
                 : {}),
               workflowsEnabled: command.options.workflowsEnabled,
               memoryEnabled: command.options.memoryEnabled,
+              autoCompactEnabled: command.options.claudeCodeAutoCompactEnabled,
+              autoCompactWindow: command.options.claudeCodeAutoCompactWindow,
               ...(dynamicTools && dynamicTools.length > 0
                 ? { dynamicTools }
                 : {}),
@@ -1204,6 +1206,8 @@ export function createClaudeCodeProviderAdapter(
                 : {}),
               workflowsEnabled: command.options.workflowsEnabled,
               memoryEnabled: command.options.memoryEnabled,
+              autoCompactEnabled: command.options.claudeCodeAutoCompactEnabled,
+              autoCompactWindow: command.options.claudeCodeAutoCompactWindow,
               ...(dynamicTools && dynamicTools.length > 0
                 ? { dynamicTools }
                 : {}),
@@ -1324,6 +1328,8 @@ export function createClaudeCodeProviderAdapter(
                 : {}),
               workflowsEnabled: command.options.workflowsEnabled,
               memoryEnabled: command.options.memoryEnabled,
+              autoCompactEnabled: command.options.claudeCodeAutoCompactEnabled,
+              autoCompactWindow: command.options.claudeCodeAutoCompactWindow,
               ...(dynamicTools && dynamicTools.length > 0
                 ? { dynamicTools }
                 : {}),

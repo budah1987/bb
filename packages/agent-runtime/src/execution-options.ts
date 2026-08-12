@@ -73,6 +73,10 @@ export function sameExecutionSettings(
     args.left.reasoningLevel === args.right.reasoningLevel &&
     args.left.workflowsEnabled === args.right.workflowsEnabled &&
     args.left.memoryEnabled === args.right.memoryEnabled &&
+    args.left.claudeCodeAutoCompactEnabled ===
+      args.right.claudeCodeAutoCompactEnabled &&
+    args.left.claudeCodeAutoCompactWindow ===
+      args.right.claudeCodeAutoCompactWindow &&
     args.left.providerSubagentsEnabled ===
       args.right.providerSubagentsEnabled &&
     args.left.claudeCodePermissionMode ===
@@ -102,6 +106,8 @@ export function toProviderExecutionContext(
       DEFAULT_CLAUDE_CODE_MOCK_CLI_TRAFFIC_CONFIG,
     workflowsEnabled: args.execOpts.workflowsEnabled,
     memoryEnabled: args.execOpts.memoryEnabled,
+    claudeCodeAutoCompactEnabled: args.execOpts.claudeCodeAutoCompactEnabled,
+    claudeCodeAutoCompactWindow: args.execOpts.claudeCodeAutoCompactWindow,
     providerSubagentsEnabled: args.execOpts.providerSubagentsEnabled,
     ...permissionPolicy,
     instructions: args.instructions,

@@ -80,6 +80,12 @@ export const BUILTIN_PLUGINS = [
     category: "Interface",
   },
   {
+    name: "claude-auto-compact",
+    pluginId: "claude-auto-compact",
+    defaultEnabled: true,
+    category: "Agent interaction",
+  },
+  {
     name: "custom-instructions",
     pluginId: "custom-instructions",
     defaultEnabled: true,
