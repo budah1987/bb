@@ -12,6 +12,7 @@ import { defineRpcContract, type BbPluginApi } from "@bb/plugin-sdk";
 import { z } from "zod";
 
 const SYNC_INTERVAL_MS = 5 * 60_000;
+const STARTUP_SYNC_DELAY_MS = 30_000;
 const ISSUE_PAGE = 100;
 const CLOSED_ISSUE_PAGE = 50;
 const PR_PAGE = 50;
@@ -390,6 +391,34 @@ export function validateGithubCliArgs(argv: string[]): string | null {
   return null;
 }
 
+function waitForSyncDelay(signal: AbortSignal, delayMs: number): Promise<void> {
+  return new Promise<void>((resolve) => {
+    const finish = () => {
+      clearTimeout(timer);
+      signal.removeEventListener("abort", finish);
+      resolve();
+    };
+    const timer = setTimeout(finish, delayMs);
+    signal.addEventListener("abort", finish, { once: true });
+  });
+}
+
+export async function runGithubSyncService(args: {
+  signal: AbortSignal;
+  sync: () => Promise<unknown>;
+  startupDelayMs?: number;
+  intervalMs?: number;
+}): Promise<void> {
+  const startupDelayMs = args.startupDelayMs ?? STARTUP_SYNC_DELAY_MS;
+  const intervalMs = args.intervalMs ?? SYNC_INTERVAL_MS;
+  if (args.signal.aborted) return;
+  await waitForSyncDelay(args.signal, startupDelayMs);
+  while (!args.signal.aborted) {
+    await args.sync();
+    await waitForSyncDelay(args.signal, intervalMs);
+  }
+}
+
 function toItems(raw: string, repo: string, kind: "issue" | "pr"): CachedItem[] {
   const entries = JSON.parse(raw) as GhListEntry[];
   return entries
@@ -725,25 +754,24 @@ export default async function plugin(bb: BbPluginApi) {
     return { repos: repos.length, items: total };
   }
 
-  // Initial sync + 5-minute refresh loop. NeedsConfigurationError from a
-  // missing/unauthenticated gh flips the plugin to needs-configuration
-  // instead of crash-looping.
+  let syncInFlight: Promise<{ repos: number; items: number }> | null = null;
+  function requestSync(force = false): Promise<{ repos: number; items: number }> {
+    if (syncInFlight !== null) return syncInFlight;
+    const request = syncAll(force).finally(() => {
+      if (syncInFlight === request) syncInFlight = null;
+    });
+    syncInFlight = request;
+    return request;
+  }
+
+  // Serve the persisted cache during startup. Defer network and `gh` process
+  // work until after the app's critical startup window, then refresh normally.
   bb.background.service("sync", {
     async start(signal) {
-      while (!signal.aborted) {
-        await syncAll();
-        await new Promise<void>((resolve) => {
-          const timer = setTimeout(resolve, SYNC_INTERVAL_MS);
-          signal.addEventListener(
-            "abort",
-            () => {
-              clearTimeout(timer);
-              resolve();
-            },
-            { once: true },
-          );
-        });
-      }
+      await runGithubSyncService({
+        signal,
+        sync: () => requestSync(),
+      });
     },
   });
 
@@ -923,7 +951,7 @@ export default async function plugin(bb: BbPluginApi) {
 
     /** () → force a full sync now. */
     async refresh() {
-      return await syncAll(true);
+      return await requestSync(true);
     },
 
     /** { kind?, repo?, query?, state?, mine? } → cached items, newest first. */
@@ -1467,7 +1495,7 @@ export default async function plugin(bb: BbPluginApi) {
           };
         }
         if (sub === "sync") {
-          const { repos, items } = await syncAll(true);
+          const { repos, items } = await requestSync(true);
           return { exitCode: 0, stdout: `Synced ${items} item(s) across ${repos} repo(s).` };
         }
         return { exitCode: 1, stderr: `Unknown subcommand "${sub}".\n${USAGE}` };

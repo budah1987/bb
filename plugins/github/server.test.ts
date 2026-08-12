@@ -1,4 +1,4 @@
-import { describe, expect, expectTypeOf, it } from "vitest";
+import { describe, expect, expectTypeOf, it, vi } from "vitest";
 import { defineRpcContract } from "@bb/plugin-sdk";
 import type { PluginRpcClient, PluginRpcHandlers } from "@bb/plugin-sdk";
 import { createFakePluginHost } from "@bb/plugin-sdk/testing";
@@ -6,6 +6,7 @@ import {
   fetchRepoItems,
   githubRpcContract,
   parsePaginatedGhApi,
+  runGithubSyncService,
   validateGithubCliArgs,
 } from "./server";
 
@@ -139,6 +140,30 @@ describe("GitHub RPC contract", () => {
     expect(validateGithubCliArgs(["repos", "--json"])).toContain(
       "does not accept arguments",
     );
+  });
+
+  it("defers the first background sync and stops cleanly", async () => {
+    vi.useFakeTimers();
+    try {
+      const controller = new AbortController();
+      const sync = vi.fn(async () => undefined);
+      const service = runGithubSyncService({
+        signal: controller.signal,
+        sync,
+        startupDelayMs: 30_000,
+        intervalMs: 300_000,
+      });
+
+      await vi.advanceTimersByTimeAsync(29_999);
+      expect(sync).not.toHaveBeenCalled();
+      await vi.advanceTimersByTimeAsync(1);
+      expect(sync).toHaveBeenCalledTimes(1);
+
+      controller.abort();
+      await service;
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("infers parsed handler inputs and frontend results", () => {
