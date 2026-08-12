@@ -23,6 +23,7 @@ import { threadDisplayTitle } from "./projection";
 export function ConversationActionMenu({
   thread,
   children,
+  onContinueInNewTab,
   onRename,
   onSetRead,
   onArchive,
@@ -30,6 +31,7 @@ export function ConversationActionMenu({
 }: {
   thread: PluginSidebarThread;
   children: ReactNode;
+  onContinueInNewTab?: () => void;
   onRename: () => void;
   onSetRead: (read: boolean) => void;
   onArchive: () => void;
@@ -41,6 +43,15 @@ export function ConversationActionMenu({
     <ContextMenu>
       <ContextMenuTrigger asChild>{children}</ContextMenuTrigger>
       <ContextMenuContent aria-label={`${title} actions`}>
+        {onContinueInNewTab ? (
+          <>
+            <ContextMenuItem onSelect={onContinueInNewTab}>
+              <Icon name="Fork" aria-hidden />
+              Continue in new tab
+            </ContextMenuItem>
+            <ContextMenuSeparator />
+          </>
+        ) : null}
         <ContextMenuItem onSelect={() => onSetRead(!isExplicitlyRead)}>
           <Icon name={isExplicitlyRead ? "Mail" : "MailOpen"} aria-hidden />
           {isExplicitlyRead ? "Mark as unread" : "Mark as read"}

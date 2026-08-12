@@ -1202,6 +1202,15 @@ export function renderSlot<
         ...(newThreadOptions ? { options: { ...newThreadOptions } } : {}),
       });
     },
+    experimental_canOpenForkDraft() {
+      return true;
+    },
+    async experimental_openForkDraft(threadId) {
+      sidebarActionCalls.push({
+        method: "experimental_openForkDraft",
+        threadId,
+      });
+    },
     async setPinned(threadId, pinned) {
       sidebarActionCalls.push({ method: "setPinned", threadId, pinned });
     },

@@ -289,7 +289,12 @@ reimplementing it, and `indicatorLabel` carries the matching accessible string.
    copy, whether the workspace-scoped draft should remain isolated from the
    ordinary root composer, and whether this should become a purpose-built host
    creation dialog.
-10. **`experimental_useSidebarThreadSplit`.** Gives a custom row the built-in
+10. **Temporary fork drafts.** `experimental_canOpenForkDraft` exposes the
+    host's provider and environment check. `experimental_openForkDraft` opens
+    the existing lazy fork composer, so closing it before the first message
+    creates no thread. Audit whether these methods belong on sidebar actions,
+    and whether availability should become a field on `PluginSidebarThread`.
+11. **`experimental_useSidebarThreadSplit`.** Gives a custom row the built-in
     drag-to-split gesture: spread `splitProps` onto the row, gate any affordance
     on `isAvailable`, and read `layout` to paint where the thread already sits.
     The host owns every rule — the drag engages only after the pointer leaves the

@@ -579,6 +579,18 @@ export interface PluginSidebarThreadActions {
     /** Open bb's GitHub branch / pull-request workflow chooser. */
     experimental_startGithubWorkflow?: boolean;
   }): void;
+  /**
+   * Whether this thread can open as a temporary fork draft. The host checks
+   * the source environment and provider capability. Experimental: see
+   * docs/api_to_audit.md.
+   */
+  experimental_canOpenForkDraft(threadId: string): boolean;
+  /**
+   * Open a temporary fork draft from the complete source conversation. The
+   * host creates the fork only after the user sends its first message.
+   * Experimental: see docs/api_to_audit.md.
+   */
+  experimental_openForkDraft(threadId: string): Promise<void>;
   setPinned(threadId: string, pinned: boolean): Promise<void>;
   setRead(threadId: string, read: boolean): Promise<void>;
   /** Silent rename — no dialog. For inline editing in your own row. */

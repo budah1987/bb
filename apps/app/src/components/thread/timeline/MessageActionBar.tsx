@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { flushSync } from "react-dom";
+import { useAtomValue } from "jotai";
 import * as PopoverPrimitive from "@radix-ui/react-popover";
 import { CopyButton } from "../../ui/copy-button.js";
 import { Icon } from "@bb/shared-ui/icon";
@@ -24,6 +25,8 @@ import type { PromptDraftAttachment } from "@/lib/prompt-draft";
 import { usePortalScopeProps } from "@/lib/portal-scope";
 import { PluginIcon, pluginIconName } from "@/components/plugin/PluginIcon";
 import type { ThreadTimelinePluginMessageAction } from "./types.js";
+import { CONDUCTOR_THREAD_LIST_PROVIDER_KEY } from "@/components/conductor/conductorThreadListProvider";
+import { threadListProviderAtom } from "@/components/sidebar/threadListProvider";
 
 /** Plugin-action icon: branding icon when the plugin is known, hint otherwise. */
 function PluginActionIcon({
@@ -215,6 +218,11 @@ export function MessageActionBar({
   disabled,
   pluginActions = [],
 }: MessageActionBarProps) {
+  const threadListProvider = useAtomValue(threadListProviderAtom);
+  const forkActionLabel =
+    threadListProvider === CONDUCTOR_THREAD_LIST_PROVIDER_KEY
+      ? "Continue in new tab"
+      : "Fork into new thread";
   const isCompactViewport = useIsCompactViewport();
   const isPointerCoarse = usePointerCoarse();
   const hasCopy = messageText.length > 0;
@@ -276,7 +284,7 @@ export function MessageActionBar({
       ? [
           {
             icon: "Fork" as const,
-            label: "Fork into new thread",
+            label: forkActionLabel,
             onSelect: onFork,
             disabled,
           },
@@ -389,7 +397,7 @@ export function MessageActionBar({
                 )}
                 onClick={onFork}
                 disabled={disabled}
-                aria-label="Fork into new thread"
+                aria-label={forkActionLabel}
               >
                 <Icon name="Fork" className="size-3" />
               </button>
@@ -398,7 +406,7 @@ export function MessageActionBar({
               side={ACTION_TOOLTIP_SIDE}
               collisionBoundary={collisionBoundary}
             >
-              Fork into new thread
+              {forkActionLabel}
             </TooltipContent>
           </Tooltip>
         ) : null}

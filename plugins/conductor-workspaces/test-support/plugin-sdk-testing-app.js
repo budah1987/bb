@@ -1,4 +1,4 @@
-// src/testing/app.tsx
+// packages/plugin-sdk/src/testing/app.tsx
 import {
   createContext,
   useContext,
@@ -10,12 +10,12 @@ import {
 } from "react";
 import { act, render } from "@testing-library/react";
 
-// src/internal/composer-view.ts
+// packages/plugin-sdk/src/internal/composer-view.ts
 function isComposerDraftEmpty(text, attachmentCount) {
   return text.trim().length === 0 && attachmentCount === 0;
 }
 
-// src/internal/composer-customization-validation.ts
+// packages/plugin-sdk/src/internal/composer-customization-validation.ts
 var PLUGIN_SLOT_ID_PATTERN = /^[a-zA-Z0-9_-]+$/;
 var PLUGIN_MESSAGE_DIRECTIVE_ID_PATTERN = /^[a-z][a-z0-9]*(-[a-z0-9]+)*$/;
 function normalizePluginThreadRowStatus(value, onRejected) {
@@ -243,7 +243,7 @@ function collectComposerCustomization(registration, seenIds, onRejected) {
   }
 }
 
-// src/testing/app.tsx
+// packages/plugin-sdk/src/testing/app.tsx
 import { jsx, jsxs } from "react/jsx-runtime";
 function SlotLifecycleGuard({
   children,
@@ -966,6 +966,15 @@ function renderSlot(registration, props, options = {}) {
       sidebarActionCalls.push({
         method: "openNewThread",
         ...newThreadOptions ? { options: { ...newThreadOptions } } : {}
+      });
+    },
+    experimental_canOpenForkDraft() {
+      return true;
+    },
+    async experimental_openForkDraft(threadId2) {
+      sidebarActionCalls.push({
+        method: "experimental_openForkDraft",
+        threadId: threadId2
       });
     },
     async setPinned(threadId2, pinned) {

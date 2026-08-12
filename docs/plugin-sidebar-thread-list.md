@@ -241,6 +241,10 @@ interface PluginSidebarThreadActions {
       locked: boolean;
     };
   }): void;
+  /** True when the host can fork this thread into a temporary draft. */
+  experimental_canOpenForkDraft(threadId: string): boolean;
+  /** Open that draft. No thread exists until the first message is sent. */
+  experimental_openForkDraft(threadId: string): Promise<void>;
 
   setPinned(threadId: string, pinned: boolean): Promise<void>;
   setRead(threadId: string, read: boolean): Promise<void>;

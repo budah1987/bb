@@ -436,6 +436,13 @@ function ConductorWorkspaceContextBar({
           <ConversationActionMenu
             key={thread.id}
             thread={thread}
+            onContinueInNewTab={
+              actions.experimental_canOpenForkDraft(thread.id)
+                ? () => {
+                    void actions.experimental_openForkDraft(thread.id);
+                  }
+                : undefined
+            }
             onSetRead={(read) => {
               void actions.setRead(thread.id, read);
             }}
