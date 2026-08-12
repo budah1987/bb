@@ -8,13 +8,23 @@ import {
   waitFor,
   within,
 } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { getDefaultStore } from "jotai";
 import { COMPACT_VIEWPORT_QUERY } from "@bb/shared-ui/hooks/use-compact-viewport";
 import { POINTER_COARSE_QUERY } from "@bb/shared-ui/hooks/use-pointer-coarse";
 import {
   findMessageActionTooltipCollisionBoundary,
   MessageActionBar,
 } from "./MessageActionBar";
+import { CONDUCTOR_THREAD_LIST_PROVIDER_KEY } from "@/components/conductor/conductorThreadListProvider";
+import {
+  BUILT_IN_THREAD_LIST_PROVIDER,
+  threadListProviderAtom,
+} from "@/components/sidebar/threadListProvider";
+
+beforeEach(() => {
+  getDefaultStore().set(threadListProviderAtom, BUILT_IN_THREAD_LIST_PROVIDER);
+});
 
 afterEach(() => {
   cleanup();
@@ -35,6 +45,25 @@ function mockMobileCoarsePointer() {
 }
 
 describe("MessageActionBar", () => {
+  it("describes a fork as a new tab in the Conductor style", () => {
+    getDefaultStore().set(
+      threadListProviderAtom,
+      CONDUCTOR_THREAD_LIST_PROVIDER_KEY,
+    );
+    render(
+      <MessageActionBar
+        messageText="An answer."
+        alignment="start"
+        mobileActionDisplay="inline"
+        onFork={vi.fn()}
+      />,
+    );
+
+    expect(
+      screen.getByRole("button", { name: "Continue in new tab" }),
+    ).toBeDefined();
+  });
+
   it("uses the nearest thread window as the tooltip collision boundary", () => {
     const threadWindow = document.createElement("div");
     threadWindow.setAttribute("data-thread-window", "");

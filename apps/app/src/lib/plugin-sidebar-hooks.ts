@@ -1,6 +1,7 @@
 import { useCallback, useMemo } from "react";
 import { useStore } from "jotai";
 import { useNavigate } from "react-router-dom";
+import { useQueryClient } from "@tanstack/react-query";
 import { PERSONAL_PROJECT_ID, type ThreadListEntry } from "@bb/domain";
 import { useIsCompactViewport } from "@bb/shared-ui/hooks/use-compact-viewport";
 import type {
@@ -28,6 +29,14 @@ import {
   getThreadRoutePath,
 } from "./route-paths";
 import { resolvePluginWorkspaceDraftNavigationState } from "./plugin-new-thread-draft";
+import {
+  FORK_THREAD_CREATE_SEED_LOCATION_STATE_KEY,
+  isThreadForkable,
+  type ForkThreadCreateSeed,
+} from "./fork-thread-request";
+import { getThreadDisplayTitle } from "./thread-title";
+import { sdk } from "./sdk";
+import { threadDefaultExecutionOptionsQueryKey } from "@/hooks/queries/query-keys";
 
 const EMPTY_THREADS: readonly PluginSidebarThread[] = [];
 const EMPTY_PROJECTS: readonly PluginSidebarProject[] = [];
@@ -115,6 +124,7 @@ export function useSidebarThreadEntry(
  */
 export function useSidebarThreadActions(): PluginSidebarThreadActions {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const store = useStore();
   const isCompact = useIsCompactViewport();
   const threadSplitsEnabled = useThreadSplitsEnabled();
@@ -202,6 +212,44 @@ export function useSidebarThreadActions(): PluginSidebarThreadActions {
           state ? { state } : undefined,
         );
       },
+      experimental_canOpenForkDraft(threadId) {
+        return isThreadForkable(entriesById.get(threadId) ?? null);
+      },
+      async experimental_openForkDraft(threadId) {
+        const sourceThread = requireEntry(threadId);
+        if (!isThreadForkable(sourceThread)) return;
+        const executionOptions = await queryClient.fetchQuery({
+          queryKey: threadDefaultExecutionOptionsQueryKey(sourceThread.id),
+          queryFn: ({ signal }) =>
+            sdk.threads.defaultExecutionOptions({
+              signal,
+              threadId: sourceThread.id,
+            }),
+        });
+        if (executionOptions === null || sourceThread.environmentId === null) {
+          return;
+        }
+        const seed: ForkThreadCreateSeed = {
+          environmentId: sourceThread.environmentId,
+          model: executionOptions.model,
+          permissionMode: executionOptions.permissionMode,
+          projectId: sourceThread.projectId,
+          providerId: sourceThread.providerId,
+          reasoningLevel: executionOptions.reasoningLevel,
+          serviceTier: executionOptions.serviceTier,
+          sourceSeqEnd: undefined,
+          sourceThreadId: sourceThread.id,
+          sourceThreadTitle: getThreadDisplayTitle(sourceThread),
+        };
+        setRootComposeProjectId(sourceThread.projectId);
+        navigate(getRootComposeRoutePath(), {
+          state: {
+            focusPrompt: true,
+            reuseEnvironmentId: sourceThread.environmentId,
+            [FORK_THREAD_CREATE_SEED_LOCATION_STATE_KEY]: seed,
+          },
+        });
+      },
       async setPinned(threadId, pinned) {
         const entry = requireEntry(threadId);
         if ((entry.pinnedAt !== null) === pinned) return;
@@ -236,6 +284,7 @@ export function useSidebarThreadActions(): PluginSidebarThreadActions {
       hostActions,
       isCompact,
       navigate,
+      queryClient,
       requireEntry,
       setRootComposeProjectId,
       store,

@@ -1003,6 +1003,10 @@ const { pullRequest } = experimental_useSidebarThreadPullRequest(thread.id);
 
 actions.open(id, { split: true }); // bb's split placement rules
 actions.openNewThread({ projectId }); // also sets the composer's project
+if (actions.experimental_canOpenForkDraft(id)) {
+  // This stays lazy. The first send creates the fork.
+  await actions.experimental_openForkDraft(id);
+}
 actions.setPinned(id, true);
 actions.setRead(id, false);
 actions.rename(id, "New title"); // silent; for inline editing

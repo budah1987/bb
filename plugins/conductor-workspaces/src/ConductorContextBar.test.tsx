@@ -337,6 +337,43 @@ describe("ConductorContextBar compact layout", () => {
     });
   });
 
+  it("opens a complete conversation as a temporary fork tab", async () => {
+    const rendered = renderSlot(
+      contextBar,
+      {
+        threadId: "thread-2",
+        projectId: "project-1",
+        environmentId: "environment-1",
+        isCompactViewport: false,
+      },
+      {
+        sidebarThreads: {
+          status: "ready",
+          threads: [thread(1), thread(2)],
+          projects: [{ id: "project-1", name: "BB", isPersonal: false }],
+        },
+        rpc: {
+          readReconciliation: () => ({
+            legacyWorkspaces: [],
+            recordedSignature: null,
+          }),
+        },
+      },
+    );
+
+    fireEvent.contextMenu(
+      await screen.findByRole("button", { name: "Conversation 1" }),
+    );
+    fireEvent.click(
+      await screen.findByRole("menuitem", { name: "Continue in new tab" }),
+    );
+
+    expect(rendered.sidebarActionCalls).toContainEqual({
+      method: "experimental_openForkDraft",
+      threadId: "thread-1",
+    });
+  });
+
   it("opens tab actions on a mobile long press", async () => {
     vi.useFakeTimers();
     const rendered = renderSlot(
