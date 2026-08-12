@@ -628,6 +628,7 @@ describe("public terminal contracts", () => {
         hostId: "host_1",
         title: "Terminal 1",
         launchCommand: null,
+        devServerPort: null,
         restartPolicy: "never",
         initialCwd: "/tmp/workspace",
         cols: 80,
