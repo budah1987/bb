@@ -10,12 +10,12 @@ import {
   decideWorkspaceSwipe,
   describeWorkspacePosition,
   hasWorkspaceSwipeIntent,
-  isWorkspaceSwipeTextEditingTarget,
   readReleaseVelocity,
   readWorkspaceSwipeDirection,
   resolveWorkspaceSwipePaneId,
   resolveWorkspaceSwipeTarget,
   shouldIgnoreWorkspaceSwipeTarget,
+  WORKSPACE_SWIPE_COMMAND_CENTER_RATIO,
   WORKSPACE_SWIPE_SETTLE_EASING,
   WORKSPACE_SWIPE_SETTLE_MS,
   type WorkspaceSwipeDirection,
@@ -26,7 +26,12 @@ const CONVERSATION_SWIPE_COMMIT_RATIO = 0.18;
 const CONVERSATION_SWIPE_MIN_COMMIT_PX = 52;
 const CONVERSATION_SWIPE_MAX_COMMIT_PX = 72;
 const CONVERSATION_SWIPE_MAX_SHORT_TRAVEL_PX = 44;
-const LONG_WORKSPACE_SWIPE_RATIO = 0.68;
+// Must track the real commit ratio (both long destinations share one value),
+// or the surface would visually "arrive" before or after the point release
+// actually commits it. Imported rather than a second hardcoded literal — two
+// independent copies of this number is what let the ratio drift out of
+// physical reach unnoticed last time.
+const LONG_WORKSPACE_SWIPE_RATIO = WORKSPACE_SWIPE_COMMAND_CENTER_RATIO;
 const CONDUCTOR_CONVERSATION_CYCLE_EVENT =
   "bb:conductor-compact-conversation-cycle";
 const CONDUCTOR_CONVERSATION_AVAILABLE_EVENT =
@@ -259,7 +264,6 @@ export function CompactWorkspaceSwipeHost({
       ? previewState.preview
       : null;
   const [announcement, setAnnouncement] = useState("");
-  const [isTextEditing, setIsTextEditing] = useState(false);
   const contentKeyRef = useRef(contentKey);
   useEffect(() => {
     contentKeyRef.current = contentKey;
@@ -506,7 +510,7 @@ export function CompactWorkspaceSwipeHost({
       window.removeEventListener("pointermove", onMove);
       window.removeEventListener("pointerup", onPointerUp);
       window.removeEventListener("pointercancel", onPointerAbort);
-      window.removeEventListener("lostpointercapture", onPointerAbort);
+      window.removeEventListener("lostpointercapture", onCaptureLost);
       window.removeEventListener("resize", onEnvironmentChange);
       window.removeEventListener("orientationchange", onEnvironmentChange);
       pointerMoveRef.current = null;
@@ -637,7 +641,12 @@ export function CompactWorkspaceSwipeHost({
         finish(false);
       }
     };
-    const onEnvironmentChange = () => finish(false);
+    const onCaptureLost = () => {
+      // Pointer capture loss does not cancel the active touch session.
+    };
+    const onEnvironmentChange = () => {
+      finish(false);
+    };
 
     teardownRef.current = teardown;
     pointerMoveRef.current = onMove;
@@ -646,7 +655,7 @@ export function CompactWorkspaceSwipeHost({
     window.addEventListener("pointermove", onMove, { passive: false });
     window.addEventListener("pointerup", onPointerUp);
     window.addEventListener("pointercancel", onPointerAbort);
-    window.addEventListener("lostpointercapture", onPointerAbort);
+    window.addEventListener("lostpointercapture", onCaptureLost);
     window.addEventListener("resize", onEnvironmentChange);
     window.addEventListener("orientationchange", onEnvironmentChange);
   };
@@ -655,29 +664,14 @@ export function CompactWorkspaceSwipeHost({
     <div
       ref={hostRef}
       data-workspace-swipe-host=""
-      data-workspace-swipe-text-editing={isTextEditing ? "" : undefined}
       onPointerDown={handlePointerDown}
       onPointerMove={(event) => pointerMoveRef.current?.(event.nativeEvent)}
       onPointerUp={(event) => pointerUpRef.current?.(event.nativeEvent)}
       onPointerCancel={(event) => pointerAbortRef.current?.(event.nativeEvent)}
-      onLostPointerCapture={(event) =>
-        pointerAbortRef.current?.(event.nativeEvent)
-      }
-      onFocusCapture={(event) => {
-        if (isWorkspaceSwipeTextEditingTarget(event.target)) {
-          setIsTextEditing(true);
-        }
-      }}
-      onBlurCapture={(event) => {
-        if (!isWorkspaceSwipeTextEditingTarget(event.target)) return;
-        setIsTextEditing(
-          isWorkspaceSwipeTextEditingTarget(event.relatedTarget),
-        );
-      }}
-      // iOS's held-Space keyboard trackpad needs native horizontal selection
-      // handling. Yield that axis while an editor is focused; editable pointer
-      // starts are already excluded from workspace swipes above.
-      style={{ touchAction: isTextEditing ? "auto" : "pan-y" }}
+      // Keep ownership of the horizontal axis when the composer has focus.
+      // Editable pointer starts are excluded in handlePointerDown, while a
+      // transcript swipe must not let iOS cancel the active pointer stream.
+      style={{ touchAction: "pan-y" }}
       // Cancels the app layout's page padding so the surface travels to the
       // real screen edges; each layer re-applies it (see SWIPE_LAYER_CLASS).
       className="relative -m-4 flex min-h-0 min-w-0 flex-1 overflow-hidden md:-m-5"
