@@ -308,7 +308,7 @@ describe("consumer-specific config", () => {
     expect(serverConfig.OPENAI_API_KEY).toBe("test-openai-key");
     expect(serverConfig.featureFlags).toEqual({
       placeholder: false,
-      timelineWindowEventBudget: 1_500,
+      timelineWindowEventBudget: 850,
     });
   });
 

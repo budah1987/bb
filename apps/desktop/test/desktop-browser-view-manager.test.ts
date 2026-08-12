@@ -838,6 +838,38 @@ describe("DesktopBrowserViewManager", () => {
     ).toBe(false);
   });
 
+  it("keeps the live page when an existing browser view reattaches", () => {
+    const manager = createDesktopBrowserViewManager({
+      partition: "persist:test",
+    });
+    const hostWindow = new FakeHostWindow({
+      contentBounds: { width: 700, height: 450 },
+      webContentsId: 54,
+    });
+
+    attachBrowserTab({
+      manager,
+      hostWindow,
+      tabId: "browser:a",
+      url: "https://example.com/start",
+    });
+    const view = requireFakeView(0);
+    view.webContents.emitDidNavigate("https://example.com/live");
+
+    attachBrowserTab({
+      manager,
+      hostWindow,
+      tabId: "browser:a",
+      url: "https://example.com/start",
+    });
+
+    expect(electronMock.fakeViews).toHaveLength(1);
+    expect(view.webContents.getURL()).toBe("https://example.com/live");
+    expect(view.webContents.loadURLCalls).toEqual([
+      "https://example.com/start",
+    ]);
+  });
+
   it("blocks local main-frame form posts while allowing local get navigations", () => {
     const manager = createDesktopBrowserViewManager({
       partition: "persist:test",

@@ -604,6 +604,98 @@ describe("public thread default routes", () => {
     });
   });
 
+  it("limits each sidebar project's initial thread page", async () => {
+    await withTestHarness(async (harness) => {
+      const { host } = seedHostSession(harness.deps);
+      const { project } = seedProjectWithSource(harness.deps, {
+        hostId: host.id,
+        path: "/tmp/sidebar-thread-page",
+      });
+      for (let index = 0; index < 3; index += 1) {
+        seedThread(harness.deps, {
+          projectId: project.id,
+          title: `Thread ${index}`,
+        });
+      }
+
+      const response = await harness.app.request(
+        "/api/v1/sidebar-bootstrap?threadLimit=2",
+      );
+
+      expect(response.status).toBe(200);
+      const bootstrap = sidebarBootstrapResponseSchema.parse(
+        await readJson(response),
+      );
+      expect(
+        bootstrap.projects.find((candidate) => candidate.id === project.id)
+          ?.threads,
+      ).toHaveLength(2);
+    });
+  });
+
+  it("keeps a large initial sidebar payload below half of the complete payload", async () => {
+    await withTestHarness(async (harness) => {
+      const { host } = seedHostSession(harness.deps);
+      const { project } = seedProjectWithSource(harness.deps, {
+        hostId: host.id,
+        path: "/tmp/sidebar-thread-payload",
+      });
+      for (let index = 0; index < 120; index += 1) {
+        seedThread(harness.deps, {
+          projectId: project.id,
+          title: `Payload thread ${index}`,
+        });
+      }
+
+      const [completeResponse, initialResponse] = await Promise.all([
+        harness.app.request("/api/v1/sidebar-bootstrap"),
+        harness.app.request("/api/v1/sidebar-bootstrap?threadLimit=50"),
+      ]);
+      const completeJson = await completeResponse.text();
+      const initialJson = await initialResponse.text();
+
+      expect(initialJson.length).toBeLessThan(completeJson.length * 0.5);
+    });
+  });
+
+  it("keeps priority threads and their ancestors in the initial page", async () => {
+    await withTestHarness(async (harness) => {
+      const { host } = seedHostSession(harness.deps);
+      const { project } = seedProjectWithSource(harness.deps, {
+        hostId: host.id,
+        path: "/tmp/sidebar-priority-thread-page",
+      });
+      const parent = seedThread(harness.deps, {
+        projectId: project.id,
+        title: "Priority parent",
+      });
+      const activeChild = seedThread(harness.deps, {
+        parentThreadId: parent.id,
+        projectId: project.id,
+        status: "active",
+        title: "Priority child",
+      });
+      seedThread(harness.deps, {
+        projectId: project.id,
+        title: "Other thread",
+      });
+
+      const response = await harness.app.request(
+        "/api/v1/sidebar-bootstrap?threadLimit=1",
+      );
+
+      expect(response.status).toBe(200);
+      const bootstrap = sidebarBootstrapResponseSchema.parse(
+        await readJson(response),
+      );
+      const threadIds = bootstrap.projects
+        .find((candidate) => candidate.id === project.id)
+        ?.threads.map((thread) => thread.id);
+      expect(threadIds).toContain(activeChild.id);
+      expect(threadIds).toContain(parent.id);
+    });
+  });
+
   it("excludes side-chat threads from sidebar bootstrap", async () => {
     await withTestHarness(async (harness) => {
       const { host } = seedHostSession(harness.deps);

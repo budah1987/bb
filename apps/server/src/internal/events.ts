@@ -169,6 +169,7 @@ interface ActivePruneCandidate {
 
 interface ResolveActivePruneCandidatesArgs {
   acceptedEvents: AcceptedDaemonEvent[];
+  acceptedInputIndexes: number[];
   events: HostDaemonEventEnvelope[];
   insertedEventIndexes: number[];
 }
@@ -268,6 +269,7 @@ function toStoredEvent(args: ToStoredEventArgs): AppendDaemonEventInput {
   const envelope = args.envelope;
   const { scope, type, threadId, ...data } = envelope.event;
   return {
+    daemonEventId: envelope.eventId,
     threadId: envelope.threadId,
     environmentId: args.environmentId,
     ...resolveProviderIdentifiers(envelope.event),
@@ -772,12 +774,14 @@ function resolveActivePruneCandidates(
   args: ResolveActivePruneCandidatesArgs,
 ): ActivePruneCandidate[] {
   const latestPrunableSequenceByThreadId = new Map<string, number>();
+  const insertedEventIndexLookup = new Set(args.insertedEventIndexes);
 
   for (const [acceptedIndex, acceptedEvent] of args.acceptedEvents.entries()) {
-    const inputIndex = args.insertedEventIndexes[acceptedIndex];
+    const inputIndex = args.acceptedInputIndexes[acceptedIndex];
     if (inputIndex === undefined) {
-      throw new Error("Missing inserted event index for accepted daemon event");
+      throw new Error("Missing input index for accepted daemon event");
     }
+    if (!insertedEventIndexLookup.has(inputIndex)) continue;
     const entry = args.events[inputIndex];
     if (entry === undefined) {
       throw new Error("Missing daemon event for inserted event index");
@@ -975,6 +979,7 @@ export function registerInternalEventRoutes(app: Hono, deps: AppDeps): void {
       );
       for (const candidate of resolveActivePruneCandidates({
         acceptedEvents: appendResult.acceptedEvents,
+        acceptedInputIndexes: appendResult.acceptedInputIndexes,
         events: postableEvents,
         insertedEventIndexes: appendResult.insertedInputIndexes,
       })) {
@@ -985,10 +990,10 @@ export function registerInternalEventRoutes(app: Hono, deps: AppDeps): void {
       return context.json({
         acceptedEvents: appendResult.acceptedEvents.map(
           (acceptedEvent, acceptedIndex) => {
-            const inputIndex = appendResult.insertedInputIndexes[acceptedIndex];
+            const inputIndex = appendResult.acceptedInputIndexes[acceptedIndex];
             if (inputIndex === undefined) {
               throw new Error(
-                "Missing inserted event index for accepted daemon event",
+                "Missing input index for accepted daemon event",
               );
             }
             const entry = entries[inputIndex];

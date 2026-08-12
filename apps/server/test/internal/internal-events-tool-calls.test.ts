@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { once } from "node:events";
 import { setTimeout as sleep } from "node:timers/promises";
 import { eq } from "drizzle-orm";
@@ -13,6 +14,7 @@ import {
 import { threadScope, turnScope, type ToolCallResponse } from "@bb/domain";
 import {
   groupHostDaemonEvents,
+  hostDaemonEventBatchResponseSchema,
   type HostDaemonEventEnvelope,
 } from "@bb/host-daemon-contract";
 import { describe, expect, it, vi } from "vitest";
@@ -38,7 +40,9 @@ import { setPluginAgentContributions } from "../../src/services/plugins/plugin-a
 import type { PluginAgentToolRecord } from "../../src/services/plugins/plugin-api.js";
 
 async function postEventBatch(args: {
-  events: HostDaemonEventEnvelope[];
+  events: Array<
+    Omit<HostDaemonEventEnvelope, "eventId"> & { eventId?: string }
+  >;
   harness: TestAppHarness;
   sessionId: string;
 }): Promise<Response> {
@@ -47,7 +51,12 @@ async function postEventBatch(args: {
     headers: internalAuthHeaders(args.harness),
     body: JSON.stringify({
       sessionId: args.sessionId,
-      eventGroups: groupHostDaemonEvents(args.events),
+      eventGroups: groupHostDaemonEvents(
+        args.events.map((event) => ({
+          ...event,
+          eventId: event.eventId ?? randomUUID(),
+        })),
+      ),
     }),
   });
 }
@@ -956,7 +965,7 @@ describe("internal event and tool-call routes", () => {
     });
   });
 
-  it("keeps a thread idle when a started/completed batch is posted again", async () => {
+  it("deduplicates a replayed started/completed batch", async () => {
     await withTestHarness(async (harness) => {
       const { session } = seedHostSession(harness.deps);
       const { project } = seedProjectWithSource(harness.deps, {
@@ -973,6 +982,7 @@ describe("internal event and tool-call routes", () => {
       });
       const eventBatch: HostDaemonEventEnvelope[] = [
         {
+          eventId: randomUUID(),
           threadId: thread.id,
           event: {
             type: "turn/started",
@@ -982,6 +992,7 @@ describe("internal event and tool-call routes", () => {
           },
         },
         {
+          eventId: randomUUID(),
           threadId: thread.id,
           event: {
             type: "turn/completed",
@@ -999,12 +1010,19 @@ describe("internal event and tool-call routes", () => {
         events: eventBatch,
       });
       expect(firstResponse.status).toBe(200);
+      const firstBody = hostDaemonEventBatchResponseSchema.parse(
+        await firstResponse.json(),
+      );
       const duplicateResponse = await postEventBatch({
         harness,
         sessionId: session.id,
         events: eventBatch,
       });
       expect(duplicateResponse.status).toBe(200);
+      const duplicateBody = hostDaemonEventBatchResponseSchema.parse(
+        await duplicateResponse.json(),
+      );
+      expect(duplicateBody.acceptedEvents).toEqual(firstBody.acceptedEvents);
 
       expect(
         harness.db.select().from(threads).where(eq(threads.id, thread.id)).get()
@@ -1016,7 +1034,7 @@ describe("internal event and tool-call routes", () => {
           .from(events)
           .where(eq(events.threadId, thread.id))
           .all(),
-      ).toHaveLength(4);
+      ).toHaveLength(2);
     });
   });
 

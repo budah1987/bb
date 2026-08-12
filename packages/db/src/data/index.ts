@@ -129,6 +129,7 @@ export {
   listThreads,
   listThreadsWithPendingInteractionState,
   listThreadsWithPendingInteractionStateForProjects,
+  listInitialSidebarThreadsWithPendingInteractionStateForProjects,
   pinThread,
   reorderPinnedThread,
   updateThread,

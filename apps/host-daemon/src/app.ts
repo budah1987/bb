@@ -1,3 +1,4 @@
+import path from "node:path";
 import { CommandRouter } from "./command-router.js";
 import { createDaemon, type HostDaemon } from "./daemon.js";
 import {
@@ -5,6 +6,7 @@ import {
   EventSinkDisposedError,
   type EventSink,
 } from "./event-sink.js";
+import { SqliteEventSinkStorage } from "./event-sink-storage.js";
 import {
   InteractiveRequestRegistry,
   InteractiveRequestRegistryError,
@@ -407,6 +409,9 @@ export async function createHostDaemonApp(
   eventSink = createEventSink({
     isSessionOpen: () => sessionState.value !== null,
     logger: options.logger,
+    storage: new SqliteEventSinkStorage(
+      path.join(options.dataDir, "host-event-outbox.db"),
+    ),
     postEvents: (events) =>
       runSessionRequest({
         source: "postEvents",
@@ -878,6 +883,7 @@ export async function createHostDaemonApp(
   });
   const hostDaemonHealthMonitor = startHostDaemonHealthMonitor({
     logger: options.logger,
+    getEventQueueStats: () => eventSink.stats(),
     getWatchCounts: () => ({
       workspaceWatches: watchManager.workspaceWatchCount(),
       threadStorageTargets: watchManager.threadStorageWatchTargetCount(),

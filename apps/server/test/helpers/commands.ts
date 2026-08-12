@@ -1,5 +1,5 @@
 import { setTimeout as sleep } from "node:timers/promises";
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { isUtf8 } from "node:buffer";
 import { lstatSync, readFileSync, readdirSync } from "node:fs";
 import path from "node:path";
@@ -295,6 +295,7 @@ export function createTestDaemonEventEnvelope(
   args: CreateTestDaemonEventEnvelopeArgs,
 ): HostDaemonEventEnvelope {
   return {
+    eventId: randomUUID(),
     threadId: args.threadId ?? args.event.threadId,
     event: args.event,
   };

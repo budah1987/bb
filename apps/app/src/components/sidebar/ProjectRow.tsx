@@ -1,7 +1,9 @@
 import {
   memo,
   useCallback,
+  useEffect,
   useMemo,
+  useRef,
   useState,
   type CSSProperties,
   type MouseEventHandler,
@@ -150,6 +152,7 @@ import { SectionThreadDndProvider } from "./SectionThreadDndContext";
 // worktree group headers); rows deeper than the cap render non-sticky so a deep
 // chain can't pin more ancestors than a short viewport can hold.
 const SIDEBAR_STICKY_PARENT_DEPTH_CAP = 4;
+const SIDEBAR_THREAD_ROOT_PAGE_SIZE = 20;
 
 export type ProjectThreadListState =
   | {
@@ -175,8 +178,10 @@ export interface ProjectRowProps {
   isLocalPathInvalid: boolean;
   headerActions?: ReactNode;
   headerActionsOpen?: boolean;
+  hasMoreThreads?: boolean;
   onProjectSelect?: () => void;
   onCreateProjectThread?: (projectId: string) => void;
+  onLoadMoreThreads?: () => void;
   onToggleProjectCollapsed: (projectId: string) => void;
   onToggleThreadCollapsed: (threadId: string) => void;
   onToggleEnvironmentCollapsed: (environmentId: string) => void;
@@ -196,7 +201,9 @@ interface ProjectThreadTreeProps {
   collapsedThreadIds: Set<string>;
   collapsedEnvironmentIds: Set<string>;
   variant: ProjectThreadTreeVariant;
+  hasMoreThreads?: boolean;
   onProjectSelect?: () => void;
+  onLoadMoreThreads?: () => void;
   onToggleThreadCollapsed: (threadId: string) => void;
   onToggleEnvironmentCollapsed: (environmentId: string) => void;
 }
@@ -208,7 +215,9 @@ interface SectionThreadTreeProps {
   selectedThreadId?: string;
   collapsedThreadIds: Set<string>;
   collapsedEnvironmentIds: Set<string>;
+  hasMoreThreads?: boolean;
   onProjectSelect?: () => void;
+  onLoadMoreThreads?: () => void;
   onCreateThreadInSection?: (sectionId: string) => void;
   onRenameSection?: (section: SidebarSectionDefinition) => void;
   onRemoveSection?: (section: SidebarSectionDefinition) => void;
@@ -369,6 +378,33 @@ function getItemProjectId(item: ProjectThreadItem): string {
         return PERSONAL_PROJECT_ID;
       }
       return getItemProjectId(item.group.items[0]);
+  }
+}
+
+function projectThreadItemContainsThread(
+  item: ProjectThreadItem,
+  threadId: string,
+): boolean {
+  switch (item.kind) {
+    case "thread":
+      return (
+        item.node.thread.id === threadId ||
+        item.node.children.some((child) =>
+          projectThreadItemContainsThread(child, threadId),
+        )
+      );
+    case "environment":
+      return item.group.nodes.some(
+        (node) =>
+          node.thread.id === threadId ||
+          node.children.some((child) =>
+            projectThreadItemContainsThread(child, threadId),
+          ),
+      );
+    case "section":
+      return item.group.items.some((child) =>
+        projectThreadItemContainsThread(child, threadId),
+      );
   }
 }
 
@@ -1806,6 +1842,8 @@ interface SectionThreadTreeItemsProps {
   onRenameSection?: (section: SidebarSectionDefinition) => void;
   onRemoveSection?: (section: SidebarSectionDefinition) => void;
   renderTopLevelSectionHeaderActions?: SectionThreadTreeProps["renderTopLevelSectionHeaderActions"];
+  hasMoreThreads?: boolean;
+  onLoadMoreThreads?: () => void;
 }
 
 // The one place that maps thread-tree items to rows. Every sidebar view
@@ -1828,8 +1866,53 @@ function SectionThreadTreeItems({
   onRenameSection,
   onRemoveSection,
   renderTopLevelSectionHeaderActions,
+  hasMoreThreads = false,
+  onLoadMoreThreads,
 }: SectionThreadTreeItemsProps) {
-  const rows = items.map((item) => (
+  const [requestedItemCount, setRequestedItemCount] = useState(
+    SIDEBAR_THREAD_ROOT_PAGE_SIZE,
+  );
+  const loadMoreRef = useRef<HTMLButtonElement>(null);
+  const selectedItemIndex = useMemo(
+    () =>
+      selectedThreadId === undefined
+        ? -1
+        : items.findIndex((item) =>
+            projectThreadItemContainsThread(item, selectedThreadId),
+          ),
+    [items, selectedThreadId],
+  );
+  const visibleItemCount = Math.min(
+    items.length,
+    Math.max(requestedItemCount, selectedItemIndex + 1),
+  );
+  const visibleItems = items.slice(0, visibleItemCount);
+  const remainingItemCount = items.length - visibleItemCount;
+  const loadMore = useCallback(() => {
+    if (requestedItemCount < items.length) {
+      setRequestedItemCount((current) =>
+        Math.min(items.length, current + SIDEBAR_THREAD_ROOT_PAGE_SIZE),
+      );
+      return;
+    }
+    onLoadMoreThreads?.();
+  }, [items.length, onLoadMoreThreads, requestedItemCount]);
+  useEffect(() => {
+    const target = loadMoreRef.current;
+    if (target === null || typeof IntersectionObserver === "undefined") {
+      return;
+    }
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((entry) => entry.isIntersecting)) loadMore();
+      },
+      { rootMargin: "160px 0px" },
+    );
+    observer.observe(target);
+    return () => observer.disconnect();
+  }, [loadMore, remainingItemCount]);
+
+  const rows = visibleItems.map((item) => (
     <SectionDndItemRow
       key={getItemKey(item)}
       projectId={projectId ?? getItemProjectId(item)}
@@ -1865,6 +1948,19 @@ function SectionThreadTreeItems({
       ) : (
         rows
       )}
+      {remainingItemCount > 0 || hasMoreThreads ? (
+        <button
+          ref={loadMoreRef}
+          type="button"
+          className="h-7 w-full rounded-md px-2 text-left text-xs text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring"
+          data-sidebar-thread-load-more=""
+          onClick={loadMore}
+        >
+          {remainingItemCount > 0
+            ? `Show ${Math.min(SIDEBAR_THREAD_ROOT_PAGE_SIZE, remainingItemCount)} more`
+            : "Show older tasks"}
+        </button>
+      ) : null}
     </ProjectThreadTreeGroup>
   );
 }
@@ -1877,7 +1973,9 @@ export const ProjectThreadTree = memo(function ProjectThreadTree({
   collapsedThreadIds,
   collapsedEnvironmentIds,
   variant,
+  hasMoreThreads,
   onProjectSelect,
+  onLoadMoreThreads,
   onToggleThreadCollapsed,
   onToggleEnvironmentCollapsed,
 }: ProjectThreadTreeProps) {
@@ -1912,7 +2010,27 @@ export const ProjectThreadTree = memo(function ProjectThreadTree({
     );
 
     if (variant === "section") {
-      return emptyState;
+      return hasMoreThreads ? (
+        <>
+          {emptyState}
+          <SectionThreadTreeItems
+            items={[]}
+            sectionDnd={null}
+            variant={variant}
+            projectId={projectId}
+            selectedThreadId={selectedThreadId}
+            collapsedThreadIds={collapsedThreadIds}
+            collapsedEnvironmentIds={collapsedEnvironmentIds}
+            onProjectSelect={onProjectSelect}
+            onToggleThreadCollapsed={onToggleThreadCollapsed}
+            onToggleEnvironmentCollapsed={onToggleEnvironmentCollapsed}
+            hasMoreThreads
+            onLoadMoreThreads={onLoadMoreThreads}
+          />
+        </>
+      ) : (
+        emptyState
+      );
     }
 
     return (
@@ -1937,6 +2055,8 @@ export const ProjectThreadTree = memo(function ProjectThreadTree({
       onProjectSelect={onProjectSelect}
       onToggleThreadCollapsed={onToggleThreadCollapsed}
       onToggleEnvironmentCollapsed={onToggleEnvironmentCollapsed}
+      hasMoreThreads={hasMoreThreads}
+      onLoadMoreThreads={onLoadMoreThreads}
     />
   );
 });
@@ -1949,7 +2069,9 @@ export const ChronologicalSectionThreadSections = memo(
     selectedThreadId,
     collapsedThreadIds,
     collapsedEnvironmentIds,
+    hasMoreThreads,
     onProjectSelect,
+    onLoadMoreThreads,
     onCreateThreadInSection,
     onRenameSection,
     onRemoveSection,
@@ -2073,7 +2195,10 @@ export const ChronologicalSectionThreadSections = memo(
 
     // No sortableParentKey: the outer SectionDndSortableList below provides the
     // SortableContext spanning both the sections and loose-threads sections.
-    const renderItems = (items: readonly ProjectThreadItem[]) => (
+    const renderItems = (
+      items: readonly ProjectThreadItem[],
+      includePaging = false,
+    ) => (
       <SectionThreadTreeItems
         items={items}
         sectionDnd={renderedSectionDnd}
@@ -2088,6 +2213,8 @@ export const ChronologicalSectionThreadSections = memo(
         onRenameSection={onRenameSection}
         onRemoveSection={onRemoveSection}
         renderTopLevelSectionHeaderActions={renderTopLevelSectionHeaderActions}
+        hasMoreThreads={includePaging && hasMoreThreads}
+        onLoadMoreThreads={includePaging ? onLoadMoreThreads : undefined}
       />
     );
 
@@ -2117,8 +2244,10 @@ export const ChronologicalSectionThreadSections = memo(
           items={looseItems.map(getSidebarDndItemId)}
           strategy={verticalListSortingStrategy}
         >
-          {renderItems(looseItems)}
+          {renderItems(looseItems, true)}
         </SortableContext>
+      ) : hasMoreThreads ? (
+        renderItems([], true)
       ) : renderedSectionDnd ? (
         <div className="grid">
           <div
@@ -2255,8 +2384,10 @@ function ProjectRowComponent({
   isLocalPathInvalid,
   headerActions,
   headerActionsOpen = false,
+  hasMoreThreads,
   onProjectSelect,
   onCreateProjectThread,
+  onLoadMoreThreads,
   onToggleProjectCollapsed,
   onToggleThreadCollapsed,
   onToggleEnvironmentCollapsed,
@@ -2403,6 +2534,8 @@ function ProjectRowComponent({
             onProjectSelect={onProjectSelect}
             onToggleThreadCollapsed={onToggleThreadCollapsed}
             onToggleEnvironmentCollapsed={onToggleEnvironmentCollapsed}
+            hasMoreThreads={hasMoreThreads}
+            onLoadMoreThreads={onLoadMoreThreads}
           />
         </TopLevelSidebarSection>
       </div>
@@ -2494,8 +2627,10 @@ function areProjectRowPropsEqual(
     prev.isLocalPathInvalid !== next.isLocalPathInvalid ||
     prev.headerActions !== next.headerActions ||
     prev.headerActionsOpen !== next.headerActionsOpen ||
+    prev.hasMoreThreads !== next.hasMoreThreads ||
     prev.onProjectSelect !== next.onProjectSelect ||
     prev.onCreateProjectThread !== next.onCreateProjectThread ||
+    prev.onLoadMoreThreads !== next.onLoadMoreThreads ||
     prev.onToggleProjectCollapsed !== next.onToggleProjectCollapsed ||
     prev.onToggleThreadCollapsed !== next.onToggleThreadCollapsed ||
     prev.onToggleEnvironmentCollapsed !== next.onToggleEnvironmentCollapsed ||

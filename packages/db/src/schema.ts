@@ -612,6 +612,21 @@ export const threads = sqliteTable(
     index("threads_active_maintenance_idx")
       .on(table.status)
       .where(sql`${table.deletedAt} IS NULL`),
+    index("threads_sidebar_recent_idx")
+      .on(table.projectId, table.createdAt, table.id)
+      .where(
+        sql`${table.visibility} = 'visible' AND ${table.archivedAt} IS NULL AND ${table.deletedAt} IS NULL`,
+      ),
+    index("threads_sidebar_active_idx")
+      .on(table.projectId, table.status, table.id)
+      .where(
+        sql`${table.visibility} = 'visible' AND ${table.archivedAt} IS NULL AND ${table.deletedAt} IS NULL AND ${table.status} IN ('active', 'starting')`,
+      ),
+    index("threads_sidebar_unread_idx")
+      .on(table.projectId, table.id)
+      .where(
+        sql`${table.visibility} = 'visible' AND ${table.archivedAt} IS NULL AND ${table.deletedAt} IS NULL AND (${table.lastReadAt} IS NULL OR ${table.latestAttentionAt} > ${table.lastReadAt})`,
+      ),
   ],
 );
 
@@ -760,6 +775,7 @@ export const events = sqliteTable(
   "events",
   {
     id: text("id").primaryKey(),
+    daemonEventId: text("daemon_event_id"),
     threadId: text("thread_id")
       .notNull()
       .references(() => threads.id, { onDelete: "cascade" }),
@@ -777,6 +793,7 @@ export const events = sqliteTable(
     createdAt: integer("created_at").notNull(),
   },
   (table) => [
+    uniqueIndex("events_daemon_event_id_idx").on(table.daemonEventId),
     uniqueIndex("events_thread_sequence_idx").on(
       table.threadId,
       table.sequence,

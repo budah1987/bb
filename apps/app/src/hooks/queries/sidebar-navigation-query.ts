@@ -1,8 +1,12 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, type QueryClient } from "@tanstack/react-query";
 import { PERSONAL_PROJECT_ID } from "@bb/domain";
-import type { SidebarBootstrapResponse } from "@bb/server-contract";
+import type {
+  ProjectWithThreadsResponse,
+  SidebarBootstrapResponse,
+} from "@bb/server-contract";
 import { apiClient } from "@/lib/api-server";
 import { request, requestOptions } from "@/lib/api";
+import { sdk } from "@/lib/sdk";
 import {
   useEnvironmentListRealtimeSubscription,
   useHostListRealtimeSubscription,
@@ -12,6 +16,26 @@ import {
 import { REALTIME_OWNED_STATIC_CACHE_QUERY_POLICY } from "./query-policies";
 
 export const SIDEBAR_NAVIGATION_QUERY_KEY = "sidebarNavigation";
+const SIDEBAR_INITIAL_THREAD_LIMIT = 50;
+const SIDEBAR_BACKGROUND_THREAD_PAGE_SIZE = 200;
+
+interface SidebarThreadPaginationState {
+  complete: boolean;
+  completeProjectIds: string[];
+  generation: number;
+  initialLimit: number;
+  nextOffsetByProjectId: Record<string, number>;
+}
+
+export type SidebarNavigationCacheResponse = SidebarBootstrapResponse & {
+  _threadPagination: SidebarThreadPaginationState;
+};
+
+const sidebarProjectLoads = new WeakMap<
+  QueryClient,
+  Map<string, Promise<void>>
+>();
+let sidebarNavigationGeneration = 0;
 
 export type SidebarNavigationQueryKey = readonly [
   typeof SIDEBAR_NAVIGATION_QUERY_KEY,
@@ -27,9 +51,183 @@ export function sidebarNavigationQueryKey(): SidebarNavigationQueryKey {
 
 export function fetchSidebarNavigation(
   signal?: AbortSignal,
-): Promise<SidebarBootstrapResponse> {
+): Promise<SidebarNavigationCacheResponse> {
   return request<SidebarBootstrapResponse>(
-    apiClient["sidebar-bootstrap"].$get(undefined, requestOptions(signal)),
+    apiClient["sidebar-bootstrap"].$get(
+      { query: { threadLimit: String(SIDEBAR_INITIAL_THREAD_LIMIT) } },
+      requestOptions(signal),
+    ),
+  ).then((response) => {
+    const projects = [...response.projects, response.personalProject];
+    const completeProjectIds = projects
+      .filter(
+        (project) => project.threads.length < SIDEBAR_INITIAL_THREAD_LIMIT,
+      )
+      .map((project) => project.id);
+    return {
+      ...response,
+      _threadPagination: {
+        complete: completeProjectIds.length === projects.length,
+        completeProjectIds,
+        generation: (sidebarNavigationGeneration += 1),
+        initialLimit: SIDEBAR_INITIAL_THREAD_LIMIT,
+        nextOffsetByProjectId: Object.fromEntries(
+          projects.map((project) => [project.id, SIDEBAR_INITIAL_THREAD_LIMIT]),
+        ),
+      },
+    };
+  });
+}
+
+function mergeSidebarThreadPage(
+  existingThreads: ProjectWithThreadsResponse["threads"],
+  page: ProjectWithThreadsResponse["threads"],
+): ProjectWithThreadsResponse["threads"] {
+  const pageThreadIds = new Set(page.map((thread) => thread.id));
+  return [
+    ...existingThreads.filter((thread) => !pageThreadIds.has(thread.id)),
+    ...page,
+  ];
+}
+
+export function sidebarProjectHasMore(
+  navigation: SidebarNavigationCacheResponse | undefined,
+  projectId: string,
+): boolean {
+  return (
+    navigation !== undefined &&
+    !navigation._threadPagination.completeProjectIds.includes(projectId)
+  );
+}
+
+export function loadMoreSidebarProjectThreads(
+  queryClient: QueryClient,
+  projectId: string,
+): Promise<void> {
+  const navigation = queryClient.getQueryData<SidebarNavigationCacheResponse>(
+    sidebarNavigationQueryKey(),
+  );
+  if (!sidebarProjectHasMore(navigation, projectId)) {
+    return Promise.resolve();
+  }
+  let projectLoads = sidebarProjectLoads.get(queryClient);
+  if (projectLoads === undefined) {
+    projectLoads = new Map();
+    sidebarProjectLoads.set(queryClient, projectLoads);
+  }
+  const currentLoad = projectLoads.get(projectId);
+  if (currentLoad !== undefined) return currentLoad;
+
+  const generation = navigation!._threadPagination.generation;
+  const offset =
+    navigation!._threadPagination.nextOffsetByProjectId[projectId] ??
+    SIDEBAR_INITIAL_THREAD_LIMIT;
+  const load = sdk.threads
+    .list({
+      archived: false,
+      limit: SIDEBAR_BACKGROUND_THREAD_PAGE_SIZE,
+      offset,
+      projectId,
+    })
+    .then((page) => {
+      queryClient.setQueryData<SidebarNavigationCacheResponse>(
+        sidebarNavigationQueryKey(),
+        (current) => {
+          if (
+            current === undefined ||
+            current._threadPagination.generation !== generation
+          ) {
+            return current;
+          }
+          const completeProjectIds =
+            page.length < SIDEBAR_BACKGROUND_THREAD_PAGE_SIZE
+              ? [
+                  ...new Set([
+                    ...current._threadPagination.completeProjectIds,
+                    projectId,
+                  ]),
+                ]
+              : current._threadPagination.completeProjectIds;
+          const projects = [...current.projects, current.personalProject];
+          const pagination = {
+            ...current._threadPagination,
+            complete: completeProjectIds.length === projects.length,
+            completeProjectIds,
+            nextOffsetByProjectId: {
+              ...current._threadPagination.nextOffsetByProjectId,
+              [projectId]: offset + page.length,
+            },
+          };
+          if (current.personalProject.id === projectId) {
+            return {
+              ...current,
+              _threadPagination: pagination,
+              personalProject: {
+                ...current.personalProject,
+                threads: mergeSidebarThreadPage(
+                  current.personalProject.threads,
+                  page,
+                ),
+              },
+            };
+          }
+          return {
+            ...current,
+            _threadPagination: pagination,
+            projects: current.projects.map((project) =>
+              project.id === projectId
+                ? {
+                    ...project,
+                    threads: mergeSidebarThreadPage(project.threads, page),
+                  }
+                : project,
+            ),
+          };
+        },
+      );
+    })
+    .finally(() => {
+      projectLoads?.delete(projectId);
+    });
+  projectLoads.set(projectId, load);
+  return load;
+}
+
+async function hydrateSidebarProjectThreads(
+  queryClient: QueryClient,
+  projectId: string,
+): Promise<void> {
+  while (true) {
+    const navigation = queryClient.getQueryData<SidebarNavigationCacheResponse>(
+      sidebarNavigationQueryKey(),
+    );
+    if (!sidebarProjectHasMore(navigation, projectId)) return;
+    await loadMoreSidebarProjectThreads(queryClient, projectId);
+  }
+}
+
+export async function ensureSidebarNavigationHydrated(
+  queryClient: QueryClient,
+  navigation: SidebarNavigationCacheResponse,
+): Promise<void> {
+  const projects = [...navigation.projects, navigation.personalProject].filter(
+    (project) => sidebarProjectHasMore(navigation, project.id),
+  );
+  await Promise.all(
+    projects.map((project) =>
+      hydrateSidebarProjectThreads(queryClient, project.id),
+    ),
+  );
+}
+
+export async function loadMoreSidebarThreads(
+  queryClient: QueryClient,
+  projectIds: readonly string[],
+): Promise<void> {
+  await Promise.all(
+    projectIds.map((projectId) =>
+      loadMoreSidebarProjectThreads(queryClient, projectId),
+    ),
   );
 }
 
@@ -40,7 +238,7 @@ export function useSidebarNavigation(options?: QueryOptions) {
   useProjectListRealtimeSubscription({ enabled });
   useThreadListRealtimeSubscription({ enabled });
 
-  return useQuery<SidebarBootstrapResponse>({
+  return useQuery<SidebarNavigationCacheResponse>({
     queryKey: sidebarNavigationQueryKey(),
     queryFn: ({ signal }) => fetchSidebarNavigation(signal),
     enabled,
@@ -58,7 +256,7 @@ export function useSidebarNavigation(options?: QueryOptions) {
 export function useProjectDisplayName(
   projectId: string | undefined,
 ): string | undefined {
-  const { data } = useQuery<SidebarBootstrapResponse>({
+  const { data } = useQuery<SidebarNavigationCacheResponse>({
     queryKey: sidebarNavigationQueryKey(),
     queryFn: ({ signal }) => fetchSidebarNavigation(signal),
     ...REALTIME_OWNED_STATIC_CACHE_QUERY_POLICY,

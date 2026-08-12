@@ -84,8 +84,8 @@ declare const serviceTierSchema: z.ZodEnum<{
 type ServiceTier = z.infer<typeof serviceTierSchema>;
 declare const permissionModeSchema: z.ZodEnum<{
     full: "full";
-    auto: "auto";
     "accept-edits": "accept-edits";
+    auto: "auto";
 }>;
 type PermissionMode = z.infer<typeof permissionModeSchema>;
 declare const promptInputSchema: z.ZodDiscriminatedUnion<[z.ZodObject<{
@@ -1534,8 +1534,8 @@ interface PluginSdkApp {
     useComposer(): PluginComposerApi;
     /**
      * The sidebar's live thread view (see {@link PluginSidebarThreadsState}).
-     * Reads the host's own cache and realtime subscriptions, so it costs no
-     * extra request and updates exactly when the built-in sidebar does.
+     * Reads the host's own cache and realtime subscriptions. The host loads any
+     * remaining task pages before returning a ready list.
      * Experimental: see docs/api_to_audit.md.
      */
     experimental_useSidebarThreads(): PluginSidebarThreadsState;

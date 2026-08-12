@@ -89,6 +89,7 @@ const panelCallbacks = vi.hoisted(
 );
 const commandHandlers = vi.hoisted(() => new Map<string, () => boolean>());
 const threadViewMountCounts = vi.hoisted(() => new Map<string, number>());
+const threadViewRenderCounts = vi.hoisted(() => new Map<string, number>());
 interface ShortcutPresentationFixture {
   ariaKeyshortcuts: string;
   label: string;
@@ -255,6 +256,10 @@ vi.mock("./ThreadDetailView", () => ({
     projectId: string;
     threadId: string;
   }) => {
+    threadViewRenderCounts.set(
+      threadId,
+      (threadViewRenderCounts.get(threadId) ?? 0) + 1,
+    );
     useState(() => {
       threadViewMountCounts.set(
         threadId,
@@ -735,6 +740,7 @@ beforeEach(() => {
   panelGroupLayoutState.layout = [100, 0];
   commandHandlers.clear();
   threadViewMountCounts.clear();
+  threadViewRenderCounts.clear();
   commandPresentationState.isModifierHeld = false;
   commandPresentationState.shortcut = null;
   threadStore.set("thr-a", { archivedAt: null, deletedAt: null });
@@ -781,6 +787,27 @@ describe("SplitThreadArea", () => {
     expect(
       (screen.getByTestId("draft-thr-a") as HTMLTextAreaElement).value,
     ).toBe("keep this draft");
+  });
+
+  it("limits unrelated panes to the shared route update during focus changes", async () => {
+    renderSplitArea({
+      path: threadPath("thr-h"),
+      layout: eightPaneThreadLayout(),
+    });
+    await screen.findByTestId("pane-thr-h");
+    const unrelatedRenderCount = threadViewRenderCounts.get("thr-d");
+
+    fireEvent.pointerDown(
+      document.querySelector<HTMLElement>('[data-split-pane-id="pane-1"]') ??
+        document.body,
+    );
+
+    await waitFor(() =>
+      expect(screen.getByTestId("pane-thr-a").dataset.focused).toBe("true"),
+    );
+    expect(threadViewRenderCounts.get("thr-d")).toBe(
+      (unrelatedRenderCount ?? 0) + 1,
+    );
   });
 
   it("maximizes without changing the split tree and restores mounted pane state", async () => {

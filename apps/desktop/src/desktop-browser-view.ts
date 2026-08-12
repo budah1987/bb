@@ -789,7 +789,13 @@ export function createDesktopBrowserViewManager(
       ) {
         entry.view.webContents.focus();
       }
-      loadIfNeeded(entry, request.url);
+      // The request URL hydrates a new native view. An existing view owns its
+      // live navigation state, which can be newer than persisted renderer
+      // metadata while its React owner is inactive. Reattaching must not send
+      // that live page back to a stale saved URL.
+      if (existing === null) {
+        loadIfNeeded(entry, request.url);
+      }
       pushState(hostWindow, request.tabId);
     },
     detach({ hostWindow, tabId }) {

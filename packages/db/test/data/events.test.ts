@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { describe, expect, it, vi } from "vitest";
 import {
   LOCAL_AGENT_TASK_TYPE,
@@ -91,6 +92,9 @@ const threadEventFields = {
 };
 
 const daemonThreadEventFields = {
+  get daemonEventId() {
+    return randomUUID();
+  },
   ...threadEventFields,
   environmentId: null,
   providerThreadId: null,
@@ -356,6 +360,7 @@ describe("events", () => {
           sequence: 7,
         },
       ],
+      acceptedInputIndexes: [0, 1],
       insertedInputIndexes: [0, 1],
       skippedTurnUnstartedInputIndexes: [],
     });
@@ -378,6 +383,7 @@ describe("events", () => {
         (tx) =>
           appendDaemonEventsInTransaction(tx, [
             {
+              daemonEventId: randomUUID(),
               threadId: thread.id,
               type: "turn/completed",
               ...createTurnEventFields({ turnId: "turn_missing" }),
@@ -404,6 +410,7 @@ describe("events", () => {
         (tx) =>
           appendDaemonEventsInTransaction(tx, [
             {
+              daemonEventId: randomUUID(),
               threadId: thread.id,
               type: "turn/completed",
               ...createTurnEventFields({ turnId: "turn_late_start" }),
@@ -416,6 +423,7 @@ describe("events", () => {
               }),
             },
             {
+              daemonEventId: randomUUID(),
               threadId: thread.id,
               type: "turn/started",
               ...createTurnEventFields({ turnId: "turn_late_start" }),
@@ -445,6 +453,7 @@ describe("events", () => {
       (tx) =>
         appendDaemonEventsInTransaction(tx, [
           {
+            daemonEventId: randomUUID(),
             threadId: thread.id,
             type: "thread/tokenUsage/updated",
             ...createTurnEventFields({ turnId: "turn_carried_over" }),
@@ -456,6 +465,7 @@ describe("events", () => {
             }),
           },
           {
+            daemonEventId: randomUUID(),
             threadId: thread.id,
             type: "turn/started",
             ...createTurnEventFields({ turnId: "turn_new" }),
@@ -484,6 +494,7 @@ describe("events", () => {
       (tx) =>
         appendDaemonEventsInTransaction(tx, [
           {
+            daemonEventId: randomUUID(),
             threadId: thread.id,
             type: "turn/started",
             ...createTurnEventFields({ turnId: "turn_ordered" }),
@@ -495,6 +506,7 @@ describe("events", () => {
             }),
           },
           {
+            daemonEventId: randomUUID(),
             threadId: thread.id,
             type: "turn/completed",
             ...createTurnEventFields({ turnId: "turn_ordered" }),
@@ -527,6 +539,7 @@ describe("events", () => {
       (tx) =>
         appendDaemonEventsInTransaction(tx, [
           {
+            daemonEventId: randomUUID(),
             threadId: thread.id,
             type: "turn/started",
             ...createTurnEventFields({ turnId: "turn_prior" }),
@@ -545,6 +558,7 @@ describe("events", () => {
       (tx) =>
         appendDaemonEventsInTransaction(tx, [
           {
+            daemonEventId: randomUUID(),
             threadId: thread.id,
             type: "turn/completed",
             ...createTurnEventFields({ turnId: "turn_prior" }),

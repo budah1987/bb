@@ -12,6 +12,7 @@ import {
   listPublicProjects,
   listProjectSourcesByProjectIds,
   listThreadSections,
+  listInitialSidebarThreadsWithPendingInteractionStateForProjects,
   listThreadsWithPendingInteractionStateForProjects,
   reorderProject,
   updateProject,
@@ -298,13 +299,20 @@ function buildProjectsWithThreadsResponse(
 function buildProjectsWithThreadsResponseFromRows(
   deps: AppDeps,
   projectRows: ProjectResponseRow[],
+  options: { threadLimit?: number } = {},
 ): ProjectWithThreadsResponse[] {
   const projects = buildProjectResponsesFromRows(deps, projectRows);
   const projectIds = projects.map((project) => project.id);
-  const threadRows = listThreadsWithPendingInteractionStateForProjects(
-    deps.db,
-    { archived: false, projectIds },
-  );
+  const threadRows =
+    options.threadLimit === undefined
+      ? listThreadsWithPendingInteractionStateForProjects(deps.db, {
+          archived: false,
+          projectIds,
+        })
+      : listInitialSidebarThreadsWithPendingInteractionStateForProjects(
+          deps.db,
+          { limitPerProject: options.threadLimit, projectIds },
+        );
   const threadResponses = toThreadListEntryResponses(deps, {
     threads: threadRows,
   });
@@ -334,7 +342,10 @@ function buildProjectsWithThreadsResponseFromRows(
   }));
 }
 
-function buildSidebarBootstrapResponse(deps: AppDeps) {
+function buildSidebarBootstrapResponse(
+  deps: AppDeps,
+  options: { threadLimit?: number } = {},
+) {
   const personalProject = getPersonalProject(deps.db);
   if (!personalProject) {
     throw new ApiError(
@@ -346,6 +357,7 @@ function buildSidebarBootstrapResponse(deps: AppDeps) {
   const personalProjectResponse = buildProjectsWithThreadsResponseFromRows(
     deps,
     [personalProject],
+    options,
   )[0];
   if (!personalProjectResponse) {
     throw new ApiError(
@@ -360,6 +372,7 @@ function buildSidebarBootstrapResponse(deps: AppDeps) {
     projects: buildProjectsWithThreadsResponseFromRows(
       deps,
       listPublicProjects(deps.db),
+      options,
     ),
     personalProject: personalProjectResponse,
   };
@@ -438,9 +451,18 @@ export function registerProjectRoutes(app: Hono, deps: AppDeps): void {
     );
   });
 
-  get(routes.sidebarBootstrap, (context) =>
-    context.json(buildSidebarBootstrapResponse(deps)),
-  );
+  get(routes.sidebarBootstrap, (context, query) => {
+    const threadLimit =
+      query.threadLimit === undefined
+        ? undefined
+        : parseBoundedPositiveOptionalInteger({
+            defaultValue: 50,
+            max: 200,
+            name: "threadLimit",
+            value: query.threadLimit,
+          });
+    return context.json(buildSidebarBootstrapResponse(deps, { threadLimit }));
+  });
 
   post(routes.create, async (context, payload) => {
     const { source } = payload;

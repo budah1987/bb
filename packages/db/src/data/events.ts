@@ -118,6 +118,7 @@ export interface InsertEventsResult {
 }
 
 export interface AppendDaemonEventInput {
+  daemonEventId: string;
   data: string;
   environmentId: string | null;
   itemId: string | null;
@@ -135,6 +136,7 @@ export interface AcceptedDaemonEvent {
 
 export interface AppendDaemonEventsResult {
   acceptedEvents: AcceptedDaemonEvent[];
+  acceptedInputIndexes: number[];
   insertedInputIndexes: number[];
   /**
    * Indexes of inputs dropped because they were orphan thread-state snapshots
@@ -483,6 +485,7 @@ export function appendDaemonEventsInTransaction(
   if (eventInputs.length === 0) {
     return {
       acceptedEvents: [],
+      acceptedInputIndexes: [],
       insertedInputIndexes: [],
       skippedTurnUnstartedInputIndexes: [],
     };
@@ -497,6 +500,7 @@ export function appendDaemonEventsInTransaction(
     ]),
   );
   const acceptedEvents: AcceptedDaemonEvent[] = [];
+  const acceptedInputIndexes: number[] = [];
   const insertedInputIndexes: number[] = [];
   const skippedTurnUnstartedInputIndexes: number[] = [];
 
@@ -504,8 +508,45 @@ export function appendDaemonEventsInTransaction(
     db,
     collectDaemonTurnStartLookupKeys(eventInputs),
   );
+  const existingDaemonEvents = db
+    .select({
+      daemonEventId: events.daemonEventId,
+      sequence: events.sequence,
+      threadId: events.threadId,
+    })
+    .from(events)
+    .where(
+      inArray(
+        events.daemonEventId,
+        eventInputs.map((input) => input.daemonEventId),
+      ),
+    )
+    .all();
+  const acceptedByDaemonEventId = new Map(
+    existingDaemonEvents.flatMap((event) =>
+      event.daemonEventId === null
+        ? []
+        : [
+            [
+              event.daemonEventId,
+              { sequence: event.sequence, threadId: event.threadId },
+            ] as const,
+          ],
+    ),
+  );
   const now = Date.now();
   for (const [index, input] of eventInputs.entries()) {
+    const existing = acceptedByDaemonEventId.get(input.daemonEventId);
+    if (existing !== undefined) {
+      if (existing.threadId !== input.threadId) {
+        throw new Error(
+          `Daemon event ID ${input.daemonEventId} belongs to another thread`,
+        );
+      }
+      acceptedEvents.push(existing);
+      acceptedInputIndexes.push(index);
+      continue;
+    }
     if (
       resolveDaemonTurnStartDisposition(input, startedTurnKeys) ===
       "skip-orphan-snapshot"
@@ -521,9 +562,10 @@ export function appendDaemonEventsInTransaction(
     const turnId = getThreadEventScopeTurnId(input.scope) ?? null;
     db.run(
       sql`INSERT INTO events
-        (id, thread_id, environment_id, scope_kind, turn_id, provider_thread_id, sequence, type, item_id, item_kind, data, created_at)
+        (id, daemon_event_id, thread_id, environment_id, scope_kind, turn_id, provider_thread_id, sequence, type, item_id, item_kind, data, created_at)
         VALUES (
           ${createEventId()},
+          ${input.daemonEventId},
           ${input.threadId},
           ${input.environmentId},
           ${input.scope.kind},
@@ -553,7 +595,9 @@ export function appendDaemonEventsInTransaction(
       threadId: input.threadId,
     };
     acceptedEvents.push(acceptedEvent);
+    acceptedInputIndexes.push(index);
     insertedInputIndexes.push(index);
+    acceptedByDaemonEventId.set(input.daemonEventId, acceptedEvent);
     if (input.type === "turn/started") {
       const turnId = getThreadEventScopeTurnId(input.scope);
       if (turnId !== undefined) {
@@ -567,6 +611,7 @@ export function appendDaemonEventsInTransaction(
 
   return {
     acceptedEvents,
+    acceptedInputIndexes,
     insertedInputIndexes,
     skippedTurnUnstartedInputIndexes,
   };

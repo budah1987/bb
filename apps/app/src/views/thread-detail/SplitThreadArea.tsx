@@ -4,6 +4,7 @@ import { useAtom, useAtomValue, useStore } from "jotai";
 import {
   Activity,
   Fragment,
+  memo,
   useCallback,
   useContext,
   useEffect,
@@ -168,7 +169,7 @@ function useRetainedThreadViews(
   return contents;
 }
 
-function RetainedThreadDetailViews({
+const RetainedThreadDetailViews = memo(function RetainedThreadDetailViews({
   activeContent,
   scopeKey,
 }: {
@@ -196,7 +197,7 @@ function RetainedThreadDetailViews({
       />
     </Activity>
   ));
-}
+});
 
 type BeginPaneDrag = (
   paneId: string,
@@ -477,19 +478,20 @@ function SplitThreadAreaContent({ routeContent }: SplitThreadAreaProps) {
   // history), and the focused pane becomes the address bar's owner.
   const focusPane = useCallback(
     (paneId: string) => {
-      if (layout === null || layout.focusedPaneId === paneId) {
+      const current = store.get(splitLayoutAtom);
+      if (current === null || current.focusedPaneId === paneId) {
         return;
       }
-      const pane = findPane(layout.root, paneId);
-      setLayout(setFocus(layout, paneId));
-      if (maximizedPaneId !== null) {
+      const pane = findPane(current.root, paneId);
+      store.set(splitLayoutAtom, setFocus(current, paneId));
+      if (store.get(maximizedPaneIdAtom) !== null) {
         setMaximizedPaneId(paneId);
       }
       if (pane !== null) {
         navigate(paneContentRoute(pane.content), { replace: true });
       }
     },
-    [layout, maximizedPaneId, navigate, setLayout, setMaximizedPaneId],
+    [navigate, setMaximizedPaneId, store],
   );
 
   // A committed long rightward swipe pushes exactly one `/` entry carrying the
@@ -527,26 +529,27 @@ function SplitThreadAreaContent({ routeContent }: SplitThreadAreaProps) {
 
   const closePane = useCallback(
     (paneId: string) => {
-      if (layout === null) {
+      const current = store.get(splitLayoutAtom);
+      if (current === null) {
         return;
       }
-      const next = removePane(layout, paneId);
-      if (next === layout) {
+      const next = removePane(current, paneId);
+      if (next === current) {
         return;
       }
       setThreadRetentionEpoch((epoch) => epoch + 1);
-      setLayout(next);
-      if (maximizedPaneId === paneId) {
+      store.set(splitLayoutAtom, next);
+      if (store.get(maximizedPaneIdAtom) === paneId) {
         setMaximizedPaneId(null);
       }
-      if (next.focusedPaneId !== layout.focusedPaneId) {
+      if (next.focusedPaneId !== current.focusedPaneId) {
         const route = focusedPaneRoute(next);
         if (route !== null) {
           navigate(route, { replace: true });
         }
       }
     },
-    [layout, maximizedPaneId, navigate, setLayout, setMaximizedPaneId],
+    [navigate, setMaximizedPaneId, store],
   );
 
   const toggleMaximizePane = useCallback(
@@ -634,7 +637,7 @@ function SplitThreadAreaContent({ routeContent }: SplitThreadAreaProps) {
       }
       setThreadRetentionEpoch((epoch) => epoch + 1);
       store.set(splitLayoutAtom, next);
-      if (maximizedPaneId === paneId) {
+      if (store.get(maximizedPaneIdAtom) === paneId) {
         setMaximizedPaneId(null);
       }
       if (next.focusedPaneId !== current.focusedPaneId) {
@@ -644,7 +647,7 @@ function SplitThreadAreaContent({ routeContent }: SplitThreadAreaProps) {
         }
       }
     },
-    [maximizedPaneId, navigate, setMaximizedPaneId, store],
+    [navigate, setMaximizedPaneId, store],
   );
 
   // Pane reorder: dragging a pane header through the shared split-drag layer.
@@ -922,6 +925,152 @@ interface SplitTreeProps {
   onPruneStalePane: (paneId: string) => void;
 }
 
+interface SplitPaneLeafProps {
+  node: PaneNode;
+  isFocused: boolean;
+  isMaximized: boolean;
+  isHiddenByMaximize: boolean;
+  isTopRow: boolean;
+  isLeftEdge: boolean;
+  isRightEdge: boolean;
+  secondaryPanelRegistry: PaneSecondaryPanelRegistry;
+  retentionEpoch: number;
+  onFocusPane: (paneId: string) => void;
+  onClosePane: (paneId: string) => void;
+  onToggleMaximizePane: (paneId: string) => void;
+  onMovePaneToSide: (paneId: string, side: SplitSide) => void;
+  onNavigateInPane: NavigateInPane;
+  onBeginPaneDrag: BeginPaneDrag;
+  onPruneStalePane: (paneId: string) => void;
+}
+
+function areSplitPaneLeafPropsEqual(
+  previous: SplitPaneLeafProps,
+  next: SplitPaneLeafProps,
+): boolean {
+  return (
+    previous.node.paneId === next.node.paneId &&
+    paneContentRoute(previous.node.content) ===
+      paneContentRoute(next.node.content) &&
+    previous.isFocused === next.isFocused &&
+    previous.isMaximized === next.isMaximized &&
+    previous.isHiddenByMaximize === next.isHiddenByMaximize &&
+    previous.isTopRow === next.isTopRow &&
+    previous.isLeftEdge === next.isLeftEdge &&
+    previous.isRightEdge === next.isRightEdge &&
+    previous.secondaryPanelRegistry === next.secondaryPanelRegistry &&
+    previous.retentionEpoch === next.retentionEpoch &&
+    previous.onFocusPane === next.onFocusPane &&
+    previous.onClosePane === next.onClosePane &&
+    previous.onToggleMaximizePane === next.onToggleMaximizePane &&
+    previous.onMovePaneToSide === next.onMovePaneToSide &&
+    previous.onNavigateInPane === next.onNavigateInPane &&
+    previous.onBeginPaneDrag === next.onBeginPaneDrag &&
+    previous.onPruneStalePane === next.onPruneStalePane
+  );
+}
+
+const SplitPaneLeaf = memo(function SplitPaneLeaf({
+  node,
+  isFocused,
+  isMaximized,
+  isHiddenByMaximize,
+  isTopRow,
+  isLeftEdge,
+  isRightEdge,
+  secondaryPanelRegistry,
+  retentionEpoch,
+  onFocusPane,
+  onClosePane,
+  onToggleMaximizePane,
+  onMovePaneToSide,
+  onNavigateInPane,
+  onBeginPaneDrag,
+  onPruneStalePane,
+}: SplitPaneLeafProps) {
+  const focusPane = useCallback(
+    () => onFocusPane(node.paneId),
+    [node.paneId, onFocusPane],
+  );
+  const closePane = useCallback(
+    () => onClosePane(node.paneId),
+    [node.paneId, onClosePane],
+  );
+  const toggleMaximizePane = useCallback(
+    () => onToggleMaximizePane(node.paneId),
+    [node.paneId, onToggleMaximizePane],
+  );
+  const movePaneToSide = useCallback(
+    (side: SplitSide) => onMovePaneToSide(node.paneId, side),
+    [node.paneId, onMovePaneToSide],
+  );
+  const pruneStalePane = useCallback(
+    () => onPruneStalePane(node.paneId),
+    [node.paneId, onPruneStalePane],
+  );
+
+  return (
+    <div
+      onPointerDown={focusPane}
+      // Flush tiles: no rounding, outer edges flush; a straight hairline
+      // seam separates panes (see SplitDivider). Bounded panes suppress
+      // the content's page-bleed negative margins (see
+      // PaneContextValue.isBoundedPane) so content fills the tile exactly.
+      aria-hidden={isHiddenByMaximize || undefined}
+      // Electron can retain a composited frame from animated descendants
+      // (notably the New Thread welcome mark) after visibility changes.
+      // Skip subtree painting while preserving the mounted pane and its box.
+      style={{
+        contain: "layout paint",
+        contentVisibility: isHiddenByMaximize ? "hidden" : undefined,
+      }}
+      className={cn(
+        "relative flex min-h-0 min-w-0 flex-1 overflow-hidden",
+        isHiddenByMaximize && "invisible pointer-events-none",
+        isMaximized && "absolute inset-0 z-30",
+      )}
+      data-split-pane-id={node.paneId}
+      data-focused={isFocused ? "true" : "false"}
+      data-maximized={isMaximized ? "true" : undefined}
+    >
+      {node.content.kind === "thread" ? (
+        <PaneStaleWatcher
+          threadId={node.content.threadId}
+          onStale={pruneStalePane}
+        />
+      ) : null}
+      <WorkspacePaneContent
+        content={node.content}
+        paneId={node.paneId}
+        isFocused={isFocused}
+        isSplitPane
+        secondaryPanelRegistry={secondaryPanelRegistry}
+        retentionEpoch={retentionEpoch}
+        reservesWindowPanelToggle={isMaximized || (isTopRow && isRightEdge)}
+        onRequestClose={closePane}
+        isMaximized={isMaximized}
+        onToggleMaximize={toggleMaximizePane}
+        onMoveToSide={movePaneToSide}
+        isBoundedPane
+        isTopRow={isMaximized || isTopRow}
+        ownsWindowTopLeft={
+          isMaximized || (!isHiddenByMaximize && isTopRow && isLeftEdge)
+        }
+        onNavigateInPane={onNavigateInPane}
+        onBeginPaneDrag={onBeginPaneDrag}
+      />
+      <div
+        aria-hidden
+        data-pane-focus-scrim=""
+        className={cn(
+          "pointer-events-none absolute inset-0 z-20 transition-colors",
+          isFocused ? "bg-transparent" : "bg-background/30",
+        )}
+      />
+    </div>
+  );
+}, areSplitPaneLeafPropsEqual);
+
 function SplitTree(props: SplitTreeProps) {
   const { node, path, isTopRow, isLeftEdge, isRightEdge, focusedPaneId } =
     props;
@@ -931,71 +1080,24 @@ function SplitTree(props: SplitTreeProps) {
     const isMaximized = node.paneId === props.maximizedPaneId;
     const isHiddenByMaximize = props.maximizedPaneId !== null && !isMaximized;
     return (
-      <div
-        onPointerDown={() => props.onFocusPane(node.paneId)}
-        // Flush tiles: no rounding, outer edges flush; a straight hairline
-        // seam separates panes (see SplitDivider). Bounded panes suppress
-        // the content's page-bleed negative margins (see
-        // PaneContextValue.isBoundedPane) so content fills the tile exactly.
-        aria-hidden={isHiddenByMaximize || undefined}
-        // Electron can retain a composited frame from animated descendants
-        // (notably the New Thread welcome mark) after visibility changes.
-        // Skip subtree painting while preserving the mounted pane and its box.
-        style={isHiddenByMaximize ? { contentVisibility: "hidden" } : undefined}
-        className={cn(
-          "relative flex min-h-0 min-w-0 flex-1 overflow-hidden",
-          isHiddenByMaximize && "invisible pointer-events-none",
-          isMaximized && "absolute inset-0 z-30",
-        )}
-        data-split-pane-id={node.paneId}
-        data-focused={isFocused ? "true" : "false"}
-        data-maximized={isMaximized ? "true" : undefined}
-      >
-        {/* Only mounted in split mode, so single panes never pay for the extra
-            thread subscription (and never prune the last pane). */}
-        {node.content.kind === "thread" ? (
-          <PaneStaleWatcher
-            threadId={node.content.threadId}
-            onStale={() => props.onPruneStalePane(node.paneId)}
-          />
-        ) : null}
-        <WorkspacePaneContent
-          content={node.content}
-          paneId={node.paneId}
-          isFocused={isFocused}
-          isSplitPane
-          secondaryPanelRegistry={props.secondaryPanelRegistry}
-          retentionEpoch={props.retentionEpoch}
-          // Position alone decides this: the host pins its toggle over the
-          // workspace corner, so a plugin pane sitting there must reserve the
-          // same footprint or the toggle lands on its Close pane button.
-          reservesWindowPanelToggle={isMaximized || (isTopRow && isRightEdge)}
-          onRequestClose={() => props.onClosePane(node.paneId)}
-          isMaximized={isMaximized}
-          onToggleMaximize={() => props.onToggleMaximizePane(node.paneId)}
-          onMoveToSide={(side) => props.onMovePaneToSide(node.paneId, side)}
-          isBoundedPane
-          isTopRow={isMaximized || isTopRow}
-          ownsWindowTopLeft={
-            props.maximizedPaneId !== null
-              ? isMaximized
-              : isTopRow && isLeftEdge
-          }
-          onNavigateInPane={props.onNavigateInPane}
-          onBeginPaneDrag={props.onBeginPaneDrag}
-        />
-        {/* Recede inactive pane bodies without adding another boundary. Pane
-            headers sit above this layer so titles, selected tabs, and controls
-            stay crisp while the timeline and composer step back. */}
-        <div
-          aria-hidden
-          data-pane-focus-scrim=""
-          className={cn(
-            "pointer-events-none absolute inset-0 z-20 transition-colors",
-            isFocused ? "bg-transparent" : "bg-background/30",
-          )}
-        />
-      </div>
+      <SplitPaneLeaf
+        node={node}
+        isFocused={isFocused}
+        isMaximized={isMaximized}
+        isHiddenByMaximize={isHiddenByMaximize}
+        isTopRow={isTopRow}
+        isLeftEdge={isLeftEdge}
+        isRightEdge={isRightEdge}
+        secondaryPanelRegistry={props.secondaryPanelRegistry}
+        retentionEpoch={props.retentionEpoch}
+        onFocusPane={props.onFocusPane}
+        onClosePane={props.onClosePane}
+        onToggleMaximizePane={props.onToggleMaximizePane}
+        onMovePaneToSide={props.onMovePaneToSide}
+        onNavigateInPane={props.onNavigateInPane}
+        onBeginPaneDrag={props.onBeginPaneDrag}
+        onPruneStalePane={props.onPruneStalePane}
+      />
     );
   }
 
@@ -1100,7 +1202,8 @@ function WorkspacePaneContent({
         ? null
         : {
             publish: (model) => secondaryPanelRegistry.publish(paneId, model),
-            clear: () => secondaryPanelRegistry.clear(paneId),
+            clear: (contentKey) =>
+              secondaryPanelRegistry.clear(paneId, contentKey),
           },
     [paneId, secondaryPanelRegistry],
   );

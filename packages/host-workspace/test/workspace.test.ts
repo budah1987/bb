@@ -292,6 +292,34 @@ describe("Workspace", () => {
     ]);
   });
 
+  it("refreshes cached merge-base status when either branch ref changes", async () => {
+    const repoPath = await initRepo();
+    await runGit(["checkout", "-b", "feature"], { cwd: repoPath });
+    await fs.writeFile(path.join(repoPath, "README.md"), "feature\n", "utf8");
+    await runGit(["add", "README.md"], { cwd: repoPath });
+    await runGit(["commit", "-m", "Feature commit"], { cwd: repoPath });
+    const workspace = new Workspace(repoPath);
+
+    const initial = await workspace.getStatus({ mergeBaseBranch: "main" });
+    expect(initial.mergeBase?.aheadCount).toBe(1);
+
+    await fs.writeFile(path.join(repoPath, "notes.txt"), "pending\n", "utf8");
+    const workingTreeChange = await workspace.getStatus({
+      mergeBaseBranch: "main",
+    });
+    expect(workingTreeChange.workingTree.hasUncommittedChanges).toBe(true);
+    expect(workingTreeChange.mergeBase?.aheadCount).toBe(1);
+
+    await runGit(["branch", "-f", "main", "HEAD"], { cwd: repoPath });
+    const baseChange = await workspace.getStatus({ mergeBaseBranch: "main" });
+    expect(baseChange.mergeBase?.aheadCount).toBe(0);
+
+    await runGit(["add", "notes.txt"], { cwd: repoPath });
+    await runGit(["commit", "-m", "Second feature commit"], { cwd: repoPath });
+    const headChange = await workspace.getStatus({ mergeBaseBranch: "main" });
+    expect(headChange.mergeBase?.aheadCount).toBe(1);
+  });
+
   it("reports untracked files plus committed unmerged changes as dirty_and_committed_unmerged", async () => {
     const repoPath = await initRepo();
     await runGit(["checkout", "-b", "feature"], { cwd: repoPath });

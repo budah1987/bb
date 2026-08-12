@@ -1,4 +1,7 @@
+import { execFile } from "node:child_process";
 import fs from "node:fs";
+import { promisify } from "node:util";
+import type { EventSinkStorageStats } from "./event-sink-storage.js";
 import type { HostDaemonLogger } from "./logger.js";
 
 /**
@@ -29,6 +32,8 @@ export interface HostDaemonWatchCounts {
 }
 
 export interface HostDaemonResourceUsage {
+  /** Direct child processes, or null when process inspection is unavailable. */
+  childProcesses: number | null;
   rssBytes: number;
   /** Open file descriptors, or null when unavailable (e.g. no /proc). */
   openFds: number | null;
@@ -36,15 +41,23 @@ export interface HostDaemonResourceUsage {
   inotifyInstances: number | null;
   /** OS thread count, or null when unavailable. */
   threads: number | null;
+  /** Direct zombie children, or null when process inspection is unavailable. */
+  zombieChildren: number | null;
 }
 
 interface HostDaemonHealthMonitorOptions {
   logger: Pick<HostDaemonLogger, "warn">;
   getWatchCounts: () => HostDaemonWatchCounts;
-  readResourceUsage?: () => HostDaemonResourceUsage;
+  getEventQueueStats?: () => EventSinkStorageStats;
+  readResourceUsage?: () =>
+    | HostDaemonResourceUsage
+    | Promise<HostDaemonResourceUsage>;
   setIntervalFn?: HostDaemonHealthMonitorIntervalFn;
   intervalMs?: number;
   inotifyInstanceWarnThreshold?: number;
+  zombieChildWarnThreshold?: number;
+  eventQueueBytesWarnThreshold?: number;
+  eventQueueAgeWarnThresholdMs?: number;
 }
 
 interface HostDaemonHealthMonitor {
@@ -55,6 +68,10 @@ const DEFAULT_HEALTH_MONITOR_INTERVAL_MS = 60_000;
 // Headroom above the ~1 shared backend a healthy daemon needs, so brief
 // overlaps during watch-set churn do not warn but a real leak does.
 const DEFAULT_INOTIFY_INSTANCE_WARN_THRESHOLD = 8;
+const DEFAULT_ZOMBIE_CHILD_WARN_THRESHOLD = 0;
+const DEFAULT_EVENT_QUEUE_BYTES_WARN_THRESHOLD = 256 * 1024 * 1024;
+const DEFAULT_EVENT_QUEUE_AGE_WARN_THRESHOLD_MS = 5 * 60 * 1000;
+const execFileAsync = promisify(execFile);
 
 function countInotifyInstances(fds: string[]): number {
   let count = 0;
@@ -70,24 +87,59 @@ function countInotifyInstances(fds: string[]): number {
   return count;
 }
 
-export function defaultReadResourceUsage(): HostDaemonResourceUsage {
+export async function defaultReadResourceUsage(): Promise<HostDaemonResourceUsage> {
   const rssBytes = process.memoryUsage().rss;
   let openFds: number | null = null;
   let inotifyInstances: number | null = null;
   let threads: number | null = null;
+  let childProcesses: number | null = null;
+  let zombieChildren: number | null = null;
   try {
     const fds = fs.readdirSync("/proc/self/fd");
     openFds = fds.length;
     inotifyInstances = countInotifyInstances(fds);
   } catch {
-    // /proc is unavailable (non-Linux); leave fd metrics null.
+    try {
+      openFds = fs.readdirSync("/dev/fd").length;
+    } catch {
+      // File descriptor inspection is unavailable.
+    }
   }
   try {
     threads = fs.readdirSync("/proc/self/task").length;
   } catch {
     // /proc is unavailable; leave thread count null.
   }
-  return { rssBytes, openFds, inotifyInstances, threads };
+  try {
+    const { stdout: processRows } = await execFileAsync(
+      "ps",
+      ["-axo", "pid=,ppid=,state=,comm="],
+      {
+        encoding: "utf8",
+        maxBuffer: 4 * 1024 * 1024,
+        timeout: 2_000,
+      },
+    );
+    childProcesses = 0;
+    zombieChildren = 0;
+    for (const row of processRows.split("\n")) {
+      const match = /^\s*\d+\s+(\d+)\s+(\S)\s+(.+)$/u.exec(row);
+      if (Number.parseInt(match?.[1] ?? "-1", 10) !== process.pid) continue;
+      if (match?.[3] === "ps") continue;
+      childProcesses += 1;
+      if (match?.[2] === "Z") zombieChildren += 1;
+    }
+  } catch {
+    // Process inspection is unavailable.
+  }
+  return {
+    childProcesses,
+    inotifyInstances,
+    openFds,
+    rssBytes,
+    threads,
+    zombieChildren,
+  };
 }
 
 export function startHostDaemonHealthMonitor(
@@ -97,6 +149,14 @@ export function startHostDaemonHealthMonitor(
   const inotifyInstanceWarnThreshold =
     options.inotifyInstanceWarnThreshold ??
     DEFAULT_INOTIFY_INSTANCE_WARN_THRESHOLD;
+  const zombieChildWarnThreshold =
+    options.zombieChildWarnThreshold ?? DEFAULT_ZOMBIE_CHILD_WARN_THRESHOLD;
+  const eventQueueBytesWarnThreshold =
+    options.eventQueueBytesWarnThreshold ??
+    DEFAULT_EVENT_QUEUE_BYTES_WARN_THRESHOLD;
+  const eventQueueAgeWarnThresholdMs =
+    options.eventQueueAgeWarnThresholdMs ??
+    DEFAULT_EVENT_QUEUE_AGE_WARN_THRESHOLD_MS;
   const readResourceUsage =
     options.readResourceUsage ?? defaultReadResourceUsage;
   const setIntervalFn: HostDaemonHealthMonitorIntervalFn =
@@ -109,8 +169,12 @@ export function startHostDaemonHealthMonitor(
       };
     });
 
-  const timer = setIntervalFn(() => {
-    const usage = readResourceUsage();
+  function inspectUsage(usage: HostDaemonResourceUsage): void {
+    const queueStats = options.getEventQueueStats?.();
+    const queueAgeMs =
+      queueStats?.oldestCreatedAtMs == null
+        ? 0
+        : Date.now() - queueStats.oldestCreatedAtMs;
     if (
       usage.inotifyInstances !== null &&
       usage.inotifyInstances > inotifyInstanceWarnThreshold
@@ -129,6 +193,43 @@ export function startHostDaemonHealthMonitor(
         "Host daemon inotify instance count is high; filesystem watchers are likely leaking (dead backends after poll interruptions)",
       );
     }
+    if (
+      usage.zombieChildren !== null &&
+      usage.zombieChildren > zombieChildWarnThreshold
+    ) {
+      options.logger.warn(
+        {
+          ...usage,
+          warnThreshold: zombieChildWarnThreshold,
+        },
+        "Host daemon has zombie child processes; child cleanup is not completing",
+      );
+    }
+    if (
+      queueStats &&
+      (queueStats.sizeBytes > eventQueueBytesWarnThreshold ||
+        queueAgeMs > eventQueueAgeWarnThresholdMs)
+    ) {
+      options.logger.warn(
+        {
+          queueAgeMs,
+          queueBytes: queueStats.sizeBytes,
+          queueDepth: queueStats.count,
+          ageWarnThresholdMs: eventQueueAgeWarnThresholdMs,
+          bytesWarnThreshold: eventQueueBytesWarnThreshold,
+        },
+        "Host daemon event outbox is backing up",
+      );
+    }
+  }
+
+  const timer = setIntervalFn(() => {
+    const usage = readResourceUsage();
+    if (usage instanceof Promise) {
+      void usage.then(inspectUsage).catch(() => undefined);
+      return;
+    }
+    inspectUsage(usage);
   }, intervalMs);
   timer.unref();
 

@@ -9,6 +9,7 @@ import {
   type ReactNode,
 } from "react";
 import { useNavigate } from "react-router-dom";
+import { useQueryClient } from "@tanstack/react-query";
 import { useAtom, useAtomValue, useSetAtom } from "jotai";
 import type {
   ProjectResponse,
@@ -26,7 +27,13 @@ import {
 } from "@/hooks/queries/connection-aware-query-state";
 import { isTransientReadError } from "@/hooks/queries/query-helpers";
 import { stripProjectThreads } from "@/hooks/queries/project-queries";
-import { useSidebarNavigation } from "@/hooks/queries/sidebar-navigation-query";
+import {
+  ensureSidebarNavigationHydrated,
+  loadMoreSidebarProjectThreads,
+  loadMoreSidebarThreads,
+  sidebarProjectHasMore,
+  useSidebarNavigation,
+} from "@/hooks/queries/sidebar-navigation-query";
 import { useReorderPinnedThread } from "@/hooks/mutations/thread-state-mutations";
 import {
   useCreateThreadSection,
@@ -979,7 +986,9 @@ interface ProjectModeSectionsProps extends BuiltInSectionRenderState {
   draftThreadIds: ReadonlySet<string>;
   effectivePinnedThreadIds: ReadonlySet<string>;
   isReady: boolean;
+  hasMoreThreads: (projectId: string) => boolean;
   onCreateProjectThread: (projectId: string) => void;
+  onLoadMoreProjectThreads: (projectId: string) => void;
   onProjectSelect?: () => void;
   onToggleEnvironmentCollapsed: ToggleCollapsedId;
   onToggleThreadCollapsed: ToggleCollapsedId;
@@ -1001,8 +1010,10 @@ function ProjectModeSections({
   draftThreadIds,
   effectivePinnedThreadIds,
   isReady,
+  hasMoreThreads,
   isSectionDisplayOptionsOpen,
   onCreateProjectThread,
+  onLoadMoreProjectThreads,
   onProjectSelect,
   onToggleCollapsed,
   onToggleEnvironmentCollapsed,
@@ -1140,6 +1151,10 @@ function ProjectModeSections({
           onProjectSelect={onProjectSelect}
           onToggleThreadCollapsed={onToggleThreadCollapsed}
           onToggleEnvironmentCollapsed={onToggleEnvironmentCollapsed}
+          hasMoreThreads={hasMoreThreads(PERSONAL_PROJECT_ID)}
+          onLoadMoreThreads={() =>
+            onLoadMoreProjectThreads(PERSONAL_PROJECT_ID)
+          }
         />
       ),
     },
@@ -1181,6 +1196,8 @@ function ProjectModeSections({
             headerActionsOpen={isSectionDisplayOptionsOpen(sectionId)}
             onProjectSelect={onProjectSelect}
             onCreateProjectThread={onCreateProjectThread}
+            hasMoreThreads={hasMoreThreads(row.project.id)}
+            onLoadMoreThreads={() => onLoadMoreProjectThreads(row.project.id)}
             onToggleProjectCollapsed={toggleProjectCollapsed}
             onToggleThreadCollapsed={onToggleThreadCollapsed}
             onToggleEnvironmentCollapsed={onToggleEnvironmentCollapsed}
@@ -1199,7 +1216,9 @@ interface SectionModeSectionsProps extends BuiltInSectionRenderState {
   compareThreads: ThreadComparator;
   sections: readonly SidebarSectionDefinition[];
   isReady: boolean;
+  hasMoreThreads?: boolean;
   onCreateThreadInSection: (sectionId: string) => void;
+  onLoadMoreThreads?: () => void;
   onProjectSelect?: () => void;
   onRemoveSection: (section: SidebarSectionDefinition) => void;
   onRenameSection: (section: SidebarSectionDefinition) => void;
@@ -1230,7 +1249,9 @@ function SectionModeSections({
   effectivePinnedThreadIds,
   sections,
   isReady,
+  hasMoreThreads,
   onCreateThreadInSection,
+  onLoadMoreThreads,
   onProjectSelect,
   onRemoveSection,
   onRenameSection,
@@ -1285,6 +1306,8 @@ function SectionModeSections({
       renderTopLevelSectionHeaderActions={renderTopLevelSectionHeaderActions}
       onToggleThreadCollapsed={onToggleThreadCollapsed}
       onToggleEnvironmentCollapsed={onToggleEnvironmentCollapsed}
+      hasMoreThreads={hasMoreThreads}
+      onLoadMoreThreads={onLoadMoreThreads}
       topLevelSectionOrder={order}
       onTopLevelSectionOrderChange={onOrderChange}
       pinnedReorderPending={pinnedReorderPending}
@@ -1307,7 +1330,9 @@ interface MachineModeSectionsProps extends BuiltInSectionRenderState {
   draftThreadIds: ReadonlySet<string>;
   effectivePinnedThreadIds: ReadonlySet<string>;
   isReady: boolean;
+  hasMoreThreads?: boolean;
   onProjectSelect?: () => void;
+  onLoadMoreThreads?: () => void;
   onToggleEnvironmentCollapsed: ToggleCollapsedId;
   onToggleThreadCollapsed: ToggleCollapsedId;
   pinnedSection: BuiltInSidebarSectionOptions;
@@ -1327,8 +1352,10 @@ export function MachineModeSections({
   draftThreadIds,
   effectivePinnedThreadIds,
   isReady,
+  hasMoreThreads,
   isSectionDisplayOptionsOpen,
   onProjectSelect,
+  onLoadMoreThreads,
   onToggleCollapsed,
   onToggleEnvironmentCollapsed,
   onToggleThreadCollapsed,
@@ -1424,6 +1451,8 @@ export function MachineModeSections({
           onProjectSelect={onProjectSelect}
           onToggleThreadCollapsed={onToggleThreadCollapsed}
           onToggleEnvironmentCollapsed={onToggleEnvironmentCollapsed}
+          hasMoreThreads={hasMoreThreads}
+          onLoadMoreThreads={onLoadMoreThreads}
         />
       ),
     },
@@ -1475,6 +1504,10 @@ export function MachineModeSections({
               onProjectSelect={onProjectSelect}
               onToggleThreadCollapsed={onToggleThreadCollapsed}
               onToggleEnvironmentCollapsed={onToggleEnvironmentCollapsed}
+              hasMoreThreads={
+                hasMoreThreads && section.key === machineSections.at(-1)?.key
+              }
+              onLoadMoreThreads={onLoadMoreThreads}
             />
           </SortableSidebarSection>
         );
@@ -1491,6 +1524,7 @@ function ProjectListComponent({
   threadSearch,
 }: ProjectListProps) {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const setRootComposeProjectId = useSetRootComposeProjectId();
   const sidebarNavigationQuery = useSidebarNavigation();
   const sidebarNavigation = sidebarNavigationQuery.data;
@@ -1556,6 +1590,44 @@ function ProjectListComponent({
     ),
   });
   const { threadId: selectedThreadId } = useRouteState();
+  const pagingProjectIds = useMemo(
+    () => [
+      ...(projects?.map((project) => project.id) ?? []),
+      PERSONAL_PROJECT_ID,
+    ],
+    [projects],
+  );
+  const hasMoreThreads = useCallback(
+    (projectId: string) => sidebarProjectHasMore(sidebarNavigation, projectId),
+    [sidebarNavigation],
+  );
+  const hasMoreVisibleThreads = pagingProjectIds.some(hasMoreThreads);
+  const handleLoadMoreProjectThreads = useCallback(
+    (projectId: string) => {
+      void loadMoreSidebarProjectThreads(queryClient, projectId).catch(
+        () => undefined,
+      );
+    },
+    [queryClient],
+  );
+  const handleLoadMoreVisibleThreads = useCallback(() => {
+    void loadMoreSidebarThreads(queryClient, pagingProjectIds).catch(
+      () => undefined,
+    );
+  }, [pagingProjectIds, queryClient]);
+  useEffect(() => {
+    if (
+      selectedThreadId === undefined ||
+      sidebarNavigation === undefined ||
+      sidebarNavigation._threadPagination.complete ||
+      threads.some((thread) => thread.id === selectedThreadId)
+    ) {
+      return;
+    }
+    void ensureSidebarNavigationHydrated(queryClient, sidebarNavigation).catch(
+      () => undefined,
+    );
+  }, [queryClient, selectedThreadId, sidebarNavigation, threads]);
   const {
     isPending: isPinnedReorderPending,
     mutate: reorderPinnedThreadMutate,
@@ -2066,6 +2138,7 @@ function ProjectListComponent({
             }
             status={projectsState.status}
             isReady={Boolean(sidebarNavigation)}
+            hasMoreThreads={hasMoreVisibleThreads}
             showPinnedSection={hasPinnedSection}
             pinnedSection={pinnedSection}
             threadsSection={threadsSection}
@@ -2077,6 +2150,7 @@ function ProjectListComponent({
             renderSectionDisplayOptions={renderSectionDisplayOptions}
             isSectionDisplayOptionsOpen={isSectionDisplayOptionsOpen}
             onProjectSelect={onProjectSelect}
+            onLoadMoreThreads={handleLoadMoreVisibleThreads}
             onToggleCollapsed={toggleSidebarSectionCollapsed}
             onToggleThreadCollapsed={toggleThreadCollapsed}
             onToggleEnvironmentCollapsed={toggleEnvironmentCollapsed}
@@ -2091,6 +2165,7 @@ function ProjectListComponent({
               }
               status={projectsState.status}
               isReady={Boolean(sidebarNavigation)}
+              hasMoreThreads={hasMoreVisibleThreads}
               showPinnedSection={hasPinnedSection}
               sections={sections}
               pinnedSection={pinnedSection}
@@ -2105,6 +2180,7 @@ function ProjectListComponent({
               compareThreads={sidebarThreadComparator}
               onProjectSelect={onProjectSelect}
               onCreateThreadInSection={handleCreateThreadInSection}
+              onLoadMoreThreads={handleLoadMoreVisibleThreads}
               onRenameSection={handleOpenRenameThreadSection}
               onRemoveSection={handleRemoveThreadSection}
               renderTopLevelSectionHeaderActions={(section) => {
@@ -2137,6 +2213,7 @@ function ProjectListComponent({
               }
               status={projectsState.status}
               isReady={Boolean(sidebarNavigation)}
+              hasMoreThreads={hasMoreThreads}
               showPinnedSection={hasPinnedSection}
               pinnedSection={pinnedSection}
               threadsSection={threadsSection}
@@ -2149,6 +2226,7 @@ function ProjectListComponent({
               isSectionDisplayOptionsOpen={isSectionDisplayOptionsOpen}
               onProjectSelect={onProjectSelect}
               onCreateProjectThread={handleCreateProjectThread}
+              onLoadMoreProjectThreads={handleLoadMoreProjectThreads}
               onToggleCollapsed={toggleSidebarSectionCollapsed}
               onToggleThreadCollapsed={toggleThreadCollapsed}
               onToggleEnvironmentCollapsed={toggleEnvironmentCollapsed}

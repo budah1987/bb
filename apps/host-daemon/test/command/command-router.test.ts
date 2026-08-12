@@ -35,6 +35,10 @@ type RouterHarness = ReturnType<typeof createHarness>;
 type TextPromptInput = Extract<PromptInput, { type: "text" }>;
 type ThreadStartCommand = Extract<HostDaemonCommand, { type: "thread.start" }>;
 type TurnSubmitCommand = Extract<HostDaemonCommand, { type: "turn.submit" }>;
+type WorkspaceStatusCommand = Extract<
+  HostDaemonOnlineRpcRequestMessage["command"],
+  { type: "workspace.status" }
+>;
 
 interface Deferred<T> {
   promise: Promise<T>;
@@ -43,7 +47,7 @@ interface Deferred<T> {
 }
 
 interface RunRouterCommandArgs {
-  command: HostDaemonCommand;
+  command: HostDaemonOnlineRpcRequestMessage["command"];
   requestId: string;
   router: CommandRouter;
 }
@@ -199,6 +203,21 @@ function createEnvironmentProvisionCommand(): EnvironmentProvisionCommand {
   };
 }
 
+function createWorkspaceStatusCommand(
+  mergeBaseBranch = "main",
+  environmentId = "env-router",
+): WorkspaceStatusCommand {
+  return {
+    type: "workspace.status",
+    environmentId,
+    mergeBaseBranch,
+    workspaceContext: {
+      workspacePath: `/tmp/${environmentId}`,
+      workspaceProvisionType: "unmanaged",
+    },
+  };
+}
+
 function flushAsyncWork(): Promise<void> {
   return new Promise((resolve) => {
     setImmediate(resolve);
@@ -219,6 +238,114 @@ async function runRouterCommand({
 }
 
 describe("CommandRouter", () => {
+  it("combines workspace status refresh bursts into one trailing read", async () => {
+    const harness = createHarness({ workspacePath: "/tmp/env-router" });
+    await harness.manager.ensureEnvironment({
+      environmentId: "env-router",
+      workspacePath: "/tmp/env-router",
+    });
+    const firstRead = createDeferred<void>();
+    const releaseFirstRead = createDeferred<void>();
+    const originalGetStatus = harness.workspace.getStatus;
+    harness.workspace.getStatus = async (options) => {
+      firstRead.resolve();
+      if (harness.workspaceState.statusReads === 0) {
+        await releaseFirstRead.promise;
+      }
+      return originalGetStatus(options);
+    };
+    const router = createRouter(harness);
+    const command = createWorkspaceStatusCommand();
+
+    const first = runRouterCommand({
+      command,
+      requestId: "status-first",
+      router,
+    });
+    await firstRead.promise;
+    const second = runRouterCommand({
+      command,
+      requestId: "status-second",
+      router,
+    });
+    const third = runRouterCommand({
+      command,
+      requestId: "status-third",
+      router,
+    });
+    await flushAsyncWork();
+
+    expect(harness.workspaceState.statusReads).toBe(0);
+    releaseFirstRead.resolve();
+    const responses = await Promise.all([first, second, third]);
+
+    expect(responses.every((response) => response.ok)).toBe(true);
+    expect(harness.workspaceState.statusReads).toBe(2);
+  });
+
+  it("limits concurrent workspace status refreshes across environments", async () => {
+    const releaseReads = createDeferred<void>();
+    const fourReadsStarted = createDeferred<void>();
+    let activeReads = 0;
+    let maximumActiveReads = 0;
+    const workspaces = new Map(
+      Array.from({ length: 5 }, (_, index) => {
+        const environmentId = `env-status-${index}`;
+        const fake = createFakeWorkspace(`/tmp/${environmentId}`);
+        const originalGetStatus = fake.workspace.getStatus;
+        fake.workspace.getStatus = async (options) => {
+          activeReads += 1;
+          maximumActiveReads = Math.max(maximumActiveReads, activeReads);
+          if (activeReads === 4) fourReadsStarted.resolve();
+          await releaseReads.promise;
+          activeReads -= 1;
+          return originalGetStatus(options);
+        };
+        return [environmentId, fake.workspace] as const;
+      }),
+    );
+    const harness = createHarness();
+    const runtimeManager = new RuntimeManager({
+      createRuntime: () => harness.runtime,
+      provisionWorkspace: async (options) => {
+        const workspacePath =
+          "path" in options ? options.path : options.targetPath;
+        const workspace = [...workspaces.values()].find(
+          (candidate) => candidate.path === workspacePath,
+        );
+        if (!workspace) throw new Error("Unexpected environment");
+        return workspace;
+      },
+    });
+    await Promise.all(
+      [...workspaces.keys()].map((environmentId) =>
+        runtimeManager.ensureEnvironment({
+          environmentId,
+          workspacePath: `/tmp/${environmentId}`,
+        }),
+      ),
+    );
+    const router = createRouter(harness, { runtimeManager });
+    const requests = [...workspaces.keys()].map((environmentId, index) =>
+      runRouterCommand({
+        command: createWorkspaceStatusCommand("main", environmentId),
+        requestId: `status-concurrent-${index}`,
+        router,
+      }),
+    );
+
+    await fourReadsStarted.promise;
+    await flushAsyncWork();
+    expect(activeReads).toBe(4);
+    expect(maximumActiveReads).toBe(4);
+
+    releaseReads.resolve();
+    const responses = await Promise.all(requests);
+    expect(responses.every((response) => response.ok)).toBe(true);
+    expect(maximumActiveReads).toBe(4);
+    await runtimeManager.shutdownAll();
+  });
+
   it("does not warn for expected provision cancellation RPC failures", async () => {
     const harness = createHarness({ workspacePath: "/tmp/env-router" });
     const logger = {
