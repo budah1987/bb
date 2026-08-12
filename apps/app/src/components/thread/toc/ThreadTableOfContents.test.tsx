@@ -317,6 +317,7 @@ beforeEach(() => {
   scrollElement = document.createElement("div");
   scrollElementIntoView = vi.fn();
   vi.mocked(useBottomAnchoredScroll).mockReturnValue({
+    anchorNextUserMessage: vi.fn(),
     getScrollElement: () => scrollElement,
     isAtBottom: false,
     scrollToBottom: vi.fn(),

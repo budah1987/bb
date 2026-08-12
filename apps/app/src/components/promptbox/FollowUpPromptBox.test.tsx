@@ -33,6 +33,7 @@ let resizeObserverCallback: ResizeObserverCallback | null = null;
 
 vi.mock("@/components/ui/bottom-anchored-scroll-body.js", () => ({
   useBottomAnchoredScroll: () => ({
+    anchorNextUserMessage: vi.fn(),
     isAtBottom: false,
     scrollToBottom: mocks.scrollToBottom,
     scrollElementIntoView: vi.fn(),

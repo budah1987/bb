@@ -86,6 +86,7 @@ import { getProjectComposeRoutePath } from "@/lib/route-paths";
 import { getThreadDisplayTitle } from "@/lib/thread-title";
 import { buildThreadHandoffLocationState } from "@/lib/thread-handoff-request";
 import { appToast } from "@/components/ui/app-toast";
+import { useBottomAnchoredScroll } from "@/components/ui/bottom-anchored-scroll-body";
 import {
   FollowUpPromptBox,
   type FollowUpComposerProps,
@@ -230,6 +231,7 @@ export function ThreadDetailPromptArea({
   thread,
 }: ThreadDetailPromptAreaProps) {
   const navigate = useNavigate();
+  const bottomAnchor = useBottomAnchoredScroll();
   const defaultExecutionOptionsQuery = useThreadDefaultExecutionOptions(
     thread.id,
     {
@@ -696,6 +698,7 @@ export function ThreadDetailPromptArea({
           execution: followUpExecutionSelection,
         });
         if (request) {
+          bottomAnchor?.anchorNextUserMessage();
           await sendMessage.mutateAsync(request);
         }
       }
@@ -714,6 +717,7 @@ export function ThreadDetailPromptArea({
       );
     }
   }, [
+    bottomAnchor,
     createQueuedMessage,
     currentPromptDraft,
     currentPromptDraftInput,
@@ -747,6 +751,7 @@ export function ThreadDetailPromptArea({
       setBottomAttachmentError(null);
 
       try {
+        bottomAnchor?.anchorNextUserMessage();
         await sendMessage.mutateAsync(shortcutRequest.request);
       } catch (nextError) {
         promptDraft.restoreIfEmpty(submittedDraft);
@@ -778,6 +783,7 @@ export function ThreadDetailPromptArea({
       setIsFollowUpShortcutSending(false);
     }
   }, [
+    bottomAnchor,
     canSubmitModifierShortcut,
     currentPromptDraft,
     currentPromptDraftInput,

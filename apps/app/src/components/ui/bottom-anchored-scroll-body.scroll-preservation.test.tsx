@@ -95,8 +95,18 @@ function requireHTMLElement(element: Element | null) {
 interface RenderArgs {
   threadId: string;
   rowIds: string[];
+  showAnchorNextMessageControl?: boolean;
   showCapturePrependAnchorControl?: boolean;
   showScrollToBottomControl?: boolean;
+}
+
+function AnchorNextMessageControl() {
+  const bottomAnchor = useBottomAnchoredScroll();
+  return (
+    <button type="button" onClick={() => bottomAnchor?.anchorNextUserMessage()}>
+      Anchor next message
+    </button>
+  );
 }
 
 function CapturePrependAnchorControl() {
@@ -120,6 +130,7 @@ function ScrollToBottomControl() {
 function renderTimeline({
   threadId,
   rowIds,
+  showAnchorNextMessageControl = false,
   showCapturePrependAnchorControl = false,
   showScrollToBottomControl = false,
 }: RenderArgs) {
@@ -130,6 +141,7 @@ function renderTimeline({
       scrollAreaClassName={SCROLL_AREA_CLASS}
       scrollAnchorThreadId={threadId}
     >
+      {showAnchorNextMessageControl ? <AnchorNextMessageControl /> : null}
       {showCapturePrependAnchorControl ? <CapturePrependAnchorControl /> : null}
       {showScrollToBottomControl ? <ScrollToBottomControl /> : null}
       {rowIds.map((rowId) => (
@@ -184,6 +196,46 @@ afterEach(() => {
 });
 
 describe("BottomAnchoredScrollBody scroll preservation", () => {
+  it("smoothly positions a sent user message near the top", () => {
+    const animationFrame = vi.fn((callback: FrameRequestCallback) => {
+      callback(0);
+      return 1;
+    });
+    vi.stubGlobal("requestAnimationFrame", animationFrame);
+    vi.stubGlobal(
+      "matchMedia",
+      vi.fn(() => ({ matches: false })),
+    );
+    const { getByRole, scrollArea, rowElements } = renderTimeline({
+      threadId: "thread-a",
+      rowIds: ["row-a", "optimistic-user-message-a"],
+      showAnchorNextMessageControl: true,
+    });
+    mockScrollAreaRect(scrollArea);
+    mockRowRect(
+      requireHTMLElement(rowElements.get("optimistic-user-message-a")!),
+      { top: 180, bottom: 220 },
+    );
+    setScrollMetrics(scrollArea, {
+      scrollHeight: 240,
+      clientHeight: 100,
+      scrollTop: 40,
+    });
+    const scrollTo = vi.fn();
+    scrollArea.scrollTo = scrollTo;
+
+    fireEvent.click(getByRole("button", { name: "Anchor next message" }));
+
+    expect(scrollTo).toHaveBeenCalledWith({
+      top: 204,
+      behavior: "smooth",
+    });
+    const endSpace = requireHTMLElement(
+      scrollArea.querySelector("[data-sent-message-end-space]"),
+    );
+    expect(endSpace.style.height).toBe("64px");
+  });
+
   it("shows the thread scrollbar only while scroll events are active", () => {
     vi.useFakeTimers();
     const { scrollArea } = renderTimeline({
