@@ -851,6 +851,10 @@ describe("discoverProviderCommands (codex)", () => {
       path.join(fixture.codexHome, "skills", "prd", "SKILL.md"),
       "---\nname: prd\ndescription: Draft a PRD\n---\n",
     );
+    await writeFileEnsuringDir(
+      path.join(fixture.homeDir, ".agents", "skills", "shared", "SKILL.md"),
+      "---\nname: shared\ndescription: Shared user skill\n---\n",
+    );
 
     const commands = await discoverCodex(fixture, fixture.cwd);
 
@@ -866,6 +870,13 @@ describe("discoverProviderCommands (codex)", () => {
       source: "skill",
       origin: "user",
       description: "Draft a PRD",
+      argumentHint: null,
+    });
+    expect(byName(commands, "shared")).toEqual({
+      name: "shared",
+      source: "skill",
+      origin: "user",
+      description: "Shared user skill",
       argumentHint: null,
     });
   });
@@ -904,6 +915,7 @@ describe("discoverProviderCommands (codex)", () => {
     const agentsRootPaths = roots
       .filter(
         (root) =>
+          root.origin === "project" &&
           root.shape === "skill" &&
           root.rootPath.includes(`${path.sep}.agents${path.sep}`),
       )
@@ -1118,7 +1130,7 @@ describe("discoverProviderCommands (codex)", () => {
     expect(byName(commands, "disabled-plugin:hidden")).toBeUndefined();
   });
 
-  it("returns only user-origin codex skills when cwd is null", async () => {
+  it("returns codex and shared user skills when cwd is null", async () => {
     const fixture = await makeWorkspaceFixture();
     await writeFileEnsuringDir(
       path.join(fixture.cwd, ".codex", "skills", "proj", "SKILL.md"),
@@ -1132,10 +1144,14 @@ describe("discoverProviderCommands (codex)", () => {
       path.join(fixture.codexHome, "skills", "home", "SKILL.md"),
       "---\nname: home\ndescription: home\n---\n",
     );
+    await writeFileEnsuringDir(
+      path.join(fixture.homeDir, ".agents", "skills", "shared", "SKILL.md"),
+      "---\nname: shared\ndescription: shared user\n---\n",
+    );
 
     const commands = await discoverCodex(fixture, null);
 
-    expect(commands.map((command) => command.name)).toEqual(["home"]);
+    expect(commands.map((command) => command.name)).toEqual(["home", "shared"]);
   });
 });
 

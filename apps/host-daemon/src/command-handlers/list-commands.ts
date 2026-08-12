@@ -1205,6 +1205,13 @@ export function resolveCommandScanRoots(
       origin: "user",
     });
     roots.push({
+      rootPath: path.join(resolution.homeDir, AGENTS_DIR_NAME, "skills"),
+      shape: "skill",
+      namePrefix: "",
+      source: "skill",
+      origin: "user",
+    });
+    roots.push({
       rootPath: path.join(resolution.codexHome, "skills", ".system"),
       shape: "skill",
       namePrefix: "",

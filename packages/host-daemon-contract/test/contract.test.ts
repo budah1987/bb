@@ -1275,8 +1275,8 @@ describe("host-daemon command schemas", () => {
   // satisfy a `>= 95` check while missing the BBamir payloads, so the merged
   // build claims the current version to force every older daemon to update
   // before it connects.
-  it("uses protocol version 99 for the current wire surface", () => {
-    expect(HOST_DAEMON_PROTOCOL_VERSION).toBe(99);
+  it("uses protocol version 100 for the current wire surface", () => {
+    expect(HOST_DAEMON_PROTOCOL_VERSION).toBe(100);
   });
 
   it("binds Plan cancellation to a required turn id and typed result", () => {
