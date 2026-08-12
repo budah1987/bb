@@ -12,6 +12,7 @@ import {
   BluetoothIcon,
   Book02Icon,
   BookOpen01Icon,
+  BrainIcon,
   Briefcase01Icon,
   Bug01Icon,
   BulbIcon,
@@ -89,6 +90,7 @@ import {
   ScissorIcon,
   Settings01Icon,
   Shield01Icon,
+  ShippingTruck01Icon,
   ShoppingCart01Icon,
   SkullIcon,
   SmileIcon,
@@ -112,11 +114,37 @@ import {
   UserIcon,
   Video01Icon,
   Wallet01Icon,
+  WarehouseIcon,
   Wifi01Icon,
   Wrench01Icon,
   ZapIcon,
 } from "@hugeicons/core-free-icons";
 import { cn } from "../lib/utils";
+
+const GhostIcon: IconSvgElement = [
+  [
+    "path",
+    {
+      d: "M5 21V10A7 7 0 0 1 19 10V21L16 19L14 21L12 19L10 21L8 19L5 21Z",
+      fill: "none",
+      stroke: "currentColor",
+      strokeLinecap: "round",
+      strokeLinejoin: "round",
+      strokeWidth: "1.5",
+      key: "0",
+    },
+  ],
+  [
+    "path",
+    {
+      d: "M9 11H9.01M15 11H15.01",
+      stroke: "currentColor",
+      strokeLinecap: "round",
+      strokeWidth: "2",
+      key: "1",
+    },
+  ],
+];
 
 export interface ProjectGlyph {
   name: string;
@@ -185,6 +213,11 @@ export const PROJECT_GLYPHS: readonly ProjectGlyph[] = [
   { name: "Bug", icon: Bug01Icon, keywords: ["bug", "insect", "debug"] },
   { name: "Chip", icon: ChipIcon, keywords: ["chip", "hardware", "circuit"] },
   { name: "Cpu", icon: CpuIcon, keywords: ["cpu", "processor", "compute"] },
+  {
+    name: "Brain",
+    icon: BrainIcon,
+    keywords: ["brain", "mind", "think", "ai"],
+  },
   {
     name: "Database",
     icon: Database01Icon,
@@ -362,6 +395,11 @@ export const PROJECT_GLYPHS: readonly ProjectGlyph[] = [
     icon: Building01Icon,
     keywords: ["building", "office", "company"],
   },
+  {
+    name: "Warehouse",
+    icon: WarehouseIcon,
+    keywords: ["warehouse", "storage", "inventory", "logistics"],
+  },
   { name: "City", icon: City01Icon, keywords: ["city", "skyline", "urban"] },
   {
     name: "Castle",
@@ -379,6 +417,11 @@ export const PROJECT_GLYPHS: readonly ProjectGlyph[] = [
   { name: "Smile", icon: SmileIcon, keywords: ["smile", "happy", "face"] },
   { name: "Happy", icon: HappyIcon, keywords: ["happy", "joy", "face"] },
   { name: "Skull", icon: SkullIcon, keywords: ["skull", "danger", "pirate"] },
+  {
+    name: "Ghost",
+    icon: GhostIcon,
+    keywords: ["ghost", "spooky", "spirit", "boo"],
+  },
   { name: "Alien", icon: Alien01Icon, keywords: ["alien", "space", "ufo"] },
   { name: "Ufo", icon: Ufo01Icon, keywords: ["ufo", "space", "saucer"] },
   { name: "Saturn", icon: SaturnIcon, keywords: ["saturn", "planet", "space"] },
@@ -441,6 +484,11 @@ export const PROJECT_GLYPHS: readonly ProjectGlyph[] = [
     name: "Truck",
     icon: TruckIcon,
     keywords: ["truck", "delivery", "shipping"],
+  },
+  {
+    name: "ShippingTruck",
+    icon: ShippingTruck01Icon,
+    keywords: ["shipping", "truck", "delivery", "logistics"],
   },
   { name: "Train", icon: Train01Icon, keywords: ["train", "rail", "transit"] },
   {
