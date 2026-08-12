@@ -117,6 +117,36 @@ describe("buildConductorProjection", () => {
     expect(projection.projects[1]?.workspaces).toEqual([]);
   });
 
+  it("keeps the first conversation title after workspace provisioning", () => {
+    const projection = buildConductorProjection(
+      [
+        thread("first", {
+          title: "Fix workspace naming",
+          environment: {
+            id: "environment-1",
+            name: null,
+            branchName: "budah1987/fix-workspace-naming-thread-1",
+            workspaceDisplayKind: "managed-worktree",
+          },
+        }),
+      ],
+      [{ id: "project-1", name: "BB", isPersonal: false }],
+    );
+
+    expect(projection.projects[0]?.workspaces[0]?.title).toBe(
+      "Fix workspace naming",
+    );
+  });
+
+  it("keeps an explicit workspace name above the first conversation title", () => {
+    const projection = buildConductorProjection(
+      [thread("first", { title: "Fix workspace naming" })],
+      [{ id: "project-1", name: "BB", isPersonal: false }],
+    );
+
+    expect(projection.projects[0]?.workspaces[0]?.title).toBe("Payments");
+  });
+
   it("projects native environments exactly once and preserves legacy organizers", () => {
     const threads = [
       thread("organizer", { originPluginId: "conductor-workspaces" }),
