@@ -77,10 +77,14 @@ function workspaceTitle(
 ): string {
   if (isUnassigned) return "Local conversations";
   const representative = threads[0];
+  const firstConversationTitle = representative
+    ? representative.title?.trim() || representative.titleFallback?.trim()
+    : null;
   return (
     representative?.environment?.name?.trim() ||
+    firstConversationTitle ||
     representative?.environment?.branchName?.trim() ||
-    (representative ? titleFor(representative) : "Untitled workspace")
+    "Untitled workspace"
   );
 }
 
