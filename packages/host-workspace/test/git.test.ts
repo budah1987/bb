@@ -280,6 +280,37 @@ describe("command timeouts", () => {
       name: "WorkspaceError",
     });
   });
+
+  it.skipIf(process.platform === "win32")(
+    "kills shell pipeline descendants after a timeout",
+    async () => {
+      const repoPath = await initEmptyRepo();
+      const pidPath = path.join(repoPath, "pipeline-child.pid");
+
+      await expect(
+        runShellPipeline(
+          `sleep 30 & child=$!; printf '%s' "$child" > "$1"; wait "$child"`,
+          [pidPath],
+          { cwd: repoPath, timeoutMs: 100 },
+        ),
+      ).rejects.toMatchObject({ code: "shell_pipeline_timeout" });
+
+      const childPid = Number.parseInt(await fs.readFile(pidPath, "utf8"), 10);
+      let isRunning = true;
+      for (let attempt = 0; attempt < 20 && isRunning; attempt += 1) {
+        try {
+          process.kill(childPid, 0);
+          await new Promise((resolve) => setTimeout(resolve, 25));
+        } catch (error) {
+          if ((error as NodeJS.ErrnoException).code !== "ESRCH") throw error;
+          isRunning = false;
+        }
+      }
+      if (isRunning) process.kill(childPid, "SIGKILL");
+
+      expect(isRunning).toBe(false);
+    },
+  );
 });
 
 describe("readGitBlob", () => {

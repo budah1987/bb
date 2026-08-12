@@ -179,6 +179,7 @@ export type HostDaemonProjectAttachmentContentQuery = z.infer<
 
 export const hostDaemonEventEnvelopeSchema = z
   .object({
+    eventId: z.string().uuid(),
     threadId: z.string().min(1),
     event: threadEventSchema,
   })
@@ -220,9 +221,19 @@ const hostDaemonWireEventSchema = z
 export const hostDaemonEventGroupSchema = z
   .object({
     threadId: z.string().min(1),
+    eventIds: z.array(z.string().uuid()).min(1),
     events: z.array(hostDaemonWireEventSchema).min(1),
   })
-  .strict();
+  .strict()
+  .superRefine((group, context) => {
+    if (group.eventIds.length !== group.events.length) {
+      context.addIssue({
+        code: "custom",
+        message: "Daemon event ID count must match the event count",
+        path: ["eventIds"],
+      });
+    }
+  });
 export type HostDaemonEventGroup = z.infer<typeof hostDaemonEventGroupSchema>;
 
 export const hostDaemonEventBatchRequestSchema = z
@@ -247,9 +258,14 @@ export function groupHostDaemonEvents(
   for (const envelope of envelopes) {
     const last = groups.at(-1);
     if (last?.threadId === envelope.threadId) {
+      last.eventIds.push(envelope.eventId);
       last.events.push(envelope.event);
     } else {
-      groups.push({ threadId: envelope.threadId, events: [envelope.event] });
+      groups.push({
+        threadId: envelope.threadId,
+        eventIds: [envelope.eventId],
+        events: [envelope.event],
+      });
     }
   }
   return groups;
@@ -259,7 +275,13 @@ export function ungroupHostDaemonEvents(
   groups: readonly HostDaemonEventGroup[],
 ): HostDaemonEventEnvelope[] {
   return groups.flatMap((group) =>
-    group.events.map((event) => ({ threadId: group.threadId, event })),
+    group.events.map((event, index) => {
+      const eventId = group.eventIds[index];
+      if (eventId === undefined) {
+        throw new Error("Daemon event group is missing an event ID");
+      }
+      return { eventId, threadId: group.threadId, event };
+    }),
   );
 }
 

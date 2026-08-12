@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { eq } from "drizzle-orm";
 import { events, getThread } from "@bb/db";
 import { threadScope, turnScope } from "@bb/domain";
@@ -31,7 +32,9 @@ interface SeedEventRouteArgs {
 interface PostEventBatchArgs {
   harness: TestAppHarness;
   sessionId: string;
-  events: HostDaemonEventEnvelope[];
+  events: Array<
+    Omit<HostDaemonEventEnvelope, "eventId"> & { eventId?: string }
+  >;
 }
 
 async function postEventBatch(args: PostEventBatchArgs): Promise<Response> {
@@ -40,7 +43,12 @@ async function postEventBatch(args: PostEventBatchArgs): Promise<Response> {
     headers: internalAuthHeaders(args.harness),
     body: JSON.stringify({
       sessionId: args.sessionId,
-      eventGroups: groupHostDaemonEvents(args.events),
+      eventGroups: groupHostDaemonEvents(
+        args.events.map((event) => ({
+          ...event,
+          eventId: event.eventId ?? randomUUID(),
+        })),
+      ),
     }),
   });
 }

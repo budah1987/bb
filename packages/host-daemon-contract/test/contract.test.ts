@@ -1276,7 +1276,7 @@ describe("host-daemon command schemas", () => {
   // build claims the current version to force every older daemon to update
   // before it connects.
   it("uses protocol version 100 for the current wire surface", () => {
-    expect(HOST_DAEMON_PROTOCOL_VERSION).toBe(100);
+    expect(HOST_DAEMON_PROTOCOL_VERSION).toBe(101);
   });
 
   it("binds Plan cancellation to a required turn id and typed result", () => {
@@ -3254,6 +3254,7 @@ describe("host-daemon session schemas", () => {
         eventGroups: [
           {
             threadId: "thr_123",
+            eventIds: ["00000000-0000-4000-8000-000000000001"],
             events: [
               {
                 type: "system/error",
@@ -3333,6 +3334,7 @@ describe("host-daemon session schemas", () => {
         eventGroups: [
           {
             threadId: "thr_123",
+            eventIds: ["00000000-0000-4000-8000-000000000001"],
             events: [
               {
                 type: "system/error",
@@ -3375,6 +3377,7 @@ describe("host-daemon session schemas", () => {
           eventGroups: [
             {
               threadId: "thr_123",
+              eventIds: ["00000000-0000-4000-8000-000000000001"],
               events: [
                 {
                   type: "item/started",

@@ -1,4 +1,4 @@
-import { useCallback, useMemo } from "react";
+import { useCallback, useEffect, useMemo } from "react";
 import { useStore } from "jotai";
 import { useNavigate } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
@@ -17,7 +17,10 @@ import {
   useEnvironmentPullRequest,
 } from "@/hooks/queries/environment-queries";
 import { useHosts } from "@/hooks/queries/host-queries";
-import { useSidebarNavigation } from "@/hooks/queries/sidebar-navigation-query";
+import {
+  ensureSidebarNavigationHydrated,
+  useSidebarNavigation,
+} from "@/hooks/queries/sidebar-navigation-query";
 import { useUpdateThread } from "@/hooks/mutations/thread-state-mutations";
 import { useThreadSplitsEnabled } from "@/hooks/useThreadSplitsEnabled";
 import { toPluginSidebarThread } from "./plugin-sidebar-threads";
@@ -45,9 +48,9 @@ const EMPTY_ENTRIES: ReadonlyMap<string, ThreadListEntry> = new Map();
 /**
  * The sidebar's live thread view for plugin surfaces.
  *
- * Deliberately built on `useSidebarNavigation`, the same query the built-in
- * sidebar uses: it already owns the realtime subscriptions, so a plugin list
- * costs no extra request and updates on exactly the same events.
+ * Built on `useSidebarNavigation`, the same query the built-in sidebar uses.
+ * Plugin access loads any remaining pages before reporting a ready list, then
+ * receives the same realtime updates as the built-in sidebar.
  *
  * `status` reports "error" only while there is nothing to show. Once data has
  * loaded, a failed background refresh keeps the last good list as "ready" —
@@ -56,6 +59,13 @@ const EMPTY_ENTRIES: ReadonlyMap<string, ThreadListEntry> = new Map();
 export function useSidebarThreads(): PluginSidebarThreadsState {
   const query = useSidebarNavigation();
   const data = query.data;
+  const queryClient = useQueryClient();
+  useEffect(() => {
+    if (data?._threadPagination.complete !== false) return;
+    void ensureSidebarNavigationHydrated(queryClient, data).catch(
+      () => undefined,
+    );
+  }, [data, queryClient]);
   // The sidebar already subscribes to host updates; this reads the same
   // cached list so a row can print a machine name instead of a host id.
   const { data: hosts } = useHosts();
@@ -68,6 +78,13 @@ export function useSidebarThreads(): PluginSidebarThreadsState {
     if (data === undefined) {
       return {
         status: query.isError ? "error" : "loading",
+        threads: EMPTY_THREADS,
+        projects: EMPTY_PROJECTS,
+      };
+    }
+    if (!data._threadPagination.complete) {
+      return {
+        status: "loading",
         threads: EMPTY_THREADS,
         projects: EMPTY_PROJECTS,
       };
@@ -96,6 +113,13 @@ export function useSidebarThreads(): PluginSidebarThreadsState {
 /** Thread id -> host entry, for O(1) lookups by id. */
 export function useThreadEntryMap(): ReadonlyMap<string, ThreadListEntry> {
   const { data } = useSidebarNavigation();
+  const queryClient = useQueryClient();
+  useEffect(() => {
+    if (data?._threadPagination.complete !== false) return;
+    void ensureSidebarNavigationHydrated(queryClient, data).catch(
+      () => undefined,
+    );
+  }, [data, queryClient]);
   return useMemo(() => {
     if (data === undefined) return EMPTY_ENTRIES;
     const entries = new Map<string, ThreadListEntry>();

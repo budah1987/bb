@@ -187,6 +187,8 @@ export interface ThreadTimelineRowsProps {
   workspaceRootPath: string | undefined;
 }
 
+const TIMELINE_ROW_CONTAINMENT_DELAY_MS = 5_000;
+
 /**
  * Stable renderer config: callbacks, theme, project/workspace identity. These
  * values change only when the parent's identity changes, so consumers that
@@ -594,6 +596,42 @@ function useTimelineSearchExpansionRowIds(
     }
     return combinedRowIds;
   }, [inheritedRowIds, location.state, rows, threadId]);
+}
+
+function TimelineSearchExpansionBoundary({
+  children,
+  rows,
+}: {
+  children: ReactNode;
+  rows: readonly ThreadTimelineViewRow[];
+}) {
+  const searchExpandedRowIds = useTimelineSearchExpansionRowIds(rows);
+  const stableSearchExpandedRowIds = useStableReadonlySet(searchExpandedRowIds);
+  return (
+    <TimelineSearchExpansionContext.Provider value={stableSearchExpandedRowIds}>
+      {children}
+    </TimelineSearchExpansionContext.Provider>
+  );
+}
+
+function TimelineSearchScrollEffect({
+  hasOlderTimelineRows,
+  isLoadingOlderTimelineRows,
+  onLoadOlderRows,
+  rows,
+}: {
+  hasOlderTimelineRows: boolean;
+  isLoadingOlderTimelineRows: boolean;
+  onLoadOlderRows: (() => Promise<void> | void) | undefined;
+  rows: readonly ThreadTimelineViewRow[];
+}) {
+  const { threadId } = useTimelineRendererStaticContext();
+  useScrollToSearchedMessage(rows, threadId, {
+    hasOlderRows: hasOlderTimelineRows,
+    isLoadingOlderRows: isLoadingOlderTimelineRows,
+    onLoadOlderRows,
+  });
+  return null;
 }
 
 function buildTurnSummaryDetailsIdentity({
@@ -1797,14 +1835,7 @@ function TimelineRowsList({
   unreadDividerAutoScroll,
   unreadDividerPlacement,
 }: TimelineRowsListProps) {
-  const { threadId } = useTimelineRendererStaticContext();
-  const searchExpandedRowIds = useTimelineSearchExpansionRowIds(rows);
-  const stableSearchExpandedRowIds = useStableReadonlySet(searchExpandedRowIds);
-  useScrollToSearchedMessage(rows, threadId, {
-    hasOlderRows: hasOlderTimelineRows,
-    isLoadingOlderRows: isLoadingOlderTimelineRows,
-    onLoadOlderRows,
-  });
+  const listRef = useRef<HTMLDivElement>(null);
   const activeLatestBundleId = useMemo(
     () => findActiveLatestBundleId(rows),
     [rows],
@@ -1813,9 +1844,46 @@ function TimelineRowsList({
     () => buildTimelineRowsListItems({ rows, unreadDividerPlacement }),
     [rows, unreadDividerPlacement],
   );
+  useEffect(() => {
+    let frame: number | null = null;
+    const timeout = window.setTimeout(() => {
+      frame = window.requestAnimationFrame(() => {
+        const list = listRef.current;
+        if (list === null) return;
+        const rowElements = Array.from(list.children).filter(
+          (child): child is HTMLElement =>
+            child instanceof HTMLElement &&
+            child.hasAttribute("data-timeline-row-id") &&
+            !child.hasAttribute("data-timeline-row-contained"),
+        );
+        const heights = rowElements.map(
+          (rowElement) => rowElement.getBoundingClientRect().height,
+        );
+        for (const [index, rowElement] of rowElements.entries()) {
+          rowElement.style.containIntrinsicSize = `auto ${Math.max(
+            heights[index] ?? 0,
+            1,
+          )}px`;
+          rowElement.style.contentVisibility = "auto";
+          rowElement.setAttribute("data-timeline-row-contained", "");
+        }
+      });
+    }, TIMELINE_ROW_CONTAINMENT_DELAY_MS);
+    return () => {
+      window.clearTimeout(timeout);
+      if (frame !== null) window.cancelAnimationFrame(frame);
+    };
+  }, [items]);
   return (
-    <TimelineSearchExpansionContext.Provider value={stableSearchExpandedRowIds}>
+    <TimelineSearchExpansionBoundary rows={rows}>
+      <TimelineSearchScrollEffect
+        hasOlderTimelineRows={hasOlderTimelineRows ?? false}
+        isLoadingOlderTimelineRows={isLoadingOlderTimelineRows ?? false}
+        onLoadOlderRows={onLoadOlderRows}
+        rows={rows}
+      />
       <div
+        ref={listRef}
         className={cn(
           "flex min-w-0 flex-col [&_button:not(:disabled)]:cursor-pointer",
           timelineRowsListGapClassName(spacing),
@@ -1847,7 +1915,7 @@ function TimelineRowsList({
           );
         })}
       </div>
-    </TimelineSearchExpansionContext.Provider>
+    </TimelineSearchExpansionBoundary>
   );
 }
 

@@ -312,6 +312,12 @@ type ReadTrackedPatchByPathArgs = {
 
 type WorkspaceMutationTargets = Workspace[];
 type WorkspaceMutationWork<T> = () => Promise<T>;
+type MergeBaseStatus = NonNullable<WorkspaceStatus["mergeBase"]>;
+
+interface MergeBaseStatusCache {
+  key: string;
+  value: Promise<MergeBaseStatus>;
+}
 
 interface ListWorkspaceFilesRecursivelyArgs {
   dir: string;
@@ -742,6 +748,7 @@ async function readUntrackedNumstatEntries(
 
 export class Workspace {
   readonly path: string;
+  private mergeBaseStatusCache: MergeBaseStatusCache | null = null;
 
   constructor(path: string) {
     this.path = path;
@@ -863,7 +870,7 @@ export class Workspace {
           timeoutMs: WORKSPACE_STATUS_GIT_TIMEOUT_MS,
         }),
         mergeBaseBranch
-          ? this.readMergeBaseStatus(
+          ? this.readCachedMergeBaseStatus(
               mergeBaseBranch,
               WORKSPACE_STATUS_GIT_TIMEOUT_MS,
             )
@@ -1907,7 +1914,7 @@ export class Workspace {
   private async readMergeBaseStatus(
     mergeBaseBranch: string,
     timeoutMs?: number,
-  ): Promise<WorkspaceStatus["mergeBase"]> {
+  ): Promise<MergeBaseStatus> {
     const [mergeBaseRef, aheadBehindCounts, commits, nameStatus, numstat] =
       await Promise.all([
         readMergeBaseRef(this.path, mergeBaseBranch, { timeoutMs }),
@@ -2036,6 +2043,45 @@ export class Workspace {
       insertions: effectiveInsertions,
       deletions: effectiveDeletions,
     };
+  }
+
+  private async readCachedMergeBaseStatus(
+    mergeBaseBranch: string,
+    timeoutMs?: number,
+  ): Promise<MergeBaseStatus> {
+    const [headRef, baseRef] = await Promise.all([
+      runGit(["rev-parse", "--verify", "HEAD^{commit}"], {
+        cwd: this.path,
+        allowFailure: true,
+        timeoutMs,
+      }),
+      runGit(["rev-parse", "--verify", `${mergeBaseBranch}^{commit}`], {
+        cwd: this.path,
+        allowFailure: true,
+        timeoutMs,
+      }),
+    ]);
+    const key = [
+      mergeBaseBranch,
+      headRef.exitCode,
+      headRef.stdout.trim(),
+      baseRef.exitCode,
+      baseRef.stdout.trim(),
+    ].join("\0");
+    if (this.mergeBaseStatusCache?.key === key) {
+      return this.mergeBaseStatusCache.value;
+    }
+
+    const value = this.readMergeBaseStatus(mergeBaseBranch, timeoutMs);
+    this.mergeBaseStatusCache = { key, value };
+    try {
+      return await value;
+    } catch (error) {
+      if (this.mergeBaseStatusCache?.value === value) {
+        this.mergeBaseStatusCache = null;
+      }
+      throw error;
+    }
   }
 
   /**

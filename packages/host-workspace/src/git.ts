@@ -1,4 +1,9 @@
-import { execFile, type ExecFileException } from "node:child_process";
+import {
+  execFile,
+  spawn,
+  type ChildProcess,
+  type ExecFileException,
+} from "node:child_process";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -228,6 +233,15 @@ function createShellPipelineCancelledError(cause?: unknown): WorkspaceError {
   );
 }
 
+function killShellPipeline(child: ChildProcess): void {
+  if (child.pid === undefined) return;
+  try {
+    process.kill(-child.pid, "SIGKILL");
+  } catch {
+    child.kill("SIGKILL");
+  }
+}
+
 function createGitCommandFailedError(
   args: string[],
   stderr: string,
@@ -343,44 +357,92 @@ export async function runShellPipeline(
   if (options.signal?.aborted) {
     throw createShellPipelineCancelledError(options.signal.reason);
   }
-  try {
-    const result = await execFileAsync(
-      "sh",
-      ["-c", script, "sh", ...positionalArgs],
-      {
-        cwd: options.cwd,
-        encoding: "utf8",
-        env: resolveGitProcessEnv({ env: undefined }),
-        maxBuffer: DEFAULT_BUFFER_BYTES,
-        signal: options.signal,
-        timeout: options.timeoutMs,
-      },
-    );
-    return { stdout: result.stdout, stderr: result.stderr, exitCode: 0 };
-  } catch (error) {
-    if (options.signal?.aborted) {
-      throw createShellPipelineCancelledError(error);
+  return new Promise((resolve, reject) => {
+    let didTimeOut = false;
+    let wasCancelled = false;
+    let outputError: Error | undefined;
+    let spawnError: Error | undefined;
+    let timeout: NodeJS.Timeout | undefined;
+    const stdoutChunks: Buffer[] = [];
+    const stderrChunks: Buffer[] = [];
+    let stdoutBytes = 0;
+    let stderrBytes = 0;
+    const child = spawn("sh", ["-c", script, "sh", ...positionalArgs], {
+      cwd: options.cwd,
+      detached: process.platform !== "win32",
+      env: resolveGitProcessEnv({ env: undefined }),
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+
+    const collectOutput = (
+      chunks: Buffer[],
+      chunk: Buffer,
+      currentBytes: number,
+    ): number => {
+      const nextBytes = currentBytes + chunk.length;
+      if (nextBytes > DEFAULT_BUFFER_BYTES) {
+        outputError ??= new Error("Shell pipeline output exceeded maxBuffer");
+        killShellPipeline(child);
+        return nextBytes;
+      }
+      chunks.push(chunk);
+      return nextBytes;
+    };
+    child.stdout.on("data", (chunk: Buffer) => {
+      stdoutBytes = collectOutput(stdoutChunks, chunk, stdoutBytes);
+    });
+    child.stderr.on("data", (chunk: Buffer) => {
+      stderrBytes = collectOutput(stderrChunks, chunk, stderrBytes);
+    });
+    child.once("error", (error) => {
+      spawnError = error;
+    });
+
+    const cancel = () => {
+      wasCancelled = true;
+      killShellPipeline(child);
+    };
+    options.signal?.addEventListener("abort", cancel, { once: true });
+    if (options.signal?.aborted) cancel();
+    if (options.timeoutMs !== undefined) {
+      timeout = setTimeout(() => {
+        didTimeOut = true;
+        killShellPipeline(child);
+      }, options.timeoutMs);
     }
-    const execError = toExecError(error);
-    const timeoutMs = readCommandTimeoutMs(execError, options.timeoutMs);
-    if (timeoutMs !== null) {
-      throw createShellPipelineTimedOutError(timeoutMs, error);
-    }
-    if (options.allowFailure) {
-      return {
-        stdout: execError?.stdout ?? "",
-        stderr: execError?.stderr ?? "",
-        exitCode: getExitCode(execError),
-      };
-    }
-    const stderr = trimOutput(execError?.stderr ?? "");
-    const detail = stderr ? `: ${stderr}` : "";
-    throw new WorkspaceError(
-      "shell_pipeline_failed",
-      `shell pipeline failed${detail}`,
-      { cause: error },
-    );
-  }
+
+    child.once("close", (exitCode) => {
+      if (timeout) clearTimeout(timeout);
+      options.signal?.removeEventListener("abort", cancel);
+      const stdout = Buffer.concat(stdoutChunks).toString("utf8");
+      const stderr = Buffer.concat(stderrChunks).toString("utf8");
+      const cause = spawnError ?? outputError;
+      if (wasCancelled) {
+        reject(createShellPipelineCancelledError(cause));
+        return;
+      }
+      if (didTimeOut && options.timeoutMs !== undefined) {
+        reject(createShellPipelineTimedOutError(options.timeoutMs, cause));
+        return;
+      }
+      if (exitCode === 0 && !cause) {
+        resolve({ stdout, stderr, exitCode: 0 });
+        return;
+      }
+      if (options.allowFailure && !cause) {
+        resolve({ stdout, stderr, exitCode: exitCode ?? 1 });
+        return;
+      }
+      const detail = trimOutput(stderr);
+      reject(
+        new WorkspaceError(
+          "shell_pipeline_failed",
+          `shell pipeline failed${detail ? `: ${detail}` : ""}`,
+          { cause },
+        ),
+      );
+    });
+  });
 }
 
 /**
@@ -1050,7 +1112,12 @@ async function readDefaultBranchRelation(
     return "unknown";
   }
 
-  const originIsAncestor = await isAncestorRef(cwd, originRef, localRef, options);
+  const originIsAncestor = await isAncestorRef(
+    cwd,
+    originRef,
+    localRef,
+    options,
+  );
   if (originIsAncestor === true) {
     return "local-ahead";
   }
@@ -1120,7 +1187,10 @@ export async function fetchRemoteBranches(
     });
     return { status: result.exitCode === 0 ? "fetched" : "failed" };
   } catch (error) {
-    if (error instanceof WorkspaceError && error.code === "git_command_timeout") {
+    if (
+      error instanceof WorkspaceError &&
+      error.code === "git_command_timeout"
+    ) {
       return { status: "failed" };
     }
     throw error;
@@ -1294,7 +1364,12 @@ export async function listRemoteBranches(cwd: string): Promise<string[]> {
 export async function hasUncommittedChanges(cwd: string): Promise<boolean> {
   await ensureGitRepo(cwd);
   const status = await runGit(
-    ["--no-optional-locks", "status", "--porcelain=v1", "--untracked-files=all"],
+    [
+      "--no-optional-locks",
+      "status",
+      "--porcelain=v1",
+      "--untracked-files=all",
+    ],
     { cwd },
   );
   return status.stdout.trim().length > 0;

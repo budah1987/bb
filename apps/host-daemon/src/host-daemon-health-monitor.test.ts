@@ -3,6 +3,7 @@ import {
   startHostDaemonHealthMonitor,
   type HostDaemonResourceUsage,
 } from "./host-daemon-health-monitor.js";
+import type { EventSinkStorageStats } from "./event-sink-storage.js";
 
 interface CapturedTimer {
   callback: () => void;
@@ -11,8 +12,15 @@ interface CapturedTimer {
 }
 
 function createMonitorHarness(
-  usage: HostDaemonResourceUsage,
-  options: { inotifyInstanceWarnThreshold?: number } = {},
+  usage: Omit<HostDaemonResourceUsage, "childProcesses" | "zombieChildren"> &
+    Partial<Pick<HostDaemonResourceUsage, "childProcesses" | "zombieChildren">>,
+  options: {
+    eventQueueAgeWarnThresholdMs?: number;
+    eventQueueBytesWarnThreshold?: number;
+    inotifyInstanceWarnThreshold?: number;
+    queueStats?: EventSinkStorageStats;
+    zombieChildWarnThreshold?: number;
+  } = {},
 ) {
   const warn = vi.fn();
   const timer: CapturedTimer = {
@@ -23,8 +31,18 @@ function createMonitorHarness(
   const monitor = startHostDaemonHealthMonitor({
     logger: { warn },
     getWatchCounts: () => ({ workspaceWatches: 3, threadStorageTargets: 5 }),
-    readResourceUsage: () => usage,
+    readResourceUsage: () => ({
+      childProcesses: null,
+      zombieChildren: null,
+      ...usage,
+    }),
+    ...(options.queueStats
+      ? { getEventQueueStats: () => options.queueStats! }
+      : {}),
+    eventQueueAgeWarnThresholdMs: options.eventQueueAgeWarnThresholdMs,
+    eventQueueBytesWarnThreshold: options.eventQueueBytesWarnThreshold,
     inotifyInstanceWarnThreshold: options.inotifyInstanceWarnThreshold,
+    zombieChildWarnThreshold: options.zombieChildWarnThreshold,
     setIntervalFn: (callback) => {
       timer.callback = callback;
       return {
@@ -85,6 +103,48 @@ describe("startHostDaemonHealthMonitor", () => {
     });
     unavailable.timer.callback();
     expect(unavailable.warn).not.toHaveBeenCalled();
+  });
+
+  it("warns when direct child processes become zombies", () => {
+    const { warn, timer } = createMonitorHarness(
+      {
+        childProcesses: 7,
+        inotifyInstances: null,
+        openFds: 30,
+        rssBytes: 123,
+        threads: null,
+        zombieChildren: 2,
+      },
+      { zombieChildWarnThreshold: 0 },
+    );
+
+    timer.callback();
+
+    expect(warn).toHaveBeenCalledWith(
+      expect.objectContaining({ childProcesses: 7, zombieChildren: 2 }),
+      expect.stringContaining("zombie child processes"),
+    );
+  });
+
+  it("warns when the durable event outbox stays large", () => {
+    const { warn, timer } = createMonitorHarness(
+      { rssBytes: 1, openFds: 1, inotifyInstances: 1, threads: 1 },
+      {
+        eventQueueBytesWarnThreshold: 100,
+        queueStats: {
+          count: 3,
+          oldestCreatedAtMs: Date.now(),
+          sizeBytes: 101,
+        },
+      },
+    );
+
+    timer.callback();
+
+    expect(warn).toHaveBeenCalledWith(
+      expect.objectContaining({ queueBytes: 101, queueDepth: 3 }),
+      "Host daemon event outbox is backing up",
+    );
   });
 
   it("stops the interval timer on stop()", () => {

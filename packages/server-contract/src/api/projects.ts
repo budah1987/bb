@@ -149,6 +149,12 @@ export const projectListQuerySchema = z.object({
 });
 export type ProjectListQuery = z.infer<typeof projectListQuerySchema>;
 
+export const sidebarBootstrapQuerySchema = z.object({
+  /** Limit each project's initial active-thread page. Omit for the complete list. */
+  threadLimit: z.string().regex(/^\d+$/).optional(),
+});
+export type SidebarBootstrapQuery = z.infer<typeof sidebarBootstrapQuerySchema>;
+
 const projectWorkspaceRoutingFields = {
   hostId: z.string().min(1),
   environmentId: z.preprocess(

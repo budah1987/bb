@@ -33,6 +33,12 @@ interface CommandRouterLogger extends Pick<HostDaemonLogger, "warn"> {
 }
 
 type EnvironmentLaneMode = HostDaemonCommandEnvironmentLane;
+type WorkspaceStatusCommand = Extract<
+  HostDaemonOnlineRpcCommand,
+  { type: "workspace.status" }
+>;
+type WorkspaceStatusResult =
+  HostDaemonOnlineRpcResultForCommand<WorkspaceStatusCommand>;
 type ThreadStartCommand = Extract<HostDaemonCommand, { type: "thread.start" }>;
 type ThreadStopCommand = Extract<HostDaemonCommand, { type: "thread.stop" }>;
 type TurnSubmitCommand = Extract<HostDaemonCommand, { type: "turn.submit" }>;
@@ -99,6 +105,11 @@ interface InFlightThreadProviderLane {
   lane: ProviderExecutionLane;
 }
 
+interface WorkspaceStatusRefreshState {
+  current: Promise<WorkspaceStatusResult>;
+  trailing: Promise<WorkspaceStatusResult> | null;
+}
+
 type CommandRouterTask = Promise<HostDaemonCommandResultForCommand>;
 
 export interface CommandRouterOptions {
@@ -119,6 +130,7 @@ export interface CommandRouterOptions {
 
 const HOST_COMMAND_LIFECYCLE_LOG_THRESHOLD_MS = 1_000;
 const CODEX_PROVIDER_ID = "codex";
+const MAX_CONCURRENT_WORKSPACE_STATUS_REFRESHES = 4;
 
 function roundDurationMs(durationMs: number): number {
   return Math.round(durationMs * 10) / 10;
@@ -131,6 +143,12 @@ function elapsedMs(startedAtMs: number): number {
 export class CommandRouter {
   private readonly logger;
   private readonly environmentLanes = new Map<string, ReadWriteLaneState>();
+  private readonly workspaceStatusRefreshes = new Map<
+    string,
+    WorkspaceStatusRefreshState
+  >();
+  private activeWorkspaceStatusRefreshes = 0;
+  private readonly workspaceStatusRefreshQueue: Array<() => void> = [];
   // Per-thread barrier keyed by threadId. A turn submission
   // (turn.submit/thread.start) waits for an in-flight thread.unarchive of the
   // same thread so it cannot resume a still-archived provider session.
@@ -207,6 +225,9 @@ export class CommandRouter {
   private executeOnlineRpcCommand(
     command: HostDaemonOnlineRpcCommand,
   ): Promise<HostDaemonOnlineRpcResultForCommand> {
+    if (command.type === "workspace.status") {
+      return this.runWorkspaceStatusRefresh(command);
+    }
     const environmentLaneMode = this.getEnvironmentLaneMode(command);
     const result =
       environmentLaneMode && "environmentId" in command
@@ -219,6 +240,88 @@ export class CommandRouter {
         : dispatchOnlineRpcCommand(command, this.createDispatchOptions());
     return result.then((value) =>
       parseHostDaemonOnlineRpcResultForCommand(command, value),
+    );
+  }
+
+  private runWorkspaceStatusRefresh(
+    command: WorkspaceStatusCommand,
+  ): Promise<WorkspaceStatusResult> {
+    const key = `${command.environmentId}\0${command.mergeBaseBranch ?? ""}`;
+    const existing = this.workspaceStatusRefreshes.get(key);
+    if (existing?.trailing) {
+      return existing.trailing;
+    }
+
+    const run = () =>
+      this.runWithWorkspaceStatusSlot(() =>
+        this.runInEnvironmentLane(command.environmentId, "read", () =>
+          dispatchOnlineRpcCommand(command, this.createDispatchOptions()),
+        ).then((value) =>
+          parseHostDaemonOnlineRpcResultForCommand(command, value),
+        ),
+      );
+
+    if (!existing) {
+      const current = run();
+      const state: WorkspaceStatusRefreshState = { current, trailing: null };
+      this.workspaceStatusRefreshes.set(key, state);
+      this.deleteWorkspaceStatusRefreshWhenIdle(key, state, current);
+      return current;
+    }
+
+    const trailing = existing.current
+      .catch(() => undefined)
+      .then(() => {
+        existing.current = trailing;
+        existing.trailing = null;
+        return run();
+      });
+    existing.trailing = trailing;
+    this.deleteWorkspaceStatusRefreshWhenIdle(key, existing, trailing);
+    return trailing;
+  }
+
+  private async runWithWorkspaceStatusSlot<T>(
+    work: () => Promise<T>,
+  ): Promise<T> {
+    if (
+      this.activeWorkspaceStatusRefreshes >=
+      MAX_CONCURRENT_WORKSPACE_STATUS_REFRESHES
+    ) {
+      await new Promise<void>((resolve) => {
+        this.workspaceStatusRefreshQueue.push(resolve);
+      });
+    } else {
+      this.activeWorkspaceStatusRefreshes += 1;
+    }
+    try {
+      return await work();
+    } finally {
+      const next = this.workspaceStatusRefreshQueue.shift();
+      if (next) {
+        next();
+      } else {
+        this.activeWorkspaceStatusRefreshes -= 1;
+      }
+    }
+  }
+
+  private deleteWorkspaceStatusRefreshWhenIdle(
+    key: string,
+    state: WorkspaceStatusRefreshState,
+    refresh: Promise<WorkspaceStatusResult>,
+  ): void {
+    void refresh.then(
+      () => {
+        if (state.current === refresh && state.trailing === null) {
+          this.workspaceStatusRefreshes.delete(key);
+        }
+      },
+      () => {
+        if (state.current === refresh && state.trailing === null) {
+          this.workspaceStatusRefreshes.delete(key);
+        }
+      },
     );
   }
 

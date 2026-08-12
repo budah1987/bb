@@ -34,9 +34,21 @@ function event(index: number): ThreadEvent {
 describe("daemon-to-server event payload sizes", () => {
   it("preserves event order when a thread recurs after another thread", () => {
     const envelopes: HostDaemonEventEnvelope[] = [
-      { threadId: "thr_a", event: event(1) },
-      { threadId: "thr_b", event: event(2) },
-      { threadId: "thr_a", event: event(3) },
+      {
+        eventId: "00000000-0000-4000-8000-000000000001",
+        threadId: "thr_a",
+        event: event(1),
+      },
+      {
+        eventId: "00000000-0000-4000-8000-000000000002",
+        threadId: "thr_b",
+        event: event(2),
+      },
+      {
+        eventId: "00000000-0000-4000-8000-000000000003",
+        threadId: "thr_a",
+        event: event(3),
+      },
     ];
 
     const groups = groupHostDaemonEvents(envelopes);
@@ -54,6 +66,7 @@ describe("daemon-to-server event payload sizes", () => {
       const events: HostDaemonEventEnvelope[] = Array.from(
         { length: eventCount },
         (_, index) => ({
+          eventId: `00000000-0000-4000-8000-${String(index).padStart(12, "0")}`,
           threadId: "thr_payload_measurement_123456789",
           event: event(index),
         }),
@@ -76,18 +89,18 @@ describe("daemon-to-server event payload sizes", () => {
     expect(measurements).toEqual([
       {
         eventCount: 1,
-        legacyEnvelope: { gzipBytes: 194, jsonBytes: 413 },
-        grouped: { gzipBytes: 198, jsonBytes: 421 },
+        legacyEnvelope: { gzipBytes: 208, jsonBytes: 462 },
+        grouped: { gzipBytes: 221, jsonBytes: 473 },
       },
       {
         eventCount: 10,
-        legacyEnvelope: { gzipBytes: 246, jsonBytes: 3_554 },
-        grouped: { gzipBytes: 247, jsonBytes: 3_049 },
+        legacyEnvelope: { gzipBytes: 289, jsonBytes: 4_044 },
+        grouped: { gzipBytes: 295, jsonBytes: 3_452 },
       },
       {
         eventCount: 50,
-        legacyEnvelope: { gzipBytes: 406, jsonBytes: 17_554 },
-        grouped: { gzipBytes: 407, jsonBytes: 14_769 },
+        legacyEnvelope: { gzipBytes: 572, jsonBytes: 20_004 },
+        grouped: { gzipBytes: 565, jsonBytes: 16_732 },
       },
     ]);
 

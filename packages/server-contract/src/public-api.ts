@@ -158,6 +158,7 @@ import type {
   SkillFilesResponse,
   UpdateSkillRequest,
   ProjectWithThreadsResponse,
+  SidebarBootstrapQuery,
   PromptHistoryQuery,
   PromptHistoryResponse,
   ReorderPinnedThreadRequest,
@@ -336,6 +337,7 @@ import {
   projectFileContentQuerySchema,
   projectFilesQuerySchema,
   projectListQuerySchema,
+  sidebarBootstrapQuerySchema,
   projectPathsQuerySchema,
   projectSkillsQuerySchema,
   deleteSkillRequestSchema,
@@ -462,7 +464,9 @@ export const publicApiRoutes = {
     sidebarBootstrap: defineRoute({
       path: "/sidebar-bootstrap",
       method: "get",
-      request: noRequest(),
+      request: optionalQueryRequest<EmptyInput, SidebarBootstrapQuery>(
+        sidebarBootstrapQuerySchema,
+      ),
       response: jsonResponse<SidebarBootstrapResponse>(),
     }),
     get: defineRoute({

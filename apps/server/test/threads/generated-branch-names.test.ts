@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { createThread, getEnvironment, getThread, listEvents } from "@bb/db";
 import {
   type ResolvedThreadExecutionOptions,
@@ -858,6 +859,7 @@ describe("generated managed branch names", () => {
             sessionId: session.id,
             eventGroups: groupHostDaemonEvents([
               {
+                eventId: randomUUID(),
                 threadId: thread.id,
                 event: {
                   type: "turn/started",
@@ -867,6 +869,7 @@ describe("generated managed branch names", () => {
                 },
               },
               {
+                eventId: randomUUID(),
                 threadId: thread.id,
                 event: {
                   type: "turn/completed",

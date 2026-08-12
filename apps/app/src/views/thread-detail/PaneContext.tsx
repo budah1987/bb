@@ -93,14 +93,14 @@ export interface PaneSecondaryPanelViewModel {
 }
 
 export interface PaneSecondaryPanelRegistration {
-  clear: () => void;
+  clear: (contentKey: string) => void;
   publish: (model: PaneSecondaryPanelViewModel) => void;
 }
 
 type PaneSecondaryPanelRegistryListener = () => void;
 
 export interface PaneSecondaryPanelRegistry {
-  clear: (paneId: string) => void;
+  clear: (paneId: string, contentKey?: string) => void;
   getSnapshot: (paneId: string) => PaneSecondaryPanelViewModel | null;
   publish: (paneId: string, model: PaneSecondaryPanelViewModel) => void;
   subscribe: (
@@ -117,7 +117,13 @@ export function createPaneSecondaryPanelRegistry(): PaneSecondaryPanelRegistry {
   };
 
   return {
-    clear: (paneId) => {
+    clear: (paneId, contentKey) => {
+      if (
+        contentKey !== undefined &&
+        models.get(paneId)?.contentKey !== contentKey
+      ) {
+        return;
+      }
       if (!models.delete(paneId)) return;
       notify(paneId);
     },
@@ -163,8 +169,11 @@ export function usePaneSecondaryPanelRegistration(
     registration.publish(model);
   }, [model, registration]);
   useLayoutEffect(
-    () => (registration === null ? undefined : registration.clear),
-    [registration],
+    () =>
+      registration === null
+        ? undefined
+        : () => registration.clear(model.contentKey),
+    [model.contentKey, registration],
   );
 }
 

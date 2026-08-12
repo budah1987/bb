@@ -140,6 +140,9 @@ function renderProjectRow(
   isActive = false,
   collapsedEnvironmentIds: Set<string> = new Set(),
   isCollapsed = false,
+  selectedThreadId?: string,
+  hasMoreThreads = false,
+  onLoadMoreThreads = vi.fn(),
 ) {
   const onToggleEnvironmentCollapsed = vi.fn();
   const queryClient = new QueryClient({
@@ -151,6 +154,8 @@ function renderProjectRow(
         <ProjectRow
           project={makeProject()}
           threadListState={threadListState}
+          selectedThreadId={selectedThreadId}
+          hasMoreThreads={hasMoreThreads}
           isActive={isActive}
           isCollapsed={isCollapsed}
           compareThreads={() => 0}
@@ -160,11 +165,17 @@ function renderProjectRow(
           onToggleProjectCollapsed={onToggleProjectCollapsed}
           onToggleThreadCollapsed={vi.fn()}
           onToggleEnvironmentCollapsed={onToggleEnvironmentCollapsed}
+          onLoadMoreThreads={onLoadMoreThreads}
         />
       </MemoryRouter>
     </QueryClientProvider>,
   );
-  return { ...result, onToggleEnvironmentCollapsed, onToggleProjectCollapsed };
+  return {
+    ...result,
+    onLoadMoreThreads,
+    onToggleEnvironmentCollapsed,
+    onToggleProjectCollapsed,
+  };
 }
 
 function expectCollapsedActivityAtSidebarEdge(label: string) {
@@ -225,6 +236,87 @@ describe("ProjectRow interactions", () => {
     expect(
       (threadLink?.parentElement as HTMLElement | null)?.style.paddingLeft,
     ).toBe("8px");
+  });
+
+  it("renders large project trees in pages of 20 root threads", () => {
+    const threads = Array.from({ length: 45 }, (_, index) =>
+      makeThread({
+        id: `thr_${index}`,
+        title: `Thread ${index}`,
+        titleFallback: `Thread ${index}`,
+      }),
+    );
+    const result = renderProjectRow(vi.fn(), {
+      status: "ready",
+      threads,
+    });
+
+    expect(
+      result.container.querySelectorAll("[data-sidebar-thread-id]"),
+    ).toHaveLength(20);
+    expect(screen.getByRole("button", { name: "Show 20 more" })).not.toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "Show 20 more" }));
+
+    expect(
+      result.container.querySelectorAll("[data-sidebar-thread-id]"),
+    ).toHaveLength(40);
+    expect(screen.getByRole("button", { name: "Show 5 more" })).not.toBeNull();
+  });
+
+  it("renders a selected child beyond the first page immediately", () => {
+    const rootThreads = Array.from({ length: 45 }, (_, index) =>
+      makeThread({
+        id: `thr_${index}`,
+        title: `Thread ${index}`,
+        titleFallback: `Thread ${index}`,
+      }),
+    );
+    const selectedChild = makeThread({
+      id: "thr_selected_child",
+      parentThreadId: "thr_34",
+      title: "Selected child",
+      titleFallback: "Selected child",
+    });
+    const result = renderProjectRow(
+      vi.fn(),
+      { status: "ready", threads: [...rootThreads, selectedChild] },
+      false,
+      new Set(),
+      false,
+      selectedChild.id,
+    );
+
+    expect(
+      result.container.querySelector(
+        '[data-sidebar-thread-id="thr_selected_child"]',
+      ),
+    ).not.toBeNull();
+    expect(
+      result.container.querySelectorAll("[data-sidebar-thread-id]"),
+    ).toHaveLength(36);
+    expect(screen.getByRole("button", { name: "Show 10 more" })).not.toBeNull();
+  });
+
+  it("requests an older server page only after loaded roots are visible", () => {
+    const onLoadMoreThreads = vi.fn();
+    const threads = Array.from({ length: 20 }, (_, index) =>
+      makeThread({ id: `thr_${index}`, title: `Thread ${index}` }),
+    );
+    renderProjectRow(
+      vi.fn(),
+      { status: "ready", threads },
+      false,
+      new Set(),
+      false,
+      undefined,
+      true,
+      onLoadMoreThreads,
+    );
+
+    expect(onLoadMoreThreads).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Show older tasks" }));
+    expect(onLoadMoreThreads).toHaveBeenCalledTimes(1);
   });
 
   it("shows generic runtime activity before a named workflow rollup", () => {

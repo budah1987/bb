@@ -17,6 +17,7 @@ import {
   listActiveVisiblePinnedThreadRoots,
   listThreadEnvironmentAssignmentsOnHost,
   listThreads,
+  listInitialSidebarThreadsWithPendingInteractionStateForProjects,
   listThreadsWithPendingInteractionStateForProjects,
   listThreadsWithPendingInteractionState,
   updateThread,
@@ -195,6 +196,94 @@ describe("threads", () => {
         parentThreadId: parent.id,
       }),
     ).toBe(2);
+  });
+
+  it("limits initial sidebar rows per project", () => {
+    vi.useFakeTimers();
+    try {
+      const { db, host, project } = setup();
+      const { project: otherProject } = createProject(db, noopNotifier, {
+        name: "other-project",
+        source: { type: "local_path", hostId: host.id, path: "/tmp/other" },
+      });
+      for (const targetProject of [project, otherProject]) {
+        for (let index = 0; index < 6; index += 1) {
+          vi.setSystemTime(index + 1);
+          createThread(db, noopNotifier, {
+            projectId: targetProject.id,
+            providerId: "codex",
+            status: "idle",
+          });
+        }
+      }
+
+      const initialThreads =
+        listInitialSidebarThreadsWithPendingInteractionStateForProjects(db, {
+          limitPerProject: 2,
+          projectIds: [project.id, otherProject.id],
+        });
+
+      expect(initialThreads).toHaveLength(4);
+      expect(
+        initialThreads.filter((thread) => thread.projectId === project.id),
+      ).toHaveLength(2);
+      expect(
+        initialThreads.filter(
+          (thread) => thread.projectId === otherProject.id,
+        ),
+      ).toHaveLength(2);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("adds priority sidebar rows and their ancestors beyond the limit", () => {
+    vi.useFakeTimers();
+    try {
+      const { db, project } = setup();
+      vi.setSystemTime(1);
+      const parent = createThread(db, noopNotifier, {
+        projectId: project.id,
+        providerId: "codex",
+        status: "idle",
+      });
+      vi.setSystemTime(2);
+      const activeChild = createThread(db, noopNotifier, {
+        parentThreadId: parent.id,
+        projectId: project.id,
+        providerId: "codex",
+        status: "active",
+      });
+      const recentThreadIds: string[] = [];
+      for (let index = 0; index < 10; index += 1) {
+        vi.setSystemTime(index + 10);
+        recentThreadIds.push(
+          createThread(db, noopNotifier, {
+            projectId: project.id,
+            providerId: "codex",
+            status: "idle",
+          }).id,
+        );
+      }
+
+      const initialThreads =
+        listInitialSidebarThreadsWithPendingInteractionStateForProjects(db, {
+          limitPerProject: 3,
+          projectIds: [project.id],
+        });
+      const initialThreadIds = new Set(
+        initialThreads.map((thread) => thread.id),
+      );
+
+      expect(initialThreads).toHaveLength(5);
+      expect(initialThreadIds).toContain(parent.id);
+      expect(initialThreadIds).toContain(activeChild.id);
+      expect(initialThreadIds).toEqual(
+        new Set([parent.id, activeChild.id, ...recentThreadIds.slice(-3)]),
+      );
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("allows hidden threads to belong to sections", () => {

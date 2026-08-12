@@ -680,6 +680,20 @@
       "when": 1786458251303,
       "tag": "0096_hard_toro",
       "breakpoints": true
+    },
+    {
+      "idx": 97,
+      "version": "6",
+      "when": 1786562202348,
+      "tag": "0097_slippery_supreme_intelligence",
+      "breakpoints": true
+    },
+    {
+      "idx": 98,
+      "version": "6",
+      "when": 1786568969394,
+      "tag": "0098_motionless_silver_fox",
+      "breakpoints": true
     }
   ]
 }

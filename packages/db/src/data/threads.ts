@@ -350,6 +350,11 @@ export interface ListThreadsForProjectsOptions {
   archived?: boolean;
 }
 
+export interface ListInitialSidebarThreadsForProjectsOptions {
+  limitPerProject: number;
+  projectIds: readonly string[];
+}
+
 export interface PinThreadArgs {
   pinnedAt?: number;
   threadId: string;
@@ -1165,6 +1170,170 @@ export function listThreadsWithPendingInteractionStateForProjects(
   const rows = threadWithPendingInteractionBaseQuery(db)
     .where(and(...buildListThreadsForProjectsFilters(options)))
     .orderBy(...buildListThreadsForProjectsOrderBy(options))
+    .all();
+
+  return rows.map(toThreadWithPendingInteractionState);
+}
+
+interface InitialSidebarThreadIdRow {
+  id: string;
+}
+
+const SIDEBAR_THREAD_ID_BATCH_SIZE = 500;
+
+function listSidebarThreadParentRows(
+  db: DbConnection,
+  projectIds: readonly string[],
+  threadIds: readonly string[],
+): Array<{ id: string; parentThreadId: string | null }> {
+  const rows: Array<{ id: string; parentThreadId: string | null }> = [];
+  for (let offset = 0; offset < threadIds.length; offset += SIDEBAR_THREAD_ID_BATCH_SIZE) {
+    rows.push(
+      ...db
+        .select({ id: threads.id, parentThreadId: threads.parentThreadId })
+        .from(threads)
+        .where(
+          and(
+            inArray(
+              threads.id,
+              threadIds.slice(offset, offset + SIDEBAR_THREAD_ID_BATCH_SIZE),
+            ),
+            inArray(threads.projectId, [...projectIds]),
+            eq(threads.visibility, "visible"),
+            isNull(threads.archivedAt),
+            isNull(threads.deletedAt),
+          ),
+        )
+        .all(),
+    );
+  }
+  return rows;
+}
+
+/**
+ * Select only the first useful sidebar page before hydrating full thread rows.
+ * Priority work bypasses the recent limit, and recursive ancestors keep every
+ * returned child attached to the same visible tree as the complete query.
+ */
+export function listInitialSidebarThreadsWithPendingInteractionStateForProjects(
+  db: DbConnection,
+  options: ListInitialSidebarThreadsForProjectsOptions,
+): ThreadWithPendingInteractionState[] {
+  if (options.projectIds.length === 0) {
+    return [];
+  }
+
+  const projectFilter = inArray(threads.projectId, [...options.projectIds]);
+  const activeVisibleFilters = [
+    projectFilter,
+    eq(threads.visibility, "visible"),
+    isNull(threads.archivedAt),
+    isNull(threads.deletedAt),
+  ] as const;
+  const selectedThreadIds = new Set<string>();
+
+  const recentIdQueries = options.projectIds.map(
+    (projectId) => sql`
+      SELECT id FROM (
+        SELECT ${threads.id} AS id
+        FROM ${threads}
+        WHERE ${threads.projectId} = ${projectId}
+          AND ${threads.visibility} = 'visible'
+          AND ${threads.archivedAt} IS NULL
+          AND ${threads.deletedAt} IS NULL
+        ORDER BY ${threads.createdAt} DESC, ${threads.id} DESC
+        LIMIT ${options.limitPerProject}
+      )
+    `,
+  );
+  const recentIds = db.all<InitialSidebarThreadIdRow>(
+    sql`${sql.join(recentIdQueries, sql` UNION ALL `)}`,
+  );
+  for (const row of recentIds) selectedThreadIds.add(row.id);
+
+  const priorityIdGroups: InitialSidebarThreadIdRow[][] = [
+    db
+      .select({ id: threads.id })
+      .from(threads)
+      .where(and(...activeVisibleFilters, isNotNull(threads.pinnedAt)))
+      .all(),
+    db
+      .select({ id: threads.id })
+      .from(threads)
+      .where(
+        and(
+          ...activeVisibleFilters,
+          inArray(threads.status, ["active", "starting"]),
+        ),
+      )
+      .all(),
+    db
+      .select({ id: threads.id })
+      .from(threads)
+      .where(
+        and(
+          ...activeVisibleFilters,
+          or(
+            isNull(threads.lastReadAt),
+            lt(threads.lastReadAt, threads.latestAttentionAt),
+          ),
+        ),
+      )
+      .all(),
+    db
+      .select({ id: threads.id })
+      .from(pendingInteractions)
+      .innerJoin(threads, eq(threads.id, pendingInteractions.threadId))
+      .where(
+        and(
+          eq(pendingInteractions.status, "pending"),
+          ...activeVisibleFilters,
+        ),
+      )
+      .all(),
+  ];
+  for (const group of priorityIdGroups) {
+    for (const row of group) selectedThreadIds.add(row.id);
+  }
+
+  let ancestorCandidates = [
+    ...new Set(
+      listSidebarThreadParentRows(db, options.projectIds, [
+        ...selectedThreadIds,
+      ])
+        .map((row) => row.parentThreadId)
+        .filter(
+          (id): id is string => id !== null && !selectedThreadIds.has(id),
+        ),
+    ),
+  ];
+  while (ancestorCandidates.length > 0) {
+    const ancestorRows = listSidebarThreadParentRows(
+      db,
+      options.projectIds,
+      ancestorCandidates,
+    );
+    const nextAncestorCandidates = new Set<string>();
+    for (const row of ancestorRows) {
+      if (selectedThreadIds.has(row.id)) continue;
+      selectedThreadIds.add(row.id);
+      if (
+        row.parentThreadId !== null &&
+        !selectedThreadIds.has(row.parentThreadId)
+      ) {
+        nextAncestorCandidates.add(row.parentThreadId);
+      }
+    }
+    ancestorCandidates = [...nextAncestorCandidates];
+  }
+
+  if (selectedThreadIds.size === 0) {
+    return [];
+  }
+
+  const rows = threadWithPendingInteractionBaseQuery(db)
+    .where(inArray(threads.id, [...selectedThreadIds]))
+    .orderBy(...buildActiveProjectThreadOrderBy())
     .all();
 
   return rows.map(toThreadWithPendingInteractionState);
