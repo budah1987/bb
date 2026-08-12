@@ -23,6 +23,7 @@ import type {
 import { Workspace } from "./workspace.js";
 import type {
   GitHostCommandOptions,
+  GitHostPullRequestChecksRerunResult,
   GitHostPullRequestLookup,
 } from "./git-host.js";
 import {
@@ -174,7 +175,7 @@ export interface HostWorkspace {
   runPullRequestAction(
     action: PullRequestActionOptions,
     options?: GitHostCommandOptions,
-  ): Promise<void | GitHostPullRequest>;
+  ): Promise<void | GitHostPullRequest | GitHostPullRequestChecksRerunResult>;
   listBranches(): Promise<string[]>;
   listFiles(): Promise<string[]>;
 
@@ -292,7 +293,7 @@ class ProvisionedHostWorkspace implements HostWorkspace {
   runPullRequestAction(
     action: PullRequestActionOptions,
     options?: GitHostCommandOptions,
-  ): Promise<void | GitHostPullRequest> {
+  ): Promise<void | GitHostPullRequest | GitHostPullRequestChecksRerunResult> {
     return this.ws.runPullRequestAction(action, options);
   }
 

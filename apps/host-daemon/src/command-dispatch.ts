@@ -520,6 +520,28 @@ const commandHandlers: CommandHandlerMap = {
     }
     return {};
   },
+  "workspace.pull_request_checks_rerun": async (command, options) => {
+    const entry = await requireResolvedWorkspaceForCommand({
+      dataDir: options.dataDir,
+      environmentId: command.environmentId,
+      requireGit: true,
+      requireManagedWorktree: true,
+      runtimeManager: options.runtimeManager,
+      workspaceContext: command.workspaceContext,
+    });
+    const githubEnv = await getGithubAccountEnvironment({
+      env: options.runtimeManager.getShellEnv(),
+      login: command.githubAccountLogin,
+    });
+    const result = await entry.workspace.runPullRequestAction(
+      { operation: "rerun_checks", target: command.target },
+      githubEnv === undefined ? {} : { env: githubEnv },
+    );
+    if (!result || !("rerunCount" in result)) {
+      throw new Error("Pull request check retry returned no result");
+    }
+    return result;
+  },
   "workspace.pull_request_create": async (command, options) => {
     const entry = await requireResolvedWorkspaceForCommand({
       dataDir: options.dataDir,
@@ -543,7 +565,7 @@ const commandHandlers: CommandHandlerMap = {
       },
       githubEnv === undefined ? {} : { env: githubEnv },
     );
-    if (!pullRequest) {
+    if (!pullRequest || "rerunCount" in pullRequest) {
       throw new Error("Pull request creation returned no pull request");
     }
     return { pullRequest };

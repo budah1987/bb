@@ -1143,6 +1143,22 @@ function ThreadDetailViewInternal(props: ThreadDetailViewInternalProps) {
     openPersistedWorkspaceFile,
     togglePersistedPanel: toggleDefaultPersistedSecondaryPanel,
   });
+  useEffect(() => {
+    const handleCompactPanelOpen = (event: Event) => {
+      if (!(event instanceof CustomEvent)) return;
+      if (!isFocused || event.detail?.threadId !== threadId) return;
+      openCompactDrawer();
+    };
+    window.addEventListener(
+      "bb:thread-secondary-panel-open",
+      handleCompactPanelOpen,
+    );
+    return () =>
+      window.removeEventListener(
+        "bb:thread-secondary-panel-open",
+        handleCompactPanelOpen,
+      );
+  }, [isFocused, openCompactDrawer, threadId]);
   const handleOpenTimelinePluginPanel =
     useCallback<ThreadTimelineOpenPluginPanelHandler>(
       ({ pluginId, actionId, title, params }) => {

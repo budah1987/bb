@@ -29,6 +29,8 @@ const CONVERSATION_SWIPE_MAX_SHORT_TRAVEL_PX = 44;
 const LONG_WORKSPACE_SWIPE_RATIO = 0.68;
 const CONDUCTOR_CONVERSATION_CYCLE_EVENT =
   "bb:conductor-compact-conversation-cycle";
+const CONDUCTOR_CONVERSATION_AVAILABLE_EVENT =
+  "bb:conductor-compact-conversation-available";
 
 /** The whole standalone surface travels as one layer; both share this box. */
 const SWIPE_LAYER_CLASS = "flex min-h-0 min-w-0 flex-1 flex-col p-4 md:p-5";
@@ -72,6 +74,14 @@ function cycleConversation(
       detail: { threadId, direction },
     }),
   );
+}
+
+function hasConversationCycleHandler(threadId: string): boolean {
+  const event = new CustomEvent(CONDUCTOR_CONVERSATION_AVAILABLE_EVENT, {
+    cancelable: true,
+    detail: { threadId },
+  });
+  return !window.dispatchEvent(event);
 }
 
 export interface CompactWorkspaceSwipeHostProps {
@@ -188,7 +198,9 @@ function conversationDragOffset(deltaX: number, width: number): number {
   const distance = Math.abs(deltaX);
   const shortCommit = conversationCommitDistance(width);
   if (distance <= shortCommit) {
-    return direction * Math.min(distance, CONVERSATION_SWIPE_MAX_SHORT_TRAVEL_PX);
+    return (
+      direction * Math.min(distance, CONVERSATION_SWIPE_MAX_SHORT_TRAVEL_PX)
+    );
   }
   const longCommit = width * LONG_WORKSPACE_SWIPE_RATIO;
   if (longCommit <= shortCommit || distance >= longCommit) return deltaX;
@@ -364,7 +376,10 @@ export function CompactWorkspaceSwipeHost({
     if (target.kind === "right-panel") {
       return { direction: "left", destination: target };
     }
-    if (conversationThreadId !== null) {
+    if (
+      conversationThreadId !== null &&
+      hasConversationCycleHandler(conversationThreadId)
+    ) {
       return {
         direction: target.direction,
         destination: { kind: "conversation" },
@@ -410,7 +425,13 @@ export function CompactWorkspaceSwipeHost({
     });
     const { destination } = current;
     if (destination.kind === "conversation") {
-      if (Math.abs(session.deltaX) < conversationCommitDistance(session.width)) {
+      const threadId = conversationThreadId;
+      if (threadId === null) {
+        return null;
+      }
+      if (
+        Math.abs(session.deltaX) < conversationCommitDistance(session.width)
+      ) {
         return null;
       }
       return {
@@ -418,7 +439,7 @@ export function CompactWorkspaceSwipeHost({
           current.direction === "left"
             ? "Next conversation"
             : "Previous conversation",
-        run: () => cycleConversation(conversationThreadId, current.direction),
+        run: () => cycleConversation(threadId, current.direction),
       };
     }
     if (
@@ -427,10 +448,7 @@ export function CompactWorkspaceSwipeHost({
     ) {
       return { announcement: "Command Center", run: onOpenCommandCenter };
     }
-    if (
-      outcome.kind === "right-panel" &&
-      destination.kind === "right-panel"
-    ) {
+    if (outcome.kind === "right-panel" && destination.kind === "right-panel") {
       return { announcement: "Right panel", run: onOpenRightPanel };
     }
     if (outcome.kind !== "pane") {

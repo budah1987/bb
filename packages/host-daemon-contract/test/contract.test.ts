@@ -727,6 +727,7 @@ const SETTLED_RESPONSE_RESULT_FIXTURES: SettledResponseResultFixtures = {
     branchName: "feature/renamed",
   },
   "workspace.pull_request_action": {},
+  "workspace.pull_request_checks_rerun": { rerunCount: 2 },
   "workspace.pull_request_create": {
     pullRequest: {
       number: 42,
@@ -1270,8 +1271,8 @@ describe("host-daemon command schemas", () => {
   // satisfy a `>= 95` check while missing the BBamir payloads, so the merged
   // build claims 96 to force every older daemon on either lineage to update
   // before it connects.
-  it("uses protocol version 96 for the merged BBamir and upstream wire surface", () => {
-    expect(HOST_DAEMON_PROTOCOL_VERSION).toBe(97);
+  it("uses protocol version 98 for the current wire surface", () => {
+    expect(HOST_DAEMON_PROTOCOL_VERSION).toBe(98);
   });
 
   it("binds Plan cancellation to a required turn id and typed result", () => {
@@ -1540,6 +1541,21 @@ describe("host-daemon command schemas", () => {
         },
       }),
     ).toThrow();
+
+    expect(
+      hostDaemonCommandSchema.parse({
+        type: "workspace.pull_request_checks_rerun",
+        target: { scope: "check", checkName: "typecheck" },
+        environmentId: "env_123",
+        workspaceContext: {
+          workspacePath: "/tmp/workspace",
+          workspaceProvisionType: "unmanaged",
+        },
+      }),
+    ).toMatchObject({
+      type: "workspace.pull_request_checks_rerun",
+      target: { scope: "check", checkName: "typecheck" },
+    });
 
     expect(
       hostDaemonOnlineRpcCommandSchema.parse({

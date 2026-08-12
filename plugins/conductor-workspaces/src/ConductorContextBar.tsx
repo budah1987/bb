@@ -43,6 +43,8 @@ const COMPACT_TAB_SWIPE_INTENT_PX = 10;
 const COMPACT_TAB_SWIPE_COMMIT_PX = 36;
 const COMPACT_CONVERSATION_CYCLE_EVENT =
   "bb:conductor-compact-conversation-cycle";
+const COMPACT_CONVERSATION_AVAILABLE_EVENT =
+  "bb:conductor-compact-conversation-available";
 const TAB_CLOSE_TRANSITION_MS = 150;
 
 interface CompactTabSwipeSession {
@@ -166,10 +168,7 @@ function ConductorWorkspaceContextBar({
   const closeConversation = useCallback(
     (threadId: string): boolean => {
       if (!workspace) return false;
-      if (
-        closeInFlightRef.current ||
-        closingTabIdsRef.current.has(threadId)
-      ) {
+      if (closeInFlightRef.current || closingTabIdsRef.current.has(threadId)) {
         return true;
       }
 
@@ -207,7 +206,9 @@ function ConductorWorkspaceContextBar({
         }
 
         const fallback =
-          openThreads[closingIndex + 1] ?? openThreads[closingIndex - 1] ?? null;
+          openThreads[closingIndex + 1] ??
+          openThreads[closingIndex - 1] ??
+          null;
         if (fallback) {
           cycleThreadIdRef.current = fallback.id;
           actions.open(fallback.id);
@@ -311,6 +312,11 @@ function ConductorWorkspaceContextBar({
 
   useLayoutEffect(() => {
     if (!isCompactViewport || !workspace || activeThreadId === null) return;
+    const handleConversationAvailability = (event: Event) => {
+      if (!(event instanceof CustomEvent)) return;
+      if (event.detail?.threadId !== activeThreadId) return;
+      event.preventDefault();
+    };
     const handleConversationCycle = (event: Event) => {
       if (!("detail" in event)) return;
       const detail: unknown = event.detail;
@@ -326,12 +332,27 @@ function ConductorWorkspaceContextBar({
       COMPACT_CONVERSATION_CYCLE_EVENT,
       handleConversationCycle,
     );
-    return () =>
+    window.addEventListener(
+      COMPACT_CONVERSATION_AVAILABLE_EVENT,
+      handleConversationAvailability,
+    );
+    return () => {
       window.removeEventListener(
         COMPACT_CONVERSATION_CYCLE_EVENT,
         handleConversationCycle,
       );
-  }, [activeThreadId, isCompactViewport, openAdjacentConversation, openThreads.length, workspace]);
+      window.removeEventListener(
+        COMPACT_CONVERSATION_AVAILABLE_EVENT,
+        handleConversationAvailability,
+      );
+    };
+  }, [
+    activeThreadId,
+    isCompactViewport,
+    openAdjacentConversation,
+    openThreads.length,
+    workspace,
+  ]);
 
   const resetTabSwipe = useCallback(() => {
     tabSwipeRef.current = null;
@@ -668,10 +689,7 @@ function runTabCloseTransition(
     close();
   };
   const handleAnimationEnd = (event: AnimationEvent) => {
-    if (
-      event.target !== tab ||
-      event.animationName !== "conductor-tab-close"
-    ) {
+    if (event.target !== tab || event.animationName !== "conductor-tab-close") {
       return;
     }
     finish();

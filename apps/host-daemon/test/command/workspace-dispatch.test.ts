@@ -124,9 +124,7 @@ describe("workspace command dispatch", () => {
 
     expect(result.outcome).toBe("available");
     expect(refreshed.state.statusReads).toBe(1);
-    expect(
-      harness.manager.get("env-late-git")?.workspace.isGitRepo,
-    ).toBe(true);
+    expect(harness.manager.get("env-late-git")?.workspace.isGitRepo).toBe(true);
   });
 
   it("covers workspace.pull_request", async () => {
@@ -307,6 +305,34 @@ describe("workspace command dispatch", () => {
     expect(harness.workspaceState.lastPullRequestAction).toEqual({
       operation: "merge",
       method: "rebase",
+    });
+  });
+
+  it("covers workspace.pull_request_checks_rerun", async () => {
+    const harness = createHarness({ isWorktree: true });
+    await harness.manager.ensureEnvironment({
+      environmentId: "env-1",
+      workspacePath: "/tmp/env-1",
+    });
+
+    await expect(
+      dispatchCommand(
+        {
+          type: "workspace.pull_request_checks_rerun",
+          githubAccountLogin: null,
+          target: { scope: "check", checkName: "typecheck" },
+          environmentId: "env-1",
+          workspaceContext: {
+            workspacePath: "/tmp/env-1",
+            workspaceProvisionType: "managed-worktree",
+          },
+        },
+        harness.dispatchOptions(),
+      ),
+    ).resolves.toEqual({ rerunCount: 1 });
+    expect(harness.workspaceState.lastPullRequestAction).toEqual({
+      operation: "rerun_checks",
+      target: { scope: "check", checkName: "typecheck" },
     });
   });
 

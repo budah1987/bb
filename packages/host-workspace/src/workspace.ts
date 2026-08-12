@@ -14,10 +14,12 @@ import path from "node:path";
 import {
   createPullRequestForBranch,
   getPullRequestForCurrentBranch,
+  rerunPullRequestChecksForCurrentBranch,
   runPullRequestActionForCurrentBranch,
   type GitHostCommandOptions,
   type GitHostPullRequestAction,
   type GitHostPullRequestLookup,
+  type GitHostPullRequestChecksRerunResult,
 } from "./git-host.js";
 import {
   createTempDir,
@@ -802,7 +804,7 @@ export class Workspace {
   async runPullRequestAction(
     action: PullRequestActionOptions,
     options: GitHostCommandOptions = {},
-  ): Promise<void | GitHostPullRequest> {
+  ): Promise<void | GitHostPullRequest | GitHostPullRequestChecksRerunResult> {
     const branch = await getCurrentBranch(this.path);
     if (!branch) {
       throw new WorkspaceError(
@@ -816,6 +818,13 @@ export class Workspace {
         cwd: this.path,
         branch,
         ...action,
+        ...envOptions,
+      });
+    }
+    if (action.operation === "rerun_checks") {
+      return rerunPullRequestChecksForCurrentBranch({
+        cwd: this.path,
+        target: action.target,
         ...envOptions,
       });
     }

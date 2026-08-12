@@ -3,6 +3,7 @@ import {
   createPullRequestForBranch,
   getPullRequestForCurrentBranch,
   parseGitHostPullRequest,
+  rerunPullRequestChecksForCurrentBranch,
   runPullRequestActionForCurrentBranch,
   type GitHostPullRequestAction,
 } from "../src/git-host.js";
@@ -284,6 +285,114 @@ describe("runPullRequestActionForCurrentBranch", () => {
           GH_TOKEN: "personal-token",
         }),
       }),
+      expect.any(Function),
+    );
+  });
+});
+
+describe("rerunPullRequestChecksForCurrentBranch", () => {
+  it("resolves a failed check to its job database ID", async () => {
+    execFileMock.mockImplementation(
+      (
+        _file: string,
+        commandArgs: readonly string[],
+        _options: object,
+        callback: (error: Error | null, stdout?: string) => void,
+      ) => {
+        if (commandArgs[0] === "pr") {
+          callback(
+            null,
+            ghJson({
+              statusCheckRollup: [
+                {
+                  name: "typecheck",
+                  status: "COMPLETED",
+                  conclusion: "FAILURE",
+                  detailsUrl:
+                    "https://github.com/acme/bb/actions/runs/123/job/456",
+                },
+              ],
+            }),
+          );
+          return;
+        }
+        if (commandArgs[1] === "view") {
+          callback(
+            null,
+            JSON.stringify({
+              jobs: [
+                {
+                  databaseId: 789,
+                  name: "typecheck",
+                  url: "https://github.com/acme/bb/actions/runs/123/job/456",
+                },
+              ],
+            }),
+          );
+          return;
+        }
+        callback(null, "");
+      },
+    );
+
+    await expect(
+      rerunPullRequestChecksForCurrentBranch({
+        cwd: "/tmp/workspace",
+        target: { scope: "check", checkName: "typecheck" },
+      }),
+    ).resolves.toEqual({ rerunCount: 1 });
+    expect(execFileMock).toHaveBeenCalledWith(
+      "gh",
+      ["run", "rerun", "123", "--job", "789"],
+      expect.any(Object),
+      expect.any(Function),
+    );
+  });
+
+  it("re-runs failed jobs once per workflow run", async () => {
+    execFileMock.mockImplementation(
+      (
+        _file: string,
+        commandArgs: readonly string[],
+        _options: object,
+        callback: (error: Error | null, stdout?: string) => void,
+      ) => {
+        callback(
+          null,
+          commandArgs[0] === "pr"
+            ? ghJson({
+                statusCheckRollup: [
+                  {
+                    name: "typecheck",
+                    status: "COMPLETED",
+                    conclusion: "FAILURE",
+                    detailsUrl:
+                      "https://github.com/acme/bb/actions/runs/123/job/456",
+                  },
+                  {
+                    name: "test",
+                    status: "COMPLETED",
+                    conclusion: "TIMED_OUT",
+                    detailsUrl:
+                      "https://github.com/acme/bb/actions/runs/123/job/457",
+                  },
+                ],
+              })
+            : "",
+        );
+      },
+    );
+
+    await expect(
+      rerunPullRequestChecksForCurrentBranch({
+        cwd: "/tmp/workspace",
+        target: { scope: "failed" },
+      }),
+    ).resolves.toEqual({ rerunCount: 1 });
+    expect(execFileMock).toHaveBeenCalledWith(
+      "gh",
+      ["run", "rerun", "123", "--failed"],
+      expect.any(Object),
       expect.any(Function),
     );
   });

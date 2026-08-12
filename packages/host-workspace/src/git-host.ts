@@ -60,7 +60,16 @@ export type GitHostPullRequestAction =
   | { operation: "ready" }
   | { operation: "draft" }
   | { operation: "merge"; method: GitHostPullRequestMergeMethod }
+  | { operation: "rerun_checks"; target: GitHostPullRequestChecksRerunTarget }
   | ({ operation: "create" } & GitHostPullRequestCreateOptions);
+
+export type GitHostPullRequestChecksRerunTarget =
+  | { scope: "check"; checkName: string }
+  | { scope: "failed" };
+
+export interface GitHostPullRequestChecksRerunResult {
+  rerunCount: number;
+}
 
 export interface GitHostPullRequestCreateOptions {
   baseBranch: string;
@@ -71,7 +80,10 @@ export interface GitHostPullRequestCreateOptions {
 
 interface RunPullRequestActionForCurrentBranchArgs {
   cwd: string;
-  action: Exclude<GitHostPullRequestAction, { operation: "create" }>;
+  action: Exclude<
+    GitHostPullRequestAction,
+    { operation: "create" | "rerun_checks" }
+  >;
   env?: NodeJS.ProcessEnv;
 }
 
@@ -79,6 +91,12 @@ interface CreatePullRequestForBranchArgs extends GitHostPullRequestCreateOptions
   branch: string;
   cwd: string;
   env?: NodeJS.ProcessEnv;
+}
+
+interface RerunPullRequestChecksForCurrentBranchArgs {
+  cwd: string;
+  env?: NodeJS.ProcessEnv;
+  target: GitHostPullRequestChecksRerunTarget;
 }
 
 type JsonObject = Record<string, unknown>;
@@ -307,7 +325,10 @@ function getMergeMethodFlag(method: GitHostPullRequestMergeMethod): string {
 }
 
 function buildPullRequestActionArgs(
-  action: Exclude<GitHostPullRequestAction, { operation: "create" }>,
+  action: Exclude<
+    GitHostPullRequestAction,
+    { operation: "create" | "rerun_checks" }
+  >,
 ): string[] {
   switch (action.operation) {
     case "ready":
@@ -359,6 +380,75 @@ function createGitHostCommandFailedError(
       : `gh ${args.join(" ")} failed`,
     { cause: error },
   );
+}
+
+function isFailedCheck(check: GitHostPullRequestCheck): boolean {
+  return (
+    check.status === "completed" &&
+    check.conclusion !== null &&
+    [
+      "failure",
+      "cancelled",
+      "timed_out",
+      "action_required",
+      "startup_failure",
+      "stale",
+    ].includes(check.conclusion)
+  );
+}
+
+function getActionsRunId(url: string | null): string | null {
+  if (!url) return null;
+  try {
+    const parsed = new URL(url);
+    const match = parsed.pathname.match(/\/actions\/runs\/(\d+)(?:\/|$)/u);
+    return match?.[1] ?? null;
+  } catch {
+    return null;
+  }
+}
+
+interface GitHubActionsJob {
+  databaseId: number;
+  name: string;
+  url: string | null;
+}
+
+function parseGitHubActionsJobs(stdout: string): GitHubActionsJob[] {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(stdout);
+  } catch {
+    return [];
+  }
+  const object = asObject(parsed);
+  if (!object || !Array.isArray(object.jobs)) return [];
+  return object.jobs.flatMap((value) => {
+    const job = asObject(value);
+    if (!job) return [];
+    const databaseId = getNumber(job, "databaseId");
+    const name = getString(job, "name");
+    if (!databaseId || !name) return [];
+    return [{ databaseId, name, url: getNullableUrl(job, "url") }];
+  });
+}
+
+async function runGh(
+  args: string[],
+  options: { cwd: string; env?: NodeJS.ProcessEnv },
+): Promise<string> {
+  try {
+    const result = await execFileAsync("gh", args, {
+      cwd: options.cwd,
+      encoding: "utf8",
+      env: resolveGitHostProcessEnv(options.env),
+      timeout: GH_PR_ACTION_TIMEOUT_MS,
+      maxBuffer: GH_PR_ACTION_MAX_BUFFER_BYTES,
+    });
+    return result.stdout;
+  } catch (error) {
+    throw createGitHostCommandFailedError(args, error);
+  }
 }
 
 /**
@@ -491,6 +581,84 @@ export async function runPullRequestActionForCurrentBranch(
   } catch (error) {
     throw createGitHostCommandFailedError(ghArgs, error);
   }
+}
+
+/** Retry one failed GitHub Actions check, or every failed workflow run. */
+export async function rerunPullRequestChecksForCurrentBranch(
+  args: RerunPullRequestChecksForCurrentBranchArgs,
+): Promise<GitHostPullRequestChecksRerunResult> {
+  const lookup = await getPullRequestForCurrentBranch(args);
+  if (lookup.outcome !== "found") {
+    throw new WorkspaceError(
+      "invalid_request",
+      lookup.outcome === "unavailable"
+        ? lookup.message
+        : "No pull request exists for the current branch",
+    );
+  }
+
+  const failedChecks = lookup.pullRequest.checks.filter(isFailedCheck);
+  if (args.target.scope === "failed") {
+    const runIds = [
+      ...new Set(
+        failedChecks
+          .map((check) => getActionsRunId(check.url))
+          .filter((runId): runId is string => runId !== null),
+      ),
+    ];
+    if (runIds.length === 0) {
+      throw new WorkspaceError(
+        "invalid_request",
+        "No failed GitHub Actions checks can be re-run",
+      );
+    }
+    for (const runId of runIds) {
+      await runGh(["run", "rerun", runId, "--failed"], args);
+    }
+    return { rerunCount: runIds.length };
+  }
+
+  const checkName = args.target.checkName;
+  const matchingChecks = failedChecks.filter(
+    (check) => check.name === checkName,
+  );
+  if (matchingChecks.length !== 1) {
+    throw new WorkspaceError(
+      "invalid_request",
+      matchingChecks.length === 0
+        ? `Failed check not found: ${checkName}`
+        : `More than one failed check is named ${checkName}`,
+    );
+  }
+  const check = matchingChecks[0];
+  const runId = getActionsRunId(check.url);
+  if (!runId) {
+    throw new WorkspaceError(
+      "invalid_request",
+      `${check.name} is not a GitHub Actions check`,
+    );
+  }
+  const jobsOutput = await runGh(
+    ["run", "view", runId, "--json", "jobs"],
+    args,
+  );
+  const jobs = parseGitHubActionsJobs(jobsOutput);
+  const matchingJobs = jobs.filter(
+    (job) =>
+      job.name === check.name ||
+      (job.url !== null && check.url !== null && job.url === check.url),
+  );
+  if (matchingJobs.length !== 1) {
+    throw new WorkspaceError(
+      "git_host_command_failed",
+      `Could not resolve the GitHub Actions job for ${check.name}`,
+    );
+  }
+  await runGh(
+    ["run", "rerun", runId, "--job", String(matchingJobs[0].databaseId)],
+    args,
+  );
+  return { rerunCount: 1 };
 }
 
 /**

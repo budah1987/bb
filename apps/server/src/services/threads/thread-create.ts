@@ -2,9 +2,11 @@ import {
   deleteThread,
   findProjectEnvironmentByHostPath,
   getEnvironment,
+  getLatestThreadSequence,
   getThread,
 } from "@bb/db";
 import type {
+  PromptInput,
   ProjectExecutionDefaults,
   Project,
   Thread,
@@ -12,6 +14,7 @@ import type {
   ThreadVisibility,
 } from "@bb/domain";
 import { supportsNativeFork } from "@bb/agent-providers";
+import { formatThreadTimelineText } from "@bb/thread-view";
 import type { BaseBranchSpec, UnmanagedBranchSpec } from "@bb/server-contract";
 import type { LoggedPendingInteractionWorkSessionDeps } from "../../types.js";
 import { COMMAND_TIMEOUT_MS } from "../../constants.js";
@@ -66,6 +69,7 @@ import type {
 import { resolveManagedDefaultBaseBranchSpec } from "../projects/worktree-base-branch.js";
 import { applyLoggedEnvironmentLifecycleEvent } from "../environments/lifecycle-outcome.js";
 import { resolveSystemProviderModels } from "../system/execution-options.js";
+import { buildThreadTimeline } from "./timeline.js";
 
 type ThreadCreateDeps = LoggedPendingInteractionWorkSessionDeps;
 
@@ -99,6 +103,58 @@ interface ResolveForkDescriptorArgs {
   providerId: string;
   sourceSeqEnd: number | undefined;
   sourceThread: Thread | null;
+}
+
+const CROSS_PROVIDER_FORK_CONTEXT_MAX_CHARS = 60_000;
+
+function buildSemanticForkProviderInput(
+  deps: ThreadCreateDeps,
+  args: {
+    input: PromptInput[];
+    sourceSeqEnd: number | undefined;
+    sourceThread: Thread;
+  },
+): PromptInput[] {
+  const latestSequence = getLatestThreadSequence(deps.db, {
+    threadId: args.sourceThread.id,
+  });
+  const sourceSeqEnd = Math.min(
+    args.sourceSeqEnd ?? latestSequence,
+    latestSequence,
+  );
+  const timeline = buildThreadTimeline(deps.db, args.sourceThread, {
+    eventBudget: deps.config.featureFlags.timelineWindowEventBudget,
+    includeNestedRows: true,
+    includeProviderUnhandledOperations: false,
+    maxInlineOutputChars: 4_000,
+    maxSeq: sourceSeqEnd,
+    page: { kind: "latest", segmentLimit: 100 },
+  });
+  const transcript = formatThreadTimelineText(timeline.rows, {
+    color: false,
+    verbose: true,
+  });
+  const isTruncated = transcript.length > CROSS_PROVIDER_FORK_CONTEXT_MAX_CHARS;
+  const boundedTranscript = isTruncated
+    ? transcript.slice(-CROSS_PROVIDER_FORK_CONTEXT_MAX_CHARS)
+    : transcript;
+  const context: PromptInput = {
+    type: "text",
+    visibility: "agent-only",
+    mentions: [],
+    text: [
+      `Continue the conversation from bb thread ${args.sourceThread.id} through event sequence ${sourceSeqEnd}.`,
+      "Treat the source transcript as prior conversation context.",
+      ...(isTruncated
+        ? ["The transcript starts after older context that did not fit."]
+        : []),
+      "",
+      "<source_conversation>",
+      boundedTranscript,
+      "</source_conversation>",
+    ].join("\n"),
+  };
+  return [context, ...args.input];
 }
 
 interface DeriveThreadCreateTitleFallbackArgs {
@@ -181,6 +237,9 @@ function resolveForkDescriptor(
   args: ResolveForkDescriptorArgs,
 ): ThreadForkDescriptor | null {
   if (args.originKind === null || args.sourceThread === null) {
+    return null;
+  }
+  if (args.providerId !== args.sourceThread.providerId) {
     return null;
   }
   if (!supportsNativeFork(args.providerId)) {
@@ -906,11 +965,17 @@ export async function createThreadFromRequest(
     sourceThread,
   });
 
+  const usesSemanticFork =
+    request.originKind === "fork" &&
+    sourceThread !== null &&
+    (request.providerId !== sourceThread.providerId ||
+      !supportsNativeFork(request.providerId));
+
   // A fork/side-chat must clone the source provider session. If that clone
   // cannot be resolved (source has no active session, provider lacks fork
   // support, or the target is cross-host), do not fall back to a fresh
   // history-less thread.start.
-  if (request.originKind !== null && fork === null) {
+  if (request.originKind !== null && fork === null && !usesSemanticFork) {
     throw new ApiError(
       400,
       "fork_source_session_unavailable",
@@ -923,9 +988,17 @@ export async function createThreadFromRequest(
     environmentIntent,
     executionDefaults: resolvedExecutionDefaults,
     fork,
-    ...(options.providerInput !== undefined
-      ? { providerInput: options.providerInput }
-      : {}),
+    ...(usesSemanticFork && sourceThread !== null
+      ? {
+          providerInput: buildSemanticForkProviderInput(deps, {
+            input: request.input,
+            sourceSeqEnd: request.sourceSeqEnd,
+            sourceThread,
+          }),
+        }
+      : options.providerInput !== undefined
+        ? { providerInput: options.providerInput }
+        : {}),
     request,
   });
   deps.telemetry.capture({

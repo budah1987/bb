@@ -1423,6 +1423,41 @@ describe("@bb/sdk", () => {
     ]);
   });
 
+  it("re-runs failed pull request checks through the environment action transport", async () => {
+    const response = {
+      ok: true,
+      action: "pull_request_checks_rerun",
+      message: "Failed checks queued to re-run",
+      rerunCount: 2,
+    } as const;
+    const queue = createFetchQueue([{ body: response }]);
+    const sdk = createBbSdk({
+      transport: createHttpTransport({
+        baseUrl: "http://bb.test",
+        fetch: queue.fetch,
+        runtime: "node",
+      }),
+    });
+
+    await expect(
+      sdk.environments.rerunPullRequestChecks({
+        environmentId: "env_pr",
+        target: { scope: "failed" },
+      }),
+    ).resolves.toEqual(response);
+
+    expect(queue.requests).toEqual([
+      {
+        bodyText: JSON.stringify({
+          action: "pull_request_checks_rerun",
+          options: { scope: "failed" },
+        }),
+        method: "POST",
+        url: "http://bb.test/api/v1/environments/env_pr/actions",
+      },
+    ]);
+  });
+
   it("updates environment metadata through the HTTP transport", async () => {
     const environment = makeEnvironment({
       id: "env_update",

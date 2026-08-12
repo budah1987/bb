@@ -249,6 +249,71 @@ describe("thread creation with startedOnBehalfOf (seed-without-run)", () => {
     });
   });
 
+  it("starts a cross-provider fork with source conversation context", async () => {
+    await withTestHarness(async (harness) => {
+      const { host } = seedHostSession(harness.deps, {
+        id: "host-cross-provider-fork",
+      });
+      const { project } = seedProjectWithSource(harness.deps, {
+        hostId: host.id,
+        path: "/tmp/cross-provider-fork-project",
+      });
+      const environment = seedEnvironment(harness.deps, {
+        hostId: host.id,
+        projectId: project.id,
+        path: "/tmp/cross-provider-fork-project",
+      });
+      const sourceThread = seedThread(harness.deps, {
+        environmentId: environment.id,
+        projectId: project.id,
+        providerId: "codex",
+      });
+      seedTurnStarted(harness.deps, {
+        environmentId: environment.id,
+        providerThreadId: "provider-cross-provider-source",
+        threadId: sourceThread.id,
+        turnId: "turn-cross-provider-source",
+      });
+
+      const input = textInput("Continue with Pi");
+      const fork = await createThreadFromRequest(harness.deps, {
+        environment: { type: "reuse", environmentId: environment.id },
+        input,
+        origin: "app",
+        originKind: "fork",
+        projectId: project.id,
+        providerId: "pi",
+        sourceThreadId: sourceThread.id,
+        startedOnBehalfOf: null,
+      });
+
+      const queuedStart = await waitForQueuedCommand(
+        harness,
+        ({ command }) =>
+          command.type === "thread.start" && command.threadId === fork.id,
+      );
+      if (queuedStart.command.type !== "thread.start") {
+        throw new Error("Expected a thread.start command");
+      }
+      expect(queuedStart.command.providerId).toBe("pi");
+      expect(queuedStart.command.fork).toBeUndefined();
+      expect(queuedStart.command.input.slice(1)).toEqual(input);
+      expect(queuedStart.command.input[0]).toMatchObject({
+        type: "text",
+        visibility: "agent-only",
+      });
+      expect(queuedStart.command.input[0]).toHaveProperty(
+        "text",
+        expect.stringContaining(`bb thread ${sourceThread.id}`),
+      );
+      expect(getThread(harness.db, fork.id)).toMatchObject({
+        originKind: "fork",
+        providerId: "pi",
+        sourceThreadId: sourceThread.id,
+      });
+    });
+  });
+
   it("dispatches a provider run for a normal user start (no startedOnBehalfOf)", async () => {
     await withTestHarness(async (harness) => {
       const { host } = seedHostSession(harness.deps, {

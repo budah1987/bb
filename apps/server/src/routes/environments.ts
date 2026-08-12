@@ -257,6 +257,45 @@ function assertCanMergePullRequest(
   }
 }
 
+function assertCanRerunPullRequestChecks(
+  pullRequest: ThreadPullRequest | null,
+  target: { scope: "failed" } | { scope: "check"; checkName: string },
+): void {
+  if (!pullRequest) {
+    throw new ApiError(
+      409,
+      "pull_request_unavailable",
+      "No pull request found",
+    );
+  }
+  const failedChecks = pullRequest.checks.items.filter(
+    (check) =>
+      check.status === "completed" &&
+      check.conclusion !== null &&
+      [
+        "failure",
+        "cancelled",
+        "timed_out",
+        "action_required",
+        "startup_failure",
+        "stale",
+      ].includes(check.conclusion),
+  );
+  if (target.scope === "failed") {
+    if (failedChecks.length === 0) {
+      throw new ApiError(409, "invalid_request", "No failed checks found");
+    }
+    return;
+  }
+  if (!failedChecks.some((check) => check.name === target.checkName)) {
+    throw new ApiError(
+      409,
+      "invalid_request",
+      `Failed check not found: ${target.checkName}`,
+    );
+  }
+}
+
 /**
  * Pick the git ref to read for the requested side of a diff. Returns
  * `undefined` when the side should be read from the working tree (no ref —
@@ -1571,6 +1610,44 @@ export function registerEnvironmentRoutes(app: Hono, deps: AppDeps): void {
           action: "pull_request_merge",
           method: payload.options.method,
           message: "Pull request merge started",
+        });
+      }
+      case "pull_request_checks_rerun": {
+        if (!environment.isGitRepo) {
+          throw new ApiError(
+            409,
+            "invalid_request",
+            "Pull request checks require a git environment",
+          );
+        }
+        const target = requireWorkspaceCommandTarget(environment);
+        const pullRequest = await getPullRequestForWorkspaceTarget(
+          deps,
+          target,
+          environment.githubAccountLogin,
+        );
+        assertCanRerunPullRequestChecks(pullRequest, payload.options);
+        const result = await mapPullRequestActionFailureTo409(() =>
+          runLiveCommandAndWait(deps, {
+            hostId: target.hostId,
+            timeoutMs: COMMAND_TIMEOUT_MS,
+            command: {
+              type: "workspace.pull_request_checks_rerun",
+              githubAccountLogin: environment.githubAccountLogin,
+              target: payload.options,
+              environmentId: target.environmentId,
+              workspaceContext: target.workspaceContext,
+            },
+          }),
+        );
+        return context.json({
+          ok: true,
+          action: "pull_request_checks_rerun",
+          message:
+            payload.options.scope === "failed"
+              ? "Failed checks queued to re-run"
+              : `${payload.options.checkName} queued to re-run`,
+          rerunCount: result.rerunCount,
         });
       }
       default: {

@@ -222,6 +222,9 @@ export function createFakeWorkspace(pathname: string) {
     },
     async runPullRequestAction(action) {
       state.lastPullRequestAction = action;
+      if (action.operation === "rerun_checks") {
+        return { rerunCount: 1 };
+      }
       if (action.operation === "create") {
         return {
           number: 42,

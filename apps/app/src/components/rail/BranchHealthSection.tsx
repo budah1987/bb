@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import type {
   EnvironmentPreviewsResponse,
   EnvironmentPullRequestResponse,
@@ -6,17 +6,24 @@ import type {
 } from "@bb/server-contract";
 import { Button } from "@bb/shared-ui/button";
 import { cn } from "@bb/shared-ui/lib/utils";
+import { appToast } from "@/components/ui/app-toast";
+import { useUpdateEnvironment } from "@/hooks/mutations/environment-mutations";
 import {
   getEnvironmentPullRequestFromResponse,
+  useEnvironment,
   useEnvironmentPreviews,
   useEnvironmentPullRequest,
   useEnvironmentWorkStatus,
 } from "@/hooks/queries/environment-queries";
+import { useGithubAccounts } from "@/hooks/queries/system-queries";
 import { useThread } from "@/hooks/queries/thread-queries";
+import { getMutationErrorMessage } from "@/lib/mutation-errors";
 import { getPullRequestAttentionDisplay } from "@/lib/pull-request-display";
 import { statusTierClassName, type StatusTier } from "@/lib/status-tier";
 import { RailRow } from "./RailRow";
 import { RailSection } from "./RailSection";
+import { GithubAccountRailRow } from "./GithubAccountRailRow";
+import { PullRequestChecksRail } from "./PullRequestChecksRail";
 import { RAIL_BODY_TEXT_CLASS, RAIL_PROSE_CLASS } from "./railStyleTokens";
 
 interface BranchHealthSummary {
@@ -72,6 +79,15 @@ export function BranchHealthSection({
   const [isExpanded, setIsExpanded] = useState(true);
   const threadQuery = useThread(threadId, { enabled });
   const environmentId = threadQuery.data?.environmentId;
+  const environmentQuery = useEnvironment(environmentId, { enabled });
+  const environment = environmentQuery.data;
+  const githubAccountsQuery = useGithubAccounts({
+    ...(environment?.hostId === undefined
+      ? {}
+      : { hostId: environment.hostId }),
+    enabled: enabled && environment !== undefined,
+  });
+  const updateEnvironment = useUpdateEnvironment();
   const statusQuery = useEnvironmentWorkStatus(environmentId, undefined, {
     enabled,
   });
@@ -123,6 +139,40 @@ export function BranchHealthSection({
     void pullRequestQuery.refetch();
     void previewsQuery.refetch();
   };
+  const githubAccounts = githubAccountsQuery.data?.accounts ?? [];
+  const selectedGithubAccountLogin =
+    environment?.githubAccountLogin ??
+    githubAccounts.find((account) => account.active)?.login ??
+    githubAccounts[0]?.login ??
+    null;
+  const handleGithubAccountChange = useCallback(
+    async (login: string) => {
+      if (!environmentId || environment?.githubAccountLogin === login) return;
+      const toastId = appToast.loading(`Switching to @${login}`);
+      try {
+        await updateEnvironment.mutateAsync({
+          id: environmentId,
+          githubAccountLogin: login,
+        });
+        await pullRequestQuery.refetch();
+        appToast.success(`Using @${login} for this worktree`, { id: toastId });
+      } catch (error) {
+        appToast.error("GitHub account was not changed", {
+          id: toastId,
+          description: getMutationErrorMessage({
+            error,
+            fallbackMessage: `Could not use @${login}`,
+          }),
+        });
+      }
+    },
+    [
+      environment?.githubAccountLogin,
+      environmentId,
+      pullRequestQuery,
+      updateEnvironment,
+    ],
+  );
 
   return (
     <RailSection
@@ -171,6 +221,15 @@ export function BranchHealthSection({
               workspace.workingTree.hasUncommittedChanges ? "Changes" : "Clean"
             }
           />
+          <GithubAccountRailRow
+            accounts={githubAccounts}
+            disabled={updateEnvironment.isPending}
+            isLoading={
+              environmentQuery.isLoading || githubAccountsQuery.isLoading
+            }
+            onChange={(login) => void handleGithubAccountChange(login)}
+            value={selectedGithubAccountLogin}
+          />
           {workspace.mergeBase === null ? null : (
             <RailRow
               icon="GitMerge"
@@ -185,15 +244,25 @@ export function BranchHealthSection({
               trailing="None"
             />
           ) : (
-            <RailRow
-              icon="GitPullRequestArrow"
-              label={`#${pullRequest.number} ${pullRequest.title}`}
-              trailing={getPullRequestAttentionDisplay(pullRequest).label}
-              showsChevron
-              onSelect={() =>
-                window.open(pullRequest.url, "_blank", "noopener,noreferrer")
-              }
-            />
+            <>
+              <RailRow
+                icon="GitPullRequestArrow"
+                label={`#${pullRequest.number} ${pullRequest.title}`}
+                trailing={getPullRequestAttentionDisplay(pullRequest).label}
+                showsChevron
+                onSelect={() =>
+                  window.open(pullRequest.url, "_blank", "noopener,noreferrer")
+                }
+              />
+              {environmentId ? (
+                <PullRequestChecksRail
+                  environmentId={environmentId}
+                  onRefresh={pullRequestQuery.refetch}
+                  pullRequest={pullRequest}
+                  threadId={threadId}
+                />
+              ) : null}
+            </>
           )}
           <RailRow
             icon="Globe"

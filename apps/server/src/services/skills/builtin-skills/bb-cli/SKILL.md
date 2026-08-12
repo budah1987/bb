@@ -342,6 +342,8 @@ environment pull-request show <id>`. Diff commands require an explicit target
   `--draft`, `--body`, or `--json` as needed. `pull-request show` includes
   individual CI check results and links.
 - `bb environment pull-request ready|draft|merge` manages pull-request state;
+  `bb environment pull-request rerun-checks <id> --check <name>` retries one
+  failed check, while `--all-failed` retries every failed GitHub Actions run.
   `bb environment archive-threads` bulk-archives an environment's threads.
 - `bb environment rename <id> --branch <name>` renames a worktree's checked-out
   branch; use `--folder <name>` instead to move it within its current parent.

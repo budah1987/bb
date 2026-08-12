@@ -160,6 +160,9 @@ Making your repo work with bb:
   bb environment pull-request draft <id>  Convert a pull request to draft
   bb environment pull-request merge <id>  Merge a pull request
     --method <method>                     merge, squash, or rebase
+  bb environment pull-request rerun-checks <id> Re-run failed checks
+    --check <name>                        Re-run one failed check
+    --all-failed                          Re-run every failed GitHub Actions run
 
 Every inspection command accepts an arbitrary environment ID and supports
 `--json`. Non-git status/diff responses are reported explicitly. `diff-file`
@@ -168,6 +171,7 @@ truncation markers are preserved.
 Pull-request inspection includes each check run, its result, and its details
 URL when GitHub provides one. A saved GitHub account is scoped to the
 environment and is used for pushes, PR lookup and creation, checks, and merges.
+Check retries require exactly one of `--check` or `--all-failed`.
 
 Remote access (bb connect):
 

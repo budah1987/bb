@@ -441,7 +441,10 @@ export type EnvironmentPreviewShareResponse = z.infer<
 >;
 
 export const environmentPreviewUnshareResponseSchema = z
-  .object({ port: z.number().int().min(1).max(65535), shared: z.literal(false) })
+  .object({
+    port: z.number().int().min(1).max(65535),
+    shared: z.literal(false),
+  })
   .strict();
 export type EnvironmentPreviewUnshareResponse = z.infer<
   typeof environmentPreviewUnshareResponseSchema
@@ -566,6 +569,7 @@ export const environmentActionTypeSchema = z.enum([
   "pull_request_ready",
   "pull_request_merge",
   "pull_request_draft",
+  "pull_request_checks_rerun",
 ]);
 
 export const squashMergeOptionsSchema = z
@@ -615,6 +619,22 @@ export const pullRequestMetadataOptionsSchema = z
   .strict();
 export type PullRequestMetadataOptions = z.infer<
   typeof pullRequestMetadataOptionsSchema
+>;
+
+export const pullRequestChecksRerunOptionsSchema = z.discriminatedUnion(
+  "scope",
+  [
+    z.object({ scope: z.literal("failed") }).strict(),
+    z
+      .object({
+        scope: z.literal("check"),
+        checkName: z.string().trim().min(1),
+      })
+      .strict(),
+  ],
+);
+export type PullRequestChecksRerunOptions = z.infer<
+  typeof pullRequestChecksRerunOptionsSchema
 >;
 
 export const commitOptionsSchema = z
@@ -675,6 +695,12 @@ export const environmentActionRequestSchema = z.discriminatedUnion("action", [
   z
     .object({
       action: z.literal("pull_request_draft"),
+    })
+    .strict(),
+  z
+    .object({
+      action: z.literal("pull_request_checks_rerun"),
+      options: pullRequestChecksRerunOptionsSchema,
     })
     .strict(),
 ]);
@@ -785,6 +811,16 @@ export type PullRequestDraftActionResponse = z.infer<
   typeof pullRequestDraftActionResponseSchema
 >;
 
+export const pullRequestChecksRerunActionResponseSchema = z.object({
+  ok: z.literal(true),
+  action: z.literal("pull_request_checks_rerun"),
+  message: z.string().min(1),
+  rerunCount: z.number().int().positive(),
+});
+export type PullRequestChecksRerunActionResponse = z.infer<
+  typeof pullRequestChecksRerunActionResponseSchema
+>;
+
 export const environmentActionResponseSchema = z.discriminatedUnion("action", [
   commitActionResponseSchema,
   squashMergeActionResponseSchema,
@@ -795,6 +831,7 @@ export const environmentActionResponseSchema = z.discriminatedUnion("action", [
   pullRequestReadyActionResponseSchema,
   pullRequestMergeActionResponseSchema,
   pullRequestDraftActionResponseSchema,
+  pullRequestChecksRerunActionResponseSchema,
 ]);
 export type EnvironmentActionResponse = z.infer<
   typeof environmentActionResponseSchema

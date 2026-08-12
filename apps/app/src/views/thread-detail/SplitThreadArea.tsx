@@ -123,7 +123,6 @@ import {
 import { PaneMaximizeButton } from "./PaneMaximizeButton";
 import { wsManager } from "@/lib/ws";
 import { useOpenFixedSecondaryPanel } from "@/lib/fixed-panel-tabs";
-import { useAppCommandDispatch } from "@/components/commands/AppCommandProvider";
 
 // A `pointerdown`-relative move threshold before a pane-header drag engages.
 const PANE_DRAG_ENGAGE_DISTANCE_PX = 7;
@@ -1189,7 +1188,6 @@ function StandaloneWorkspaceSurface({
   onReturnFromCommandCenter,
 }: StandaloneWorkspaceSurfaceProps) {
   const panes = listPanes(layout.root);
-  const dispatchAppCommand = useAppCommandDispatch();
   const panelStateId = content.kind === "thread" ? content.threadId : null;
   const openPersistedRightPanel = useOpenFixedSecondaryPanel(
     panelStateId,
@@ -1197,8 +1195,13 @@ function StandaloneWorkspaceSurface({
   );
   const openRightPanel = useCallback(() => {
     openPersistedRightPanel();
-    dispatchAppCommand("panel.toggle");
-  }, [dispatchAppCommand, openPersistedRightPanel]);
+    if (panelStateId === null) return;
+    window.dispatchEvent(
+      new CustomEvent("bb:thread-secondary-panel-open", {
+        detail: { threadId: panelStateId },
+      }),
+    );
+  }, [openPersistedRightPanel, panelStateId]);
   // On a standalone compact display, the root compose page is always the
   // Command Center. A validated swipe still adds its return destination.
   return (

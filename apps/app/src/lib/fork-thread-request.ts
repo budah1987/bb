@@ -1,4 +1,3 @@
-import { supportsNativeFork } from "@bb/agent-providers";
 import type {
   PermissionMode,
   PromptInput,
@@ -31,10 +30,7 @@ export interface BuildForkThreadRequestArgs extends ForkThreadCreateSeed {
 type ForkableThread = Pick<Thread, "environmentId" | "providerId">;
 
 export function isThreadForkable(sourceThread: ForkableThread | null): boolean {
-  if (sourceThread === null || sourceThread.environmentId === null) {
-    return false;
-  }
-  return supportsNativeFork(sourceThread.providerId);
+  return sourceThread !== null && sourceThread.environmentId !== null;
 }
 
 export function buildForkThreadRequest({
@@ -48,16 +44,7 @@ export function buildForkThreadRequest({
   serviceTier,
   sourceSeqEnd,
   sourceThreadId,
-}: BuildForkThreadRequestArgs): AppCreateThreadRequest | null {
-  if (
-    !isThreadForkable({
-      environmentId,
-      providerId,
-    })
-  ) {
-    return null;
-  }
-
+}: BuildForkThreadRequestArgs): AppCreateThreadRequest {
   return {
     environment: { type: "reuse", environmentId },
     input,

@@ -131,12 +131,14 @@ interface EnvironmentSquashMergeCommandOptions {
 }
 
 interface EnvironmentPullRequestCommandOptions {
+  allFailed?: boolean;
   base?: string;
   body?: string;
   draft?: boolean;
   fallbackTitle?: string;
   json?: boolean;
   method?: "merge" | "squash" | "rebase";
+  check?: string;
   title?: string;
 }
 
@@ -1251,6 +1253,30 @@ export function registerEnvironmentCommands(
         ).environments.mergePullRequest({
           environmentId: id,
           method: opts.method,
+        });
+        if (outputJson(opts, result)) return;
+        console.log(result.message);
+      }),
+    );
+
+  pullRequest
+    .command("rerun-checks <id>")
+    .description("Re-run one failed check or all failed checks")
+    .option("--check <name>", "Failed check name")
+    .option("--all-failed", "Re-run all failed checks")
+    .option("--json", "Print machine-readable JSON output")
+    .action(
+      action(async (id: string, opts: EnvironmentPullRequestCommandOptions) => {
+        if (Boolean(opts.check) === Boolean(opts.allFailed)) {
+          throw new Error("Use exactly one of --check or --all-failed.");
+        }
+        const result = await createCliBbSdk(
+          getUrl(),
+        ).environments.rerunPullRequestChecks({
+          environmentId: id,
+          target: opts.allFailed
+            ? { scope: "failed" }
+            : { scope: "check", checkName: opts.check ?? "" },
         });
         if (outputJson(opts, result)) return;
         console.log(result.message);

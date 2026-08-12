@@ -42,7 +42,7 @@ import {
   providerCliStatusResponseSchema,
 } from "./local.js";
 
-export const HOST_DAEMON_PROTOCOL_VERSION = 97 as const;
+export const HOST_DAEMON_PROTOCOL_VERSION = 98 as const;
 export const githubAccountLoginSchema = z.string().trim().min(1).max(255);
 
 export {
@@ -1303,6 +1303,25 @@ const workspacePullRequestCreateCommandSchema = hostDaemonWorkspaceTargetSchema
   })
   .strict();
 
+const pullRequestChecksRerunTargetSchema = z.discriminatedUnion("scope", [
+  z.object({ scope: z.literal("failed") }).strict(),
+  z
+    .object({
+      scope: z.literal("check"),
+      checkName: z.string().trim().min(1),
+    })
+    .strict(),
+]);
+
+const workspacePullRequestChecksRerunCommandSchema =
+  hostDaemonWorkspaceTargetSchema
+    .extend({
+      type: z.literal("workspace.pull_request_checks_rerun"),
+      githubAccountLogin: githubAccountLoginSchema.nullable().default(null),
+      target: pullRequestChecksRerunTargetSchema,
+    })
+    .strict();
+
 const pullRequestMergeMethodSchema = z.enum(["merge", "squash", "rebase"]);
 
 const workspacePullRequestReadyCommandSchema = hostDaemonWorkspaceTargetSchema
@@ -1871,6 +1890,9 @@ const workspaceRenameResultSchema = z.discriminatedUnion("target", [
   z.object({ target: z.literal("folder"), path: z.string().min(1) }),
 ]);
 const workspacePullRequestActionResultSchema = z.object({}).strict();
+const workspacePullRequestChecksRerunResultSchema = z
+  .object({ rerunCount: z.number().int().positive() })
+  .strict();
 const workspacePullRequestCreateResultSchema = z
   .object({
     pullRequest: gitHostPullRequestSchema,
@@ -2330,6 +2352,15 @@ export const hostDaemonCommandRegistry = {
     type: "workspace.pull_request_action",
     schema: workspacePullRequestActionCommandSchema,
     resultSchema: workspacePullRequestActionResultSchema,
+    transport: "settled",
+    retryable: false,
+    flushEventsBeforeResult: false,
+    envLane: "write",
+  }),
+  "workspace.pull_request_checks_rerun": defineHostDaemonCommandDescriptor({
+    type: "workspace.pull_request_checks_rerun",
+    schema: workspacePullRequestChecksRerunCommandSchema,
+    resultSchema: workspacePullRequestChecksRerunResultSchema,
     transport: "settled",
     retryable: false,
     flushEventsBeforeResult: false,

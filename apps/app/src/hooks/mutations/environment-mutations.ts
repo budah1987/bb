@@ -80,6 +80,11 @@ export function useRequestEnvironmentAction() {
           });
         case "pull_request_draft":
           return sdk.environments.markPullRequestDraft({ environmentId: id });
+        case "pull_request_checks_rerun":
+          return sdk.environments.rerunPullRequestChecks({
+            environmentId: id,
+            target: request.options,
+          });
         case "publish_to_main":
           return sdk.environments.publishToMain({ environmentId: id });
         case "update_from_main":

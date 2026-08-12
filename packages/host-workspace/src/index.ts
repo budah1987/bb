@@ -70,9 +70,12 @@ export type {
 export {
   createPullRequestForBranch,
   getPullRequestForCurrentBranch,
+  rerunPullRequestChecksForCurrentBranch,
   runPullRequestActionForCurrentBranch,
   parseGitHostPullRequest,
   type GitHostPullRequestLookup,
   type GitHostCommandOptions,
   type GitHostPullRequestCreateOptions,
+  type GitHostPullRequestChecksRerunResult,
+  type GitHostPullRequestChecksRerunTarget,
 } from "./git-host.js";

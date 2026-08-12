@@ -7,6 +7,7 @@ import {
   commitActionResponseSchema,
   pullRequestCreateActionResponseSchema,
   pullRequestDraftActionResponseSchema,
+  pullRequestChecksRerunActionResponseSchema,
   pullRequestMetadataActionResponseSchema,
   pullRequestMergeActionResponseSchema,
   pullRequestReadyActionResponseSchema,
@@ -50,6 +51,8 @@ import type {
   PullRequestCreateActionResponse,
   PullRequestMetadataActionResponse,
   PullRequestDraftActionResponse,
+  PullRequestChecksRerunActionResponse,
+  PullRequestChecksRerunOptions,
   PullRequestMergeActionResponse,
   PullRequestReadyActionResponse,
   PublishToMainActionResponse,
@@ -174,6 +177,10 @@ export interface EnvironmentCommitArgs {
   paths?: WorkspaceCommitPaths;
 }
 
+export interface EnvironmentPullRequestChecksRerunArgs extends EnvironmentActionArgs {
+  target: PullRequestChecksRerunOptions;
+}
+
 export interface EnvironmentSimulatorAttachArgs extends EnvironmentActionArgs {
   deviceUdid?: string;
 }
@@ -251,8 +258,7 @@ export type EnvironmentDockerControlResult = EnvironmentDockerControlResponse;
 export type EnvironmentPreviewsResult = EnvironmentPreviewsResponse;
 export type EnvironmentStartDevServerResult = TerminalSession;
 export type EnvironmentPreviewShareResult = EnvironmentPreviewShareResponse;
-export type EnvironmentPreviewUnshareResult =
-  EnvironmentPreviewUnshareResponse;
+export type EnvironmentPreviewUnshareResult = EnvironmentPreviewUnshareResponse;
 export type EnvironmentPreviewBypassResult = EnvironmentPreviewBypassResponse;
 export type EnvironmentUpdateResult = Environment;
 export type EnvironmentSimulatorStatusResult = SimulatorStatusResponse;
@@ -318,6 +324,9 @@ export interface EnvironmentsArea {
   mergePullRequest(
     args: EnvironmentPullRequestMergeArgs,
   ): Promise<EnvironmentMergePullRequestResult>;
+  rerunPullRequestChecks(
+    args: EnvironmentPullRequestChecksRerunArgs,
+  ): Promise<PullRequestChecksRerunActionResponse>;
   paths(args: EnvironmentPathsArgs): Promise<EnvironmentPathsResult>;
   squashMerge(
     args: EnvironmentSquashMergeArgs,
@@ -619,6 +628,18 @@ export function createEnvironmentsArea(
         }),
       );
       return pullRequestMergeActionResponseSchema.parse(body);
+    },
+    async rerunPullRequestChecks(input) {
+      const body = await transport.readJson(
+        transport.api.v1.environments[":id"].actions.$post({
+          param: { id: input.environmentId },
+          json: {
+            action: "pull_request_checks_rerun",
+            options: input.target,
+          },
+        }),
+      );
+      return pullRequestChecksRerunActionResponseSchema.parse(body);
     },
     async paths(input) {
       return transport.readJson(

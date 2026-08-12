@@ -9,7 +9,13 @@ import {
   waitFor,
 } from "@testing-library/react";
 import { createStore, Provider as JotaiProvider } from "jotai";
-import { useContext, useMemo, useState, type ReactNode } from "react";
+import {
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+  type ReactNode,
+} from "react";
 import { MemoryRouter, useLocation, useNavigate } from "react-router-dom";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { PERSONAL_PROJECT_ID } from "@bb/domain";
@@ -82,7 +88,6 @@ const panelCallbacks = vi.hoisted(
     >(),
 );
 const commandHandlers = vi.hoisted(() => new Map<string, () => boolean>());
-const commandDispatchCalls = vi.hoisted(() => [] as string[]);
 const threadViewMountCounts = vi.hoisted(() => new Map<string, number>());
 interface ShortcutPresentationFixture {
   ariaKeyshortcuts: string;
@@ -152,10 +157,8 @@ vi.mock("@/hooks/queries/thread-queries", () => ({
 
 vi.mock("@/components/commands/AppCommandProvider", () => ({
   useAppCommandContext: () => undefined,
-  useAppCommandDispatch: () => (command: string) => {
-    commandDispatchCalls.push(command);
-    return commandHandlers.get(command)?.() ?? false;
-  },
+  useAppCommandDispatch: () => (command: string) =>
+    commandHandlers.get(command)?.() ?? false,
   useAppCommandHandler: (command: string, handler: () => boolean) => {
     commandHandlers.set(command, handler);
   },
@@ -260,6 +263,23 @@ vi.mock("./ThreadDetailView", () => ({
     });
     const pane = useContext(PaneContext);
     const [isPanelOpen, setIsPanelOpen] = useState(threadId === "thr-a");
+    useEffect(() => {
+      const handlePanelOpen = (event: Event) => {
+        const detail = (event as CustomEvent).detail;
+        if (pane?.isFocused && detail.threadId === threadId) {
+          setIsPanelOpen(true);
+        }
+      };
+      window.addEventListener(
+        "bb:thread-secondary-panel-open",
+        handlePanelOpen,
+      );
+      return () =>
+        window.removeEventListener(
+          "bb:thread-secondary-panel-open",
+          handlePanelOpen,
+        );
+    }, [pane?.isFocused, threadId]);
     useAppCommandHandler("panel.toggle", () => {
       if (!pane?.isFocused) return false;
       setIsPanelOpen((open) => !open);
@@ -714,7 +734,6 @@ beforeEach(() => {
   panelFullScreenState.isMainCollapsed = false;
   panelGroupLayoutState.layout = [100, 0];
   commandHandlers.clear();
-  commandDispatchCalls.length = 0;
   threadViewMountCounts.clear();
   commandPresentationState.isModifierHeld = false;
   commandPresentationState.shortcut = null;
@@ -2475,6 +2494,10 @@ describe("SplitThreadArea", () => {
       await screen.findByTestId("workspace-swipe-position");
 
       let cycleDirection = "";
+      const handleAvailability = (event: Event) => {
+        const detail = (event as CustomEvent).detail;
+        if (detail.threadId === "thr-a") event.preventDefault();
+      };
       const handleCycle = (event: Event) => {
         const detail = (event as CustomEvent).detail;
         if (detail.threadId === "thr-a") cycleDirection = detail.direction;
@@ -2483,16 +2506,18 @@ describe("SplitThreadArea", () => {
         "bb:conductor-compact-conversation-cycle",
         handleCycle,
       );
+      window.addEventListener(
+        "bb:conductor-compact-conversation-available",
+        handleAvailability,
+      );
 
       try {
         const transcriptText = document.createElement("p");
         transcriptText.textContent = "Conversation transcript text";
         swipeSurface().append(transcriptText);
-        dragTo(430, { from: 500, target: transcriptText });
-        expect(swipeSurface().style.transform).toBe(
-          "translate3d(-44px, 0, 0)",
-        );
-        firePointer(window, "pointerup", 430);
+        dragTo(428, { from: 500, target: transcriptText });
+        expect(swipeSurface().style.transform).toBe("translate3d(-44px, 0, 0)");
+        firePointer(window, "pointerup", 428);
 
         await waitFor(() => expect(cycleDirection).toBe("left"));
         expect(storedSplitLayout(store).focusedPaneId).toBe("pane-1");
@@ -2504,6 +2529,10 @@ describe("SplitThreadArea", () => {
         window.removeEventListener(
           "bb:conductor-compact-conversation-cycle",
           handleCycle,
+        );
+        window.removeEventListener(
+          "bb:conductor-compact-conversation-available",
+          handleAvailability,
         );
       }
     });
@@ -2520,6 +2549,14 @@ describe("SplitThreadArea", () => {
       const transcriptText = document.createElement("p");
       transcriptText.textContent = "Conversation transcript text";
       surface.append(transcriptText);
+      let openedPanelThreadId = "";
+      const handlePanelOpen = (event: Event) => {
+        openedPanelThreadId = (event as CustomEvent).detail.threadId;
+      };
+      window.addEventListener(
+        "bb:thread-secondary-panel-open",
+        handlePanelOpen,
+      );
       firePointer(transcriptText, "pointerdown", 900);
       firePointer(surface, "pointermove", 860);
       firePointer(surface, "pointermove", 100);
@@ -2527,7 +2564,11 @@ describe("SplitThreadArea", () => {
       expect(previewSurface()?.textContent).toContain("Right panel");
       firePointer(surface, "pointerup", 100);
 
-      expect(commandDispatchCalls).toContain("panel.toggle");
+      expect(openedPanelThreadId).toBe("thr-b");
+      window.removeEventListener(
+        "bb:thread-secondary-panel-open",
+        handlePanelOpen,
+      );
       expect(screen.getByTestId("workspace-swipe-position").textContent).toBe(
         "Right panel",
       );

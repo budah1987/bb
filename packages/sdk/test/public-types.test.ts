@@ -261,6 +261,7 @@ type ExpectedEnvironmentsKey =
   | "updateFromMain"
   | "previews"
   | "pullRequest"
+  | "rerunPullRequestChecks"
   | "rename"
   | "squashMerge"
   | "status"
