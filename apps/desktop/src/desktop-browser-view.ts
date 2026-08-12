@@ -76,6 +76,8 @@ const ERR_ABORTED = -3;
 
 interface BrowserViewEntry {
   view: WebContentsView;
+  hostWindow: DesktopBrowserHostWindow;
+  lastUsedAt: number;
   lastErrorText: string | null;
   isRendererRecoveryPending: boolean;
   currentMainFrameLocalOriginKey: string | null;
@@ -216,6 +218,8 @@ export interface DesktopBrowserViewManager {
    * already torn down by the time `closed` fires.
    */
   releaseWindow(hostWebContentsId: number): void;
+  /** Release least-recently-used hidden pages while preserving visible work. */
+  trimHiddenViews(maxRetainedPerWindow: number): number;
   destroyAll(): void;
 }
 
@@ -700,6 +704,8 @@ export function createDesktopBrowserViewManager(
     });
     const entry: BrowserViewEntry = {
       view,
+      hostWindow: args.hostWindow,
+      lastUsedAt: Date.now(),
       lastErrorText: null,
       isRendererRecoveryPending: false,
       currentMainFrameLocalOriginKey: null,
@@ -778,6 +784,9 @@ export function createDesktopBrowserViewManager(
         });
       setEntryDesiredBounds({ bounds: request.bounds, entry, hostWindow });
       entry.visible = request.visible;
+      if (request.visible) {
+        entry.lastUsedAt = Date.now();
+      }
       applyEntryVisibility(entry, hostWindow);
       // Focus on a real not-visible → visible transition so a freshly-mounted
       // active tab (shown via attach, not setVisible) wires the Edit-menu
@@ -803,6 +812,7 @@ export function createDesktopBrowserViewManager(
     },
     navigate({ hostWindow, request }) {
       withEntry({ hostWindow, tabId: request.tabId }, (entry) => {
+        entry.lastUsedAt = Date.now();
         loadIfNeeded(entry, request.url);
       });
     },
@@ -839,6 +849,9 @@ export function createDesktopBrowserViewManager(
       withEntry({ hostWindow, tabId: request.tabId }, (entry) => {
         const wasVisible = entry.visible;
         entry.visible = request.visible;
+        if (request.visible) {
+          entry.lastUsedAt = Date.now();
+        }
         applyEntryVisibility(entry, hostWindow);
         if (
           request.visible &&
@@ -985,6 +998,32 @@ export function createDesktopBrowserViewManager(
           entry.view.webContents.close();
         }
       }
+    },
+    trimHiddenViews(maxRetainedPerWindow) {
+      const boundedMaximum = Math.max(0, Math.floor(maxRetainedPerWindow));
+      const entriesByHost = new Map<
+        number,
+        Array<[string, BrowserViewEntry]>
+      >();
+      for (const [key, entry] of entries) {
+        const hostId = entry.hostWindow.webContents.id;
+        const hostEntries = entriesByHost.get(hostId) ?? [];
+        hostEntries.push([key, entry]);
+        entriesByHost.set(hostId, hostEntries);
+      }
+      let released = 0;
+      for (const hostEntries of entriesByHost.values()) {
+        const releaseCount = Math.max(0, hostEntries.length - boundedMaximum);
+        const hiddenEntries = hostEntries
+          .filter(([, entry]) => !entry.visible)
+          .sort(([, a], [, b]) => a.lastUsedAt - b.lastUsedAt)
+          .slice(0, releaseCount);
+        for (const [key, entry] of hiddenEntries) {
+          destroyEntry(entry.hostWindow, key);
+          released += 1;
+        }
+      }
+      return released;
     },
     destroyAll() {
       resizingHostIds.clear();

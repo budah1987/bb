@@ -144,6 +144,7 @@ import {
   createDesktopBrowserViewManager,
   type DesktopBrowserViewManager,
 } from "./desktop-browser-view.js";
+import { shouldTrimDesktopBrowserViews } from "./desktop-memory-pressure.js";
 import { resolveDesktopBrowserAppCommand } from "./desktop-browser-shortcuts.js";
 import { registerDesktopBrowserIpc } from "./desktop-browser-main-ipc.js";
 import { ensurePackagedMacOsUserShellPath } from "./desktop-shell-path.js";
@@ -289,6 +290,7 @@ const logViewerCopyRequestSchema = z
 
 let desktopWindowFactory: DesktopWindowFactory | null = null;
 let desktopBrowserViewManager: DesktopBrowserViewManager | null = null;
+let desktopMemoryPressureTimer: NodeJS.Timeout | null = null;
 let currentAppKeybindings: AppKeybindings = [];
 let currentApplicationMenuAccelerators = DEFAULT_APPLICATION_MENU_ACCELERATORS;
 let desktopUpdateService: DesktopUpdateService | null = null;
@@ -313,6 +315,42 @@ let connectServerSync: ConnectServerSync | null = null;
 let connectCredentialCache: ConnectCredentialCache | null = null;
 let cachedConnectCredential: ConnectCredential | null = null;
 let enrollingDesktopMachine: Promise<void> | null = null;
+
+const DESKTOP_MEMORY_PRESSURE_POLL_INTERVAL_MS = 15_000;
+const MEMORY_PRESSURE_BROWSER_VIEWS_PER_WINDOW = 4;
+
+function sampleDesktopMemoryPressure(): void {
+  const manager = desktopBrowserViewManager;
+  if (manager === null) return;
+  const systemMemory = process.getSystemMemoryInfo();
+  const appWorkingSetKb = app
+    .getAppMetrics()
+    .reduce((total, metric) => total + metric.memory.workingSetSize, 0);
+  if (
+    shouldTrimDesktopBrowserViews({
+      appWorkingSetKb,
+      freeSystemMemoryKb: systemMemory.free,
+      totalSystemMemoryKb: systemMemory.total,
+    })
+  ) {
+    manager.trimHiddenViews(MEMORY_PRESSURE_BROWSER_VIEWS_PER_WINDOW);
+  }
+}
+
+function startDesktopMemoryPressureMonitor(): void {
+  if (desktopMemoryPressureTimer !== null) return;
+  desktopMemoryPressureTimer = setInterval(
+    sampleDesktopMemoryPressure,
+    DESKTOP_MEMORY_PRESSURE_POLL_INTERVAL_MS,
+  );
+  desktopMemoryPressureTimer.unref();
+}
+
+function stopDesktopMemoryPressureMonitor(): void {
+  if (desktopMemoryPressureTimer === null) return;
+  clearInterval(desktopMemoryPressureTimer);
+  desktopMemoryPressureTimer = null;
+}
 let connectSessionRenewal: ConnectSessionRenewal | null = null;
 let serverTargetGeneration = 0;
 let connectAccountServers: ConnectAccountServer[] = [];
@@ -1552,6 +1590,7 @@ function handleBeforeQuit(event: Event): void {
 
 async function finishQuit(): Promise<void> {
   stopSystemConfigSync();
+  stopDesktopMemoryPressureMonitor();
   connectSessionRenewal?.stop();
   desktopUpdateService?.stop();
   desktopAutoUpdateService?.stop();
@@ -2230,6 +2269,7 @@ async function runDesktopApp(): Promise<void> {
     },
   });
   registerDesktopBrowserIpc(desktopBrowserViewManager);
+  startDesktopMemoryPressureMonitor();
   desktopUpdateService.start();
   desktopAutoUpdateService.start();
 
