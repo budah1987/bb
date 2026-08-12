@@ -624,7 +624,8 @@ function ThreadDetailViewInternal(props: ThreadDetailViewInternalProps) {
   );
   const [browserAddressFocusRequest, setBrowserAddressFocusRequest] =
     useState<BrowserAddressFocusRequest | null>(null);
-  const shouldLoadThreadStorageFiles = thread !== undefined;
+  const shouldLoadThreadStorageFiles =
+    thread !== undefined && isSecondaryPanelOpen;
   const {
     isThreadStorageFilesLoading,
     refetchThreadStorageFiles,
