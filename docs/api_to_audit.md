@@ -307,10 +307,12 @@ reimplementing it, and `indicatorLabel` carries the matching accessible string.
    ordinary root composer, and whether this should become a purpose-built host
    creation dialog.
 10. **Temporary fork drafts.** `experimental_canOpenForkDraft` exposes the
-    host's provider and environment check. `experimental_openForkDraft` opens
-    the existing lazy fork composer, so closing it before the first message
-    creates no thread. Audit whether these methods belong on sidebar actions,
-    and whether availability should become a field on `PluginSidebarThread`.
+    host's source-environment check. `experimental_openForkDraft` opens the
+    existing lazy fork composer with an unlocked provider picker, so closing it
+    before the first message creates no thread. Same-provider forks clone the
+    native session. Other providers receive a bounded source transcript. Audit
+    whether these methods belong on sidebar actions, and whether availability
+    should become a field on `PluginSidebarThread`.
 11. **`experimental_useSidebarThreadSplit`.** Gives a custom row the built-in
     drag-to-split gesture: spread `splitProps` onto the row, gate any affordance
     on `isAvailable`, and read `layout` to paint where the thread already sits.

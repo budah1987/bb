@@ -236,6 +236,21 @@ describe("BottomAnchoredScrollBody scroll preservation", () => {
     expect(endSpace.style.height).toBe("64px");
   });
 
+  it("separates transcript gesture content from the sticky composer", () => {
+    const { scrollArea } = renderTimeline({
+      threadId: "thread-a",
+      rowIds: ["row-a"],
+    });
+
+    const transcript = requireHTMLElement(
+      scrollArea.querySelector("[data-thread-scroll-content]"),
+    );
+    const footer = requireHTMLElement(scrollArea.querySelector(".sticky"));
+
+    expect(transcript.contains(footer)).toBe(false);
+    expect(transcript.parentElement).toBe(footer.parentElement);
+  });
+
   it("shows the thread scrollbar only while scroll events are active", () => {
     vi.useFakeTimers();
     const { scrollArea } = renderTimeline({

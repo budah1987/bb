@@ -647,6 +647,17 @@
     scrollbar-color: transparent transparent;
   }
 
+  /*
+   * iOS stops touch-action negotiation at the nearest scroll container. The
+   * workspace gesture host sits outside this scrollport, so its pan-y policy
+   * cannot protect transcript drags. Put the same policy on transcript content
+   * inside the scrollport. The sticky composer is a sibling and keeps native
+   * text-editing gestures.
+   */
+  [data-workspace-swipe-host] [data-thread-scroll-content] {
+    touch-action: pan-y;
+  }
+
   .thread-scrollbar::-webkit-scrollbar-thumb,
   .thread-scrollbar::-webkit-scrollbar-thumb:hover,
   .transient-scrollbar::-webkit-scrollbar-thumb,

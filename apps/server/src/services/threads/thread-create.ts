@@ -134,8 +134,9 @@ function buildSemanticForkProviderInput(
     color: false,
     verbose: true,
   });
-  const isTruncated = transcript.length > CROSS_PROVIDER_FORK_CONTEXT_MAX_CHARS;
-  const boundedTranscript = isTruncated
+  const exceedsCharacterLimit =
+    transcript.length > CROSS_PROVIDER_FORK_CONTEXT_MAX_CHARS;
+  const boundedTranscript = exceedsCharacterLimit
     ? transcript.slice(-CROSS_PROVIDER_FORK_CONTEXT_MAX_CHARS)
     : transcript;
   const context: PromptInput = {
@@ -145,7 +146,7 @@ function buildSemanticForkProviderInput(
     text: [
       `Continue the conversation from bb thread ${args.sourceThread.id} through event sequence ${sourceSeqEnd}.`,
       "Treat the source transcript as prior conversation context.",
-      ...(isTruncated
+      ...(timeline.timelinePage.hasOlderRows || exceedsCharacterLimit
         ? ["The transcript starts after older context that did not fit."]
         : []),
       "",
@@ -221,13 +222,11 @@ async function resolveCatalogExecutionDefaults(
 
 /**
  * Resolve the native-fork descriptor for a source-derived thread, or null when
- * it cannot be provisioned as a fork. Both forks and side chats are native
- * forks: they clone the source thread's provider session at its branch point so
- * the new thread carries the full conversation history (a fork then waits idle;
- * a side chat runs its question turn). Forking requires: a live source thread
- * (any non-null originKind), a provider that supports native fork, a source that
- * already has a provider session, and a new workspace on the same host as the
- * source (a cross-host clone of a provider session is not possible).
+ * it cannot use a native clone. Same-provider forks and side chats clone the
+ * source provider session at the branch point. Cross-provider app forks use a
+ * bounded transcript instead. Native forking requires a live source thread, a
+ * matching provider with fork support, an active source session, and a target
+ * workspace on the source host.
  * Returns null when the request has no source provenance or the source session
  * cannot be cloned; the consumer treats a null descriptor for a source-derived
  * thread as an unforkable error rather than a silent fresh start.
@@ -971,10 +970,9 @@ export async function createThreadFromRequest(
     (request.providerId !== sourceThread.providerId ||
       !supportsNativeFork(request.providerId));
 
-  // A fork/side-chat must clone the source provider session. If that clone
-  // cannot be resolved (source has no active session, provider lacks fork
-  // support, or the target is cross-host), do not fall back to a fresh
-  // history-less thread.start.
+  // Same-provider native forks and side chats must clone the source session.
+  // Do not turn a missing native session into a history-less start. A deliberate
+  // semantic fork carries the bounded source transcript instead.
   if (request.originKind !== null && fork === null && !usesSemanticFork) {
     throw new ApiError(
       400,

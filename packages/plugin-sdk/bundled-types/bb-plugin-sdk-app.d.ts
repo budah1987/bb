@@ -755,9 +755,9 @@ interface PluginSidebarThreadActions {
         experimental_startGithubWorkflow?: boolean;
     }): void;
     /**
-     * Whether this thread can open as a temporary fork draft. The host checks
-     * the source environment and provider capability. Experimental: see
-     * docs/api_to_audit.md.
+     * Whether this thread can open as a temporary fork draft. The host requires
+     * a source environment. The draft can select any available provider.
+     * Experimental: see docs/api_to_audit.md.
      */
     experimental_canOpenForkDraft(threadId: string): boolean;
     /**

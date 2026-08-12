@@ -2515,6 +2515,7 @@ describe("SplitThreadArea", () => {
         const transcriptText = document.createElement("p");
         transcriptText.textContent = "Conversation transcript text";
         swipeSurface().append(transcriptText);
+        fireEvent.focus(screen.getByTestId("draft-thr-a"));
         dragTo(428, { from: 500, target: transcriptText });
         expect(swipeSurface().style.transform).toBe("translate3d(-44px, 0, 0)");
         firePointer(window, "pointerup", 428);
@@ -2533,6 +2534,112 @@ describe("SplitThreadArea", () => {
         window.removeEventListener(
           "bb:conductor-compact-conversation-available",
           handleAvailability,
+        );
+      }
+    });
+
+    // iOS WebKit drops capture for a touch pointer about one frame after the
+    // gesture takes it, with no preceding `pointercancel`: the finger is still
+    // down. Treating that as the end of the gesture killed every swipe on a
+    // real iPhone within ~16ms of recognition, which read as a jitter and a
+    // snap back. The two tests below replay that exact event order.
+    function fireLostPointerCapture(target: Element, pointerId = 1) {
+      const event = new Event("lostpointercapture", {
+        bubbles: true,
+        cancelable: false,
+      });
+      Object.defineProperties(event, {
+        pointerId: { value: pointerId },
+        pointerType: { value: "touch" },
+      });
+      fireEvent(target, event);
+    }
+
+    it("still cycles a conversation after iOS drops pointer capture mid-drag", async () => {
+      renderSplitArea({
+        path: threadPath("thr-a"),
+        layout: twoPaneLayout("pane-1"),
+        workspaceRouteContent: true,
+      });
+      await screen.findByTestId("workspace-swipe-position");
+
+      let cycleDirection = "";
+      const handleAvailability = (event: Event) => {
+        const detail = (event as CustomEvent).detail;
+        if (detail.threadId === "thr-a") event.preventDefault();
+      };
+      const handleCycle = (event: Event) => {
+        const detail = (event as CustomEvent).detail;
+        if (detail.threadId === "thr-a") cycleDirection = detail.direction;
+      };
+      window.addEventListener(
+        "bb:conductor-compact-conversation-cycle",
+        handleCycle,
+      );
+      window.addEventListener(
+        "bb:conductor-compact-conversation-available",
+        handleAvailability,
+      );
+
+      try {
+        const transcriptText = document.createElement("p");
+        transcriptText.textContent = "Conversation transcript text";
+        swipeSurface().append(transcriptText);
+
+        firePointer(transcriptText, "pointerdown", 500);
+        // Crosses the intent threshold, so the gesture takes capture here.
+        firePointer(window, "pointermove", 480);
+        fireLostPointerCapture(transcriptText);
+        // The finger keeps travelling past the short-swipe commit distance.
+        firePointer(window, "pointermove", 428);
+        firePointer(window, "pointerup", 428);
+
+        await waitFor(() => expect(cycleDirection).toBe("left"));
+      } finally {
+        window.removeEventListener(
+          "bb:conductor-compact-conversation-cycle",
+          handleCycle,
+        );
+        window.removeEventListener(
+          "bb:conductor-compact-conversation-available",
+          handleAvailability,
+        );
+      }
+    });
+
+    it("still opens the right panel after iOS drops pointer capture mid-drag", async () => {
+      renderSplitArea({
+        path: threadPath("thr-b"),
+        layout: twoPaneLayout("pane-2"),
+        workspaceRouteContent: true,
+      });
+      await screen.findByTestId("workspace-swipe-position");
+
+      const surface = swipeSurface();
+      const transcriptText = document.createElement("p");
+      transcriptText.textContent = "Conversation transcript text";
+      surface.append(transcriptText);
+      let openedPanelThreadId = "";
+      const handlePanelOpen = (event: Event) => {
+        openedPanelThreadId = (event as CustomEvent).detail.threadId;
+      };
+      window.addEventListener(
+        "bb:thread-secondary-panel-open",
+        handlePanelOpen,
+      );
+
+      try {
+        firePointer(transcriptText, "pointerdown", 900);
+        firePointer(window, "pointermove", 860);
+        fireLostPointerCapture(transcriptText);
+        firePointer(window, "pointermove", 100);
+        firePointer(window, "pointerup", 100);
+
+        expect(openedPanelThreadId).toBe("thr-b");
+      } finally {
+        window.removeEventListener(
+          "bb:thread-secondary-panel-open",
+          handlePanelOpen,
         );
       }
     });
@@ -2635,7 +2742,7 @@ describe("SplitThreadArea", () => {
       await waitFor(() => expect(locationPath()).toBe(threadPath("thr-a")));
     });
 
-    it("opens the Command Center past 68% and keeps the whole layout", async () => {
+    it("opens the Command Center past the long-swipe threshold and keeps the whole layout", async () => {
       const store = renderSplitArea({
         path: threadPath("thr-b"),
         layout: twoPaneLayout("pane-2"),
@@ -2755,7 +2862,7 @@ describe("SplitThreadArea", () => {
       );
     });
 
-    it("releases the horizontal touch policy while a text editor is focused", async () => {
+    it("keeps horizontal gesture ownership while a text editor is focused", async () => {
       renderSplitArea({
         path: threadPath("thr-b"),
         layout: twoPaneLayout("pane-2"),
@@ -2772,8 +2879,7 @@ describe("SplitThreadArea", () => {
       const editor = screen.getByTestId("draft-thr-a");
       fireEvent.focus(editor);
 
-      expect(host.style.touchAction).toBe("auto");
-      expect(host.hasAttribute("data-workspace-swipe-text-editing")).toBe(true);
+      expect(host.style.touchAction).toBe("pan-y");
 
       fireEvent.blur(editor);
       expect(host.style.touchAction).toBe("pan-y");

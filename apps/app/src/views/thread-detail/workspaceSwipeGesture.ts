@@ -15,13 +15,26 @@ export const WORKSPACE_SWIPE_FLING_MIN_RATIO = 0.08;
 /** …when it is still travelling at least this fast, in the same direction. */
 export const WORKSPACE_SWIPE_FLING_VELOCITY_PX_PER_SEC = 360;
 /**
+ * Both long-swipe destinations commit past this share of the width. Measured
+ * on a real iPhone: a deliberate, unhurried single-stroke drag tops out
+ * around 60-65% of the screen width before a thumb runs out of comfortable
+ * reach. The previous value, 0.68, sat just past that ceiling, so no drag
+ * ever reached it — every long swipe fell through to an ordinary pane change
+ * instead. Keep this below ~0.6 with real headroom, and above
+ * WORKSPACE_SWIPE_PANE_COMMIT_RATIO by enough margin that an ordinary pane
+ * swipe can't cross it by accident.
+ */
+const WORKSPACE_SWIPE_LONG_TRAVEL_RATIO = 0.5;
+/**
  * The Command Center opens on physical rightward distance only. Velocity can
  * complete a short pane swipe but must never promote one to this destination,
  * or a quick flick would replace the whole surface.
  */
-export const WORKSPACE_SWIPE_COMMAND_CENTER_RATIO = 0.68;
+export const WORKSPACE_SWIPE_COMMAND_CENTER_RATIO =
+  WORKSPACE_SWIPE_LONG_TRAVEL_RATIO;
 /** A deliberate leftward drag opens the current task's right panel. */
-export const WORKSPACE_SWIPE_RIGHT_PANEL_RATIO = 0.68;
+export const WORKSPACE_SWIPE_RIGHT_PANEL_RATIO =
+  WORKSPACE_SWIPE_LONG_TRAVEL_RATIO;
 /**
  * How recent the last movement sample must be to describe the release. A finger
  * that travelled fast and then rested is no longer flinging, so a stale sample

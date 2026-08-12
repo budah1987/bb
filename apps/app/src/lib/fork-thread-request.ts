@@ -27,7 +27,7 @@ export interface BuildForkThreadRequestArgs extends ForkThreadCreateSeed {
   input: PromptInput[];
 }
 
-type ForkableThread = Pick<Thread, "environmentId" | "providerId">;
+type ForkableThread = Pick<Thread, "environmentId">;
 
 export function isThreadForkable(sourceThread: ForkableThread | null): boolean {
   return sourceThread !== null && sourceThread.environmentId !== null;
