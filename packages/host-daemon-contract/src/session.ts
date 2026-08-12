@@ -480,6 +480,7 @@ const hostDaemonOnlineRpcResponseSuccessSchema = z.discriminatedUnion(
     commandRpcResponseSuccessSchemaFor("workspace.update_from_target"),
     commandRpcResponseSuccessSchemaFor("workspace.rename"),
     commandRpcResponseSuccessSchemaFor("workspace.pull_request_action"),
+    commandRpcResponseSuccessSchemaFor("workspace.pull_request_checks_rerun"),
     commandRpcResponseSuccessSchemaFor("workspace.pull_request_create"),
   ],
 );

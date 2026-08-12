@@ -438,6 +438,38 @@ describe("bb environment command output", () => {
     ]);
   });
 
+  it("bb environment pull-request rerun-checks retries all failed checks", async () => {
+    const post = vi.fn(async () => ({
+      ok: true,
+      action: "pull_request_checks_rerun",
+      message: "Failed checks queued to re-run",
+      rerunCount: 2,
+    }));
+    stubServerApi({ "v1.environments.:id.actions.$post": post });
+
+    await runCommand(
+      [
+        "environment",
+        "pull-request",
+        "rerun-checks",
+        "env-pr-checks",
+        "--all-failed",
+      ],
+      register,
+    );
+
+    expect(post).toHaveBeenCalledWith({
+      param: { id: "env-pr-checks" },
+      json: {
+        action: "pull_request_checks_rerun",
+        options: { scope: "failed" },
+      },
+    });
+    expect(collectLogLines(vi.mocked(console.log))).toEqual([
+      "Failed checks queued to re-run",
+    ]);
+  });
+
   it("bb environment branches returns local and remote results", async () => {
     const get = vi.fn(async () => ({
       branches: ["main", "release"],

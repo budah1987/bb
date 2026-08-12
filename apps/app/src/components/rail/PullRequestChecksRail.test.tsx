@@ -1,8 +1,14 @@
 // @vitest-environment jsdom
 
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import type { GitHostPullRequestCheck, ThreadPullRequest } from "@bb/domain";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   isFailedPullRequestCheck,
   isRerunnablePullRequestCheck,
@@ -85,6 +91,8 @@ beforeEach(() => {
   sendMessage.mutateAsync.mockReset();
   sendMessage.mutateAsync.mockResolvedValue(undefined);
 });
+
+afterEach(cleanup);
 
 describe("pull request check helpers", () => {
   it("only offers retries for failed GitHub Actions checks", () => {
@@ -170,9 +178,7 @@ describe("PullRequestChecksRail", () => {
       />,
     );
 
-    fireEvent.click(
-      screen.getByRole("button", { name: "Re-run all failed" }),
-    );
+    fireEvent.click(screen.getByRole("button", { name: "Re-run all failed" }));
 
     await waitFor(() =>
       expect(requestAction.mutateAsync).toHaveBeenCalledWith({
