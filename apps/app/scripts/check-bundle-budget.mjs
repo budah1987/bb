@@ -85,6 +85,14 @@ if (bootBrotliBytes > budget.maxBootBrotliBytes) {
 for (const [pkg, chunks] of offenders) {
   failures.push(`${pkg} is in the boot payload (${chunks.join(", ")}). It must load on demand.`);
 }
+for (const chunk of stats.chunks ?? []) {
+  if (chunk.moduleCount <= 1 || chunk.bytes <= budget.maxMultiModuleChunkBytes) {
+    continue;
+  }
+  failures.push(
+    `${chunk.fileName} is ${kb(chunk.bytes)}, over the ${kb(budget.maxMultiModuleChunkBytes)} multi-module chunk budget.`,
+  );
+}
 
 if (failures.length > 0) {
   console.error("\nBundle budget failed:\n");

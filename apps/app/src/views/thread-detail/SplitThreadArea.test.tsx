@@ -51,6 +51,9 @@ import {
 import { PaneContext, usePaneSecondaryPanelRegistration } from "./PaneContext";
 import { SplitThreadArea } from "./SplitThreadArea";
 import { applyThreadOpenToLayout } from "./splitThreadNavigation";
+import performanceBudgets from "../../../../../performance-budgets.json" with {
+  type: "json",
+};
 
 // Per-thread archived/deleted state consulted by the mocked useThread, driving
 // PaneStaleWatcher. Unknown threads read as "still loading" (never pruned).
@@ -789,7 +792,7 @@ describe("SplitThreadArea", () => {
     ).toBe("keep this draft");
   });
 
-  it("limits unrelated panes to the shared route update during focus changes", async () => {
+  it("keeps eight-pane focus switching within the render budget", async () => {
     renderSplitArea({
       path: threadPath("thr-h"),
       layout: eightPaneThreadLayout(),
@@ -805,8 +808,11 @@ describe("SplitThreadArea", () => {
     await waitFor(() =>
       expect(screen.getByTestId("pane-thr-a").dataset.focused).toBe("true"),
     );
-    expect(threadViewRenderCounts.get("thr-d")).toBe(
-      (unrelatedRenderCount ?? 0) + 1,
+    expect(
+      (threadViewRenderCounts.get("thr-d") ?? 0) -
+        (unrelatedRenderCount ?? 0),
+    ).toBeLessThanOrEqual(
+      performanceBudgets.splitSwitching.maxUnrelatedPaneRenders,
     );
   });
 

@@ -1,0 +1,9 @@
+{
+  "sidebar": {
+    "maxInitialPayloadBytes": 1500000,
+    "maxQueryMs": 1000
+  },
+  "splitSwitching": {
+    "maxUnrelatedPaneRenders": 1
+  }
+}

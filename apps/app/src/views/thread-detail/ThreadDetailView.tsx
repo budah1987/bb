@@ -183,11 +183,16 @@ import {
 import { PluginThreadPanelNavigationProvider } from "@/components/plugin/plugin-thread-panel-navigation";
 import {
   PullRequestCreateDialog,
-  PullRequestPanel,
   type PullRequestCreateInput,
   type PullRequestMetadataSuggestion,
 } from "@/components/pull-request/PullRequestPanel";
 import { getPullRequestAttentionDisplay } from "@/lib/pull-request-display";
+
+const PullRequestPanel = lazy(() =>
+  import("@/components/pull-request/PullRequestPanel").then((module) => ({
+    default: module.PullRequestPanel,
+  })),
+);
 import { ThreadTimelineNavigationProvider } from "@/components/thread/timeline/ThreadTimelineNavigationContext";
 import { usePluginSlots } from "@/lib/plugin-slots";
 import { getFileExtension } from "@/lib/file-opener-preference";
@@ -3075,7 +3080,8 @@ function ThreadDetailViewInternal(props: ThreadDetailViewInternalProps) {
     </ThreadTimelineNavigationProvider>
   ) : undefined;
   const pullRequestPanelContent = (
-    <PullRequestPanel
+    <Suspense fallback={null}>
+      <PullRequestPanel
       archiveErrorMessage={pullRequestArchive.errorMessage}
       baseBranchOptions={[
         ...new Set([
@@ -3111,7 +3117,8 @@ function ThreadDetailViewInternal(props: ThreadDetailViewInternalProps) {
       selectedGithubAccountLogin={selectedGithubAccountLogin}
       threadTitle={threadTitle}
       workspaceStatus={workspaceStatus}
-    />
+      />
+    </Suspense>
   );
   const isBrowserTabActive = activeBrowserTab !== null;
   const threadDetailContent = (
