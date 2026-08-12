@@ -90,6 +90,14 @@ function unavailableMetric(
   return { label, usedPercent: null, resetsAt: null };
 }
 
+function keepsProviderVisible(usage: ProviderUsage): boolean {
+  return (
+    usage.status === "ok" ||
+    usage.status === "expired" ||
+    usage.status === "error"
+  );
+}
+
 function isPresent<T>(value: T | null): value is T {
   return value !== null;
 }
@@ -134,10 +142,10 @@ export function buildCompactUsageLimitsModel(
 
   const claudeSummary =
     claudeSession ??
-    (usage.claudeCode.status === "ok" ? unavailableMetric("5hr") : null);
+    (keepsProviderVisible(usage.claudeCode) ? unavailableMetric("5hr") : null);
   const codexDetailSession =
     codexSession ??
-    (usage.codex.status === "ok" ? unavailableMetric("5hr") : null);
+    (keepsProviderVisible(usage.codex) ? unavailableMetric("5hr") : null);
   const codexSummary = codexSession ?? codexWeekly ?? codexDetailSession;
 
   const providers = [
