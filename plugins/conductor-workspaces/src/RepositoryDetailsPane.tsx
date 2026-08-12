@@ -28,7 +28,7 @@ import {
   workspaceSignal,
 } from "./thread-state";
 import { useReconciliation } from "./useReconciliation";
-import type { conductorRpcContract } from "./server";
+import type { conductorRpcContract } from "./rpc-contract";
 
 const REPOSITORY_DETAILS_PATH = "repository-details";
 const REPOSITORY_DETAIL_TABS = ["overview", "git", "manager"] as const;

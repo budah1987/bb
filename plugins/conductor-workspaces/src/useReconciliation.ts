@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRealtime, useRpc } from "@bb/plugin-sdk/app";
-import type { conductorRpcContract } from "./server";
+import type { conductorRpcContract } from "./rpc-contract";
 import type { ConductorBackfillReport, LegacyWorkspace } from "./projection";
 
 export function useReconciliation() {

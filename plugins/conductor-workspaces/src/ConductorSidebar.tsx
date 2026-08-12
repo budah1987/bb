@@ -82,7 +82,7 @@ import {
   signalLabel,
   workspaceSignal,
 } from "./thread-state";
-import type { conductorRpcContract } from "./server";
+import type { conductorRpcContract } from "./rpc-contract";
 import { useReconciliation } from "./useReconciliation";
 import {
   ConversationActionMenu,
