@@ -57,6 +57,9 @@ message agents, or inspect projects, providers, and environments.
 - In the app, open the thread's right panel, choose New Tab, then select
   **Open simulator**. The tab is singleton per environment; closing it leaves
   the managed session running, while Stop ends the session.
+- After the simulator starts, select its pop-out button for a separate window.
+  The toolbar provides Home, screenshot, rotation, app switcher, lock screen,
+  Siri, and side button controls. Closing the pop-out leaves the session running.
 - Use `bb simulator list`, `attach [device-udid]`, `tap <x> <y>`,
   `swipe <x1> <y1> <x2> <y2>`, `type <text>`, `button <name>`,
   `rotate <orientation>`, `ax`, `screenshot --out <path>`, and `stop` for agent

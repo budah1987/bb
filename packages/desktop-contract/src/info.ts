@@ -41,6 +41,15 @@ export type BbDesktopWindowState = z.infer<typeof bbDesktopWindowStateSchema>;
 export const bbDesktopThemeSchema = z.enum(["system", "light", "dark"]);
 export type BbDesktopTheme = z.infer<typeof bbDesktopThemeSchema>;
 
+export const bbDesktopSimulatorPopoutRequestSchema = z
+  .object({
+    environmentId: z.string().min(1),
+  })
+  .strict();
+export type BbDesktopSimulatorPopoutRequest = z.infer<
+  typeof bbDesktopSimulatorPopoutRequestSchema
+>;
+
 export type BbDesktopInfoChangeHandler = (info: BbDesktopInfo) => void;
 export type BbDesktopInfoUnsubscribe = () => void;
 export type BbDesktopWindowStateChangeHandler = (
@@ -98,6 +107,11 @@ export interface BbDesktopApi extends BbDesktopInfo {
    * No-op on the web build where `window.bbDesktop` is undefined.
    */
   openExternalUrl(url: string): void;
+  /**
+   * Open or focus the desktop simulator window for an environment. Optional
+   * for desktop shells that predate the simulator pop-out.
+   */
+  openSimulatorPopout?(request: BbDesktopSimulatorPopoutRequest): void;
   /**
    * Push the renderer's theme preference to the Electron main process so the
    * NSWindow appearance — traffic lights and inactive title-bar chrome —

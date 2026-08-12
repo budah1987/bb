@@ -98,6 +98,10 @@ export interface CreateDesktopWindowArgs {
   stateKey: WindowStateKey | null;
 }
 
+export interface CreateSimulatorPopoutWindowArgs {
+  initialUrl: string;
+}
+
 export interface RestoreDesktopWindowsArgs {
   initialUrl: string | null;
 }
@@ -108,6 +112,9 @@ export interface LoadDesktopWindowsUrlArgs {
 
 export interface DesktopWindowFactory {
   createWindow(args: CreateDesktopWindowArgs): Promise<DesktopBrowserWindow>;
+  createSimulatorPopoutWindow(
+    args: CreateSimulatorPopoutWindowArgs,
+  ): Promise<DesktopBrowserWindow>;
   focusFirstWindow(): boolean;
   hasOpenWindows(): boolean;
   sendToFocusedWindow(channel: string, payload: unknown): boolean;
@@ -185,6 +192,30 @@ function createWindowOptions(
     width: args.bounds.width,
     x: args.bounds.x,
     y: args.bounds.y,
+  };
+}
+
+function createSimulatorPopoutWindowOptions(
+  args: Pick<CreateWindowOptionsArgs, "icon" | "preloadPath">,
+): BrowserWindowConstructorOptions {
+  return {
+    frame: false,
+    height: 900,
+    icon: args.icon,
+    minHeight: 520,
+    minWidth: 360,
+    show: false,
+    title: "iOS Simulator",
+    titleBarStyle: "hiddenInset",
+    trafficLightPosition: MACOS_TRAFFIC_LIGHT_POSITION,
+    webPreferences: {
+      contextIsolation: true,
+      nodeIntegration: false,
+      preload: args.preloadPath,
+      sandbox: true,
+      spellcheck: true,
+    },
+    width: 460,
   };
 }
 
@@ -273,6 +304,30 @@ export function createDesktopWindowFactory(
     } finally {
       pendingStateKeys.delete(stateKey);
     }
+  }
+
+  async function createSimulatorPopoutWindow(
+    createArgs: CreateSimulatorPopoutWindowArgs,
+  ): Promise<DesktopBrowserWindow> {
+    const browserWindow = args.browserWindowCreator.create(
+      createSimulatorPopoutWindowOptions({
+        icon: args.icon,
+        preloadPath: args.preloadPath,
+      }),
+    );
+    browserWindow.webContents.session.setSpellCheckerEnabled(true);
+    browserWindow.once("ready-to-show", () => {
+      browserWindow.show();
+    });
+    browserWindow.webContents.setWindowOpenHandler((details) => {
+      args.openExternalUrl({ url: details.url });
+      return { action: "deny" };
+    });
+    await loadUrlIntoWindow({
+      browserWindow,
+      url: createArgs.initialUrl,
+    });
+    return browserWindow;
   }
 
   async function restoreSavedWindows(
@@ -386,6 +441,7 @@ export function createDesktopWindowFactory(
 
   return {
     createWindow,
+    createSimulatorPopoutWindow,
     focusFirstWindow,
     hasOpenWindows() {
       return activeWindows.size > 0;

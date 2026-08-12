@@ -8,8 +8,11 @@ iOS Simulator commands
 
 BB can boot one managed iOS Simulator session per environment on a macOS host
 with Xcode installed. In the app, open the thread's right panel, choose New Tab,
-then select Open simulator. Closing the tab leaves the session running so agents
-can continue controlling it; Stop ends the managed session.
+then select Open simulator. After the simulator starts, select the pop-out button
+in its toolbar to open a small separate window. Its toolbar provides Home,
+screenshot, rotation, app switcher, lock screen, Siri, and side button controls.
+Closing the tab or pop-out leaves the session running so agents can continue
+controlling it; Stop ends the managed session.
 
   bb simulator list                     List devices and the active session
     --environment <id>                  Defaults to BB_ENVIRONMENT_ID

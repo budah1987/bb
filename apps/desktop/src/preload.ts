@@ -7,6 +7,7 @@ import {
   bbDesktopBrowserSnapshotSchema,
   bbDesktopBrowserStateSchema,
   bbDesktopInfoSchema,
+  bbDesktopSimulatorPopoutRequestSchema,
   bbDesktopWindowStateSchema,
   type BbDesktopApi,
   type BbDesktopAppCommandHandler,
@@ -60,6 +61,7 @@ import {
   BB_DESKTOP_CLOSE_WINDOW_RESPONSE_CHANNEL,
   BB_DESKTOP_GET_WINDOW_STATE_CHANNEL,
   BB_DESKTOP_OPEN_NEW_TAB_CHANNEL,
+  BB_DESKTOP_OPEN_SIMULATOR_POPOUT_CHANNEL,
   BB_DESKTOP_WINDOW_STATE_CHANGED_CHANNEL,
 } from "./desktop-window-command-ipc.js";
 import {
@@ -357,6 +359,11 @@ const bbDesktopApi: BbDesktopApi = {
   },
   openExternalUrl(url: string): void {
     ipcRenderer.send(BB_DESKTOP_OPEN_EXTERNAL_URL_CHANNEL, url);
+  },
+  openSimulatorPopout(request): void {
+    const parsed = bbDesktopSimulatorPopoutRequestSchema.safeParse(request);
+    if (!parsed.success) return;
+    ipcRenderer.send(BB_DESKTOP_OPEN_SIMULATOR_POPOUT_CHANNEL, parsed.data);
   },
   setTheme(theme: BbDesktopTheme): void {
     ipcRenderer.send(BB_DESKTOP_SET_THEME_CHANNEL, theme);

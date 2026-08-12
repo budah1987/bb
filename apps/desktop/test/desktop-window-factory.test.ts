@@ -319,6 +319,56 @@ describe("desktop window factory", () => {
     ]);
   });
 
+  it("creates a compact simulator window without persistent state", async () => {
+    const tempDir = await createTempDir();
+    const createdWindows: FakeDesktopWindow[] = [];
+    const factory = createDesktopWindowFactory({
+      browserWindowCreator: {
+        create(options) {
+          const browserWindow = new FakeDesktopWindow({ options });
+          createdWindows.push(browserWindow);
+          return browserWindow;
+        },
+      },
+      createWindowStateKey() {
+        return "unused";
+      },
+      displayWorkAreas: null,
+      icon: undefined,
+      isQuitting() {
+        return false;
+      },
+      openExternalUrl() {},
+      preloadPath: "/tmp/preload.cjs",
+      userDataPath: tempDir.path,
+    });
+
+    await factory.createSimulatorPopoutWindow({
+      initialUrl: "http://127.0.0.1:38886/simulator-popout/env_ios",
+    });
+    const createdWindow = createdWindows[0];
+
+    expect(createdWindow?.options).toMatchObject({
+      frame: false,
+      height: 900,
+      minHeight: 520,
+      minWidth: 360,
+      title: "iOS Simulator",
+      titleBarStyle: "hiddenInset",
+      trafficLightPosition: { x: 18, y: 18 },
+      width: 460,
+    });
+    expect(createdWindow?.loadedUrls).toEqual([
+      "http://127.0.0.1:38886/simulator-popout/env_ios",
+    ]);
+    expect(createdWindow?.webContents.zoomFactors).toEqual([1]);
+
+    await factory.persistOpenWindows();
+    await expect(
+      readPersistedWindowStateEntries({ userDataPath: tempDir.path }),
+    ).resolves.toEqual([]);
+  });
+
   it("allocates distinct state keys for concurrent implicit windows", async () => {
     const tempDir = await createTempDir();
     const createdWindows: FakeDesktopWindow[] = [];

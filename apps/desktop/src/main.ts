@@ -25,6 +25,7 @@ import type { ConnectCredential } from "@bb/connect-client";
 import type { AppKeybindings } from "@bb/domain";
 import {
   bbDesktopThemeSchema,
+  bbDesktopSimulatorPopoutRequestSchema,
   type BbDesktopInfo,
   type BbDesktopWindowState,
 } from "@bb/desktop-contract";
@@ -135,6 +136,7 @@ import {
   BB_DESKTOP_CLOSE_WINDOW_RESPONSE_CHANNEL,
   BB_DESKTOP_GET_WINDOW_STATE_CHANNEL,
   BB_DESKTOP_OPEN_NEW_TAB_CHANNEL,
+  BB_DESKTOP_OPEN_SIMULATOR_POPOUT_CHANNEL,
   BB_DESKTOP_WINDOW_STATE_CHANGED_CHANNEL,
   CLOSE_WINDOW_REQUEST_TIMEOUT_MS,
 } from "./desktop-window-command-ipc.js";
@@ -302,6 +304,7 @@ let systemConfigSync: SystemConfigSync | null = null;
 let systemConfigRefreshToken = 0;
 let refreshRemoteSystemConfig: (() => void) | null = null;
 const applicationWindowWebContentsIds = new Set<number>();
+const simulatorPopoutWindows = new Map<string, DesktopBrowserWindow>();
 let bbAppLoaded = false;
 let stoppingForQuit = false;
 let quitting = false;
@@ -366,6 +369,17 @@ function resolveDesktopUpdateFeedUrl(
     return DESKTOP_UPDATE_FEED_URL;
   }
   return rawFeedUrl;
+}
+
+function createSimulatorPopoutUrl(args: {
+  environmentId: string;
+  windowUrl: string;
+}): string {
+  const url = new URL(args.windowUrl);
+  url.pathname = `/simulator-popout/${encodeURIComponent(args.environmentId)}`;
+  url.search = "";
+  url.hash = "";
+  return url.toString();
 }
 
 function getDesktopVersion(version: string | undefined): string {
@@ -1477,6 +1491,30 @@ async function createApplicationWindow(
   return browserWindow;
 }
 
+async function openSimulatorPopout(environmentId: string): Promise<void> {
+  const existingWindow = simulatorPopoutWindows.get(environmentId);
+  if (existingWindow !== undefined && !existingWindow.isDestroyed()) {
+    if (existingWindow.isMinimized()) existingWindow.restore();
+    existingWindow.focus();
+    return;
+  }
+  if (desktopWindowFactory === null || currentWindowUrl === null) return;
+
+  const browserWindow = await desktopWindowFactory.createSimulatorPopoutWindow({
+    initialUrl: createSimulatorPopoutUrl({
+      environmentId,
+      windowUrl: currentWindowUrl,
+    }),
+  });
+  simulatorPopoutWindows.set(environmentId, browserWindow);
+  registerApplicationWindow(browserWindow);
+  browserWindow.on("closed", () => {
+    if (simulatorPopoutWindows.get(environmentId) === browserWindow) {
+      simulatorPopoutWindows.delete(environmentId);
+    }
+  });
+}
+
 async function stopOwnedRuntime(): Promise<void> {
   const runtime = currentRuntime;
   if (runtime === null || runtime.ownership !== "spawned") {
@@ -1560,6 +1598,22 @@ function registerDesktopUpdateIpc(): void {
     }
     nativeTheme.themeSource = parsed.data;
   });
+
+  ipcMain.on(
+    BB_DESKTOP_OPEN_SIMULATOR_POPOUT_CHANNEL,
+    (event, payload: unknown) => {
+      const sourceWindow = resolveApplicationWindow(event.sender);
+      if (
+        sourceWindow === null ||
+        !isRegisteredApplicationWindow(sourceWindow)
+      ) {
+        return;
+      }
+      const parsed = bbDesktopSimulatorPopoutRequestSchema.safeParse(payload);
+      if (!parsed.success) return;
+      void openSimulatorPopout(parsed.data.environmentId);
+    },
+  );
 
   ipcMain.on(BB_DESKTOP_CLOSE_WINDOW_RESPONSE_CHANNEL, (event, payload) => {
     const pending = pendingCloseWindowRequests.get(event.sender.id);
