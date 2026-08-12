@@ -121,6 +121,8 @@ export type ProviderExecutionContext = {
    */
   workflowsEnabled: boolean;
   memoryEnabled?: boolean;
+  claudeCodeAutoCompactEnabled?: boolean;
+  claudeCodeAutoCompactWindow?: number;
   providerSubagentsEnabled?: boolean;
   instructions?: string;
   envVars?: Record<string, string>;

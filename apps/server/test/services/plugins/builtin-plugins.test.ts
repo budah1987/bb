@@ -207,6 +207,7 @@ describe("builtin plugin reconciliation", () => {
       ["automations", "Clock"],
       ["connect", "Smartphone"],
       ["conductor-workspaces", "PanelsTopLeft"],
+      ["claude-auto-compact", "CircleArrowShrink"],
       ["custom-instructions", "EditFile"],
       ["design-canvas", "Palette"],
       ["ingestion-desk", "Inbox"],

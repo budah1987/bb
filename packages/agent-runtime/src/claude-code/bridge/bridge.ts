@@ -477,6 +477,8 @@ function toSessionConstructionConfig(
       disallowedTools: params.disallowedTools,
       instructionMode: params.instructionMode,
       memoryEnabled: params.memoryEnabled,
+      autoCompactEnabled: params.autoCompactEnabled,
+      autoCompactWindow: params.autoCompactWindow,
       model: params.model,
       permissionEscalation: params.permissionEscalation,
       permissionMode: params.permissionMode,

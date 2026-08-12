@@ -25,6 +25,8 @@ export interface BuildSessionOptionsArgs {
   reasoningLevel?: ReasoningLevel;
   workflowsEnabled: boolean;
   memoryEnabled?: boolean;
+  autoCompactEnabled?: boolean;
+  autoCompactWindow?: number;
 }
 
 interface ResolveExecutableOnPathArgs {
@@ -74,6 +76,12 @@ function toSdkEffort(
 function buildFlagSettings(params: BuildSessionOptionsArgs): Settings {
   return {
     autoMemoryEnabled: params.memoryEnabled ?? true,
+    ...(params.autoCompactEnabled === undefined
+      ? {}
+      : {
+          autoCompactEnabled: params.autoCompactEnabled,
+          autoCompactWindow: params.autoCompactWindow,
+        }),
     ...(params.workflowsEnabled ? { enableWorkflows: true } : {}),
     ...(params.reasoningLevel === "ultracode" ? { ultracode: true } : {}),
   };

@@ -990,6 +990,10 @@ const INTENTIONAL_OPTIONAL_HOST_DAEMON_FIELDS: Record<string, string> = {
     "thread runtime options may omit mock CLI traffic settings unless the server explicitly enables Claude traffic replay.",
   "hostDaemonCommandSchema.options.claudeCodePermissionMode":
     "thread runtime options may omit the Claude Code native permission override unless a provider command requests plan mode.",
+  "hostDaemonCommandSchema.options.claudeCodeAutoCompactEnabled":
+    "only Claude Code sessions receive automatic compaction policy; omission preserves legacy command compatibility.",
+  "hostDaemonCommandSchema.options.claudeCodeAutoCompactWindow":
+    "only Claude Code sessions receive a compaction window; omission preserves legacy command compatibility.",
   "hostDaemonCommandSchema.options.memoryEnabled":
     "legacy runtime commands may omit provider memory policy; current servers always send the persisted provider preference.",
   "hostDaemonCommandSchema.options.providerSubagentsEnabled":
@@ -1269,10 +1273,10 @@ describe("host-daemon command schemas", () => {
   // dev-server supervision (89-92), and upstream's ACP context-window usage
   // outside a turn (through 95). A stock upstream daemon reports 95 and would
   // satisfy a `>= 95` check while missing the BBamir payloads, so the merged
-  // build claims 96 to force every older daemon on either lineage to update
+  // build claims the current version to force every older daemon to update
   // before it connects.
-  it("uses protocol version 98 for the current wire surface", () => {
-    expect(HOST_DAEMON_PROTOCOL_VERSION).toBe(98);
+  it("uses protocol version 99 for the current wire surface", () => {
+    expect(HOST_DAEMON_PROTOCOL_VERSION).toBe(99);
   });
 
   it("binds Plan cancellation to a required turn id and typed result", () => {

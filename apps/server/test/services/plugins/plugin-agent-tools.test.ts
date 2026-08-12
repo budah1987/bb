@@ -636,6 +636,11 @@ describe("plugin tools reach thread runtime config", () => {
                 ";configure=" + configureCount,
             };
           });
+          bb.agents.experimental_configureClaudeCodeSession((context: any) =>
+            context.provider.id === "claude-code"
+              ? { autoCompactEnabled: false, autoCompactWindow: 380000 }
+              : null,
+          );
         }
       `,
     });
@@ -780,6 +785,8 @@ describe("plugin tools reach thread runtime config", () => {
       '"id":"claude-code","model":"claude-opus-4-6"',
     );
     expect(betaCommand.instructions).toContain("factory=1;configure=2");
+    expect(betaCommand.options.claudeCodeAutoCompactEnabled).toBe(false);
+    expect(betaCommand.options.claudeCodeAutoCompactWindow).toBe(380_000);
     expect(alphaCommand.instructions).toContain(
       "Static instructions for alpha_tool",
     );

@@ -5,6 +5,20 @@ entry here (see [AGENTS.md](../AGENTS.md), "Plugin API"). Dropping the prefix
 is the deliberate stabilization step: audit the entry, rename project-wide,
 and delete the entry in the same change.
 
+## `bb.agents.experimental_configureClaudeCodeSession(provider)`
+
+Lets a plugin set Claude Code's native `autoCompactEnabled` and
+`autoCompactWindow` flags at thread and session resolution. The callback is
+synchronous and receives the normal plugin agent configuration context.
+
+Before stabilization, audit:
+
+- whether this should become a provider-neutral session configuration API;
+- whether alphabetical plugin-id priority is the correct conflict policy;
+- whether more Claude Code flags belong in the configuration object;
+- validation limits and compatibility with older host daemons;
+- session restart behavior when a plugin changes its live configuration.
+
 ## `bb.ui.experimental_contributeBackgroundActivity(provider)`
 
 Lets one plugin contribute its live agent and command work to BB's existing

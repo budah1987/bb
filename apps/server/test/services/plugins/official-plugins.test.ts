@@ -91,6 +91,7 @@ describe("official plugin registry invariants", () => {
       automations: "Workflow management",
       connect: "Host access",
       "conductor-workspaces": "Interface",
+      "claude-auto-compact": "Agent interaction",
       "custom-instructions": "Context & knowledge",
       "design-canvas": "Interface",
       docs: "Context & knowledge",

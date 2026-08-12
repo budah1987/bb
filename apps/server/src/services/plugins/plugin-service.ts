@@ -59,6 +59,7 @@ import {
   type PluginAgentConfigurationContext,
   type PluginAgentToolContext,
   type PluginAgentToolRecord,
+  type PluginClaudeCodeSessionConfiguration,
   type PluginCliContext,
   type PluginHttpRouteRecord,
   type PluginMentionTrigger,
@@ -894,6 +895,42 @@ function normalizePluginAgentConfiguration(args: {
       value: output.skills,
     }),
     instructions,
+  };
+}
+
+function normalizeClaudeCodeSessionConfiguration(
+  value: unknown,
+): PluginClaudeCodeSessionConfiguration {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    throw new Error(
+      "experimental_configureClaudeCodeSession() must return an object or null",
+    );
+  }
+  const output = value as Record<string, unknown>;
+  const unknownKeys = Object.keys(output).filter(
+    (key) => !["autoCompactEnabled", "autoCompactWindow"].includes(key),
+  );
+  if (unknownKeys.length > 0) {
+    throw new Error(
+      `experimental_configureClaudeCodeSession() returned unknown fields: ${unknownKeys.join(", ")}`,
+    );
+  }
+  if (typeof output.autoCompactEnabled !== "boolean") {
+    throw new Error("autoCompactEnabled must be a boolean");
+  }
+  if (
+    typeof output.autoCompactWindow !== "number" ||
+    !Number.isInteger(output.autoCompactWindow) ||
+    output.autoCompactWindow < 250_000 ||
+    output.autoCompactWindow > 400_000
+  ) {
+    throw new Error(
+      "autoCompactWindow must be an integer from 250000 to 400000",
+    );
+  }
+  return {
+    autoCompactEnabled: output.autoCompactEnabled,
+    autoCompactWindow: output.autoCompactWindow,
   };
 }
 
@@ -1832,10 +1869,36 @@ export function createPluginService(deps: PluginServiceDeps): PluginService {
       const tools: PluginAgentToolContribution[] = [];
       const selectedSkillIdsByPlugin = new Map<string, ReadonlySet<string>>();
       const dynamicInstructions: Array<{ pluginId: string; text: string }> = [];
+      let claudeCodeSessionConfiguration: PluginClaudeCodeSessionConfiguration | null =
+        null;
 
       for (const [pluginId, plugin] of [...loaded.entries()].sort(([a], [b]) =>
         a.localeCompare(b),
       )) {
+        const claudeProvider =
+          plugin.handle.claudeCodeSessionConfigurationProvider;
+        if (context.provider.id === "claude-code" && claudeProvider !== null) {
+          const outcome = await invokeWrapped(
+            pluginId,
+            "Claude Code session configure",
+            () => {
+              const value = claudeProvider(context);
+              return value === null
+                ? null
+                : normalizeClaudeCodeSessionConfiguration(value);
+            },
+          );
+          if (outcome.ok && outcome.value !== null) {
+            if (claudeCodeSessionConfiguration === null) {
+              claudeCodeSessionConfiguration = outcome.value;
+            } else {
+              logger.warn(
+                { pluginId },
+                "Ignoring lower-priority Claude Code session configuration",
+              );
+            }
+          }
+        }
         const pluginTools = allTools.filter(
           (entry) => entry.pluginId === pluginId,
         );
@@ -1897,7 +1960,12 @@ export function createPluginService(deps: PluginServiceDeps): PluginService {
         }
       }
 
-      return { tools, selectedSkillIdsByPlugin, dynamicInstructions };
+      return {
+        claudeCodeSessionConfiguration,
+        tools,
+        selectedSkillIdsByPlugin,
+        dynamicInstructions,
+      };
     },
 
     listInstructionContributions() {

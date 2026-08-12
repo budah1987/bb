@@ -140,6 +140,8 @@ interface RuntimeExecutionOptionsArgs {
   permissionEscalation: PermissionEscalation;
   providerId: string;
   memoryEnabled: boolean;
+  claudeCodeAutoCompactEnabled?: boolean;
+  claudeCodeAutoCompactWindow?: number;
   providerSubagentsEnabled: boolean;
   workflowsEnabled: boolean;
 }
@@ -268,6 +270,12 @@ function toRuntimeExecutionOptions(
     claudeCodeMockCliTraffic: args.claudeCodeMockCliTraffic,
     workflowsEnabled: args.workflowsEnabled,
     memoryEnabled: args.memoryEnabled,
+    ...(args.claudeCodeAutoCompactEnabled === undefined
+      ? {}
+      : {
+          claudeCodeAutoCompactEnabled: args.claudeCodeAutoCompactEnabled,
+          claudeCodeAutoCompactWindow: args.claudeCodeAutoCompactWindow,
+        }),
     providerSubagentsEnabled: args.providerSubagentsEnabled,
   };
   if (permissionMode === "full") {
@@ -350,6 +358,8 @@ export async function buildThreadStartCommand(
       hostId: args.environment.hostId,
       claudeCodeMockCliTraffic: resolveClaudeCodeMockCliTrafficConfig(deps),
       memoryEnabled: resolveProviderMemoryEnabled(deps, args.providerId),
+      claudeCodeAutoCompactEnabled: runtimeContext.claudeCodeAutoCompactEnabled,
+      claudeCodeAutoCompactWindow: runtimeContext.claudeCodeAutoCompactWindow,
       providerSubagentsEnabled: resolveProviderSubagentsEnabled(
         deps,
         args.providerId,
@@ -392,6 +402,10 @@ function buildPreparedTurnSubmitCommandPayload(
         args.deps,
         args.runtimeContext.providerId,
       ),
+      claudeCodeAutoCompactEnabled:
+        args.runtimeContext.claudeCodeAutoCompactEnabled,
+      claudeCodeAutoCompactWindow:
+        args.runtimeContext.claudeCodeAutoCompactWindow,
       providerSubagentsEnabled: resolveProviderSubagentsEnabled(
         args.deps,
         args.runtimeContext.providerId,

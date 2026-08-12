@@ -5,7 +5,7 @@
 // Confused by the API, or need a symbol that isn't here? Clone the BB repo
 // and read the real source: https://github.com/get-bb/bb
 
-import { BbPluginApi, PluginSettingValue, PluginSharedPortTunnelIdentity, PluginAgentToolExperimentalStatusLabels, PluginAgentToolContext, PluginAgentToolResult, PluginCliCommandInfo, PluginCliContext, PluginCliResult, PluginHttpAuthMode, PluginHttpHandler, PluginMentionTrigger, PluginMentionSearchContext, PluginMentionItem, JsonValue, PluginCliExecutionResult, PluginThreadEventName, PluginThreadEventPayloads, PluginAgentConfigurationContext, PluginSettingDescriptors, PluginAgentConfiguration, PluginInteractionRequest } from '@bb/plugin-sdk';
+import { BbPluginApi, PluginSettingValue, PluginSharedPortTunnelIdentity, PluginAgentToolExperimentalStatusLabels, PluginAgentToolContext, PluginAgentToolResult, PluginCliCommandInfo, PluginCliContext, PluginCliResult, PluginHttpAuthMode, PluginHttpHandler, PluginMentionTrigger, PluginMentionSearchContext, PluginMentionItem, JsonValue, PluginCliExecutionResult, PluginThreadEventName, PluginThreadEventPayloads, PluginAgentConfigurationContext, PluginClaudeCodeSessionConfiguration, PluginSettingDescriptors, PluginAgentConfiguration, PluginInteractionRequest } from '@bb/plugin-sdk';
 
 type BbSdk = BbPluginApi["sdk"];
 /**
@@ -148,6 +148,8 @@ interface FakePluginRegistrations {
     agentTools: FakeAgentToolRecord[];
     /** Provider from bb.agents.configure, or null when none registered. */
     agentConfigurationProvider: ((context: PluginAgentConfigurationContext) => PluginAgentConfiguration) | null;
+    /** Provider from experimental_configureClaudeCodeSession, or null. */
+    claudeCodeSessionConfigurationProvider: ((context: PluginAgentConfigurationContext) => PluginClaudeCodeSessionConfiguration | null) | null;
     /** Provider from contributeInstructions, or null when none registered. */
     instructionProvider: ((ctx: {
         threadId: string;
@@ -242,6 +244,8 @@ interface FakePluginBehaviorDrivers {
         skills: string[];
         instructions: string | null;
     }>;
+    /** Evaluate the experimental Claude Code session callback. */
+    resolveClaudeCodeSessionConfiguration(context: PluginAgentConfigurationContext): PluginClaudeCodeSessionConfiguration | null;
 }
 /** Reload/shutdown controls, kept separate from behavior and inspection. */
 interface FakePluginLifecycleControls {

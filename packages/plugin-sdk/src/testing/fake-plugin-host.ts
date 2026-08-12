@@ -10,6 +10,7 @@ import type {
   BbPluginApi,
   PluginAgentConfiguration,
   PluginAgentConfigurationContext,
+  PluginClaudeCodeSessionConfiguration,
   PluginAgentToolContext,
   PluginAgentToolExperimentalStatusLabels,
   PluginAgentToolResult,
@@ -315,6 +316,12 @@ export interface FakePluginRegistrations {
   agentConfigurationProvider:
     | ((context: PluginAgentConfigurationContext) => PluginAgentConfiguration)
     | null;
+  /** Provider from experimental_configureClaudeCodeSession, or null. */
+  claudeCodeSessionConfigurationProvider:
+    | ((
+        context: PluginAgentConfigurationContext,
+      ) => PluginClaudeCodeSessionConfiguration | null)
+    | null;
   /** Provider from contributeInstructions, or null when none registered. */
   instructionProvider:
     | ((ctx: { threadId: string; projectId: string }) => string | null)
@@ -422,6 +429,10 @@ export interface FakePluginBehaviorDrivers {
     skills: string[];
     instructions: string | null;
   }>;
+  /** Evaluate the experimental Claude Code session callback. */
+  resolveClaudeCodeSessionConfiguration(
+    context: PluginAgentConfigurationContext,
+  ): PluginClaudeCodeSessionConfiguration | null;
 }
 
 /** Reload/shutdown controls, kept separate from behavior and inspection. */
@@ -1433,10 +1444,29 @@ function createFakePluginHostInternal(
   let agentConfigurationProvider:
     | ((context: PluginAgentConfigurationContext) => PluginAgentConfiguration)
     | null = null;
+  let claudeCodeSessionConfigurationProvider:
+    | ((
+        context: PluginAgentConfigurationContext,
+      ) => PluginClaudeCodeSessionConfiguration | null)
+    | null = null;
   let instructionProvider:
     | ((ctx: { threadId: string; projectId: string }) => string | null)
     | null = null;
   const agents: PluginAgents = {
+    experimental_configureClaudeCodeSession(provider) {
+      assertLive();
+      if (claudeCodeSessionConfigurationProvider !== null) {
+        throw new Error(
+          "Claude Code session configuration is already registered",
+        );
+      }
+      if (typeof provider !== "function") {
+        throw new Error(
+          "experimental_configureClaudeCodeSession requires a provider function",
+        );
+      }
+      claudeCodeSessionConfigurationProvider = provider;
+    },
     configure(provider) {
       assertLive();
       if (agentConfigurationProvider !== null) {
@@ -1935,6 +1965,9 @@ function createFakePluginHostInternal(
       get agentConfigurationProvider() {
         return agentConfigurationProvider;
       },
+      get claudeCodeSessionConfigurationProvider() {
+        return claudeCodeSessionConfigurationProvider;
+      },
       get instructionProvider() {
         return instructionProvider;
       },
@@ -2199,6 +2232,34 @@ function createFakePluginHostInternal(
       } catch (error) {
         emitLog("warn", `agent configure failed: ${errorMessage(error)}`);
         return { tools: [], skills: [], instructions: null };
+      }
+    },
+
+    resolveClaudeCodeSessionConfiguration(context) {
+      if (
+        context.provider.id !== "claude-code" ||
+        claudeCodeSessionConfigurationProvider === null
+      ) {
+        return null;
+      }
+      try {
+        const value = claudeCodeSessionConfigurationProvider(context);
+        if (value === null) return null;
+        if (
+          typeof value.autoCompactEnabled !== "boolean" ||
+          !Number.isInteger(value.autoCompactWindow) ||
+          value.autoCompactWindow < 250_000 ||
+          value.autoCompactWindow > 400_000
+        ) {
+          throw new Error("invalid Claude Code session configuration");
+        }
+        return value;
+      } catch (error) {
+        emitLog(
+          "warn",
+          `Claude Code session configure failed: ${errorMessage(error)}`,
+        );
+        return null;
       }
     },
 

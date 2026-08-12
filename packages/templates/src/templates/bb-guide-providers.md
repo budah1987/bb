@@ -44,6 +44,19 @@ when a provider thread is started, resumed, or forked; they do not interrupt
 an active turn. These settings are separate from bb's optional Memory plugin,
 an official plugin bundled with the app.
 
+Claude automatic context compaction
+
+The built-in Claude auto compact plugin uses Claude Code's native compaction.
+It is enabled by default and starts compaction near 300k context tokens. Change
+the policy under Extensions → Plugins → Claude auto compact. The available
+range is 250k to 400k tokens. Changes apply to the next started, resumed, or
+forked Claude Code session.
+
+  bb claude-compact status [--json]          Show the current policy
+  bb claude-compact on                       Enable automatic compaction
+  bb claude-compact off                      Disable automatic compaction
+  bb claude-compact threshold <250k-400k>    Set the context threshold
+
 Provider-native subagents can also be disabled on those provider pages. For
 Codex, bb turns off the native multi-agent feature and caps V2 sessions at the
 root thread so remote session policy cannot start a child. For Claude Code, bb

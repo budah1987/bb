@@ -558,6 +558,14 @@ const runtimeThreadExecutionBaseOptionsSchema = z.object({
   // Optional for legacy command compatibility; the server fills the current
   // provider preference before dispatching new runtime work.
   memoryEnabled: z.boolean().optional(),
+  // Claude Code-only session policy. Omitted for other providers and legacy daemons.
+  claudeCodeAutoCompactEnabled: z.boolean().optional(),
+  claudeCodeAutoCompactWindow: z
+    .number()
+    .int()
+    .min(250_000)
+    .max(400_000)
+    .optional(),
   // Optional for legacy command compatibility; the server fills the current
   // provider preference before dispatching new runtime work.
   providerSubagentsEnabled: z.boolean().optional(),

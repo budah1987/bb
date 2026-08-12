@@ -42,7 +42,7 @@ import {
   providerCliStatusResponseSchema,
 } from "./local.js";
 
-export const HOST_DAEMON_PROTOCOL_VERSION = 98 as const;
+export const HOST_DAEMON_PROTOCOL_VERSION = 99 as const;
 export const githubAccountLoginSchema = z.string().trim().min(1).max(255);
 
 export {

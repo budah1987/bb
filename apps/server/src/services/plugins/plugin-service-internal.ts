@@ -15,6 +15,7 @@ import type { PluginManifest } from "./manifest.js";
 import type {
   PluginApiHandle,
   PluginBackgroundServiceRecord,
+  PluginClaudeCodeSessionConfiguration,
   PluginMentionTrigger,
 } from "./plugin-api.js";
 import type { HostSharedPortCoordinator } from "../../ws/host-shared-ports.js";
@@ -148,6 +149,7 @@ export interface PluginInstructionContribution {
 
 /** Fully validated conditional selections for one thread/session resolution. */
 export interface PluginResolvedAgentConfiguration {
+  claudeCodeSessionConfiguration: PluginClaudeCodeSessionConfiguration | null;
   tools: PluginAgentToolContribution[];
   /** Only configured plugins appear. An empty set means fail-closed or an
    * intentional empty selection; absent plugins keep all manifest skills. */
