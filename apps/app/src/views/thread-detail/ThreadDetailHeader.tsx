@@ -17,7 +17,6 @@ import {
   HEADER_ICON_BUTTON_CLASS,
   HEADER_PANE_ACTION_ICON_BUTTON_CLASS,
 } from "@/components/layout/AppPageHeader";
-import type { ThreadGitActionDialogTarget } from "@/components/dialogs/ThreadGitActionDialog";
 import {
   getBbDesktopInfo,
   MACOS_WINDOW_NO_DRAG_CLASS,
@@ -43,9 +42,11 @@ const THREAD_HEADER_ACTION_BUTTON_CLASS = cn(
 );
 const NARROW_SPLIT_HEADER_MAX_WIDTH = 560;
 
-interface ThreadHeaderGitAction {
+export interface ThreadHeaderWorkflowAction {
+  disabled?: boolean;
   label: string;
-  target: ThreadGitActionDialogTarget;
+  onSelect: () => void;
+  tooltip?: string;
 }
 
 interface ThreadHeaderContext {
@@ -64,7 +65,6 @@ interface ThreadDetailHeaderProps {
   isSecondaryPanelOpen: boolean;
   /** Closes this pane; only provided when the layout is split (>1 pane). */
   onClosePane?: () => void;
-  onOpenThreadGitAction: (target: ThreadGitActionDialogTarget) => void;
   onToggleSecondaryPanel: () => void;
   /** Plugin-contributed thread action buttons (design §4.9); optional. */
   pluginActions?: ReactNode;
@@ -73,7 +73,7 @@ interface ThreadDetailHeaderProps {
    * sidebar provider renders that title in its thread context bar.
    */
   threadContext?: ThreadHeaderContext;
-  threadHeaderGitActions: ThreadHeaderGitAction[];
+  threadHeaderWorkflowActions: readonly ThreadHeaderWorkflowAction[];
   threadTitle: string;
   workspaceOpenButton?: ReactNode;
 }
@@ -83,15 +83,14 @@ export function ThreadDetailHeader({
   childPillLabel,
   isSecondaryPanelOpen,
   onClosePane,
-  onOpenThreadGitAction,
   onToggleSecondaryPanel,
   pluginActions,
   threadContext,
-  threadHeaderGitActions,
+  threadHeaderWorkflowActions,
   threadTitle,
   workspaceOpenButton,
 }: ThreadDetailHeaderProps) {
-  const [primaryAction, ...secondaryActions] = threadHeaderGitActions;
+  const [primaryAction, ...secondaryActions] = threadHeaderWorkflowActions;
   const renderAsDrawer = useIsCompactViewport();
   const [desktopInfo] = useState(getBbDesktopInfo);
   const panelShortcut = useAppCommandShortcut("panel.toggle");
@@ -284,18 +283,24 @@ export function ThreadDetailHeader({
           </span>
         ) : null}
         {!usesResponsiveActionMenu && primaryAction ? (
-          <span className="inline-flex" data-thread-header-responsive-action="">
+          <span
+            className="inline-flex"
+            data-thread-header-responsive-action=""
+            title={primaryAction.tooltip}
+          >
             {secondaryActions.length > 0 ? (
               <SplitButton
                 className={THREAD_HEADER_ACTION_BUTTON_CLASS}
+                disabled={primaryAction.disabled}
                 primaryAction={{
                   label: primaryAction.label,
-                  onSelect: () => onOpenThreadGitAction(primaryAction.target),
+                  onSelect: primaryAction.onSelect,
                 }}
                 secondaryActions={secondaryActions.map((action) => ({
                   label: action.label,
-                  onSelect: () => onOpenThreadGitAction(action.target),
+                  onSelect: action.onSelect,
                 }))}
+                primaryTooltip={primaryAction.tooltip}
               />
             ) : (
               <Button
@@ -303,7 +308,8 @@ export function ThreadDetailHeader({
                 variant="outline"
                 size="sm"
                 className={THREAD_HEADER_ACTION_BUTTON_CLASS}
-                onClick={() => onOpenThreadGitAction(primaryAction.target)}
+                disabled={primaryAction.disabled}
+                onClick={primaryAction.onSelect}
               >
                 {primaryAction.label}
               </Button>

@@ -66,13 +66,12 @@ describe("ThreadDetailHeader", () => {
           actionsMenu={null}
           childPillLabel={null}
           isSecondaryPanelOpen={false}
-          onOpenThreadGitAction={vi.fn()}
           onToggleSecondaryPanel={vi.fn()}
           threadContext={{
             projectName: "bb",
             branchName: "feature/conductor-tabs",
           }}
-          threadHeaderGitActions={[]}
+          threadHeaderWorkflowActions={[]}
           threadTitle="Conversation title"
         />
       </PaneContext.Provider>,
@@ -93,9 +92,8 @@ describe("ThreadDetailHeader", () => {
           actionsMenu={null}
           childPillLabel={null}
           isSecondaryPanelOpen
-          onOpenThreadGitAction={vi.fn()}
           onToggleSecondaryPanel={vi.fn()}
-          threadHeaderGitActions={[]}
+          threadHeaderWorkflowActions={[]}
           threadTitle="Panel state"
         />
       </PaneContext.Provider>,
@@ -120,9 +118,8 @@ describe("ThreadDetailHeader", () => {
           actionsMenu={null}
           childPillLabel={null}
           isSecondaryPanelOpen
-          onOpenThreadGitAction={vi.fn()}
           onToggleSecondaryPanel={vi.fn()}
-          threadHeaderGitActions={[]}
+          threadHeaderWorkflowActions={[]}
           threadTitle="Split panel state"
         />
       </PaneContext.Provider>,
@@ -167,11 +164,8 @@ describe("ThreadDetailHeader", () => {
           childPillLabel={null}
           isSecondaryPanelOpen={false}
           onClosePane={vi.fn()}
-          onOpenThreadGitAction={vi.fn()}
           onToggleSecondaryPanel={vi.fn()}
-          threadHeaderGitActions={[
-            { label: "Commit", target: { kind: "commit" } },
-          ]}
+          threadHeaderWorkflowActions={[{ label: "Commit", onSelect: vi.fn() }]}
           threadTitle="Narrow split"
           workspaceOpenButton={<button>Open workspace</button>}
         />
@@ -225,11 +219,8 @@ describe("ThreadDetailHeader", () => {
           childPillLabel={null}
           isSecondaryPanelOpen={false}
           onClosePane={vi.fn()}
-          onOpenThreadGitAction={vi.fn()}
           onToggleSecondaryPanel={vi.fn()}
-          threadHeaderGitActions={[
-            { label: "Commit", target: { kind: "commit" } },
-          ]}
+          threadHeaderWorkflowActions={[{ label: "Commit", onSelect: vi.fn() }]}
           threadTitle="Wide split"
           workspaceOpenButton={<button>Open workspace</button>}
         />
@@ -258,11 +249,8 @@ describe("ThreadDetailHeader", () => {
           )}
           childPillLabel={null}
           isSecondaryPanelOpen={false}
-          onOpenThreadGitAction={vi.fn()}
           onToggleSecondaryPanel={vi.fn()}
-          threadHeaderGitActions={[
-            { label: "Commit", target: { kind: "commit" } },
-          ]}
+          threadHeaderWorkflowActions={[{ label: "Commit", onSelect: vi.fn() }]}
           threadTitle="Compact thread"
           workspaceOpenButton={<button>Open workspace</button>}
         />
@@ -272,6 +260,53 @@ describe("ThreadDetailHeader", () => {
     expect(screen.getByText("Responsive menu actions")).not.toBeNull();
     expect(screen.queryByText("Open workspace")).toBeNull();
     expect(screen.queryByText("Commit")).toBeNull();
+  });
+
+  it("runs the current GitHub workflow action from the header", () => {
+    const onSelect = vi.fn();
+    render(
+      <PaneContext.Provider value={PANE_CONTEXT}>
+        <ThreadDetailHeader
+          actionsMenu={null}
+          childPillLabel={null}
+          isSecondaryPanelOpen={false}
+          onToggleSecondaryPanel={vi.fn()}
+          threadHeaderWorkflowActions={[{ label: "Create PR", onSelect }]}
+          threadTitle="GitHub workflow"
+        />
+      </PaneContext.Provider>,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Create PR" }));
+    expect(onSelect).toHaveBeenCalledOnce();
+  });
+
+  it("disables merge while GitHub reports a blocking state", () => {
+    render(
+      <PaneContext.Provider value={PANE_CONTEXT}>
+        <ThreadDetailHeader
+          actionsMenu={null}
+          childPillLabel={null}
+          isSecondaryPanelOpen={false}
+          onToggleSecondaryPanel={vi.fn()}
+          threadHeaderWorkflowActions={[
+            {
+              disabled: true,
+              label: "Merge",
+              onSelect: vi.fn(),
+              tooltip: "Checks pending",
+            },
+          ]}
+          threadTitle="GitHub workflow"
+        />
+      </PaneContext.Provider>,
+    );
+
+    const mergeButton = screen.getByRole("button", { name: "Merge" });
+    expect(mergeButton).toHaveProperty("disabled", true);
+    expect(mergeButton.parentElement?.getAttribute("title")).toBe(
+      "Checks pending",
+    );
   });
 
   it("toggles the rail, reflects its visibility, and pairs with the panel toggle", () => {
@@ -287,9 +322,8 @@ describe("ThreadDetailHeader", () => {
             actionsMenu={null}
             childPillLabel={null}
             isSecondaryPanelOpen={false}
-            onOpenThreadGitAction={vi.fn()}
             onToggleSecondaryPanel={vi.fn()}
-            threadHeaderGitActions={[]}
+            threadHeaderWorkflowActions={[]}
             threadTitle="Rail toggle"
           />
         </PaneContext.Provider>
@@ -329,9 +363,8 @@ describe("ThreadDetailHeader", () => {
             actionsMenu={null}
             childPillLabel={null}
             isSecondaryPanelOpen={false}
-            onOpenThreadGitAction={vi.fn()}
             onToggleSecondaryPanel={vi.fn()}
-            threadHeaderGitActions={[]}
+            threadHeaderWorkflowActions={[]}
             threadTitle="Compact rail toggle"
           />
         </PaneContext.Provider>
@@ -348,9 +381,8 @@ describe("ThreadDetailHeader", () => {
           actionsMenu={null}
           childPillLabel={null}
           isSecondaryPanelOpen={false}
-          onOpenThreadGitAction={vi.fn()}
           onToggleSecondaryPanel={vi.fn()}
-          threadHeaderGitActions={[]}
+          threadHeaderWorkflowActions={[]}
           threadTitle="Review @docs/foo.test.ts with @thread:thr_worker"
         />
       </PaneContext.Provider>,
@@ -377,9 +409,8 @@ describe("ThreadDetailHeader", () => {
           actionsMenu={null}
           childPillLabel="child"
           isSecondaryPanelOpen={false}
-          onOpenThreadGitAction={vi.fn()}
           onToggleSecondaryPanel={vi.fn()}
-          threadHeaderGitActions={[]}
+          threadHeaderWorkflowActions={[]}
           threadTitle="Focused thread"
         />
       </PaneContext.Provider>,
@@ -403,9 +434,8 @@ describe("ThreadDetailHeader", () => {
           actionsMenu={null}
           childPillLabel="child"
           isSecondaryPanelOpen={false}
-          onOpenThreadGitAction={vi.fn()}
           onToggleSecondaryPanel={vi.fn()}
-          threadHeaderGitActions={[]}
+          threadHeaderWorkflowActions={[]}
           threadTitle="Focused thread"
         />
       </PaneContext.Provider>,
