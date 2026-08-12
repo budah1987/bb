@@ -72,6 +72,7 @@ interface ThreadDetailSecondaryContentProps {
   header: ReactNode;
   isMetadataLoading: boolean;
   isSecondaryPanelOpen: boolean;
+  isViewActive: boolean;
   isConversationCollapsed: boolean;
   /**
    * True when rendering inside a bounded split card. Bounded panes skip the
@@ -104,6 +105,7 @@ function ThreadDetailSecondaryContentBody({
   header,
   isMetadataLoading,
   isSecondaryPanelOpen,
+  isViewActive,
   isConversationCollapsed,
   isBoundedPane,
   onToggleSecondaryPanel,
@@ -224,9 +226,11 @@ function ThreadDetailSecondaryContentBody({
     },
     [cancelCompactDrawerContentSettleFrame],
   );
-  const canShowNativeBrowserView = renderAsDrawer
-    ? isSecondaryPanelOpen && isCompactDrawerContentSettled
-    : isSecondaryPanelOpen && (secondaryPanelHost === null || isFocused);
+  const canShowNativeBrowserView =
+    isViewActive &&
+    (renderAsDrawer
+      ? isSecondaryPanelOpen && isCompactDrawerContentSettled
+      : isSecondaryPanelOpen && (secondaryPanelHost === null || isFocused));
   const { renderBrowserDeck, ...threadSecondaryPanelProps } =
     stableSecondaryPanel;
   const browserDeck = useMemo(

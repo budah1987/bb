@@ -191,6 +191,7 @@ interface RenderThreadDetailArgs {
   isFocusedHosted?: boolean;
   isCompactViewport: boolean;
   isSecondaryPanelOpen: boolean;
+  isViewActive?: boolean;
   renderBrowserDeck: RenderBrowserDeck;
   threadId: string;
 }
@@ -323,6 +324,7 @@ function createBrowserDeckRenderer(order?: string[]): RenderBrowserDeck {
 
 function createProps({
   isSecondaryPanelOpen,
+  isViewActive = true,
   renderBrowserDeck,
   threadId,
 }: Omit<
@@ -336,6 +338,7 @@ function createProps({
     isConversationCollapsed: false,
     isMetadataLoading: false,
     isSecondaryPanelOpen,
+    isViewActive,
     metadata: {
       canAssignToParent: false,
       canTakeOverThread: false,
@@ -410,6 +413,7 @@ function renderThreadDetail(args: RenderThreadDetailArgs) {
         <ThreadDetailSecondaryContent
           {...createProps({
             isSecondaryPanelOpen: renderArgs.isSecondaryPanelOpen,
+            isViewActive: renderArgs.isViewActive,
             renderBrowserDeck: renderArgs.renderBrowserDeck,
             threadId: renderArgs.threadId,
           })}
@@ -432,6 +436,7 @@ function renderThreadDetail(args: RenderThreadDetailArgs) {
             <ThreadDetailSecondaryContent
               {...createProps({
                 isSecondaryPanelOpen: renderArgs.isSecondaryPanelOpen,
+                isViewActive: renderArgs.isViewActive,
                 renderBrowserDeck: renderArgs.renderBrowserDeck,
                 threadId: renderArgs.threadId,
               })}
@@ -553,6 +558,23 @@ describe("ThreadDetailSecondaryContent compact drawer settling", () => {
       "render:false",
       "render:true",
     ]);
+  });
+
+  it("hides and restores the native browser when a retained tab changes", () => {
+    const renderBrowserDeck = createBrowserDeckRenderer();
+    const view = renderThreadDetail({
+      isCompactViewport: false,
+      isSecondaryPanelOpen: true,
+      isViewActive: true,
+      renderBrowserDeck,
+      threadId: "thread-1",
+    });
+
+    expectBrowserDeckVisibility(true);
+    view.rerenderWith({ isViewActive: false });
+    expectBrowserDeckVisibility(false);
+    view.rerenderWith({ isViewActive: true });
+    expectBrowserDeckVisibility(true);
   });
 
   it("orders open-animation completion, rAF, bounds sync, and drawer settled true", () => {

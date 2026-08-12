@@ -3128,6 +3128,7 @@ function ThreadDetailViewInternal(props: ThreadDetailViewInternalProps) {
           header={timelineHeader}
           isMetadataLoading={environmentQuery.isLoading}
           isSecondaryPanelOpen={isSecondaryPanelOpen}
+          isViewActive={isRetainedViewActive}
           isConversationCollapsed={isConversationCollapsed}
           isBoundedPane={isBoundedPane}
           onToggleSecondaryPanel={toggleSecondaryPanel}
