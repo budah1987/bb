@@ -17,13 +17,13 @@ import {
   type PluginNewThreadContextBarProps,
   type PluginThreadContextBarProps,
 } from "@bb/plugin-sdk/app";
-import { Icon } from "@/components/ui/icon";
+import { Icon } from "../components/ui/icon";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+} from "../components/ui/dropdown-menu";
 import { ThreadPixelMatrix } from "./PixelMatrix";
 import {
   buildConductorProjection,

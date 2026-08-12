@@ -1,4 +1,4 @@
-import { useCallback, type ReactNode } from "react";
+import { Suspense, useCallback, type ReactNode } from "react";
 import { toast } from "sonner";
 import { PluginSlotMount } from "@/components/plugin/PluginSlotMount";
 import { useSidebar } from "@/components/ui/sidebar.js";
@@ -64,23 +64,25 @@ export function PluginThreadList({
       crashFallback={builtInFallback}
       onCrash={handleCrash}
     >
-      <Component
-        activeThreadId={threadId ?? null}
-        activeProjectId={projectId ?? null}
-        experimental_spaces={{
-          activeSpaceId,
-          spaces: spaces.map((space) => ({
-            id: space.id,
-            name: space.name,
-            projectIds: space.projectIds,
-          })),
-          moveProject,
-          moveProjects,
-        }}
-        isCompactViewport={isCompactViewport}
-        onNavigate={onNavigate}
-        searchQuery={searchQuery}
-      />
+      <Suspense fallback={builtInFallback}>
+        <Component
+          activeThreadId={threadId ?? null}
+          activeProjectId={projectId ?? null}
+          experimental_spaces={{
+            activeSpaceId,
+            spaces: spaces.map((space) => ({
+              id: space.id,
+              name: space.name,
+              projectIds: space.projectIds,
+            })),
+            moveProject,
+            moveProjects,
+          }}
+          isCompactViewport={isCompactViewport}
+          onNavigate={onNavigate}
+          searchQuery={searchQuery}
+        />
+      </Suspense>
     </PluginSlotMount>
   );
 }

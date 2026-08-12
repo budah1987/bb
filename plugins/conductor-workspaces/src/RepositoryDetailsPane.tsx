@@ -14,8 +14,8 @@ import {
   type PluginNavPanelProps,
   type PluginSidebarThread,
 } from "@bb/plugin-sdk/app";
-import { Button } from "@/components/ui/button";
-import { Icon } from "@/components/ui/icon";
+import { Button } from "../components/ui/button";
+import { Icon } from "../components/ui/icon";
 import {
   buildConductorProjection,
   pickWorkspaceThread,

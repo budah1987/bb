@@ -2,6 +2,14 @@
   "name": "bb-plugin-conductor-workspaces",
   "version": "0.3.7",
   "type": "module",
+  "exports": {
+    "./core": {
+      "source": "./src/core.ts",
+      "types": "./src/core.ts",
+      "default": "./src/core.ts"
+    },
+    "./conductor.css": "./src/conductor.css"
+  },
   "description": "The BBamir repository, workspace, and conversation sidebar for BB.",
   "license": "MIT",
   "files": [

@@ -34,7 +34,7 @@ import {
   type PluginSidebarThread,
   type PluginThreadListProps,
 } from "@bb/plugin-sdk/app";
-import { Button } from "@/components/ui/button";
+import { Button } from "../components/ui/button";
 import {
   ContextMenu,
   ContextMenuContent,
@@ -46,7 +46,7 @@ import {
   ContextMenuSubContent,
   ContextMenuSubTrigger,
   ContextMenuTrigger,
-} from "@/components/ui/context-menu";
+} from "../components/ui/context-menu";
 import {
   Dialog,
   DialogContent,
@@ -54,9 +54,9 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from "@/components/ui/dialog";
-import { Icon } from "@/components/ui/icon";
-import { Input } from "@/components/ui/input";
+} from "../components/ui/dialog";
+import { Icon } from "../components/ui/icon";
+import { Input } from "../components/ui/input";
 import { PixelMatrix } from "./PixelMatrix";
 import {
   buildConductorProjection,

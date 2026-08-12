@@ -33,6 +33,10 @@ export const sharedViteConfig = {
   resolve: {
     conditions: ["source"],
     alias: {
+      "@bb/plugin-sdk/app": resolve(
+        appDir,
+        "./src/lib/conductor-plugin-sdk-app.ts",
+      ),
       "@": resolve(appDir, "./src"),
     },
   },
