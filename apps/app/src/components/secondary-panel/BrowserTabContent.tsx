@@ -622,7 +622,12 @@ export function BrowserTabContent({
     }
     const initialBounds = syncInitialBounds();
     const mountUrl = initialUrlRef.current;
-    registerBrowserView({ environmentId, tabId, threadId });
+    registerBrowserView({
+      desktopBrowser,
+      environmentId,
+      tabId,
+      threadId,
+    });
     desktopBrowser.attach({
       tabId,
       url: mountUrl,

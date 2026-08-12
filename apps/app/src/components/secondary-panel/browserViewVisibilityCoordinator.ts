@@ -33,11 +33,14 @@ export interface BrowserViewVisibilityCoordinator {
 
 interface BrowserViewRecord {
   environmentId: string | null;
+  lastUsedAt: number;
   tabId: string;
   threadId: string;
+  visible: boolean;
 }
 
 interface RegisterBrowserViewArgs {
+  desktopBrowser: BbDesktopBrowserApi;
   environmentId: string | null;
   tabId: string;
   threadId: string;
@@ -59,6 +62,50 @@ interface DestroyPersistedBrowserViewsForEnvironmentArgs {
 }
 
 const browserViewRecords = new Map<string, BrowserViewRecord>();
+export const MAX_RETAINED_BROWSER_VIEWS_PER_WORKSPACE = 12;
+
+function browserViewWorkspaceKey(record: {
+  environmentId: string | null;
+  threadId: string;
+}): string {
+  return record.environmentId ?? `thread:${record.threadId}`;
+}
+
+function touchBrowserView(tabId: string, visible: boolean): void {
+  const record = browserViewRecords.get(tabId);
+  if (record === undefined) return;
+  record.lastUsedAt = Date.now();
+  record.visible = visible;
+}
+
+function enforceBrowserViewBudget({
+  desktopBrowser,
+  environmentId,
+  tabId,
+  threadId,
+}: RegisterBrowserViewArgs): void {
+  const workspaceKey = browserViewWorkspaceKey({ environmentId, threadId });
+  const retained = [...browserViewRecords.values()].filter(
+    (record) => browserViewWorkspaceKey(record) === workspaceKey,
+  );
+  while (retained.length >= MAX_RETAINED_BROWSER_VIEWS_PER_WORKSPACE) {
+    const evictionIndex = retained.reduce((oldestIndex, record, index) => {
+      if (record.visible || record.tabId === tabId) return oldestIndex;
+      if (oldestIndex === -1) return index;
+      return record.lastUsedAt < retained[oldestIndex]!.lastUsedAt
+        ? index
+        : oldestIndex;
+    }, -1);
+    if (evictionIndex === -1) return;
+    const [evicted] = retained.splice(evictionIndex, 1);
+    if (evicted !== undefined) {
+      destroyPersistedBrowserView({
+        desktopBrowser,
+        tabId: evicted.tabId,
+      });
+    }
+  }
+}
 
 export function createBrowserViewVisibilityCoordinator(
   desktopBrowser: BbDesktopBrowserApi,
@@ -71,6 +118,7 @@ export function createBrowserViewVisibilityCoordinator(
         desktopBrowser.setVisible({ tabId: visibleTabId, visible: false });
       }
       visibleTabId = tabId;
+      touchBrowserView(tabId, true);
       syncBounds();
       desktopBrowser.setVisible({ tabId, visible: true });
     },
@@ -78,6 +126,7 @@ export function createBrowserViewVisibilityCoordinator(
       if (visibleTabId === tabId) {
         visibleTabId = null;
       }
+      touchBrowserView(tabId, false);
       desktopBrowser.setVisible({ tabId, visible: false });
     },
     release(tabId) {
@@ -89,11 +138,26 @@ export function createBrowserViewVisibilityCoordinator(
 }
 
 export function registerBrowserView({
+  desktopBrowser,
   environmentId,
   tabId,
   threadId,
 }: RegisterBrowserViewArgs): void {
-  browserViewRecords.set(tabId, { environmentId, tabId, threadId });
+  const existing = browserViewRecords.get(tabId);
+  if (existing !== undefined) {
+    existing.environmentId = environmentId;
+    existing.lastUsedAt = Date.now();
+    existing.threadId = threadId;
+    return;
+  }
+  enforceBrowserViewBudget({ desktopBrowser, environmentId, tabId, threadId });
+  browserViewRecords.set(tabId, {
+    environmentId,
+    lastUsedAt: Date.now(),
+    tabId,
+    threadId,
+    visible: false,
+  });
 }
 
 export function destroyPersistedBrowserView({
