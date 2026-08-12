@@ -14,6 +14,10 @@ import type {
   PluginThreadListRegistration,
   PluginThreadPanelActionRegistration,
 } from "@bb/plugin-sdk";
+import {
+  CONDUCTOR_REPOSITORY_DETAILS_PANEL_KEY,
+  conductorRepositoryDetailsPanel,
+} from "@/components/conductor/conductorThreadListProvider";
 
 /**
  * Client-side slot store (plugin design §5.2): the interpreted `app.slots.*`
@@ -119,7 +123,10 @@ export const EMPTY_PLUGIN_SLOT_SNAPSHOT: PluginSlotSnapshot = {
 const registrationsByPluginId = new Map<string, PluginRegistrationSet>();
 const generationByPluginId = new Map<string, number>();
 const listeners = new Set<() => void>();
-let snapshot: PluginSlotSnapshot = EMPTY_PLUGIN_SLOT_SNAPSHOT;
+let snapshot: PluginSlotSnapshot = {
+  ...EMPTY_PLUGIN_SLOT_SNAPSHOT,
+  navPanels: [conductorRepositoryDetailsPanel],
+};
 
 function buildSnapshot(): PluginSlotSnapshot {
   const pluginIds = [...registrationsByPluginId.keys()].sort();
@@ -140,7 +147,7 @@ function buildSnapshot(): PluginSlotSnapshot {
   } = {
     homepageSections: [],
     settingsSections: [],
-    navPanels: [],
+    navPanels: [conductorRepositoryDetailsPanel],
     threadPanelActions: [],
     composerCustomizations: [],
     pendingInteractions: [],
@@ -163,7 +170,12 @@ function buildSnapshot(): PluginSlotSnapshot {
       next.settingsSections.push({ ...registration, pluginId, generation });
     }
     for (const registration of set.navPanels) {
-      next.navPanels.push({ ...registration, pluginId, generation });
+      if (
+        `${pluginId}/${registration.id}` !==
+        CONDUCTOR_REPOSITORY_DETAILS_PANEL_KEY
+      ) {
+        next.navPanels.push({ ...registration, pluginId, generation });
+      }
     }
     for (const registration of set.threadPanelActions) {
       next.threadPanelActions.push({ ...registration, pluginId, generation });

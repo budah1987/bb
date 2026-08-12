@@ -8,6 +8,11 @@
       "types": "./src/core.ts",
       "default": "./src/core.ts"
     },
+    "./rpc-contract": {
+      "source": "./src/rpc-contract.ts",
+      "types": "./src/rpc-contract.ts",
+      "default": "./src/rpc-contract.ts"
+    },
     "./conductor.css": "./src/conductor.css"
   },
   "description": "The BBamir repository, workspace, and conversation sidebar for BB.",
