@@ -1064,7 +1064,7 @@ export function registerEnvironmentCommands(
 
   environment
     .command("update-from-main <id>")
-    .description("Rebase a clean managed worktree onto the latest origin/main")
+    .description("Rebase a clean Git worktree onto the latest origin/main")
     .option("--json", "Print machine-readable JSON output")
     .action(
       action(async (id: string, opts: { json?: boolean }) => {

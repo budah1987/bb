@@ -363,7 +363,7 @@ describe("public environment action regressions", () => {
     });
   });
 
-  it("updates a managed worktree from main through the host daemon", async () => {
+  it("updates an attached Git worktree from main through the host daemon", async () => {
     await withTestHarness(async (harness) => {
       const { host } = seedHostSession(harness.deps, {
         id: "host-update-from-main",
@@ -374,8 +374,9 @@ describe("public environment action regressions", () => {
       const environment = seedEnvironment(harness.deps, {
         hostId: host.id,
         projectId: project.id,
-        managed: true,
-        workspaceProvisionType: "managed-worktree",
+        managed: false,
+        workspaceProvisionType: "unmanaged",
+        isWorktree: true,
         path: "/tmp/update-from-main",
       });
       seedThread(harness.deps, {
@@ -398,7 +399,10 @@ describe("public environment action regressions", () => {
           queued.type === "workspace.update_from_target" &&
           queued.environmentId === environment.id,
       );
-      expect(command.command).toMatchObject({ targetBranch: "main" });
+      expect(command.command).toMatchObject({
+        targetBranch: "main",
+        workspaceContext: { workspaceProvisionType: "unmanaged" },
+      });
       await reportQueuedCommandSuccess(harness, command, {
         outcome: "updated",
         sourceBranch: "feature/update",
@@ -418,6 +422,46 @@ describe("public environment action regressions", () => {
         currentSha: "current-sha",
         rebasedCommitCount: 2,
       });
+    });
+  });
+
+  it("rejects a Git checkout that is not a worktree", async () => {
+    await withTestHarness(async (harness) => {
+      const { host } = seedHostSession(harness.deps, {
+        id: "host-update-from-main-checkout",
+      });
+      const { project } = seedProjectWithSource(harness.deps, {
+        hostId: host.id,
+      });
+      const environment = seedEnvironment(harness.deps, {
+        hostId: host.id,
+        projectId: project.id,
+        workspaceProvisionType: "unmanaged",
+        isWorktree: false,
+        path: "/tmp/update-from-main-checkout",
+      });
+
+      const response = await harness.app.request(
+        `/api/v1/environments/${environment.id}/actions`,
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ action: "update_from_main", options: {} }),
+        },
+      );
+
+      expect(response.status).toBe(409);
+      await expect(readJson(response)).resolves.toMatchObject({
+        code: "invalid_request",
+        message: "Updating from main requires a Git worktree",
+      });
+      expect(
+        listQueuedEnvironmentCommands(
+          harness,
+          "workspace.update_from_target",
+          environment.id,
+        ),
+      ).toHaveLength(0);
     });
   });
 
