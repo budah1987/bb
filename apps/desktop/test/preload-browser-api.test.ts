@@ -41,6 +41,7 @@ import {
   BB_DESKTOP_CLOSE_WINDOW_RESPONSE_CHANNEL,
   BB_DESKTOP_GET_WINDOW_STATE_CHANNEL,
   BB_DESKTOP_OPEN_NEW_TAB_CHANNEL,
+  BB_DESKTOP_OPEN_SIMULATOR_POPOUT_CHANNEL,
   BB_DESKTOP_WINDOW_STATE_CHANGED_CHANNEL,
 } from "../src/desktop-window-command-ipc.js";
 import { BB_DESKTOP_SPELLCHECK_GLOBAL_NAME } from "../src/desktop-spellcheck-contract.js";
@@ -280,6 +281,7 @@ describe("desktop preload browser API", () => {
     api.browser.focusAnnotation?.(focusAnnotationRequest);
     api.browser.syncAnnotations?.(syncAnnotationsRequest);
     api.setTheme("dark");
+    api.openSimulatorPopout?.({ environmentId: "env_ios" });
     await api.checkForUpdates();
     await expect(api.getWindowState?.()).resolves.toEqual({
       isFullScreen: false,
@@ -333,6 +335,10 @@ describe("desktop preload browser API", () => {
         payload: syncAnnotationsRequest,
       },
       { channel: BB_DESKTOP_SET_THEME_CHANNEL, payload: "dark" },
+      {
+        channel: BB_DESKTOP_OPEN_SIMULATOR_POPOUT_CHANNEL,
+        payload: { environmentId: "env_ios" },
+      },
     ]);
     expect(electronMock.invokeCalls).toContain(BB_DESKTOP_GET_INFO_CHANNEL);
     expect(electronMock.invokeCalls).toContain(

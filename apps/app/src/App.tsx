@@ -75,6 +75,13 @@ const ProjectSettingsView = lazy(() =>
   })),
 );
 const SplitWorkspaceRoute = lazy(() => import("./views/SplitWorkspaceRoute"));
+const SimulatorPopoutView = lazy(() =>
+  import("./views/SimulatorPopoutView").then((module) => ({
+    default: module.SimulatorPopoutView,
+  })),
+);
+
+const SIMULATOR_POPOUT_ROUTE_PATH = "/simulator-popout/:environmentId";
 
 export function LegacyAutomationDetailRedirect() {
   const location = useLocation();
@@ -246,20 +253,7 @@ function AppRoutes() {
   );
 }
 
-export function App() {
-  // Connect WebSocket for real-time invalidation
-  useWebSocket();
-  // Keep the Electron window chrome (traffic lights, inactive title bar)
-  // in sync with bb's theme preference.
-  useDesktopThemeSync();
-  // Apply the server-stored app palette (built-in or custom CSS) app-wide.
-  useAppTheme();
-  // Reconcile the favicon tint with the server-stored appearance (and migrate
-  // any legacy localStorage-only preference on first load).
-  useFaviconColorSync();
-  // Load plugin frontend bundles once system config resolves.
-  usePluginFrontendBoot();
-
+function StandardApp() {
   return (
     <QuickCreateProjectProvider>
       <AppCommandProvider>
@@ -281,5 +275,32 @@ export function App() {
         </RouteNavigationProvider>
       </AppCommandProvider>
     </QuickCreateProjectProvider>
+  );
+}
+
+export function App() {
+  // Connect WebSocket for real-time invalidation
+  useWebSocket();
+  // Keep the Electron window chrome (traffic lights, inactive title bar)
+  // in sync with bb's theme preference.
+  useDesktopThemeSync();
+  // Apply the server-stored app palette (built-in or custom CSS) app-wide.
+  useAppTheme();
+  // Reconcile the favicon tint with the server-stored appearance (and migrate
+  // any legacy localStorage-only preference on first load).
+  useFaviconColorSync();
+  // Load plugin frontend bundles once system config resolves.
+  usePluginFrontendBoot();
+
+  return (
+    <Suspense fallback={null}>
+      <Routes>
+        <Route
+          path={SIMULATOR_POPOUT_ROUTE_PATH}
+          element={<SimulatorPopoutView />}
+        />
+        <Route path="*" element={<StandardApp />} />
+      </Routes>
+    </Suspense>
   );
 }
