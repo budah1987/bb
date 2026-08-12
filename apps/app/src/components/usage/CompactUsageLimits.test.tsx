@@ -110,6 +110,61 @@ describe("buildCompactUsageLimitsModel", () => {
       ],
     });
   });
+
+  it("keeps authenticated providers visible when usage becomes unavailable", () => {
+    const usage = usageFixture();
+    usage.claudeCode = { status: "expired" };
+    usage.codex = {
+      status: "error",
+      message: "Codex usage request failed (HTTP 503).",
+      planLabel: "Plus",
+      accountEmail: null,
+    };
+
+    expect(buildCompactUsageLimitsModel(usage)).toEqual({
+      providers: [
+        {
+          name: "Claude",
+          summaryMetric: {
+            label: "5hr",
+            usedPercent: null,
+            resetsAt: null,
+          },
+          detailMetrics: [
+            {
+              label: "5hr",
+              usedPercent: null,
+              resetsAt: null,
+            },
+          ],
+        },
+        {
+          name: "Codex",
+          summaryMetric: {
+            label: "5hr",
+            usedPercent: null,
+            resetsAt: null,
+          },
+          detailMetrics: [
+            {
+              label: "5hr",
+              usedPercent: null,
+              resetsAt: null,
+            },
+          ],
+        },
+      ],
+    });
+  });
+
+  it("omits providers that are signed out", () => {
+    const usage = usageFixture();
+    usage.claudeCode = { status: "unauthenticated" };
+
+    expect(buildCompactUsageLimitsModel(usage)?.providers).toEqual([
+      expect.objectContaining({ name: "Codex" }),
+    ]);
+  });
 });
 
 describe("CommandCenterUsageRailContent", () => {
