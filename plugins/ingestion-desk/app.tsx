@@ -232,6 +232,11 @@ function IntakeComposer({
           aria-label="Meeting material"
           value={text}
           onChange={(event) => setText(event.target.value)}
+          onPointerDownCapture={(event) => {
+            event.stopPropagation();
+            event.currentTarget.focus();
+          }}
+          onPaste={(event) => event.stopPropagation()}
           placeholder="Paste Granola notes, a transcript, Google Drive links, or GitHub links…"
         />
         <div className="intake-tools">
@@ -281,6 +286,10 @@ function IntakeComposer({
         <input
           value={context}
           onChange={(event) => setContext(event.target.value)}
+          onPointerDownCapture={(event) => {
+            event.stopPropagation();
+            event.currentTarget.focus();
+          }}
           placeholder="For example: Spencer discussed the allocation table for warehouse2/ecto"
         />
       </label>

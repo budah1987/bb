@@ -29,12 +29,18 @@ branch. Under the hood it's `git worktree add` plus some bookkeeping:
 In the app, pick **New worktree** in the environment picker when starting
 a thread.
 
+The composer can assign an explicit branch name before it creates the
+worktree. Choose a branch type and enter a name; bb formats the name as
+lowercase kebab-case. If you leave the name empty, bb generates a unique
+`amir/<name>-<thread-id>` branch after it infers the thread name.
+
 From the CLI:
 
 ```bash
 pnpm bb thread spawn \
   --project <project-id> \
   --new-environment worktree \
+  --branch-name feature/improve-worktree-naming \
   --prompt "..."
 ```
 

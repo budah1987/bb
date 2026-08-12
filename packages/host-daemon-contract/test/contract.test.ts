@@ -1271,7 +1271,7 @@ describe("host-daemon command schemas", () => {
   // build claims 96 to force every older daemon on either lineage to update
   // before it connects.
   it("uses protocol version 96 for the merged BBamir and upstream wire surface", () => {
-    expect(HOST_DAEMON_PROTOCOL_VERSION).toBe(96);
+    expect(HOST_DAEMON_PROTOCOL_VERSION).toBe(97);
   });
 
   it("binds Plan cancellation to a required turn id and typed result", () => {

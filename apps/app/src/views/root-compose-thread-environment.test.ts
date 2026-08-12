@@ -161,6 +161,45 @@ describe("resolveRootComposeThreadEnvironment", () => {
     });
   });
 
+  it("sends a user-named managed worktree branch", () => {
+    expect(
+      resolveRootComposeThreadEnvironment({
+        defaultBranch: "main",
+        defaultWorktreeBaseBranch: "main",
+        environmentValue: hostWorktreeEnvironmentValue,
+        projectId,
+        selectedBranch: null,
+        worktreeBranchName: "feature/worktree-naming",
+      }),
+    ).toMatchObject({
+      workspace: {
+        type: "managed-worktree",
+        branchName: "feature/worktree-naming",
+      },
+    });
+  });
+
+  it("lets an explicit GitHub workflow branch override the worktree name", () => {
+    expect(
+      resolveRootComposeThreadEnvironment({
+        defaultBranch: "main",
+        defaultWorktreeBaseBranch: "main",
+        environmentValue: hostWorktreeEnvironmentValue,
+        projectId,
+        selectedBranch: {
+          name: "main",
+          isNew: true,
+          requestedName: "fix/github-workflow-name",
+        },
+        worktreeBranchName: "amir/composer-name",
+      }),
+    ).toMatchObject({
+      workspace: {
+        branchName: "fix/github-workflow-name",
+      },
+    });
+  });
+
   it("sends a named base branch when the selected branch matches the env's current", () => {
     expect(
       resolveRootComposeThreadEnvironment({

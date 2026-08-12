@@ -1,13 +1,26 @@
 // @vitest-environment jsdom
 
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { PermissionModePicker } from "./PermissionModePicker";
 
 const permissionOptions = [
-  { value: "accept-edits", label: "Accept Edits" },
-  { value: "auto", label: "Approve for me" },
-  { value: "full", label: "Full Access", tone: "warning" },
+  {
+    value: "accept-edits",
+    label: "Accept Edits",
+    description: "Ask before actions outside the workspace.",
+  },
+  {
+    value: "auto",
+    label: "Approve for me",
+    description: "Review permission requests automatically.",
+  },
+  {
+    value: "full",
+    label: "Full Access",
+    description: "Allow unrestricted access.",
+    tone: "warning",
+  },
 ] as const;
 
 afterEach(() => {
@@ -36,5 +49,35 @@ describe("PermissionModePicker", () => {
     const trigger = screen.getByRole("button", { name: "Permission mode" });
     expect(trigger.textContent).toContain("Plan Mode");
     expect(trigger.textContent).not.toContain("Full Access");
+  });
+
+  it("shows an icon and header text without descriptive subtext", () => {
+    render(
+      <PermissionModePicker
+        value="auto"
+        options={permissionOptions}
+        onChange={vi.fn()}
+        supported
+      />,
+    );
+
+    fireEvent.pointerDown(
+      screen.getByRole("button", { name: "Permission mode" }),
+      { button: 0 },
+    );
+
+    expect(screen.getByRole("menuitem", { name: "Accept Edits" })).toBeTruthy();
+    expect(
+      screen.getByRole("menuitem", { name: "Approve for me" }),
+    ).toBeTruthy();
+    expect(screen.getByRole("menuitem", { name: "Full Access" })).toBeTruthy();
+    expect(
+      screen.queryByText("Ask before actions outside the workspace."),
+    ).toBeNull();
+    expect(
+      screen.queryByText("Review permission requests automatically."),
+    ).toBeNull();
+    expect(screen.queryByText("Allow unrestricted access.")).toBeNull();
+    expect(document.querySelectorAll('[role="menuitem"] svg')).toHaveLength(6);
   });
 });

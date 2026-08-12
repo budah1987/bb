@@ -202,7 +202,9 @@ and a disabled or uninstalled plugin gets its list back when it returns.
    Its `experimental_registerCloseHandler` prop lets the companion consume the
    host's native close request before a secondary panel or desktop window does;
    audit the boolean ownership protocol and whether close/reopen should become
-   host-owned tab primitives instead.
+   host-owned tab primitives instead. Its `experimental_closePane` prop lets a
+   companion close its containing split pane when its final tab closes; audit
+   whether pane lifecycle belongs in this companion contract.
 7. **New-thread companion.** A registration may also provide
    `experimental_newThreadContextBar`, mounted above the composer while it is
    scoped to an existing environment or an unassigned workspace. Audit whether
@@ -211,7 +213,8 @@ and a disabled or uninstalled plugin gets its list back when it returns.
    the host should own. Its
    `experimental_registerCloseHandler` follows the context bar's boolean close
    ownership protocol so an unsent draft tab can consume native close requests;
-   audit whether both companions should share a dedicated close contract.
+   `experimental_closePane` closes the containing split pane. Audit whether
+   both companions should share a dedicated close contract.
 8. **New-thread empty state.** A registration may provide
    `experimental_newThreadEmptyState`, mounted inside the empty compose canvas
    for a draft scoped to an existing environment or an unassigned workspace.

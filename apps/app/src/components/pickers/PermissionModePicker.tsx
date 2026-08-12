@@ -1,10 +1,26 @@
 import { useMemo } from "react";
 import type { PermissionMode } from "@bb/domain";
+import { Icon } from "@bb/shared-ui/icon";
 import { LIST_HOVER_TRANSITION } from "@bb/shared-ui/motion";
 import { cn } from "@bb/shared-ui/lib/utils";
 import { OptionPicker, type PickerOption } from "./OptionPicker";
 
 type PermissionModeOption = PickerOption<PermissionMode>;
+
+const PERMISSION_MODE_ICONS: Record<
+  PermissionMode,
+  PermissionModeOption["icon"]
+> = {
+  "accept-edits": function AcceptEditsIcon({ className }) {
+    return <Icon name="CircleQuestion" className={className} aria-hidden />;
+  },
+  auto: function AutoApproveIcon({ className }) {
+    return <Icon name="CircleCheck" className={className} aria-hidden />;
+  },
+  full: function FullAccessIcon({ className }) {
+    return <Icon name="Lock" className={className} aria-hidden />;
+  },
+};
 
 function getPermissionModeCompactLabel(value: PermissionMode): string {
   switch (value) {
@@ -22,8 +38,11 @@ function addPermissionModeCompactLabels(
 ): PermissionModeOption[] {
   return options.map((option) => ({
     ...option,
+    icon: option.icon ?? PERMISSION_MODE_ICONS[option.value],
     compactLabel:
       option.compactLabel ?? getPermissionModeCompactLabel(option.value),
+    description: undefined,
+    disabledReason: undefined,
   }));
 }
 
@@ -89,7 +108,7 @@ export function PermissionModePicker({
       options={compactOptions}
       onChange={onChange}
       className={cn(LIST_HOVER_TRANSITION, className)}
-      contentClassName="max-w-72"
+      contentClassName="w-56"
       muted={muted}
       defaultOpen={defaultOpen}
       modal={modal}

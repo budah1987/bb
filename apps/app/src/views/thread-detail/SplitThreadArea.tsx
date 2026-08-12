@@ -23,7 +23,6 @@ import {
   shouldPreserveLayoutForCommandCenter,
   type CommandCenterNavigation,
 } from "@/lib/command-center-navigation";
-import { CompactCommandCenterIntro } from "./CompactCommandCenterIntro";
 import { CompactPluginPanelSurface } from "./CompactPluginPanelSurface";
 import { CompactWorkspaceSwipeHost } from "./CompactWorkspaceSwipeHost";
 import { useStandaloneCompactPwa } from "@/hooks/useStandaloneCompactPwa";
@@ -124,6 +123,7 @@ import {
 import { PaneMaximizeButton } from "./PaneMaximizeButton";
 import { wsManager } from "@/lib/ws";
 import { useOpenFixedSecondaryPanel } from "@/lib/fixed-panel-tabs";
+import { useAppCommandDispatch } from "@/components/commands/AppCommandProvider";
 
 // A `pointerdown`-relative move threshold before a pane-header drag engages.
 const PANE_DRAG_ENGAGE_DISTANCE_PX = 7;
@@ -1189,23 +1189,18 @@ function StandaloneWorkspaceSurface({
   onReturnFromCommandCenter,
 }: StandaloneWorkspaceSurfaceProps) {
   const panes = listPanes(layout.root);
-  const secondaryPanelStateId =
-    content.kind === "thread"
-      ? content.threadId
-      : content.kind === "new-thread"
-        ? "root-compose"
-        : null;
-  const secondaryPanelSyncThreadId =
-    content.kind === "thread" ? content.threadId : null;
-  const openRightPanel = useOpenFixedSecondaryPanel(
-    secondaryPanelStateId,
-    secondaryPanelSyncThreadId,
+  const dispatchAppCommand = useAppCommandDispatch();
+  const panelStateId = content.kind === "thread" ? content.threadId : null;
+  const openPersistedRightPanel = useOpenFixedSecondaryPanel(
+    panelStateId,
+    panelStateId,
   );
+  const openRightPanel = useCallback(() => {
+    openPersistedRightPanel();
+    dispatchAppCommand("panel.toggle");
+  }, [dispatchAppCommand, openPersistedRightPanel]);
   // On a standalone compact display, the root compose page is always the
   // Command Center. A validated swipe still adds its return destination.
-  const isCommandCenter = content.kind === "new-thread";
-  const commandCenterReturnPaneId =
-    commandCenterNavigation?.returnPaneId ?? layout.focusedPaneId;
   return (
     <CompactWorkspaceSwipeHost
       contentKey={paneContentRoute(content)}
@@ -1213,38 +1208,14 @@ function StandaloneWorkspaceSurface({
       focusedPaneId={layout.focusedPaneId}
       // Already on the Command Center: offer the return, not another open.
       allowsCommandCenter={content.kind !== "new-thread"}
-      allowsRightPanel={secondaryPanelStateId !== null}
+      allowsRightPanel={content.kind === "thread"}
       returnPaneId={commandCenterNavigation?.returnPaneId ?? null}
       onFocusPane={onFocusPane}
       onOpenCommandCenter={onOpenCommandCenter}
       onOpenRightPanel={openRightPanel}
       onReturnFromCommandCenter={onReturnFromCommandCenter}
     >
-      {isCommandCenter ? (
-        <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-          <CompactCommandCenterIntro
-            panes={panes}
-            activePaneId={commandCenterReturnPaneId}
-            // A gesture-opened Command Center returns through the source pane.
-            // A direct root page focuses the selected workspace pane instead.
-            onFocusPane={(paneId) => {
-              if (
-                commandCenterNavigation !== null &&
-                paneId === commandCenterReturnPaneId
-              ) {
-                onReturnFromCommandCenter();
-                return;
-              }
-              onFocusPane(paneId);
-            }}
-          />
-          <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-            <StandalonePaneContent content={content} ownsPluginChrome />
-          </div>
-        </div>
-      ) : (
-        <StandalonePaneContent content={content} ownsPluginChrome />
-      )}
+      <StandalonePaneContent content={content} ownsPluginChrome />
     </CompactWorkspaceSwipeHost>
   );
 }

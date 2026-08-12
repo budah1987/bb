@@ -35,6 +35,7 @@ import {
   baseBranchSpecToStoredName,
   buildEnvironmentProvisionCommand,
   buildManagedBranchName,
+  buildUnmanagedBranchName,
   SETUP_TIMEOUT_MS,
   type UnmanagedCheckoutCommand,
 } from "./thread-create-helpers.js";
@@ -766,7 +767,7 @@ function buildUnmanagedCheckout(
     kind: "new",
     name:
       args.branch.name ??
-      buildManagedBranchName({
+      buildUnmanagedBranchName({
         branchSlug: args.context.request.branchSlug,
         threadId: args.thread.id,
       }),
@@ -818,7 +819,7 @@ function buildDirectUnmanagedEnvironmentPlan(
     buildRequest: ({ context, environment }) => {
       // Resolve intent.branch to a daemon-side checkout payload. The daemon
       // expects an explicit branch name in both kinds; for "new" we mint a
-      // thread-scoped name using the same scheme as managed worktrees.
+      // thread-scoped name in the legacy unmanaged-branch namespace.
       const checkout = args.intent.branch
         ? buildUnmanagedCheckout({
             branch: args.intent.branch,

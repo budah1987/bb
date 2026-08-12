@@ -421,6 +421,18 @@ export function useAppCommandKeyDispatch(): (event: KeyboardEvent) => boolean {
   );
 }
 
+/** Runs an app command directly from a non-keyboard interaction. */
+export function useAppCommandDispatch(): (
+  command: AppCommandId,
+  target?: EventTarget | null,
+) => boolean {
+  const dispatch = useContext(AppCommandContextValue)?.dispatch;
+  return useCallback(
+    (command, target = null) => dispatch?.(command, target) ?? false,
+    [dispatch],
+  );
+}
+
 export function useAppCommandContext(
   key: AppCommandContextKey,
   active: boolean,

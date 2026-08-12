@@ -38,6 +38,7 @@ import {
   RenameConversationDialog,
   pickDeleteFallbackThread,
 } from "./ConversationActions";
+import { registerCompactConversationCycleHandler } from "./compact-conversation-navigation";
 
 const COMPACT_TAB_SWIPE_INTENT_PX = 10;
 const COMPACT_TAB_SWIPE_COMMIT_PX = 36;
@@ -257,6 +258,16 @@ function ConductorWorkspaceContextBar({
     },
     [openConversation, openThreads],
   );
+
+  useLayoutEffect(() => {
+    if (!isCompactViewport || !workspace) return;
+    return registerCompactConversationCycleHandler((direction) => {
+      const currentThreadId = cycleThreadIdRef.current;
+      if (currentThreadId === null || openThreads.length < 2) return false;
+      openAdjacentConversation(currentThreadId, direction === "left" ? 1 : -1);
+      return true;
+    });
+  }, [isCompactViewport, openAdjacentConversation, openThreads.length, workspace]);
 
   const resetTabSwipe = useCallback(() => {
     tabSwipeRef.current = null;

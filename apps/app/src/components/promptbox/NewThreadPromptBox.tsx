@@ -73,6 +73,7 @@ import {
   WorktreePicker,
   type ReuseThreadOption,
 } from "@/components/pickers/WorktreePicker";
+import { WorktreeBranchNameInput } from "@/components/pickers/WorktreeBranchNameInput";
 import { selectPrimaryHost, useHosts } from "@/hooks/queries/host-queries";
 import { useSystemConfig } from "@/hooks/queries/system-queries";
 import { useHostDaemon } from "@/hooks/useHostDaemon";
@@ -80,6 +81,7 @@ import {
   permissionDisplayForPromptMode,
   shouldDisablePermissionPickerForPromptMode,
 } from "./effective-prompt-mode";
+import type { WorktreeBranchPrefix } from "@/lib/worktree-branch-name";
 
 const NEW_THREAD_PROMPT_BOX_MIN_HEIGHT = 80;
 const OPEN_COMPOSER_OVERLAY_TRIGGER_SELECTOR =
@@ -149,6 +151,15 @@ export interface NewThreadWorktreeConfig {
   disabled?: boolean;
 }
 
+export interface NewThreadWorktreeNameConfig {
+  prefix: WorktreeBranchPrefix;
+  slug: string;
+  onPrefixChange: (prefix: WorktreeBranchPrefix) => void;
+  onSlugChange: (slug: string) => void;
+  hidden?: boolean;
+  disabled?: boolean;
+}
+
 export interface NewThreadProjectConfig {
   projects: readonly ProjectSelectorOption[];
   /** Currently-selected project id, or null when the user has no project
@@ -168,6 +179,7 @@ export interface NewThreadModeConfig {
   environment: NewThreadEnvironmentConfig;
   branch: NewThreadBranchConfig;
   worktree: NewThreadWorktreeConfig;
+  worktreeName?: NewThreadWorktreeNameConfig;
   permission: ExecutionPermissionConfig;
   githubWorkflow?: {
     label: string;
@@ -421,7 +433,20 @@ export const NewThreadPromptBoxUI = memo(function NewThreadPromptBoxUI({
             minHeight={NEW_THREAD_PROMPT_BOX_MIN_HEIGHT}
             placeholder={placeholder}
             header={modeConfig.header}
-            footerStart={<ExecutionControls {...execution} />}
+            footerStart={
+              <>
+                <ExecutionControls {...execution} />
+                <PermissionModePicker
+                  value={modeConfig.permission.value}
+                  options={modeConfig.permission.options}
+                  onChange={modeConfig.permission.onChange}
+                  supported={modeConfig.permission.supported}
+                  disabled={permissionPickerDisabledByPlanMode}
+                  showChevronWhenDisabled={permissionPickerDisabledByPlanMode}
+                  displayOverride={permissionDisplayOverride}
+                />
+              </>
+            }
           />
         </PluginComposerHostProvider>
       </PluginComposerViewProvider>
@@ -484,7 +509,9 @@ export const NewThreadPromptBoxUI = memo(function NewThreadPromptBoxUI({
                         environment={modeConfig.environment}
                         branch={modeConfig.branch}
                         worktree={modeConfig.worktree}
+                        worktreeName={modeConfig.worktreeName}
                         githubWorkflow={modeConfig.githubWorkflow}
+                        layout="mobile"
                       />
                     ) : (
                       <ProjectlessMachineSlot
@@ -493,31 +520,13 @@ export const NewThreadPromptBoxUI = memo(function NewThreadPromptBoxUI({
                     )}
                   </div>
                 </section>
-                <section className="grid gap-2" aria-label="Permission">
-                  <p className="text-xs font-medium text-muted-foreground">
-                    Permission
-                  </p>
-                  <div className="flex min-h-11 items-center rounded-lg border border-border px-2">
-                    <PermissionModePicker
-                      value={modeConfig.permission.value}
-                      options={modeConfig.permission.options}
-                      onChange={modeConfig.permission.onChange}
-                      supported={modeConfig.permission.supported}
-                      disabled={permissionPickerDisabledByPlanMode}
-                      showChevronWhenDisabled={
-                        permissionPickerDisabledByPlanMode
-                      }
-                      displayOverride={permissionDisplayOverride}
-                    />
-                  </div>
-                </section>
               </div>
             </DrawerContent>
           </Drawer>
         </>
       ) : (
-        <div className="mt-1 flex items-center justify-between gap-2 px-3.5">
-          <div className="flex min-w-0 flex-1 items-center gap-1">
+        <div className="mt-1 flex items-start gap-x-2 gap-y-1 px-3.5">
+          <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1">
             {project ? (
               <ProjectSelector
                 projects={project.projects}
@@ -535,22 +544,12 @@ export const NewThreadPromptBoxUI = memo(function NewThreadPromptBoxUI({
                 environment={modeConfig.environment}
                 branch={modeConfig.branch}
                 worktree={modeConfig.worktree}
+                worktreeName={modeConfig.worktreeName}
                 githubWorkflow={modeConfig.githubWorkflow}
               />
             ) : (
               <ProjectlessMachineSlot environment={modeConfig.environment} />
             )}
-          </div>
-          <div className="flex shrink-0 items-center gap-2">
-            <PermissionModePicker
-              value={modeConfig.permission.value}
-              options={modeConfig.permission.options}
-              onChange={modeConfig.permission.onChange}
-              supported={modeConfig.permission.supported}
-              disabled={permissionPickerDisabledByPlanMode}
-              showChevronWhenDisabled={permissionPickerDisabledByPlanMode}
-              displayOverride={permissionDisplayOverride}
-            />
           </div>
         </div>
       )}
@@ -562,14 +561,18 @@ interface ThreadEnvSlotProps {
   environment: NewThreadEnvironmentConfig;
   branch: NewThreadBranchConfig;
   worktree: NewThreadWorktreeConfig;
+  worktreeName?: NewThreadWorktreeNameConfig;
   githubWorkflow?: NewThreadModeConfig["githubWorkflow"];
+  layout?: "desktop" | "mobile";
 }
 
 export function ThreadEnvSlot({
   environment,
   branch,
   worktree,
+  worktreeName,
   githubWorkflow,
+  layout = "desktop",
 }: ThreadEnvSlotProps) {
   const parsedEnvironment = useMemo(
     () => parseEnvironmentValue(environment.value),
@@ -624,6 +627,19 @@ export function ThreadEnvSlot({
           onSearchQueryChange={branch.onSearchQueryChange}
           onCreateBaseChange={branch.onCreateBaseChange}
           onCreate={branch.onCreate}
+        />
+      ) : null}
+      {parsedEnvironment?.type === "host" &&
+      parsedEnvironment.mode === "worktree" &&
+      worktreeName &&
+      worktreeName.hidden !== true ? (
+        <WorktreeBranchNameInput
+          prefix={worktreeName.prefix}
+          slug={worktreeName.slug}
+          onPrefixChange={worktreeName.onPrefixChange}
+          onSlugChange={worktreeName.onSlugChange}
+          disabled={worktreeName.disabled}
+          layout={layout}
         />
       ) : null}
       {showWorktreePicker ? (
@@ -743,6 +759,7 @@ export interface NewThreadConnectedModeConfig {
   environment: NewThreadConnectedEnvironmentConfig;
   branch: NewThreadConnectedBranchConfig;
   worktree: NewThreadWorktreeConfig;
+  worktreeName?: NewThreadWorktreeNameConfig;
   permission: ExecutionPermissionConfig;
   githubWorkflow?: NewThreadModeConfig["githubWorkflow"];
   banner?: ReactNode;
@@ -854,6 +871,7 @@ function ConnectedThreadModeBranch({
         environment: uiEnvironment,
         branch: uiBranch,
         worktree: threadConfig.worktree,
+        worktreeName: threadConfig.worktreeName,
         permission: threadConfig.permission,
         githubWorkflow: threadConfig.githubWorkflow,
         banner: threadConfig.banner,

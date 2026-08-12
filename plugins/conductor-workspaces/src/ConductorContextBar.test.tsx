@@ -17,6 +17,10 @@ import {
 } from "@testing-library/react";
 import { loadPluginApp, renderSlot } from "@bb/plugin-sdk/testing/app";
 import type { PluginSidebarThread } from "@bb/plugin-sdk/app";
+import {
+  cycleCompactConversation,
+  hasCompactConversationCycleHandler,
+} from "./compact-conversation-navigation";
 
 const app = await loadPluginApp(() => import("../app"));
 const contextComponent = app.threadLists[0]?.experimental_contextBar;
@@ -199,6 +203,15 @@ describe("ConductorContextBar compact layout", () => {
     const rail = await screen.findByRole("navigation", {
       name: "Workspace conversations",
     });
+    expect(hasCompactConversationCycleHandler()).toBe(true);
+    act(() => {
+      expect(cycleCompactConversation("left")).toBe(true);
+    });
+    expect(rendered.sidebarActionCalls.at(-1)).toEqual({
+      method: "open",
+      threadId: "thread-3",
+    });
+
     fireEvent.pointerDown(rail, {
       button: 0,
       clientX: 120,

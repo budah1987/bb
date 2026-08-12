@@ -295,6 +295,11 @@ describe("ConductorSidebar", () => {
     expect(within(card).getByText("↑2 ↓1")).toBeDefined();
     expect(within(card).getByText("4 changes")).toBeDefined();
     expect(within(card).getByText("PR #82 ✓")).toBeDefined();
+    const metadata = card.querySelector(".conductor-workspace-meta");
+    expect(metadata).not.toBeNull();
+    expect(metadata?.querySelector(".conductor-status-label")).toBeNull();
+    expect(metadata?.querySelectorAll("svg")).toHaveLength(1);
+    expect(metadata?.querySelector('[data-kind="branch"] svg')).not.toBeNull();
   });
 
   it("shows one-off threads with live attention states and native navigation", async () => {
@@ -393,6 +398,10 @@ describe("ConductorSidebar", () => {
     const readyLabel = screen.getByText("Ready");
     expect(readyLabel.className).toContain("conductor-status-label");
     expect(readyLabel.getAttribute("data-signal")).toBe("ready");
+    expect(readyLabel.parentElement?.className).toContain(
+      "conductor-workspace-meta",
+    );
+    expect(readyLabel.parentElement?.firstElementChild).toBe(readyLabel);
     expect(screen.queryByText("Needs attention")).toBeNull();
 
     fireEvent.click(workingLink, { metaKey: true });

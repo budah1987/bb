@@ -127,6 +127,19 @@ describe("Ingestion Desk intake", () => {
       }),
     );
   });
+
+  it("claims focus before a surrounding conversation pane handles the pointer", async () => {
+    const conversationInput = document.createElement("textarea");
+    document.body.append(conversationInput);
+    conversationInput.focus();
+    const slot = renderSlot(app.navPanels[0]!, { subPath: "" }, {
+      rpc: { bootstrap: () => bootstrap },
+    });
+    const meetingInput = await slot.findByLabelText("Meeting material");
+    fireEvent.pointerDown(meetingInput);
+    expect(document.activeElement).toBe(meetingInput);
+    conversationInput.remove();
+  });
 });
 
 describe("Ingestion Desk approval", () => {

@@ -1,4 +1,5 @@
 import { useMemo } from "react";
+import type { EnvironmentWorkspaceDisplayKind } from "@bb/domain";
 import { Button } from "@bb/shared-ui/button";
 import { cn } from "@bb/shared-ui/lib/utils";
 import {
@@ -26,13 +27,12 @@ import {
 
 const REUSE_THREAD_PREVIEW_LIMIT = 2;
 
-/** One row in the worktree picker dropdown. Each row represents a worktree
- * env in the project, surfaced through a representative thread so the user
- * can identify which worktree they want by recognizing thread titles. */
+/** One row in the existing-workspace picker dropdown. */
 export interface ReuseThreadOption {
   environmentId: string;
   branchName: string | null;
   name: string | null;
+  workspaceDisplayKind: EnvironmentWorkspaceDisplayKind;
   /** Name of the machine this worktree lives on. Only set when more than one
    * machine exists — omitted, no hint renders. */
   hostName?: string | null;
@@ -70,13 +70,15 @@ export function WorktreePicker({
   defaultOpen,
   modal,
 }: WorktreePickerProps) {
-  const branchIcon = getEnvironmentWorkspaceLabelIconName("managed-worktree");
   const activeOption = useMemo(
     () => options.find((option) => option.environmentId === value) ?? null,
     [options, value],
   );
+  const branchIcon = getEnvironmentWorkspaceLabelIconName(
+    activeOption?.workspaceDisplayKind ?? "managed-worktree",
+  );
   const triggerLabel =
-    activeOption?.name ?? activeOption?.branchName ?? "Pick a worktree";
+    activeOption?.name ?? activeOption?.branchName ?? "Pick a workspace";
   return (
     <DropdownMenu defaultOpen={defaultOpen} modal={modal}>
       <DropdownMenuTrigger asChild disabled={disabled}>
@@ -84,7 +86,7 @@ export function WorktreePicker({
           type="button"
           variant="ghost"
           size="sm"
-          aria-label="Worktree"
+          aria-label="Workspace"
           disabled={disabled}
           data-promptbox-icon-only-control=""
           className={cn(
@@ -118,12 +120,12 @@ export function WorktreePicker({
       <DropdownMenuContent
         align="start"
         className={cn(OPTION_MENU_CONTENT_CLASS_NAME, "max-w-80")}
-        mobileTitle="Worktree"
+        mobileTitle="Workspace"
       >
-        <DropdownMenuLabel>Reuse existing worktree</DropdownMenuLabel>
+        <DropdownMenuLabel>Reuse existing workspace</DropdownMenuLabel>
         {options.length === 0 ? (
           <div className="px-2 py-2 text-xs text-muted-foreground">
-            No worktrees in this project yet.
+            No existing workspaces in this project yet.
           </div>
         ) : (
           options.map((option) => (
@@ -153,8 +155,10 @@ function WorktreeMenuItem({
 }: WorktreeMenuItemProps) {
   const previewThreads = option.threads.slice(0, REUSE_THREAD_PREVIEW_LIMIT);
   const additionalCount = option.threads.length - previewThreads.length;
-  const branchIcon = getEnvironmentWorkspaceLabelIconName("managed-worktree");
-  const label = option.name ?? option.branchName ?? "Worktree";
+  const branchIcon = getEnvironmentWorkspaceLabelIconName(
+    option.workspaceDisplayKind,
+  );
+  const label = option.name ?? option.branchName ?? "Workspace";
   const branchDetail = option.name ? option.branchName : null;
   return (
     <DropdownMenuItem

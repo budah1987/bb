@@ -7,10 +7,12 @@ export function PluginNewThreadContextBar({
   projectId,
   environmentId,
   onCloseHandlerChange,
+  onClosePane,
 }: {
   projectId: string;
   environmentId: string | null;
   onCloseHandlerChange: (handler: (() => boolean) | null) => void;
+  onClosePane?: () => void;
 }) {
   const provider = useThreadListProvider();
   const isCompactViewport = useIsCompactViewport();
@@ -33,6 +35,7 @@ export function PluginNewThreadContextBar({
           environmentId={environmentId}
           isCompactViewport={isCompactViewport}
           experimental_registerCloseHandler={onCloseHandlerChange}
+          experimental_closePane={onClosePane}
         />
       </Suspense>
     </PluginSlotMount>

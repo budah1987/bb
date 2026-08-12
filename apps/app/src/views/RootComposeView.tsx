@@ -113,6 +113,10 @@ import {
   useSystemConfig,
 } from "@/hooks/queries/system-queries";
 import { parseGithubRepositoryName } from "@/lib/github-repository";
+import {
+  buildWorktreeBranchName,
+  type WorktreeBranchPrefix,
+} from "@/lib/worktree-branch-name";
 import { useSidebarNavigation } from "@/hooks/queries/sidebar-navigation-query";
 import { useThreads } from "@/hooks/queries/thread-queries";
 import { useCommandSuggestions } from "@/hooks/useCommandSuggestions";
@@ -1077,6 +1081,9 @@ export function RootComposeView() {
   const [githubRepositoryChooserOpen, setGithubRepositoryChooserOpen] =
     useState(false);
   const [githubWorkflowOpen, setGithubWorkflowOpen] = useState(false);
+  const [worktreeBranchPrefix, setWorktreeBranchPrefix] =
+    useState<WorktreeBranchPrefix>("amir");
+  const [worktreeBranchSlug, setWorktreeBranchSlug] = useState("");
   const githubRepositoriesQuery = useGithubRepositories({
     ...(primaryHostId === null ? {} : { hostId: primaryHostId }),
     enabled:
@@ -1820,6 +1827,10 @@ export function RootComposeView() {
         environmentValue: effectiveEnvironmentValue,
         projectId,
         selectedBranch,
+        worktreeBranchName: buildWorktreeBranchName(
+          worktreeBranchPrefix,
+          worktreeBranchSlug,
+        ),
       }),
     [
       activeBranchesQuery.data?.defaultBranch,
@@ -1827,6 +1838,8 @@ export function RootComposeView() {
       effectiveEnvironmentValue,
       projectId,
       selectedBranch,
+      worktreeBranchPrefix,
+      worktreeBranchSlug,
     ],
   );
 
@@ -2113,6 +2126,7 @@ export function RootComposeView() {
         setLastCreatedThreadId(thread.id);
         clearReuseEnvironment();
         setForkSeed(null);
+        setWorktreeBranchSlug("");
         setRootComposeSectionId(null);
         if (submittedDraft !== null) {
           promptDraft.clearIfCurrentMatches(submittedDraft);
@@ -3739,6 +3753,23 @@ export function RootComposeView() {
     parsedEnvironment,
     reuseThreadOptions,
   ]);
+  const worktreeNameConfig = useMemo(
+    () => ({
+      prefix: worktreeBranchPrefix,
+      slug: worktreeBranchSlug,
+      onPrefixChange: setWorktreeBranchPrefix,
+      onSlugChange: setWorktreeBranchSlug,
+      hidden: selectedBranch?.requestedName !== undefined,
+      disabled: isForkDraft || isEnvironmentLocked,
+    }),
+    [
+      isEnvironmentLocked,
+      isForkDraft,
+      selectedBranch?.requestedName,
+      worktreeBranchPrefix,
+      worktreeBranchSlug,
+    ],
+  );
   const branchConfig = useMemo(
     () => ({
       value:
@@ -3971,6 +4002,7 @@ export function RootComposeView() {
         environment: environmentConfig,
         branch: branchConfig,
         worktree: worktreeConfig,
+        worktreeName: worktreeNameConfig,
         permission: permissionConfig,
         githubWorkflow:
           !isProjectless && projectId !== PERSONAL_PROJECT_ID
@@ -4043,6 +4075,7 @@ export function RootComposeView() {
                   onCloseHandlerChange={
                     handlePluginNewThreadTabCloseHandlerChange
                   }
+                  onClosePane={paneContext?.onRequestClose ?? undefined}
                 />
               </>
             ) : null

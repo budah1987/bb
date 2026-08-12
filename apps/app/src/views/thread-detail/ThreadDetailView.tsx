@@ -2797,6 +2797,7 @@ function ThreadDetailViewInternal(props: ThreadDetailViewInternalProps) {
         projectId={thread.projectId}
         environmentId={thread.environmentId}
         onCloseHandlerChange={handlePluginThreadTabCloseHandlerChange}
+        onClosePane={onRequestClose ?? undefined}
       />
     </>
   );

@@ -33,6 +33,8 @@ import {
 } from "@/lib/command-center-navigation";
 import { createBbDesktopApi } from "@/test/bb-desktop-test-utils";
 import { resourceRouteLabelAtom } from "@/components/layout/resourceRouteLabelAtom";
+import { registerCompactConversationCycleHandler } from "bb-plugin-conductor-workspaces/compact-conversation-navigation";
+import { useAppCommandHandler } from "@/components/commands/AppCommandProvider";
 import {
   resetPluginSlotStoreForTest,
   setPluginSlotRegistrations,
@@ -150,6 +152,8 @@ vi.mock("@/hooks/queries/thread-queries", () => ({
 
 vi.mock("@/components/commands/AppCommandProvider", () => ({
   useAppCommandContext: () => undefined,
+  useAppCommandDispatch: () => (command: string) =>
+    commandHandlers.get(command)?.() ?? false,
   useAppCommandHandler: (command: string, handler: () => boolean) => {
     commandHandlers.set(command, handler);
   },
@@ -254,6 +258,11 @@ vi.mock("./ThreadDetailView", () => ({
     });
     const pane = useContext(PaneContext);
     const [isPanelOpen, setIsPanelOpen] = useState(threadId === "thr-a");
+    useAppCommandHandler("panel.toggle", () => {
+      if (!pane?.isFocused) return false;
+      setIsPanelOpen((open) => !open);
+      return true;
+    });
     const composerHost = useMemo<PluginComposerHost>(() => {
       const draft = { attachments: [], mentions: [], text: "" };
       return {
@@ -310,6 +319,9 @@ vi.mock("./ThreadDetailView", () => ({
           style={{ height: 20, overflow: "auto" }}
         >
           <div style={{ height: 100 }} />
+        </div>
+        <div data-testid={`panel-${threadId}`}>
+          {isPanelOpen ? "open" : "closed"}
         </div>
         {pane?.onRequestClose ? (
           <button
@@ -379,22 +391,6 @@ function twoPaneLayout(
       children: [
         { type: "pane", paneId: "pane-1", content: threadContent("thr-a") },
         { type: "pane", paneId: "pane-2", content: threadContent("thr-b") },
-      ],
-    },
-    focusedPaneId,
-  };
-}
-
-function threePaneLayout(focusedPaneId: string): SplitLayout {
-  return {
-    root: {
-      type: "split",
-      dir: "row",
-      sizes: [1 / 3, 1 / 3, 1 / 3],
-      children: [
-        { type: "pane", paneId: "pane-1", content: threadContent("thr-a") },
-        { type: "pane", paneId: "pane-2", content: threadContent("thr-b") },
-        { type: "pane", paneId: "pane-3", content: threadContent("thr-c") },
       ],
     },
     focusedPaneId,
@@ -2467,6 +2463,68 @@ describe("SplitThreadArea", () => {
       expect(locationPath()).not.toBe("/");
     });
 
+    it("cycles a Conductor conversation before changing split panes", async () => {
+      const store = renderSplitArea({
+        path: threadPath("thr-a"),
+        layout: twoPaneLayout("pane-1"),
+        workspaceRouteContent: true,
+      });
+      await screen.findByTestId("workspace-swipe-position");
+
+      let cycleDirection = "";
+      const unregisterCycle = registerCompactConversationCycleHandler(
+        (direction) => {
+          cycleDirection = direction;
+          return true;
+        },
+      );
+
+      try {
+        const transcriptText = document.createElement("p");
+        transcriptText.textContent = "Conversation transcript text";
+        swipeSurface().append(transcriptText);
+        dragTo(250, { from: 500, target: transcriptText });
+        firePointer(window, "pointerup", 250);
+
+        await waitFor(() => expect(cycleDirection).toBe("left"));
+        expect(storedSplitLayout(store).focusedPaneId).toBe("pane-1");
+        expect(locationPath()).toBe(threadPath("thr-a"));
+        expect(screen.getByTestId("workspace-swipe-position").textContent).toBe(
+          "Next conversation",
+        );
+      } finally {
+        unregisterCycle();
+      }
+    });
+
+    it("opens the existing right panel from a long left swipe on transcript text", async () => {
+      renderSplitArea({
+        path: threadPath("thr-b"),
+        layout: twoPaneLayout("pane-2"),
+        workspaceRouteContent: true,
+      });
+      await screen.findByTestId("workspace-swipe-position");
+
+      const surface = swipeSurface();
+      const transcriptText = document.createElement("p");
+      transcriptText.textContent = "Conversation transcript text";
+      surface.append(transcriptText);
+      firePointer(transcriptText, "pointerdown", 900);
+      firePointer(surface, "pointermove", 860);
+      firePointer(surface, "pointermove", 100);
+
+      expect(previewSurface()?.textContent).toContain("Right panel");
+      expect(screen.getByTestId("panel-thr-b").textContent).toBe("closed");
+      firePointer(surface, "pointerup", 100);
+
+      await waitFor(() =>
+        expect(screen.getByTestId("panel-thr-b").textContent).toBe("open"),
+      );
+      expect(screen.getByTestId("workspace-swipe-position").textContent).toBe(
+        "Right panel",
+      );
+    });
+
     it("cannot reach the Command Center on a fast short right fling", async () => {
       renderSplitArea({
         path: threadPath("thr-b"),
@@ -2892,47 +2950,7 @@ describe("SplitThreadArea", () => {
       expect(locationPath()).toBe(threadPath("thr-b"));
     });
 
-    it("names open thread panes by their cached titles, generically when absent", async () => {
-      sidebarNavigationFixture.data = {
-        personalProject: {
-          threads: [
-            {
-              id: "thr-a",
-              title: "Refactor the swipe host",
-              titleFallback: "",
-            },
-          ],
-        },
-        projects: [
-          {
-            threads: [
-              { id: "thr-b", title: "Ship release notes", titleFallback: "" },
-            ],
-          },
-        ],
-      };
-      renderSplitArea({
-        path: "/",
-        historyEntries: [threadPath("thr-b")],
-        locationState: commandCenterState,
-        layout: threePaneLayout("pane-2"),
-        workspaceRouteContent: true,
-      });
-
-      const intro = await screen.findByTestId("compact-command-center-intro");
-      const labels = [...intro.querySelectorAll("button")].map(
-        (row) => row.firstElementChild?.textContent,
-      );
-      // Two thread panes, two distinct real titles; the unlisted third falls
-      // back to the generic name.
-      expect(labels).toEqual([
-        "Refactor the swipe host",
-        "Ship release notes",
-        "Thread",
-      ]);
-    });
-
-    it("names the Command Center only for a validated swipe arrival", async () => {
+    it("keeps the compact Command Center free of the legacy workspace heading", async () => {
       renderSplitArea({
         path: "/",
         historyEntries: [threadPath("thr-b")],
@@ -2941,43 +2959,9 @@ describe("SplitThreadArea", () => {
         workspaceRouteContent: true,
       });
 
-      const intro = await screen.findByTestId("compact-command-center-intro");
-      expect(intro.textContent).toContain("Command Center");
-      expect(intro.textContent).toContain("Workspace 2 of 2");
-      expect(intro.textContent).toContain("Continue workspace");
-      // The composer still arrives whole.
       expect(screen.getByTestId("root-compose-view")).toBeTruthy();
-      // Every row is a real, thumb-sized button.
-      const rows = intro.querySelectorAll("button");
-      expect(rows).toHaveLength(2);
-      for (const row of rows) {
-        expect(row.className).toContain("min-h-11");
-        expect(row.className).not.toContain("transition-all");
-      }
-
-      fireEvent.click(rows[0]!);
-      await waitFor(() => expect(locationPath()).toBe(threadPath("thr-a")));
-    });
-
-    it("returns through the row for the pane the gesture came from", async () => {
-      renderSplitArea({
-        path: "/",
-        historyEntries: [threadPath("thr-b")],
-        locationState: commandCenterState,
-        layout: twoPaneLayout("pane-2"),
-        workspaceRouteContent: true,
-      });
-
-      const intro = await screen.findByTestId("compact-command-center-intro");
-      const activeRow = intro.querySelector('button[aria-current="true"]');
-      expect(activeRow).not.toBeNull();
-
-      fireEvent.click(activeRow!);
-
-      // Focusing the already-focused pane would do nothing, so the row pops.
-      await waitFor(() => expect(locationPath()).toBe(threadPath("thr-b")));
-      fireEvent.click(screen.getByTestId("history-forward"));
-      await waitFor(() => expect(locationPath()).toBe("/"));
+      expect(screen.queryByTestId("compact-command-center-intro")).toBeNull();
+      expect(screen.queryByText("Workspace 2 of 2")).toBeNull();
     });
 
     it("keeps a direct root route as the Command Center after restart", async () => {
@@ -2988,9 +2972,7 @@ describe("SplitThreadArea", () => {
       });
 
       expect(await screen.findByTestId("root-compose-view")).toBeTruthy();
-      expect(
-        await screen.findByTestId("compact-command-center-intro"),
-      ).toBeTruthy();
+      expect(screen.queryByTestId("compact-command-center-intro")).toBeNull();
     });
   });
 

@@ -16,6 +16,7 @@ export interface ResolveRootComposeThreadEnvironmentArgs {
   environmentValue: string;
   projectId: string | undefined;
   selectedBranch: RootComposeSelectedBranch | null;
+  worktreeBranchName?: string | null;
 }
 
 interface ResolveManagedBaseBranchArgs {
@@ -65,6 +66,8 @@ export function resolveRootComposeThreadEnvironment(
     }
 
     if (parsed.mode === "worktree") {
+      const branchName =
+        args.selectedBranch?.requestedName ?? args.worktreeBranchName;
       return {
         type: "host",
         hostId: parsed.hostId,
@@ -75,9 +78,7 @@ export function resolveRootComposeThreadEnvironment(
             defaultWorktreeBaseBranch: args.defaultWorktreeBaseBranch,
             selectedBranch: args.selectedBranch,
           }),
-          ...(args.selectedBranch?.requestedName
-            ? { branchName: args.selectedBranch.requestedName }
-            : {}),
+          ...(branchName ? { branchName } : {}),
           ...(args.selectedBranch?.pullRequest
             ? { pullRequestNumber: args.selectedBranch.pullRequest.number }
             : {}),

@@ -65,7 +65,7 @@ describe("workspace swipe intent", () => {
 
 describe("decideWorkspaceSwipe", () => {
   it("commits a pane on short distance, or on a deliberate flick", () => {
-    expect(decide(WIDTH * 0.22, 0)).toEqual({
+    expect(decide(WIDTH * 0.18, 0)).toEqual({
       kind: "pane",
       direction: "right",
     });
@@ -73,7 +73,7 @@ describe("decideWorkspaceSwipe", () => {
       kind: "pane",
       direction: "left",
     });
-    expect(decide(WIDTH * 0.15, 0)).toEqual({ kind: "cancel" });
+    expect(decide(WIDTH * 0.17, 0)).toEqual({ kind: "cancel" });
     expect(
       decide(WIDTH * 0.09, WORKSPACE_SWIPE_FLING_VELOCITY_PX_PER_SEC),
     ).toEqual({ kind: "pane", direction: "right" });

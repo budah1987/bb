@@ -1,0 +1,758 @@
+<!doctype html>
+<html lang="en" class="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>BBamir sidebar typography prototype</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --canvas: oklch(0.195 0 0);
+        --ink: oklch(0.81 0 0);
+        --sidebar: color-mix(in oklch, var(--ink) 4.3%, var(--canvas));
+        --sidebar-foreground: var(--ink);
+        --sidebar-accent: color-mix(in oklch, var(--ink) 12%, var(--canvas));
+        --sidebar-border: color-mix(in oklch, var(--ink) 18.1%, var(--canvas));
+        --muted-foreground: oklch(0.78 0 0);
+        --subtle-foreground: oklch(0.68 0 0);
+        --state-hover: color-mix(in oklab, var(--ink) 13.8%, transparent);
+        --state-active: color-mix(in oklab, var(--ink) 22.5%, transparent);
+        --primary: oklch(0.76 0.12 250);
+        --success: oklch(0.74 0.15 155);
+        --warning: oklch(0.75 0.16 50);
+        --warning-text: oklch(0.75 0.16 50);
+        --destructive: oklch(0.65 0.16 22);
+        --awaiting-reply: color-mix(
+          in oklch,
+          var(--destructive) 86%,
+          var(--primary)
+        );
+        --project: color-mix(in oklch, var(--ink) 7.5%, var(--canvas));
+        --project-border: color-mix(
+          in oklch,
+          var(--ink) 14%,
+          var(--canvas)
+        );
+        --font-sans: "Inter Variable", Inter, -apple-system, BlinkMacSystemFont,
+          "Segoe UI", sans-serif;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html,
+      body {
+        min-height: 100%;
+        margin: 0;
+      }
+
+      body {
+        display: flex;
+        min-height: 100vh;
+        align-items: flex-start;
+        justify-content: center;
+        overflow-x: hidden;
+        background: var(--canvas);
+        color: var(--sidebar-foreground);
+        font-family: var(--font-sans);
+        -webkit-font-smoothing: antialiased;
+      }
+
+      button {
+        color: inherit;
+        font: inherit;
+      }
+
+      .sidebar {
+        width: 392px;
+        min-width: 0;
+        max-width: 392px;
+        flex: 0 0 392px;
+        min-height: 100vh;
+        padding: 8px 4px 12px;
+        overflow: hidden;
+        background: var(--sidebar);
+      }
+
+      .add-repository {
+        display: flex;
+        width: 100%;
+        min-height: 40px;
+        align-items: center;
+        gap: 10px;
+        border: 1px dashed var(--sidebar-border);
+        border-radius: 8px;
+        padding: 0 14px;
+        background: transparent;
+        color: var(--muted-foreground);
+        font-size: 13px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: background-color 120ms ease-out, color 120ms ease-out,
+          border-color 120ms ease-out, scale 120ms ease-out;
+      }
+
+      .add-repository:hover,
+      .add-repository:focus-visible {
+        border-style: solid;
+        background: var(--state-hover);
+        color: var(--sidebar-foreground);
+        outline: none;
+      }
+
+      .add-repository:active,
+      .icon-button:active,
+      .workspace:active {
+        scale: 0.96;
+      }
+
+      .project-stack {
+        display: grid;
+        gap: 8px;
+        margin-top: 8px;
+      }
+
+      .project {
+        min-width: 0;
+        border-radius: 14px;
+        padding: 6px;
+        background: var(--project);
+        box-shadow:
+          inset 0 0 0 1px var(--project-border),
+          0 6px 14px color-mix(in oklab, var(--ink) 10%, transparent);
+      }
+
+      .project[data-collapsed="true"] {
+        background: transparent;
+        box-shadow: none;
+      }
+
+      .project-header {
+        display: flex;
+        min-height: 36px;
+        align-items: center;
+        gap: 2px;
+        padding: 0 2px;
+      }
+
+      .project-toggle {
+        display: flex;
+        min-width: 0;
+        min-height: 32px;
+        flex: 1;
+        align-items: center;
+        gap: 7px;
+        border: 0;
+        border-radius: 6px;
+        padding: 0 4px;
+        background: transparent;
+        cursor: pointer;
+        text-align: left;
+      }
+
+      .project-toggle:hover,
+      .project-toggle:focus-visible,
+      .icon-button:hover,
+      .icon-button:focus-visible {
+        background: color-mix(
+          in oklch,
+          var(--sidebar-accent) 72%,
+          transparent
+        );
+        outline: none;
+      }
+
+      .chevron {
+        width: 14px;
+        height: 14px;
+        flex: none;
+        color: var(--muted-foreground);
+        transition: rotate 180ms cubic-bezier(0.22, 1, 0.36, 1);
+      }
+
+      .project[data-collapsed="true"] .chevron {
+        rotate: -90deg;
+      }
+
+      .project-icon {
+        width: 16px;
+        height: 16px;
+        flex: none;
+      }
+
+      .project-name {
+        min-width: 0;
+        flex: 1;
+        overflow: hidden;
+        font-size: 13px;
+        font-weight: 650;
+        line-height: 18px;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .project-account {
+        max-width: 88px;
+        overflow: hidden;
+        color: var(--muted-foreground);
+        font-size: 10px;
+        font-weight: 400;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .icon-button {
+        display: inline-flex;
+        width: 32px;
+        height: 32px;
+        flex: none;
+        align-items: center;
+        justify-content: center;
+        border: 0;
+        border-radius: 6px;
+        background: transparent;
+        color: var(--muted-foreground);
+        cursor: pointer;
+        transition: background-color 120ms ease-out, color 120ms ease-out,
+          scale 120ms ease-out;
+      }
+
+      .workspace-list {
+        display: grid;
+        min-width: 0;
+        width: 100%;
+        grid-template-rows: 1fr;
+        opacity: 1;
+        transition: grid-template-rows 220ms cubic-bezier(0.22, 1, 0.36, 1),
+          opacity 160ms ease-out;
+      }
+
+      .project[data-collapsed="true"] .workspace-list {
+        grid-template-rows: 0fr;
+        opacity: 0;
+      }
+
+      .workspace-list-inner {
+        min-height: 0;
+        min-width: 0;
+        width: 100%;
+        overflow: hidden;
+      }
+
+      .workspace {
+        display: grid;
+        width: 100%;
+        min-height: 52px;
+        grid-template-columns: 18px minmax(0, 1fr);
+        grid-template-rows: auto auto;
+        column-gap: 8px;
+        row-gap: 3px;
+        align-items: center;
+        border: 0;
+        border-radius: 6px;
+        padding: 7px 8px;
+        background: transparent;
+        cursor: pointer;
+        text-align: left;
+        transition: background-color 150ms cubic-bezier(0.22, 1, 0.36, 1),
+          scale 150ms cubic-bezier(0.22, 1, 0.36, 1);
+      }
+
+      .workspace:hover,
+      .workspace:focus-visible {
+        background: color-mix(
+          in oklch,
+          var(--sidebar-accent) 64%,
+          transparent
+        );
+        outline: none;
+      }
+
+      .workspace[aria-current="page"] {
+        background: color-mix(
+          in oklch,
+          var(--sidebar-accent) 82%,
+          transparent
+        );
+      }
+
+      .workspace:focus-visible {
+        box-shadow: inset 0 0 0 2px var(--primary);
+      }
+
+      .activity {
+        --pixel-size: 2px;
+        display: grid;
+        width: 18px;
+        height: 18px;
+        grid-column: 1;
+        grid-row: 1 / 3;
+        grid-template-columns: repeat(5, var(--pixel-size));
+        grid-template-rows: repeat(5, var(--pixel-size));
+        place-content: center;
+        align-self: center;
+        gap: 1px;
+        color: var(--muted-foreground);
+      }
+
+      .activity i {
+        width: var(--pixel-size);
+        height: var(--pixel-size);
+        background: currentColor;
+        opacity: 0;
+      }
+
+      .activity i:nth-child(7),
+      .activity i:nth-child(8),
+      .activity i:nth-child(9),
+      .activity i:nth-child(12),
+      .activity i:nth-child(14),
+      .activity i:nth-child(17),
+      .activity i:nth-child(18),
+      .activity i:nth-child(19) {
+        opacity: 0.9;
+      }
+
+      .activity[data-signal="working"] {
+        color: var(--primary);
+      }
+
+      .activity[data-signal="ready"] {
+        color: var(--success);
+      }
+
+      .activity[data-signal="waiting"] {
+        color: var(--warning-text);
+      }
+
+      .activity[data-signal="failed"] {
+        color: var(--destructive);
+      }
+
+      .activity[data-signal="awaiting-reply"] {
+        color: var(--awaiting-reply);
+      }
+
+      .activity[data-signal="passive"] i:nth-child(7),
+      .activity[data-signal="passive"] i:nth-child(8),
+      .activity[data-signal="passive"] i:nth-child(9),
+      .activity[data-signal="passive"] i:nth-child(12),
+      .activity[data-signal="passive"] i:nth-child(14),
+      .activity[data-signal="passive"] i:nth-child(17),
+      .activity[data-signal="passive"] i:nth-child(18),
+      .activity[data-signal="passive"] i:nth-child(19) {
+        opacity: 0.42;
+      }
+
+      .workspace-title {
+        min-width: 0;
+        grid-column: 2;
+        grid-row: 1;
+        overflow: hidden;
+        color: var(--sidebar-foreground);
+        font-size: 13px;
+        font-weight: 650;
+        line-height: 16px;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .workspace-meta {
+        display: flex;
+        min-width: 0;
+        grid-column: 2;
+        grid-row: 2;
+        align-items: center;
+        gap: 8px;
+        overflow: hidden;
+        color: var(--muted-foreground);
+        font-size: 11px;
+        font-variant-numeric: tabular-nums;
+        line-height: 15px;
+        white-space: nowrap;
+      }
+
+      .status {
+        min-width: max-content;
+        flex: none;
+        font-weight: 560;
+      }
+
+      .status[data-signal="working"] {
+        color: var(--primary);
+      }
+
+      .status[data-signal="ready"] {
+        color: var(--success);
+      }
+
+      .status[data-signal="waiting"] {
+        color: var(--warning-text);
+      }
+
+      .status[data-signal="failed"] {
+        color: var(--destructive);
+      }
+
+      .status[data-signal="awaiting-reply"] {
+        color: var(--awaiting-reply);
+      }
+
+      .status[data-signal="passive"] {
+        color: var(--subtle-foreground);
+      }
+
+      .branch {
+        display: inline-flex;
+        min-width: 28px;
+        flex: 1 1 auto;
+        align-items: center;
+        gap: 4px;
+        overflow: hidden;
+        color: var(--subtle-foreground);
+      }
+
+      .branch span {
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      .fact {
+        flex: none;
+      }
+
+      .fact[data-kind="divergence"],
+      .fact[data-kind="pull-request"] {
+        color: color-mix(in oklch, var(--primary) 78%, var(--sidebar-foreground));
+      }
+
+      .fact[data-kind="clean"] {
+        color: var(--success);
+      }
+
+      .fact[data-kind="changes"] {
+        color: color-mix(
+          in oklch,
+          var(--warning-text) 82%,
+          var(--sidebar-foreground)
+        );
+      }
+
+      .fact[data-kind="failed"] {
+        color: var(--destructive);
+      }
+
+      .collapsed-signal {
+        display: none;
+      }
+
+      .project[data-collapsed="true"] .collapsed-signal {
+        display: grid;
+        grid-template-columns: repeat(3, 2px);
+        gap: 1px;
+        color: var(--primary);
+      }
+
+      .collapsed-signal i {
+        width: 2px;
+        height: 2px;
+        background: currentColor;
+      }
+
+      svg {
+        display: block;
+      }
+
+      @keyframes pixel-wave {
+        0%,
+        100% {
+          opacity: 0.12;
+        }
+        25% {
+          opacity: 0.42;
+        }
+        50% {
+          opacity: 0.95;
+        }
+      }
+
+      @media (prefers-reduced-motion: no-preference) {
+        .activity[data-signal="working"] i:nth-child(7),
+        .activity[data-signal="working"] i:nth-child(8),
+        .activity[data-signal="working"] i:nth-child(9),
+        .activity[data-signal="working"] i:nth-child(12),
+        .activity[data-signal="working"] i:nth-child(14),
+        .activity[data-signal="working"] i:nth-child(17),
+        .activity[data-signal="working"] i:nth-child(18),
+        .activity[data-signal="working"] i:nth-child(19) {
+          animation: pixel-wave 1.4s steps(1, end) infinite;
+          animation-delay: calc(var(--phase) * -70ms);
+        }
+      }
+
+      @media (max-width: 360px) {
+        .sidebar {
+          width: 100%;
+        }
+
+        .workspace-meta {
+          gap: 6px;
+        }
+
+        .fact[data-optional="true"] {
+          display: none;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <nav class="sidebar" aria-label="BBamir workspaces">
+      <button class="add-repository" type="button">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+          <path d="M8 2.5v11M2.5 8h11" stroke="currentColor" stroke-width="1.25" stroke-linecap="round" />
+        </svg>
+        Add repository
+      </button>
+
+      <div class="project-stack">
+        <section class="project" aria-label="Ecto">
+          <div class="project-header">
+            <button class="project-toggle" type="button" aria-expanded="true">
+              <svg class="chevron" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                <path d="m4.25 6.25 3.75 3.5 3.75-3.5" stroke="currentColor" stroke-width="1.35" stroke-linecap="round" stroke-linejoin="round" />
+              </svg>
+              <svg class="project-icon" viewBox="0 0 18 18" fill="none" aria-hidden="true">
+                <path d="m9 1.7 6.3 3.55v7.5L9 16.3l-6.3-3.55v-7.5L9 1.7Z" stroke="currentColor" stroke-width="1.15" />
+                <path d="m2.9 5.4 6.1 3.45 6.1-3.45M9 8.85v7.1" stroke="currentColor" stroke-width="1.15" />
+                <path d="m5.9 3.45 6.2 3.55" stroke="currentColor" stroke-width="1.15" />
+              </svg>
+              <span class="project-name">Ecto</span>
+              <span class="collapsed-signal" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span>
+            </button>
+            <button class="icon-button" type="button" aria-label="New workspace in Ecto">
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                <path d="M8 2.5v11M2.5 8h11" stroke="currentColor" stroke-width="1.25" stroke-linecap="round" />
+              </svg>
+            </button>
+          </div>
+
+          <div class="workspace-list">
+            <div class="workspace-list-inner">
+              <button class="workspace" type="button">
+                <span class="activity" data-signal="ready" aria-label="Ready workspace"></span>
+                <span class="workspace-title">document-generator</span>
+                <span class="workspace-meta">
+                  <span class="status" data-signal="ready">Ready</span>
+                  <span class="branch">
+                    <svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M5 3.2a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0ZM14 4.7a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3ZM5 12.8a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0Z" stroke="currentColor"/><path d="M3.5 4.7v6.6M12.5 4.7v1.1c0 2.2-1.8 4-4 4h-5" stroke="currentColor" stroke-linecap="round"/></svg>
+                    <span>document-generator</span>
+                  </span>
+                  <span class="fact" data-kind="divergence">↑15</span>
+                  <span class="fact" data-kind="changes">1 change</span>
+                </span>
+              </button>
+
+              <button class="workspace" type="button">
+                <span class="activity" data-signal="working" aria-label="Working workspace"></span>
+                <span class="workspace-title">Shipments</span>
+                <span class="workspace-meta">
+                  <span class="status" data-signal="working">Working</span>
+                  <span class="branch">
+                    <svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M5 3.2a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0ZM14 4.7a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3ZM5 12.8a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0Z" stroke="currentColor"/><path d="M3.5 4.7v6.6M12.5 4.7v1.1c0 2.2-1.8 4-4 4h-5" stroke="currentColor" stroke-linecap="round"/></svg>
+                    <span>bb/discuss-spencer-shipment-redesign</span>
+                  </span>
+                  <span class="fact" data-kind="divergence">↓21</span>
+                  <span class="fact" data-kind="changes">21 changes</span>
+                </span>
+              </button>
+
+              <button class="workspace" type="button" aria-current="page">
+                <span class="activity" data-signal="working" aria-label="Working workspace"></span>
+                <span class="workspace-title">bb/fix-reui-mcp-access-in-thr_5p54ehryjx</span>
+                <span class="workspace-meta">
+                  <span class="status" data-signal="working">Working</span>
+                  <span class="branch">
+                    <svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M5 3.2a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0ZM14 4.7a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3ZM5 12.8a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0Z" stroke="currentColor"/><path d="M3.5 4.7v6.6M12.5 4.7v1.1c0 2.2-1.8 4-4 4h-5" stroke="currentColor" stroke-linecap="round"/></svg>
+                    <span>bb/fix-reui-mcp-access-in-thr_5p54ehryjx</span>
+                  </span>
+                  <span class="fact" data-kind="clean">Clean</span>
+                </span>
+              </button>
+
+              <button class="workspace" type="button">
+                <span class="activity" data-signal="awaiting-reply" aria-label="Awaiting Reply workspace"></span>
+                <span class="workspace-title">Sku Allocation</span>
+                <span class="workspace-meta">
+                  <span class="status" data-signal="awaiting-reply">Awaiting Reply</span>
+                  <span class="branch">
+                    <svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M5 3.2a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0ZM14 4.7a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3ZM5 12.8a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0Z" stroke="currentColor"/><path d="M3.5 4.7v6.6M12.5 4.7v1.1c0 2.2-1.8 4-4 4h-5" stroke="currentColor" stroke-linecap="round"/></svg>
+                    <span>agent/sku-allocation</span>
+                  </span>
+                  <span class="fact" data-kind="divergence">↑21</span>
+                  <span class="fact" data-kind="clean" data-optional="true">Clean</span>
+                  <span class="fact" data-kind="pull-request">PR #85 ✓</span>
+                </span>
+              </button>
+
+              <button class="workspace" type="button">
+                <span class="activity" data-signal="waiting" aria-label="Waiting workspace"></span>
+                <span class="workspace-title">E2E Demo</span>
+                <span class="workspace-meta">
+                  <span class="status" data-signal="waiting">Waiting</span>
+                  <span class="branch">
+                    <svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M5 3.2a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0ZM14 4.7a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3ZM5 12.8a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0Z" stroke="currentColor"/><path d="M3.5 4.7v6.6M12.5 4.7v1.1c0 2.2-1.8 4-4 4h-5" stroke="currentColor" stroke-linecap="round"/></svg>
+                    <span>amir/e2e-demo</span>
+                  </span>
+                  <span class="fact" data-kind="divergence">↑21</span>
+                  <span class="fact" data-kind="clean">Clean</span>
+                </span>
+              </button>
+
+              <button class="workspace" type="button">
+                <span class="activity" data-signal="failed" aria-label="Failed workspace"></span>
+                <span class="workspace-title">bb/add-size-context-component-thr_8r4z6kiu7k</span>
+                <span class="workspace-meta">
+                  <span class="status" data-signal="failed">Failed</span>
+                  <span class="branch">
+                    <svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M5 3.2a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0ZM14 4.7a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3ZM5 12.8a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0Z" stroke="currentColor"/><path d="M3.5 4.7v6.6M12.5 4.7v1.1c0 2.2-1.8 4-4 4h-5" stroke="currentColor" stroke-linecap="round"/></svg>
+                    <span>bb/add-size-context-component-thr_8r4z6kiu7k</span>
+                  </span>
+                  <span class="fact" data-kind="failed">PR #92 ×</span>
+                </span>
+              </button>
+            </div>
+          </div>
+        </section>
+
+        <section class="project" aria-label="BBamir">
+          <div class="project-header">
+            <button class="project-toggle" type="button" aria-expanded="true">
+              <svg class="chevron" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                <path d="m4.25 6.25 3.75 3.5 3.75-3.5" stroke="currentColor" stroke-width="1.35" stroke-linecap="round" stroke-linejoin="round" />
+              </svg>
+              <svg class="project-icon" viewBox="0 0 18 18" fill="none" aria-hidden="true">
+                <path d="M6.2 2.2h5.6M7.2 2.2v4.1l-4.3 7.2c-.65 1.08.13 2.45 1.4 2.45h9.4c1.27 0 2.05-1.37 1.4-2.45l-4.3-7.2V2.2" stroke="currentColor" stroke-width="1.15" stroke-linecap="round" stroke-linejoin="round" />
+                <path d="M5.5 11.2h7" stroke="currentColor" stroke-width="1.15" stroke-linecap="round" />
+              </svg>
+              <span class="project-name">BBamir</span>
+              <span class="project-account">@amir</span>
+              <span class="collapsed-signal" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span>
+            </button>
+            <button class="icon-button" type="button" aria-label="New workspace in BBamir">
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                <path d="M8 2.5v11M2.5 8h11" stroke="currentColor" stroke-width="1.25" stroke-linecap="round" />
+              </svg>
+            </button>
+          </div>
+
+          <div class="workspace-list">
+            <div class="workspace-list-inner">
+              <button class="workspace" type="button">
+                <span class="activity" data-signal="ready" aria-label="Ready workspace"></span>
+                <span class="workspace-title">bb iphone emulator</span>
+                <span class="workspace-meta">
+                  <span class="status" data-signal="ready">Ready</span>
+                  <span class="branch">
+                    <svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M5 3.2a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0ZM14 4.7a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3ZM5 12.8a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0Z" stroke="currentColor"/><path d="M3.5 4.7v6.6M12.5 4.7v1.1c0 2.2-1.8 4-4 4h-5" stroke="currentColor" stroke-linecap="round"/></svg>
+                    <span>feature/phone-emulator</span>
+                  </span>
+                  <span class="fact" data-kind="divergence">↓195</span>
+                  <span class="fact" data-kind="clean" data-optional="true">Clean</span>
+                  <span class="fact" data-kind="pull-request">PR #2 ✓</span>
+                </span>
+              </button>
+
+              <button class="workspace" type="button">
+                <span class="activity" data-signal="passive" aria-hidden="true"></span>
+                <span class="workspace-title">bbamir ios app</span>
+                <span class="workspace-meta">
+                  <span class="status" data-signal="passive">Idle</span>
+                  <span class="branch">
+                    <svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M5 3.2a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0ZM14 4.7a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3ZM5 12.8a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0Z" stroke="currentColor"/><path d="M3.5 4.7v6.6M12.5 4.7v1.1c0 2.2-1.8 4-4 4h-5" stroke="currentColor" stroke-linecap="round"/></svg>
+                    <span>main</span>
+                  </span>
+                  <span class="fact" data-kind="changes">9 changes</span>
+                </span>
+              </button>
+
+              <button class="workspace" type="button">
+                <span class="activity" data-signal="working" aria-label="Working workspace"></span>
+                <span class="workspace-title">CI Checks</span>
+                <span class="workspace-meta">
+                  <span class="status" data-signal="working">Working</span>
+                  <span class="branch">
+                    <svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M5 3.2a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0ZM14 4.7a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3ZM5 12.8a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0Z" stroke="currentColor"/><path d="M3.5 4.7v6.6M12.5 4.7v1.1c0 2.2-1.8 4-4 4h-5" stroke="currentColor" stroke-linecap="round"/></svg>
+                    <span>fix/ci-checks</span>
+                  </span>
+                  <span class="fact" data-kind="divergence">↓196</span>
+                  <span class="fact" data-kind="clean">Clean</span>
+                </span>
+              </button>
+
+              <button class="workspace" type="button">
+                <span class="activity" data-signal="awaiting-reply" aria-label="Awaiting Reply workspace"></span>
+                <span class="workspace-title">bb/plugin-installer</span>
+                <span class="workspace-meta">
+                  <span class="status" data-signal="awaiting-reply">Awaiting Reply</span>
+                  <span class="branch">
+                    <svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M5 3.2a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0ZM14 4.7a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3ZM5 12.8a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0Z" stroke="currentColor"/><path d="M3.5 4.7v6.6M12.5 4.7v1.1c0 2.2-1.8 4-4 4h-5" stroke="currentColor" stroke-linecap="round"/></svg>
+                    <span>bb/plugin-installer</span>
+                  </span>
+                  <span class="fact" data-kind="divergence">↓3</span>
+                  <span class="fact" data-kind="clean">Clean</span>
+                </span>
+              </button>
+
+              <button class="workspace" type="button">
+                <span class="activity" data-signal="awaiting-reply" aria-label="Awaiting Reply workspace"></span>
+                <span class="workspace-title">bb/improve-bbamir-notification-plugin-commands</span>
+                <span class="workspace-meta">
+                  <span class="status" data-signal="awaiting-reply">Awaiting Reply</span>
+                  <span class="branch">
+                    <svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M5 3.2a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0ZM14 4.7a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3ZM5 12.8a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0Z" stroke="currentColor"/><path d="M3.5 4.7v6.6M12.5 4.7v1.1c0 2.2-1.8 4-4 4h-5" stroke="currentColor" stroke-linecap="round"/></svg>
+                    <span>bb/improve-bbamir-notification-plugin-commands</span>
+                  </span>
+                  <span class="fact" data-kind="changes">3 changes</span>
+                </span>
+              </button>
+            </div>
+          </div>
+        </section>
+      </div>
+    </nav>
+
+    <script>
+      const PIXEL_COUNT = 25;
+
+      document.querySelectorAll(".activity").forEach((matrix) => {
+        for (let index = 0; index < PIXEL_COUNT; index += 1) {
+          const pixel = document.createElement("i");
+          pixel.style.setProperty(
+            "--phase",
+            String((index % 5) + Math.floor(index / 5)),
+          );
+          matrix.append(pixel);
+        }
+      });
+
+      document.querySelectorAll(".project-toggle").forEach((toggle) => {
+        toggle.addEventListener("click", () => {
+          const project = toggle.closest(".project");
+          const collapsed = project.dataset.collapsed === "true";
+          project.dataset.collapsed = String(!collapsed);
+          toggle.setAttribute("aria-expanded", String(collapsed));
+        });
+      });
+
+      document.querySelectorAll(".workspace").forEach((workspace) => {
+        workspace.addEventListener("click", () => {
+          document
+            .querySelectorAll('.workspace[aria-current="page"]')
+            .forEach((selected) => selected.removeAttribute("aria-current"));
+          workspace.setAttribute("aria-current", "page");
+        });
+      });
+    </script>
+  </body>
+</html>

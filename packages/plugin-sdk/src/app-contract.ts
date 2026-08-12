@@ -145,6 +145,13 @@ export interface PluginThreadContextBarProps {
    * Experimental: see docs/api_to_audit.md.
    */
   experimental_registerCloseHandler?: (handler: (() => boolean) | null) => void;
+  /**
+   * Closes the host pane that contains this context bar. The host provides it
+   * only when the bar is mounted in a closeable split pane.
+   *
+   * Experimental: see docs/api_to_audit.md.
+   */
+  experimental_closePane?: () => void;
 }
 
 /**
@@ -163,6 +170,13 @@ export interface PluginNewThreadContextBarProps {
    * Experimental: see docs/api_to_audit.md.
    */
   experimental_registerCloseHandler?: (handler: (() => boolean) | null) => void;
+  /**
+   * Closes the host pane that contains this context bar. The host provides it
+   * only when the bar is mounted in a closeable split pane.
+   *
+   * Experimental: see docs/api_to_audit.md.
+   */
+  experimental_closePane?: () => void;
 }
 
 /**

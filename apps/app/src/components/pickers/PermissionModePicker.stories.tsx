@@ -57,7 +57,10 @@ const noop = () => {};
 export function Overview() {
   return (
     <StoryCard>
-      <StoryRow label="default" hint="muted by default — used in prompt-box only">
+      <StoryRow
+        label="default"
+        hint="muted by default — used in prompt-box only"
+      >
         <PermissionModePicker
           value="accept-edits"
           options={allOptions}
@@ -65,7 +68,7 @@ export function Overview() {
           supported
         />
       </StoryRow>
-      <StoryRow label="full access selected" hint='warning tone'>
+      <StoryRow label="full access selected" hint="warning tone">
         <PermissionModePicker
           value="full"
           options={allOptions}
@@ -114,7 +117,7 @@ export function Overview() {
           modal={false}
         />
       </StoryRow>
-      <StoryRow label="wrapping menu" hint="long labels and descriptions">
+      <StoryRow label="wrapping menu" hint="long labels without subtext">
         <PermissionModePicker
           value="accept-edits"
           options={longOptions}
@@ -125,5 +128,20 @@ export function Overview() {
         />
       </StoryRow>
     </StoryCard>
+  );
+}
+
+export function OpenMenu() {
+  return (
+    <div className="min-h-80 p-12">
+      <PermissionModePicker
+        value="auto"
+        options={allOptions}
+        onChange={noop}
+        supported
+        defaultOpen
+        modal={false}
+      />
+    </div>
   );
 }

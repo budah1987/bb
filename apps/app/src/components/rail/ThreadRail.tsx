@@ -87,9 +87,7 @@ export interface ThreadRailProps {
  *
  * Renders nothing at all on compact surfaces. A 288px card over a conversation
  * is a wide-viewport affordance, and in the standalone PWA it would be most of
- * the screen — {@link useIsRailVisible} deliberately does not distinguish
- * "hidden because narrow" from "hidden because you hid it", so the compact
- * gates live here at the render instead of writing the preference.
+ * the screen.
  */
 export function ThreadRail({ threadId }: ThreadRailProps) {
   const isRailVisible = useIsRailVisible();
@@ -126,36 +124,35 @@ export function ThreadRail({ threadId }: ThreadRailProps) {
             : "pointer-events-none translate-x-full opacity-0",
         )}
       >
-        <div className="min-h-0 overflow-y-auto py-1">
-          <div className="flex min-w-0 flex-col px-1.5">
-            <RailPanelTitle>Environment</RailPanelTitle>
-            <div className={RAIL_SECTION_STACK_CLASS}>
-              {/* Keep section state for the exit animation, but pause hidden work. */}
-              <LocalServersSection
-                threadId={threadId}
-                enabled={isRailVisible}
-              />
-              <BranchHealthSection
-                threadId={threadId}
-                enabled={isRailVisible}
-              />
-              <PreviewSection threadId={threadId} enabled={isRailVisible} />
-              <ReviewQueueSection threadId={threadId} enabled={isRailVisible} />
-              <FeedbackReviewSection
-                threadId={threadId}
-                enabled={isRailVisible}
-              />
-              <PluginThreadRailSections
-                threadId={threadId}
-                enabled={isRailVisible}
-              />
-            </div>
-          </div>
-          <div className="mt-1 border-t border-border-hairline pt-1">
-            <NotesPanel threadId={threadId} enabled={isRailVisible} />
-          </div>
-        </div>
+        <RailContents threadId={threadId} enabled={isRailVisible} />
       </aside>
+    </div>
+  );
+}
+
+function RailContents({
+  threadId,
+  enabled,
+}: {
+  threadId: string;
+  enabled: boolean;
+}) {
+  return (
+    <div className="min-h-0 flex-1 overflow-y-auto py-1">
+      <div className="flex min-w-0 flex-col px-1.5">
+        <RailPanelTitle>Environment</RailPanelTitle>
+        <div className={RAIL_SECTION_STACK_CLASS}>
+          <LocalServersSection threadId={threadId} enabled={enabled} />
+          <BranchHealthSection threadId={threadId} enabled={enabled} />
+          <PreviewSection threadId={threadId} enabled={enabled} />
+          <ReviewQueueSection threadId={threadId} enabled={enabled} />
+          <FeedbackReviewSection threadId={threadId} enabled={enabled} />
+          <PluginThreadRailSections threadId={threadId} enabled={enabled} />
+        </div>
+      </div>
+      <div className="mt-1 border-t border-border-hairline pt-1">
+        <NotesPanel threadId={threadId} enabled={enabled} />
+      </div>
     </div>
   );
 }

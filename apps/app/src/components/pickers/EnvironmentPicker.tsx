@@ -140,7 +140,7 @@ export function EnvironmentPickerUI({
   const newWorktreeDisabledReason =
     workspaceDisabledReason ?? worktreeDisabledReason ?? null;
   const reuseDisabledReason = reuseDisabled
-    ? "No worktrees in this project yet"
+    ? "No existing workspaces in this project yet"
     : null;
 
   const parsed = useMemo(() => parseEnvironmentValue(value), [value]);
@@ -184,7 +184,7 @@ export function EnvironmentPickerUI({
     }
     if (parsed.type === "reuse") {
       return {
-        modeLabel: "Reuse worktree",
+        modeLabel: "Reuse workspace",
         compactModeLabel: "Reuse",
         icon: getEnvironmentWorkspaceLabelIconName("managed-worktree"),
       };
@@ -202,7 +202,14 @@ export function EnvironmentPickerUI({
       compactModeLabel,
       icon,
     };
-  }, [parsed, localLabel, isLocal, hostUnavailableReason, host, selectedMachineName]);
+  }, [
+    parsed,
+    localLabel,
+    isLocal,
+    hostUnavailableReason,
+    host,
+    selectedMachineName,
+  ]);
 
   return (
     <DropdownMenu defaultOpen={defaultOpen} modal={modal}>
@@ -364,7 +371,7 @@ function EnvironmentOptionsSection({
             }}
           />
           <EnvironmentMenuItem
-            label="Existing worktree"
+            label="Existing workspace"
             description={reuseDisabledReason ?? undefined}
             icon={getEnvironmentWorkspaceLabelIconName("managed-worktree")}
             selected={selectedType === "reuse"}
@@ -440,7 +447,7 @@ function MachineGroupedEnvironmentOptions({
       <DropdownMenuSeparator />
       <DropdownMenuGroup>
         <EnvironmentMenuItem
-          label="Existing worktree"
+          label="Existing workspace"
           description={reuseDisabledReason ?? undefined}
           icon={getEnvironmentWorkspaceLabelIconName("managed-worktree")}
           selected={selectedType === "reuse"}
@@ -589,9 +596,7 @@ function EnvironmentMenuItem({
           )}
         />
         <span className="flex min-w-0 flex-col">
-          <span className="whitespace-normal break-words text-xs">
-            {label}
-          </span>
+          <span className="whitespace-normal break-words text-xs">{label}</span>
           {description ? (
             <span className="mt-0.5 whitespace-normal break-words text-xs leading-snug text-muted-foreground">
               {description}

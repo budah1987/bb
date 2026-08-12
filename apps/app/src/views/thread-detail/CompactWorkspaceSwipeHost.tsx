@@ -2,6 +2,10 @@ import { useEffect, useRef, useState } from "react";
 import type { PointerEvent as ReactPointerEvent, ReactNode } from "react";
 import { flushSync } from "react-dom";
 import { useMediaQuery } from "@bb/shared-ui/hooks/use-media-query";
+import {
+  cycleCompactConversation,
+  hasCompactConversationCycleHandler,
+} from "bb-plugin-conductor-workspaces/compact-conversation-navigation";
 import { isBlockingOverlayOpen } from "@/lib/swipe-gesture-targets";
 import type { PaneContent, PaneNode } from "@/lib/split-layout";
 import { CompactWorkspacePreviewSurface } from "./CompactWorkspacePreviewSurface";
@@ -28,6 +32,7 @@ const SWIPE_LAYER_CLASS = "flex min-h-0 min-w-0 flex-1 flex-col p-4 md:p-5";
 
 type SwipeDestination =
   | { kind: "pane"; paneId: string; content: PaneContent }
+  | { kind: "conversation" }
   | { kind: "command-center" }
   | { kind: "right-panel" }
   | { kind: "return"; paneId: string; content: PaneContent | null };
@@ -52,6 +57,13 @@ interface SwipeSession {
   lastTimeMs: number;
   velocityX: number;
   isDragging: boolean;
+  lastMoveEvent: PointerEvent | null;
+}
+
+function cycleConversation(
+  direction: WorkspaceSwipeDirection,
+): void {
+  cycleCompactConversation(direction);
 }
 
 export interface CompactWorkspaceSwipeHostProps {
@@ -177,6 +189,9 @@ export function CompactWorkspaceSwipeHost({
   const sessionRef = useRef<SwipeSession | null>(null);
   const previewRef = useRef<SwipePreview | null>(null);
   const teardownRef = useRef<(() => void) | null>(null);
+  const pointerMoveRef = useRef<((event: PointerEvent) => void) | null>(null);
+  const pointerUpRef = useRef<((event: PointerEvent) => void) | null>(null);
+  const pointerAbortRef = useRef<((event: PointerEvent) => void) | null>(null);
   const settleTimerRef = useRef<number | null>(null);
   // Stamped with the content it was resolved against, so a surface that changes
   // mid-gesture drops the travelling shell on the very same render instead of
@@ -303,6 +318,12 @@ export function CompactWorkspaceSwipeHost({
     if (target.kind === "right-panel") {
       return { direction: "left", destination: target };
     }
+    if (hasCompactConversationCycleHandler()) {
+      return {
+        direction: target.direction,
+        destination: { kind: "conversation" },
+      };
+    }
     const paneId = resolveWorkspaceSwipePaneId(
       panes,
       focusedPaneId,
@@ -348,11 +369,23 @@ export function CompactWorkspaceSwipeHost({
     ) {
       return { announcement: "Command Center", run: onOpenCommandCenter };
     }
-    if (outcome.kind === "right-panel" && destination.kind === "right-panel") {
+    if (
+      outcome.kind === "right-panel" &&
+      destination.kind === "right-panel"
+    ) {
       return { announcement: "Right panel", run: onOpenRightPanel };
     }
     if (outcome.kind !== "pane") {
       return null;
+    }
+    if (destination.kind === "conversation") {
+      return {
+        announcement:
+          current.direction === "left"
+            ? "Next conversation"
+            : "Previous conversation",
+        run: () => cycleConversation(current.direction),
+      };
     }
     if (destination.kind === "pane") {
       return {
@@ -398,6 +431,7 @@ export function CompactWorkspaceSwipeHost({
       lastTimeMs: nowMs,
       velocityX: 0,
       isDragging: false,
+      lastMoveEvent: null,
     };
     sessionRef.current = session;
 
@@ -408,6 +442,9 @@ export function CompactWorkspaceSwipeHost({
       window.removeEventListener("lostpointercapture", onPointerAbort);
       window.removeEventListener("resize", onEnvironmentChange);
       window.removeEventListener("orientationchange", onEnvironmentChange);
+      pointerMoveRef.current = null;
+      pointerUpRef.current = null;
+      pointerAbortRef.current = null;
       teardownRef.current = null;
     };
 
@@ -428,6 +465,20 @@ export function CompactWorkspaceSwipeHost({
       if (committed === null) {
         applyMotion(0, session.width, true);
         afterSettle(restLayers);
+        return;
+      }
+      // Conversation changes and the compact panel are local UI actions. Run
+      // them at release, before any route or sheet change can interrupt the
+      // travelling layer's settle callback on mobile Safari.
+      if (
+        current.destination.kind === "conversation" ||
+        current.destination.kind === "right-panel"
+      ) {
+        restLayers();
+        if (committed.announcement !== null) {
+          setAnnouncement(committed.announcement);
+        }
+        committed.run();
         return;
       }
       applyMotion(
@@ -452,10 +503,12 @@ export function CompactWorkspaceSwipeHost({
     const onMove = (moveEvent: PointerEvent) => {
       if (
         sessionRef.current !== session ||
-        moveEvent.pointerId !== session.pointerId
+        moveEvent.pointerId !== session.pointerId ||
+        session.lastMoveEvent === moveEvent
       ) {
         return;
       }
+      session.lastMoveEvent = moveEvent;
       const deltaX = moveEvent.clientX - session.startX;
       const deltaY = moveEvent.clientY - session.startY;
 
@@ -520,6 +573,9 @@ export function CompactWorkspaceSwipeHost({
     const onEnvironmentChange = () => finish(false);
 
     teardownRef.current = teardown;
+    pointerMoveRef.current = onMove;
+    pointerUpRef.current = onPointerUp;
+    pointerAbortRef.current = onPointerAbort;
     window.addEventListener("pointermove", onMove, { passive: false });
     window.addEventListener("pointerup", onPointerUp);
     window.addEventListener("pointercancel", onPointerAbort);
@@ -534,6 +590,12 @@ export function CompactWorkspaceSwipeHost({
       data-workspace-swipe-host=""
       data-workspace-swipe-text-editing={isTextEditing ? "" : undefined}
       onPointerDown={handlePointerDown}
+      onPointerMove={(event) => pointerMoveRef.current?.(event.nativeEvent)}
+      onPointerUp={(event) => pointerUpRef.current?.(event.nativeEvent)}
+      onPointerCancel={(event) => pointerAbortRef.current?.(event.nativeEvent)}
+      onLostPointerCapture={(event) =>
+        pointerAbortRef.current?.(event.nativeEvent)
+      }
       onFocusCapture={(event) => {
         if (isWorkspaceSwipeTextEditingTarget(event.target)) {
           setIsTextEditing(true);
@@ -570,7 +632,8 @@ export function CompactWorkspaceSwipeHost({
           <CompactWorkspacePreviewSurface
             content={
               preview.destination.kind === "command-center" ||
-              preview.destination.kind === "right-panel"
+              preview.destination.kind === "right-panel" ||
+              preview.destination.kind === "conversation"
                 ? null
                 : preview.destination.content
             }

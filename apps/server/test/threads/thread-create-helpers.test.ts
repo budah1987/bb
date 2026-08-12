@@ -13,6 +13,7 @@ import { ApiError } from "../../src/errors.js";
 import {
   baseBranchSpecToStoredName,
   buildManagedBranchName,
+  buildUnmanagedBranchName,
   createThreadRecord,
 } from "../../src/services/threads/thread-create-helpers.js";
 import { sanitizeGeneratedBranchSlug } from "../../src/services/threads/title-generation.js";
@@ -36,7 +37,7 @@ describe("sanitizeGeneratedBranchSlug", () => {
 describe("buildManagedBranchName", () => {
   it("falls back to the full thread ID", () => {
     expect(buildManagedBranchName({ threadId: "thr_abc123def456" })).toBe(
-      "bb/thr_abc123def456",
+      "amir/thr_abc123def456",
     );
   });
 
@@ -46,7 +47,7 @@ describe("buildManagedBranchName", () => {
         branchSlug: "Fix login flow!",
         threadId: "thr_abc123def456",
       }),
-    ).toBe("bb/fix-login-flow-thr_abc123def456");
+    ).toBe("amir/fix-login-flow-thr_abc123def456");
   });
 
   it("falls back to the full thread ID when the slug is empty after sanitizing", () => {
@@ -55,7 +56,7 @@ describe("buildManagedBranchName", () => {
         branchSlug: "!!!",
         threadId: "thr_abc123def456",
       }),
-    ).toBe("bb/thr_abc123def456");
+    ).toBe("amir/thr_abc123def456");
   });
 
   it("produces unique names for threads with the same slug", () => {
@@ -68,6 +69,17 @@ describe("buildManagedBranchName", () => {
       threadId: "thr_abc123xyz789",
     });
     expect(a).not.toBe(b);
+  });
+});
+
+describe("buildUnmanagedBranchName", () => {
+  it("preserves the existing namespace for local branch creation", () => {
+    expect(
+      buildUnmanagedBranchName({
+        branchSlug: "Local branch",
+        threadId: "thr_abc123def456",
+      }),
+    ).toBe("bb/local-branch-thr_abc123def456");
   });
 });
 

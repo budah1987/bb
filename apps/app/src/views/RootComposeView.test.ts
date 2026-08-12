@@ -36,6 +36,7 @@ import {
   shouldNavigateAfterThreadCreate,
 } from "./RootComposeView";
 import {
+  buildReuseThreadOptions,
   isProjectSourceWorktreeUnavailable,
   resolveComposeHostId,
   resolveRootComposeEffectiveEnvironmentValue,
@@ -180,9 +181,32 @@ function makeReuseThreadOption(environmentId: string): ReuseThreadOption {
     environmentId,
     branchName: "feature",
     name: null,
+    workspaceDisplayKind: "managed-worktree",
     threads: [{ id: "thr_1", title: "Thread" }],
   };
 }
+
+describe("buildReuseThreadOptions", () => {
+  it("includes direct workspaces so their new-thread action can reuse them", () => {
+    const directThread: ThreadListEntry = {
+      ...makeThread({ id: "thr_direct", projectId: "proj_1" }),
+      environmentId: "env_direct",
+      environmentBranchName: "document-generator",
+      environmentWorkspaceDisplayKind: "other",
+    };
+
+    expect(buildReuseThreadOptions([directThread])).toEqual([
+      {
+        environmentId: "env_direct",
+        branchName: "document-generator",
+        name: null,
+        workspaceDisplayKind: "other",
+        hostName: null,
+        threads: [{ id: "thr_direct", title: "thr_direct" }],
+      },
+    ]);
+  });
+});
 
 function makeThread(args: MakeThreadArgs): ThreadListEntry {
   return {
@@ -1081,12 +1105,14 @@ describe("resolveRootComposePanelThreadId", () => {
             environmentId: "env_a",
             branchName: "main",
             name: null,
+            workspaceDisplayKind: "unmanaged-worktree",
             threads: [{ id: "thr_a", title: "Thread A" }],
           },
           {
             environmentId: "env_b",
             branchName: "feature",
             name: "Feature worktree",
+            workspaceDisplayKind: "managed-worktree",
             threads: [
               { id: "thr_b_recent", title: "Recent thread" },
               { id: "thr_b_old", title: "Old thread" },
@@ -1106,6 +1132,7 @@ describe("resolveRootComposePanelThreadId", () => {
             environmentId: "env_a",
             branchName: "main",
             name: null,
+            workspaceDisplayKind: "unmanaged-worktree",
             threads: [{ id: "thr_a", title: "Thread A" }],
           },
         ],

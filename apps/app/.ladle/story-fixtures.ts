@@ -251,6 +251,7 @@ export const STORY_WORKTREE_OPTIONS: readonly ReuseThreadOption[] = [
     environmentId: "env_review_flow",
     branchName: "bb/review-flow-thr_4hge9xn14m",
     name: null,
+    workspaceDisplayKind: "managed-worktree",
     threads: [
       { id: "thr_review", title: "Review flow cleanup" },
       { id: "thr_tests", title: "Backfill promptbox tests" },
@@ -260,6 +261,7 @@ export const STORY_WORKTREE_OPTIONS: readonly ReuseThreadOption[] = [
     environmentId: "env_timeline",
     branchName: "bb/timeline-pagination-thr_qfk8ksbxkk",
     name: "Timeline workspace",
+    workspaceDisplayKind: "managed-worktree",
     threads: [{ id: "thr_timeline", title: "Timeline pagination" }],
   },
 ];

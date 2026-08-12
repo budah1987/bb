@@ -37,21 +37,13 @@ export interface ResolveRootComposeEffectiveEnvironmentValueArgs {
 export const PROJECT_SOURCE_WORKTREE_DISABLED_REASON =
   "Project source is not a git repository";
 
-function isWorktreeWithEnv(thread: ThreadListEntry): boolean {
-  if (thread.environmentId === null) return false;
-  return (
-    thread.environmentWorkspaceDisplayKind === "managed-worktree" ||
-    thread.environmentWorkspaceDisplayKind === "unmanaged-worktree"
-  );
-}
-
 export function buildReuseThreadOptions(
   threads: readonly ThreadListEntry[],
   /** Host id → machine name, provided only when worktree rows should carry a
    * machine hint when more than one host exists. */
   hostNameById: ReadonlyMap<string, string> | null = null,
 ): ReuseThreadOption[] {
-  // One option per worktree env. Threads within each env are sorted
+  // One option per existing environment. Threads within each env are sorted
   // most-recently-active first so the picker preview surfaces the threads
   // the user is most likely to recognize. Only unarchived threads reach
   // here — `useThreads({ archived: false })` filters at the source. Envs
@@ -60,8 +52,11 @@ export function buildReuseThreadOptions(
   const branchByEnvironmentId = new Map<string, string | null>();
   const nameByEnvironmentId = new Map<string, string | null>();
   const hostIdByEnvironmentId = new Map<string, string | null>();
+  const workspaceDisplayKindByEnvironmentId = new Map<
+    string,
+    ThreadListEntry["environmentWorkspaceDisplayKind"]
+  >();
   for (const thread of threads) {
-    if (!isWorktreeWithEnv(thread)) continue;
     if (thread.environmentId === null) continue;
     let bucket = threadsByEnvironmentId.get(thread.environmentId);
     if (!bucket) {
@@ -73,6 +68,10 @@ export function buildReuseThreadOptions(
       );
       nameByEnvironmentId.set(thread.environmentId, thread.environmentName);
       hostIdByEnvironmentId.set(thread.environmentId, thread.environmentHostId);
+      workspaceDisplayKindByEnvironmentId.set(
+        thread.environmentId,
+        thread.environmentWorkspaceDisplayKind,
+      );
     }
     bucket.push(thread);
   }
@@ -86,6 +85,8 @@ export function buildReuseThreadOptions(
       environmentId,
       branchName: branchByEnvironmentId.get(environmentId) ?? null,
       name: nameByEnvironmentId.get(environmentId) ?? null,
+      workspaceDisplayKind:
+        workspaceDisplayKindByEnvironmentId.get(environmentId) ?? "other",
       hostName:
         hostNameById !== null && hostId !== null
           ? (hostNameById.get(hostId) ?? null)

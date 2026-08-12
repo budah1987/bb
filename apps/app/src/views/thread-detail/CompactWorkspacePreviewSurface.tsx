@@ -18,10 +18,13 @@ export function CompactWorkspacePreviewSurface({
 }: {
   /** `null` previews the Command Center (the root compose page). */
   content: PaneContent | null;
-  kind?: "pane" | "command-center" | "right-panel" | "return";
+  kind?: "pane" | "conversation" | "command-center" | "right-panel" | "return";
 }) {
   if (kind === "right-panel") {
     return <RightPanelShell />;
+  }
+  if (kind === "conversation") {
+    return <ThreadShell />;
   }
   if (content === null || content.kind === "new-thread") {
     return <CommandCenterShell />;

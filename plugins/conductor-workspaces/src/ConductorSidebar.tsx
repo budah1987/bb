@@ -11,7 +11,8 @@ import {
   DndContext,
   DragOverlay,
   KeyboardSensor,
-  PointerSensor,
+  MouseSensor,
+  TouchSensor,
   closestCenter,
   useSensor,
   useSensors,
@@ -159,10 +160,12 @@ function pullRequestLabel(pullRequest: PluginSidebarPullRequest): string {
 
 function WorkspaceMetadata({
   branchLabel,
+  signal,
   summary,
   pullRequest,
 }: {
   branchLabel: string;
+  signal: ReturnType<typeof workspaceSignal>;
   summary: WorkspaceGitSummary | null;
   pullRequest: PluginSidebarPullRequest | null;
 }) {
@@ -180,37 +183,37 @@ function WorkspaceMetadata({
 
   return (
     <span className="conductor-workspace-meta">
+      <SignalStatus signal={signal} />
       <span className="conductor-workspace-meta-item" data-kind="branch">
         <Icon name="GitBranch" aria-hidden className="size-3" />
         <span className="truncate">{branchLabel}</span>
       </span>
-      {divergence.length > 0 ? (
-        <span className="conductor-workspace-meta-item" data-kind="divergence">
-          {divergence.join(" ")}
-        </span>
-      ) : null}
-      {changedFiles ? (
-        <span
-          className="conductor-workspace-meta-item"
-          data-kind={summary?.changedFiles === 0 ? "clean" : "changes"}
-        >
-          <Icon
-            name={summary?.changedFiles === 0 ? "Check" : "FileDiff"}
-            aria-hidden
-            className="size-3"
-          />
-          {changedFiles}
-        </span>
-      ) : null}
-      {pullRequest ? (
-        <span
-          className="conductor-workspace-meta-item"
-          data-kind="pull-request"
-        >
-          <Icon name="GitPullRequest" aria-hidden className="size-3" />
-          {pullRequestLabel(pullRequest)}
-        </span>
-      ) : null}
+      <span className="conductor-workspace-facts">
+        {divergence.length > 0 ? (
+          <span
+            className="conductor-workspace-meta-item"
+            data-kind="divergence"
+          >
+            {divergence.join(" ")}
+          </span>
+        ) : null}
+        {changedFiles ? (
+          <span
+            className="conductor-workspace-meta-item"
+            data-kind={summary?.changedFiles === 0 ? "clean" : "changes"}
+          >
+            {changedFiles}
+          </span>
+        ) : null}
+        {pullRequest ? (
+          <span
+            className="conductor-workspace-meta-item"
+            data-kind="pull-request"
+          >
+            {pullRequestLabel(pullRequest)}
+          </span>
+        ) : null}
+      </span>
     </span>
   );
 }
@@ -822,11 +825,11 @@ function WorkspaceRow({
         <span className="conductor-workspace-title">{workspace.title}</span>
         <WorkspaceMetadata
           branchLabel={branchLabel}
+          signal={signal}
           summary={gitSummary}
           pullRequest={pullRequest}
         />
       </span>
-      <SignalStatus signal={signal} />
       {showJumpShortcut && jumpShortcut ? (
         <kbd
           aria-hidden
@@ -959,14 +962,17 @@ function WorkspaceDragPreview({
           signal={signal}
           label={statusLabel ? `${statusLabel} workspace` : undefined}
         />
-        <span className="min-w-0 flex-1 text-left">
-          <span className="block truncate text-xs font-medium text-sidebar-foreground">
-            {workspace.title}
-          </span>
-          <span className="block truncate text-2xs text-muted-foreground">
-            {workspace.branchName ??
-              `${workspace.threads.length} conversation${workspace.threads.length === 1 ? "" : "s"}`}
-          </span>
+        <span className="conductor-workspace-copy">
+          <span className="conductor-workspace-title">{workspace.title}</span>
+          <WorkspaceMetadata
+            branchLabel={
+              workspace.branchName ??
+              `${workspace.threads.length} conversation${workspace.threads.length === 1 ? "" : "s"}`
+            }
+            signal={signal}
+            summary={null}
+            pullRequest={null}
+          />
         </span>
       </div>
     </div>
@@ -1524,7 +1530,11 @@ export function ConductorSidebar({
     ReadonlyMap<string, WorkspaceGitSummary>
   >(() => new Map());
   const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
+    useSensor(MouseSensor, { activationConstraint: { distance: 4 } }),
+    useSensor(TouchSensor, {
+      // Let normal finger movement scroll the panel. A steady hold starts reorder.
+      activationConstraint: { delay: 300, tolerance: 8 },
+    }),
     useSensor(KeyboardSensor, {
       coordinateGetter: sortableKeyboardCoordinates,
     }),
