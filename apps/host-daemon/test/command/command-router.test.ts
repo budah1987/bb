@@ -346,6 +346,76 @@ describe("CommandRouter", () => {
     await runtimeManager.shutdownAll();
   });
 
+  it("admits another workspace before a busy workspace drains its queue", async () => {
+    const releaseReads = createDeferred<void>();
+    const quietWorkspaceStarted = createDeferred<void>();
+    let activeNoisyReads = 0;
+    const workspaces = new Map(
+      ["env-noisy", "env-quiet"].map((environmentId) => {
+        const fake = createFakeWorkspace(`/tmp/${environmentId}`);
+        const originalGetStatus = fake.workspace.getStatus;
+        fake.workspace.getStatus = async (options) => {
+          if (environmentId === "env-noisy") {
+            activeNoisyReads += 1;
+          } else {
+            quietWorkspaceStarted.resolve();
+          }
+          await releaseReads.promise;
+          if (environmentId === "env-noisy") {
+            activeNoisyReads -= 1;
+          }
+          return originalGetStatus(options);
+        };
+        return [environmentId, fake.workspace] as const;
+      }),
+    );
+    const harness = createHarness();
+    const runtimeManager = new RuntimeManager({
+      createRuntime: () => harness.runtime,
+      provisionWorkspace: async (options) => {
+        const workspacePath =
+          "path" in options ? options.path : options.targetPath;
+        const workspace = [...workspaces.values()].find(
+          (candidate) => candidate.path === workspacePath,
+        );
+        if (!workspace) throw new Error("Unexpected environment");
+        return workspace;
+      },
+    });
+    await Promise.all(
+      [...workspaces.keys()].map((environmentId) =>
+        runtimeManager.ensureEnvironment({
+          environmentId,
+          workspacePath: `/tmp/${environmentId}`,
+        }),
+      ),
+    );
+    const router = createRouter(harness, { runtimeManager });
+    const noisyRequests = Array.from({ length: 4 }, (_, index) =>
+      runRouterCommand({
+        command: createWorkspaceStatusCommand(
+          `merge-base-${index}`,
+          "env-noisy",
+        ),
+        requestId: `status-noisy-${index}`,
+        router,
+      }),
+    );
+    const quietRequest = runRouterCommand({
+      command: createWorkspaceStatusCommand("main", "env-quiet"),
+      requestId: "status-quiet",
+      router,
+    });
+
+    await quietWorkspaceStarted.promise;
+    expect(activeNoisyReads).toBe(1);
+
+    releaseReads.resolve();
+    const responses = await Promise.all([...noisyRequests, quietRequest]);
+    expect(responses.every((response) => response.ok)).toBe(true);
+    await runtimeManager.shutdownAll();
+  });
+
   it("does not warn for expected provision cancellation RPC failures", async () => {
     const harness = createHarness({ workspacePath: "/tmp/env-router" });
     const logger = {
