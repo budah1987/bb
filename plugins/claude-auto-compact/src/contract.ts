@@ -15,7 +15,7 @@ export type CompactSettings = z.infer<typeof compactSettingsSchema>;
 
 export const claudeAutoCompactRpcContract = defineRpcContract({
   getSettings: {
-    input: z.undefined(),
+    input: z.null(),
     output: compactSettingsSchema,
   },
   updateSettings: {

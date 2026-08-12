@@ -21,7 +21,7 @@ function ClaudeAutoCompactSettings() {
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
-    const next = await rpc.call("getSettings", undefined);
+    const next = await rpc.call("getSettings", null);
     setSettings(next);
     setError(null);
   }, [rpc]);

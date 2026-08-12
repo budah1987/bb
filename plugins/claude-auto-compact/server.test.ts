@@ -32,6 +32,10 @@ describe("Claude auto compact plugin", () => {
     const host = createFakePluginHost({ pluginId: "claude-auto-compact" });
     await plugin(host.bb);
 
+    await expect(host.harness.callRpc("getSettings", null)).resolves.toEqual({
+      enabled: true,
+      autoCompactWindow: 300_000,
+    });
     expect(host.harness.resolveClaudeCodeSessionConfiguration(context)).toEqual(
       {
         autoCompactEnabled: true,

@@ -84,6 +84,10 @@ import {
   serializeSplitLayout,
 } from "@/lib/split-layout/persistence";
 import { appToast } from "@/components/ui/app-toast.js";
+import {
+  SpacePanelTransition,
+  type SpacePanelDirection,
+} from "./SpacePanelTransition";
 
 const NEW_THREAD_PANE_CONTENT = { kind: "new-thread" } as const;
 const ACTIVE_SPACE_STORAGE_KEY = "bb.spaces.active";
@@ -234,6 +238,8 @@ export function AppSidebar({
       : (localStorage.getItem(ACTIVE_SPACE_STORAGE_KEY) ?? DEFAULT_SPACE_ID),
   );
   const [spaceEditor, setSpaceEditor] = useState<SpaceEditorState>(null);
+  const [spacePanelDirection, setSpacePanelDirection] =
+    useState<SpacePanelDirection>(1);
   const moveProjectMutation = useMoveProjectToSpace();
   const activeSpace =
     spaces.find((space) => space.id === activeSpaceId) ?? spaces[0];
@@ -250,9 +256,18 @@ export function AppSidebar({
   }, []);
 
   const switchSpace = useCallback(
-    (spaceId: string): boolean => {
+    (spaceId: string, requestedDirection?: SpacePanelDirection): boolean => {
       if (!spaces.some((space) => space.id === spaceId)) return false;
       if (spaceId === effectiveActiveSpaceId) return true;
+      const currentIndex = spaces.findIndex(
+        (space) => space.id === effectiveActiveSpaceId,
+      );
+      const destinationIndex = spaces.findIndex(
+        (space) => space.id === spaceId,
+      );
+      setSpacePanelDirection(
+        requestedDirection ?? (destinationIndex > currentIndex ? 1 : -1),
+      );
       const currentLayout = store.get(splitLayoutAtom);
       const currentView: StoredSpaceView = {
         route: `${location.pathname}${location.search}${location.hash}`,
@@ -315,7 +330,7 @@ export function AppSidebar({
       const nextIndex =
         (currentIndex + direction + spaces.length) % spaces.length;
       const nextSpace = spaces[nextIndex];
-      if (nextSpace) switchSpace(nextSpace.id);
+      if (nextSpace) switchSpace(nextSpace.id, direction);
     },
     [effectiveActiveSpaceId, spaces, switchSpace],
   );
@@ -563,8 +578,12 @@ export function AppSidebar({
             activeSpace ? getSpaceSidebarStyle(activeSpace.color) : undefined
           }
         >
-          {showTopReserve ? (
-            /* Top reserve that keeps the sidebar's content (New Thread / New
+          <SpacePanelTransition
+            activeSpaceId={effectiveActiveSpaceId}
+            direction={spacePanelDirection}
+          >
+            {showTopReserve ? (
+              /* Top reserve that keeps the sidebar's content (New Thread / New
              Projects) anchored below the title-bar chrome, mirroring
              the page-header height on the content side. The sidebar toggle is
              pinned at the app's top-left for every chrome (see AppLayout's
@@ -577,84 +596,85 @@ export function AppSidebar({
              of the pinned toggle/traffic lights on the left and the resize
              handle on the right; they opt out of the desktop drag region so
              clicks register. */
-            <div
-              data-testid="app-sidebar-top-reserve-row"
-              className={cn(
-                CHROME_ROW_CLASS,
-                "order-[-2] shrink-0 justify-end px-2",
-                usesDesktopChrome && MACOS_WINDOW_DRAG_CLASS,
-              )}
-            >
-              <SidebarHistoryNavigationControls
-                onNavigate={closeOnMobile}
+              <div
+                data-testid="app-sidebar-top-reserve-row"
                 className={cn(
-                  "group-data-[collapsible=icon]:hidden",
-                  usesDesktopChrome && MACOS_CHROME_CONTROL_NO_DRAG_CLASS,
+                  CHROME_ROW_CLASS,
+                  "order-[-2] shrink-0 justify-end px-2",
+                  usesDesktopChrome && MACOS_WINDOW_DRAG_CLASS,
                 )}
-              />
-            </div>
-          ) : null}
-          <SidebarUsageLimits />
-          <div
-            data-testid="app-sidebar-primary-actions"
-            className="shrink-0 px-2 py-2.5 group-data-[collapsible=icon]:hidden"
-          >
-            <ProjectListActionButtons
-              splitEnabled={threadSplitsEnabled}
-              newThreadSplit={newThreadSplit}
-              onNewChat={handleNewChat}
-              threadSearch={{
-                activeDescendantId: threadSearch.activeDescendantId,
-                inputRef: threadSearch.inputRef,
-                isActive: threadSearch.isActive,
-                onActivate: threadSearch.onActivate,
-                onClose: threadSearch.onClose,
-                onQueryChange: threadSearch.onQueryChange,
-                query: threadSearch.query,
-              }}
-            />
-          </div>
-          <MobileCommandCenterSidebarAction
-            isActive={isRootView}
-            onSelect={handleCommandCenter}
-          />
-          <PluginNavSidebarItems
-            isCompactViewport={isCompactViewport}
-            onNavigate={closeOnMobile}
-            splitEnabled={threadSplitsEnabled}
-            toolsRoutePath={toolsRoutePath}
-          />
-          <SidebarContent>
-            {spaceEditor ? (
-              <SpaceEditor
-                key={
-                  spaceEditor.kind === "edit"
-                    ? `edit:${spaceEditor.space.id}`
-                    : "create"
-                }
-                editor={spaceEditor}
-                spaces={spaces}
-                onCancel={() => setSpaceEditor(null)}
-                onSaved={(spaceId) => {
-                  if (spaceId) setActiveSpaceOnly(spaceId);
-                  setSpaceEditor(null);
+              >
+                <SidebarHistoryNavigationControls
+                  onNavigate={closeOnMobile}
+                  className={cn(
+                    "group-data-[collapsible=icon]:hidden",
+                    usesDesktopChrome && MACOS_CHROME_CONTROL_NO_DRAG_CLASS,
+                  )}
+                />
+              </div>
+            ) : null}
+            <SidebarUsageLimits />
+            <div
+              data-testid="app-sidebar-primary-actions"
+              className="shrink-0 px-2 py-2.5 group-data-[collapsible=icon]:hidden"
+            >
+              <ProjectListActionButtons
+                splitEnabled={threadSplitsEnabled}
+                newThreadSplit={newThreadSplit}
+                onNewChat={handleNewChat}
+                threadSearch={{
+                  activeDescendantId: threadSearch.activeDescendantId,
+                  inputRef: threadSearch.inputRef,
+                  isActive: threadSearch.isActive,
+                  onActivate: threadSearch.onActivate,
+                  onClose: threadSearch.onClose,
+                  onQueryChange: threadSearch.onQueryChange,
+                  query: threadSearch.query,
                 }}
               />
-            ) : threadListProvider ? (
-              <PluginThreadList
-                slot={threadListProvider}
-                builtInFallback={builtInThreadList}
-                searchQuery={threadSearch.query}
-                onNavigate={threadSearch.onExternalThreadOpen}
-                activeSpaceId={effectiveActiveSpaceId}
-                moveProject={moveProject}
-                moveProjects={moveProjects}
-                spaces={spaces}
-              />
-            ) : (
-              builtInThreadList
-            )}
-          </SidebarContent>
+            </div>
+            <MobileCommandCenterSidebarAction
+              isActive={isRootView}
+              onSelect={handleCommandCenter}
+            />
+            <PluginNavSidebarItems
+              isCompactViewport={isCompactViewport}
+              onNavigate={closeOnMobile}
+              splitEnabled={threadSplitsEnabled}
+              toolsRoutePath={toolsRoutePath}
+            />
+            <SidebarContent>
+              {spaceEditor ? (
+                <SpaceEditor
+                  key={
+                    spaceEditor.kind === "edit"
+                      ? `edit:${spaceEditor.space.id}`
+                      : "create"
+                  }
+                  editor={spaceEditor}
+                  spaces={spaces}
+                  onCancel={() => setSpaceEditor(null)}
+                  onSaved={(spaceId) => {
+                    if (spaceId) setActiveSpaceOnly(spaceId);
+                    setSpaceEditor(null);
+                  }}
+                />
+              ) : threadListProvider ? (
+                <PluginThreadList
+                  slot={threadListProvider}
+                  builtInFallback={builtInThreadList}
+                  searchQuery={threadSearch.query}
+                  onNavigate={threadSearch.onExternalThreadOpen}
+                  activeSpaceId={effectiveActiveSpaceId}
+                  moveProject={moveProject}
+                  moveProjects={moveProjects}
+                  spaces={spaces}
+                />
+              ) : (
+                builtInThreadList
+              )}
+            </SidebarContent>
+          </SpacePanelTransition>
           <SpaceDock
             activeSpaceId={effectiveActiveSpaceId}
             spaces={spaces}
