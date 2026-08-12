@@ -191,6 +191,7 @@ function RetainedThreadDetailViews({
     >
       <ThreadDetailView
         surface="pane"
+        isRetainedViewActive={content.threadId === activeContent.threadId}
         projectId={content.projectId}
         threadId={content.threadId}
       />

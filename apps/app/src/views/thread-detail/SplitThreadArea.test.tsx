@@ -238,9 +238,11 @@ vi.mock("@/hooks/queries/sidebar-navigation-query", () => ({
 // test exercises SplitThreadArea's wiring without its dependency tree.
 vi.mock("./ThreadDetailView", () => ({
   ThreadDetailView: ({
+    isRetainedViewActive,
     projectId = "proj_personal",
     threadId = "thr-a",
   }: {
+    isRetainedViewActive?: boolean;
     projectId: string;
     threadId: string;
   }) => {
@@ -291,6 +293,7 @@ vi.mock("./ThreadDetailView", () => ({
       <div
         data-testid={`pane-${threadId}`}
         data-focused={pane?.isFocused ? "true" : "false"}
+        data-retained-view-active={isRetainedViewActive ? "true" : "false"}
         data-window-top-left-owner={pane?.ownsWindowTopLeft ? "true" : "false"}
       >
         <div
@@ -1763,6 +1766,14 @@ describe("SplitThreadArea", () => {
     expect(await screen.findByTestId("pane-thr-c")).toBeTruthy();
     expect(screen.getByTestId("pane-thr-a")).toBeTruthy();
     const retainedThread = screen.getByTestId("pane-thr-b");
+    expect(retainedThread.getAttribute("data-retained-view-active")).toBe(
+      "false",
+    );
+    expect(
+      screen
+        .getByTestId("pane-thr-c")
+        .getAttribute("data-retained-view-active"),
+    ).toBe("true");
     expect(retainedThread.style.display).toBe("none");
     expect(retainedThread.style.getPropertyPriority("display")).toBe(
       "important",
