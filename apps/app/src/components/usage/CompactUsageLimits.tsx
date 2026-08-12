@@ -405,7 +405,7 @@ export function SidebarUsageLimitsContent({
     <div
       data-testid="sidebar-usage-limits"
       className={cn(
-        "relative shrink-0 px-2 py-1 max-md:hidden pointer-coarse:hidden group-data-[collapsible=icon]:hidden",
+        "relative order-[-1] shrink-0 px-2 py-1 max-md:hidden pointer-coarse:hidden group-data-[collapsible=icon]:hidden",
         open && "z-40",
       )}
     >

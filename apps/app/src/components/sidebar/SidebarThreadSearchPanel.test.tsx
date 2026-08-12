@@ -415,11 +415,13 @@ describe("sidebar thread search navigation items", () => {
 });
 
 describe("ProjectListActionButtons", () => {
-  it("keeps New thread neutral until hover or press", () => {
+  it("keeps New thread visually neutral until press", () => {
     render(<ProjectListActionButtons onNewChat={vi.fn()} />);
 
     const newThread = screen.getByRole("button", { name: "New thread" });
     expect(newThread.className).toContain("bg-transparent");
+    expect(newThread.className).toContain("border-0");
+    expect(newThread.className).toContain("hover:bg-transparent");
     expect(newThread.className).not.toContain("bg-sidebar-accent/35");
     expect(newThread.className).not.toContain("border-sidebar-border");
   });

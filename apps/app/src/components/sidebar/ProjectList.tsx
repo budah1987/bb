@@ -870,7 +870,7 @@ export function ProjectListActionButtons({
             variant="ghost"
             className={cn(
               PROJECT_LIST_ACTION_BUTTON_CLASS,
-              "flex-1 bg-transparent shadow-none hover:bg-sidebar-accent/50 active:bg-sidebar-accent/70",
+              "flex-1 border-0 bg-transparent shadow-none hover:bg-transparent active:bg-sidebar-accent/30",
             )}
             onPointerDown={newThreadSplit?.onPointerDown}
             onClick={(event) => {

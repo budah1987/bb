@@ -160,6 +160,9 @@ describe("SidebarUsageLimitsContent", () => {
     vi.setSystemTime("2026-08-08T20:00:00.000Z");
     render(<Harness />);
 
+    expect(screen.getByTestId("sidebar-usage-limits").className).toContain(
+      "order-[-1]",
+    );
     const trigger = screen.getByRole("button", { name: /Expand details/u });
     expect(trigger.querySelector("svg")).not.toBeNull();
     fireEvent.click(trigger);

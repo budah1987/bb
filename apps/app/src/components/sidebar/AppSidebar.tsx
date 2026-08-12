@@ -581,7 +581,7 @@ export function AppSidebar({
               data-testid="app-sidebar-top-reserve-row"
               className={cn(
                 CHROME_ROW_CLASS,
-                "shrink-0 justify-end px-2",
+                "order-[-2] shrink-0 justify-end px-2",
                 usesDesktopChrome && MACOS_WINDOW_DRAG_CLASS,
               )}
             >
@@ -597,7 +597,7 @@ export function AppSidebar({
           <SidebarUsageLimits />
           <div
             data-testid="app-sidebar-primary-actions"
-            className="shrink-0 border-b border-sidebar-border/60 bg-sidebar-accent/10 px-2 py-2.5 group-data-[collapsible=icon]:hidden"
+            className="shrink-0 px-2 py-2.5 group-data-[collapsible=icon]:hidden"
           >
             <ProjectListActionButtons
               splitEnabled={threadSplitsEnabled}
