@@ -238,6 +238,28 @@ async function runRouterCommand({
 }
 
 describe("CommandRouter", () => {
+  it("pauses and resumes workspace status refreshes", async () => {
+    const harness = createHarness({ workspacePath: "/tmp/env-router" });
+    await harness.manager.ensureEnvironment({
+      environmentId: "env-router",
+      workspacePath: "/tmp/env-router",
+    });
+    const router = createRouter(harness);
+    router.setBackgroundPaused(true);
+
+    const response = runRouterCommand({
+      command: createWorkspaceStatusCommand(),
+      requestId: "status-paused",
+      router,
+    });
+    await flushAsyncWork();
+    expect(harness.workspaceState.statusReads).toBe(0);
+
+    router.setBackgroundPaused(false);
+    await expect(response).resolves.toMatchObject({ ok: true });
+    expect(harness.workspaceState.statusReads).toBe(1);
+  });
+
   it("combines workspace status refresh bursts into one trailing read", async () => {
     const harness = createHarness({ workspacePath: "/tmp/env-router" });
     await harness.manager.ensureEnvironment({

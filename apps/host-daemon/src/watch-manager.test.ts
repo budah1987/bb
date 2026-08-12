@@ -164,6 +164,7 @@ describe("WatchManager", () => {
       workspaceTargets: [
         {
           environmentId: "env-watch",
+          priority: "background",
           workspaceContext: {
             workspacePath: "/tmp/env-watch",
             workspaceProvisionType: "unmanaged",
@@ -179,68 +180,6 @@ describe("WatchManager", () => {
     localFingerprint.resolve("local:/tmp/env-watch:initial");
     await vi.waitFor(() => {
       expect(workspace.getSharedGitRefsFingerprint).toHaveBeenCalledTimes(1);
-    });
-  });
-
-  it("limits background workspace fingerprint work across workspaces", async () => {
-    const workspaces = Array.from({ length: 4 }, (_, index) =>
-      createFakeWorkspace(`/tmp/env-watch-${index}`),
-    );
-    const localFingerprints = workspaces.map(() =>
-      createDeferred<GetLocalStateFingerprintResult>(),
-    );
-    for (const [index, workspace] of workspaces.entries()) {
-      workspace.getLocalStateFingerprint.mockImplementationOnce(
-        () => localFingerprints[index]!.promise,
-      );
-    }
-    const { hostWatcher } = createFakeHostWatcher();
-    let provisionIndex = 0;
-    const manager = new WatchManager({
-      hostWatcher,
-      provisionWorkspace: vi.fn(async () => {
-        const workspace = workspaces[provisionIndex];
-        if (!workspace) {
-          throw new Error("Missing fake workspace");
-        }
-        provisionIndex += 1;
-        return workspace;
-      }),
-    });
-
-    await manager.replaceWatchSet({
-      generation: 1,
-      workspaceTargets: workspaces.map((workspace, index) => ({
-        environmentId: `env-watch-${index}`,
-        workspaceContext: {
-          workspacePath: workspace.path,
-          workspaceProvisionType: "unmanaged",
-        },
-      })),
-      threadStorageTargets: [],
-    });
-
-    await vi.waitFor(() => {
-      expect(
-        workspaces.filter(
-          (workspace) =>
-            workspace.getLocalStateFingerprint.mock.calls.length > 0,
-        ),
-      ).toHaveLength(2);
-    });
-
-    localFingerprints[0]!.resolve("local:/tmp/env-watch-0:initial");
-    await vi.waitFor(() => {
-      expect(workspaces[2]!.getLocalStateFingerprint).toHaveBeenCalledTimes(1);
-    });
-
-    for (const [index, fingerprint] of localFingerprints.entries()) {
-      fingerprint.resolve(`local:/tmp/env-watch-${index}:initial`);
-    }
-    await vi.waitFor(() => {
-      expect(workspaces[3]!.getSharedGitRefsFingerprint).toHaveBeenCalledTimes(
-        1,
-      );
     });
   });
 
@@ -265,6 +204,7 @@ describe("WatchManager", () => {
       workspaceTargets: [
         {
           environmentId: "env-watch",
+          priority: "background",
           workspaceContext: {
             workspacePath: "/tmp/env-watch",
             workspaceProvisionType: "unmanaged",
@@ -306,6 +246,7 @@ describe("WatchManager", () => {
       workspaceTargets: [
         {
           environmentId: "env-watch",
+          priority: "background",
           workspaceContext: {
             workspacePath: "/tmp/env-watch",
             workspaceProvisionType: "unmanaged",
@@ -319,6 +260,7 @@ describe("WatchManager", () => {
       workspaceTargets: [
         {
           environmentId: "env-watch",
+          priority: "background",
           workspaceContext: {
             workspacePath: "/tmp/env-watch",
             workspaceProvisionType: "unmanaged",
@@ -374,6 +316,7 @@ describe("WatchManager", () => {
       workspaceTargets: [
         {
           environmentId: "env-watch",
+          priority: "background",
           workspaceContext: {
             workspacePath: "/tmp/env-watch",
             workspaceProvisionType: "unmanaged",
@@ -435,6 +378,7 @@ describe("WatchManager", () => {
       workspaceTargets: [
         {
           environmentId: "env-watch",
+          priority: "background",
           workspaceContext: {
             workspacePath: "/tmp/env-watch",
             workspaceProvisionType: "unmanaged",
@@ -511,6 +455,7 @@ describe("WatchManager", () => {
       workspaceTargets: [
         {
           environmentId: "env-watch",
+          priority: "background",
           workspaceContext: {
             workspacePath: "/tmp/env-watch",
             workspaceProvisionType: "unmanaged",
@@ -550,6 +495,7 @@ describe("WatchManager", () => {
       workspaceTargets: [
         {
           environmentId: "env-watch",
+          priority: "background",
           workspaceContext: {
             workspacePath: "/tmp/env-watch",
             workspaceProvisionType: "unmanaged",
@@ -579,6 +525,7 @@ describe("WatchManager", () => {
       workspaceTargets: [
         {
           environmentId: "env-watch",
+          priority: "background",
           workspaceContext: {
             workspacePath: "/tmp/env-watch",
             workspaceProvisionType: "unmanaged",
@@ -598,6 +545,7 @@ describe("WatchManager", () => {
       workspaceTargets: [
         {
           environmentId: "env-watch",
+          priority: "background",
           workspaceContext: {
             workspacePath: "/tmp/env-watch",
             workspaceProvisionType: "unmanaged",
@@ -632,6 +580,7 @@ describe("WatchManager", () => {
       workspaceTargets: [
         {
           environmentId: "env-watch",
+          priority: "background",
           workspaceContext: {
             workspacePath: "/tmp/env-watch",
             workspaceProvisionType: "unmanaged",
@@ -676,6 +625,7 @@ describe("WatchManager", () => {
       workspaceTargets: [
         {
           environmentId: "env-watch",
+          priority: "background",
           workspaceContext: {
             workspacePath: "/tmp/env-watch",
             workspaceProvisionType: "unmanaged",
@@ -718,6 +668,7 @@ describe("WatchManager", () => {
       workspaceTargets: [
         {
           environmentId: "env-watch",
+          priority: "background",
           workspaceContext: {
             workspacePath: "/tmp/env-watch",
             workspaceProvisionType: "unmanaged",
@@ -766,6 +717,7 @@ describe("WatchManager", () => {
       workspaceTargets: [
         {
           environmentId: "env-watch",
+          priority: "background",
           workspaceContext: {
             workspacePath: "/tmp/env-watch",
             workspaceProvisionType: "unmanaged",
@@ -816,6 +768,7 @@ describe("WatchManager", () => {
       workspaceTargets: [
         {
           environmentId: "env-watch",
+          priority: "background",
           workspaceContext: {
             workspacePath: "/tmp/env-watch",
             workspaceProvisionType: "unmanaged",
@@ -893,6 +846,7 @@ describe("WatchManager", () => {
       workspaceTargets: [
         {
           environmentId: "env-watch",
+          priority: "background",
           workspaceContext: {
             workspacePath: "/tmp/env-watch",
             workspaceProvisionType: "unmanaged",
@@ -964,6 +918,7 @@ describe("WatchManager", () => {
       workspaceTargets: [
         {
           environmentId: "env-watch",
+          priority: "background",
           workspaceContext: {
             workspacePath: "/tmp/env-watch",
             workspaceProvisionType: "unmanaged",

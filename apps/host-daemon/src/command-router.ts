@@ -9,6 +9,7 @@ import type {
   HostDaemonRpcResultForCommand,
   HostDaemonCommandEnvironmentLane,
 } from "@bb/host-daemon-contract";
+import type { ThreadEvent } from "@bb/domain";
 import { performance } from "node:perf_hooks";
 import {
   hostDaemonEnvironmentLaneForCommand,
@@ -27,6 +28,10 @@ import {
 import { isExpectedOnlineRpcFailureError } from "./command-dispatch-support.js";
 import type { HostDaemonLogger } from "./logger.js";
 import { RuntimeManager } from "./runtime-manager.js";
+import {
+  RequestLatencyTracker,
+  type RequestLatencyStage,
+} from "./request-latency-tracker.js";
 
 interface CommandRouterLogger extends Pick<HostDaemonLogger, "warn"> {
   debug?: HostDaemonLogger["debug"];
@@ -126,12 +131,19 @@ export interface CommandRouterOptions {
   simulatorManager?: CommandDispatchOptions["simulatorManager"];
   threadStorageRootPath: string;
   logger: CommandRouterLogger;
+  onForegroundDispatchStateChange?: (active: boolean) => void;
 }
 
 const HOST_COMMAND_LIFECYCLE_LOG_THRESHOLD_MS = 1_000;
 const CODEX_PROVIDER_ID = "codex";
 const MAX_CONCURRENT_WORKSPACE_STATUS_REFRESHES = 4;
 const MAX_CONCURRENT_WORKSPACE_STATUS_REFRESHES_PER_ENVIRONMENT = 1;
+const FOREGROUND_LATENCY_WARNING_MS = 5_000;
+const FOREGROUND_ACCEPTANCE_STALL_MS = 30_000;
+const REQUEST_LATENCY_LIMITS = {
+  "accept-to-first-activity": { p95Ms: 1_000, p99Ms: 3_000 },
+  "request-to-accept": { p95Ms: 2_000, p99Ms: 5_000 },
+} satisfies Record<RequestLatencyStage, { p95Ms: number; p99Ms: number }>;
 
 function roundDurationMs(durationMs: number): number {
   return Math.round(durationMs * 10) / 10;
@@ -141,14 +153,34 @@ function elapsedMs(startedAtMs: number): number {
   return performance.now() - startedAtMs;
 }
 
+function isFirstVisibleProviderActivity(event: ThreadEvent): boolean {
+  return (
+    event.type === "item/started" ||
+    event.type === "item/agentMessage/delta" ||
+    event.type === "item/commandExecution/outputDelta" ||
+    event.type === "item/fileChange/outputDelta" ||
+    event.type === "item/reasoning/summaryTextDelta" ||
+    event.type === "item/reasoning/textDelta" ||
+    event.type === "item/plan/delta" ||
+    event.type === "item/mcpToolCall/progress" ||
+    event.type === "item/toolCall/progress" ||
+    event.type === "provider/error" ||
+    event.type === "provider/unhandled" ||
+    event.type === "turn/completed"
+  );
+}
+
 export class CommandRouter {
   private readonly logger;
+  private readonly requestLatencyTracker = new RequestLatencyTracker();
   private readonly environmentLanes = new Map<string, ReadWriteLaneState>();
   private readonly workspaceStatusRefreshes = new Map<
     string,
     WorkspaceStatusRefreshState
   >();
   private activeWorkspaceStatusRefreshes = 0;
+  private activeForegroundDispatches = 0;
+  private backgroundPaused = false;
   private readonly activeWorkspaceStatusRefreshesByEnvironment = new Map<
     string,
     number
@@ -174,6 +206,11 @@ export class CommandRouter {
 
   constructor(private readonly options: CommandRouterOptions) {
     this.logger = options.logger;
+  }
+
+  setBackgroundPaused(paused: boolean): void {
+    this.backgroundPaused = paused;
+    if (!paused) this.drainWorkspaceStatusRefreshQueue();
   }
 
   async handleOnlineRpcRequest(
@@ -306,6 +343,8 @@ export class CommandRouter {
     const environmentActiveCount =
       this.activeWorkspaceStatusRefreshesByEnvironment.get(environmentId) ?? 0;
     if (
+      !this.backgroundPaused &&
+      this.activeForegroundDispatches === 0 &&
       this.workspaceStatusRefreshEnvironmentQueue.length === 0 &&
       this.activeWorkspaceStatusRefreshes <
         MAX_CONCURRENT_WORKSPACE_STATUS_REFRESHES &&
@@ -353,6 +392,7 @@ export class CommandRouter {
   }
 
   private drainWorkspaceStatusRefreshQueue(): void {
+    if (this.backgroundPaused || this.activeForegroundDispatches > 0) return;
     let remainingEnvironmentChecks =
       this.workspaceStatusRefreshEnvironmentQueue.length;
     while (
@@ -414,6 +454,25 @@ export class CommandRouter {
   private executeLiveDaemonCommand(
     command: HostDaemonCommand,
   ): Promise<HostDaemonCommandResultForCommand> {
+    const isForeground =
+      command.type === "thread.start" || command.type === "turn.submit";
+    if (isForeground) this.setForegroundDispatchActive(true);
+    const receivedAtMs = performance.now();
+    const dispatchWarning = isForeground
+      ? setTimeout(() => {
+          this.logger.warn(
+            {
+              activeWorkspaceStatusRefreshes:
+                this.activeWorkspaceStatusRefreshes,
+              commandType: command.type,
+              queueDepth: this.workspaceStatusRefreshEnvironmentQueue.length,
+              waitMs: Math.round(elapsedMs(receivedAtMs)),
+            },
+            "Foreground command is waiting for host dispatch",
+          );
+        }, FOREGROUND_LATENCY_WARNING_MS)
+      : null;
+    dispatchWarning?.unref();
     const environmentLaneMode = this.getEnvironmentLaneMode(command);
     const providerLane = this.resolveProviderLane(command);
     const task = this.runAfterThreadUnarchiveBarrier(command, () =>
@@ -422,19 +481,166 @@ export class CommandRouter {
           command,
           environmentLaneMode,
           providerLane,
-          () => this.executeLiveDaemonCommandBody(command),
+          () => {
+            if (dispatchWarning) clearTimeout(dispatchWarning);
+            return this.executeLiveDaemonCommandBody(command, receivedAtMs);
+          },
         ),
       ),
     );
     this.registerThreadUnarchiveBarrier(command, task);
     this.registerInFlightThreadProviderLane(command, task);
-    return task;
+    return isForeground
+      ? task.finally(() => {
+          if (dispatchWarning) clearTimeout(dispatchWarning);
+          this.setForegroundDispatchActive(false);
+        })
+      : task;
+  }
+
+  private setForegroundDispatchActive(active: boolean): void {
+    this.activeForegroundDispatches += active ? 1 : -1;
+    if (this.activeForegroundDispatches < 0)
+      this.activeForegroundDispatches = 0;
+    this.options.onForegroundDispatchStateChange?.(
+      this.activeForegroundDispatches > 0,
+    );
+    if (this.activeForegroundDispatches === 0) {
+      this.drainWorkspaceStatusRefreshQueue();
+    }
   }
 
   private async executeLiveDaemonCommandBody(
     command: HostDaemonCommand,
+    receivedAtMs: number,
   ): Promise<HostDaemonCommandResultForCommand> {
-    const result = await dispatchCommand(command, this.createDispatchOptions());
+    if (command.type !== "thread.start" && command.type !== "turn.submit") {
+      const result = await dispatchCommand(
+        command,
+        this.createDispatchOptions(),
+      );
+      if (shouldFlushEventsBeforeReportingCommandResult(command)) {
+        await this.options.eventSink.flush();
+      }
+      return parseHostDaemonCommandResultForCommand(command, result);
+    }
+    const dispatchAtMs = performance.now();
+    const providerId =
+      command.type === "thread.start"
+        ? command.providerId
+        : command.resumeContext.providerId;
+    const runtimeWasReady =
+      this.options.runtimeManager.get(command.environmentId) !== undefined;
+    let acceptedAtMs: number | null = null;
+    let firstActivityRecorded = false;
+    const logLatency = (
+      message: string,
+      durationMs: number,
+      limitMs: number,
+    ): void => {
+      const fields = {
+        commandType: command.type,
+        durationMs: roundDurationMs(durationMs),
+        providerId,
+        queueDepth: this.workspaceStatusRefreshEnvironmentQueue.length,
+        runtimeWasReady,
+      };
+      if (durationMs > limitMs) this.logger.warn(fields, message);
+      else this.logger.debug?.(fields, message);
+    };
+    const recordLatency = (
+      stage: RequestLatencyStage,
+      durationMs: number,
+    ): void => {
+      const percentiles = this.requestLatencyTracker.record({
+        durationMs,
+        providerId,
+        runtimeWasReady,
+        stage,
+      });
+      if (!percentiles) return;
+      const limits = REQUEST_LATENCY_LIMITS[stage];
+      if (
+        percentiles.p95Ms <= limits.p95Ms &&
+        percentiles.p99Ms <= limits.p99Ms
+      ) {
+        return;
+      }
+      this.logger.warn(
+        {
+          ...percentiles,
+          providerId,
+          queueDepth: this.workspaceStatusRefreshEnvironmentQueue.length,
+          runtimeWasReady,
+          stage,
+        },
+        "Provider latency percentile limit exceeded",
+      );
+    };
+    const acceptanceWarning = setTimeout(() => {
+      logLatency(
+        "Provider acceptance exceeded the warning limit",
+        elapsedMs(receivedAtMs),
+        0,
+      );
+    }, FOREGROUND_LATENCY_WARNING_MS);
+    acceptanceWarning.unref();
+    const acceptanceStall = setTimeout(() => {
+      logLatency(
+        "Provider acceptance remains pending; background work stays paused",
+        elapsedMs(receivedAtMs),
+        0,
+      );
+    }, FOREGROUND_ACCEPTANCE_STALL_MS);
+    acceptanceStall.unref();
+    const dispatchDelayMs = dispatchAtMs - receivedAtMs;
+    logLatency(
+      "Foreground host dispatch latency",
+      dispatchDelayMs,
+      FOREGROUND_LATENCY_WARNING_MS,
+    );
+    const onEvent = (event: { event: ThreadEvent; threadId: string }): void => {
+      if (event.threadId !== command.threadId) return;
+      if (
+        event.event.type === "turn/input/accepted" &&
+        event.event.clientRequestId === command.requestId
+      ) {
+        acceptedAtMs = performance.now();
+        clearTimeout(acceptanceWarning);
+        clearTimeout(acceptanceStall);
+        logLatency(
+          "Host request-to-provider-acceptance latency",
+          acceptedAtMs - receivedAtMs,
+          5_000,
+        );
+        recordLatency("request-to-accept", acceptedAtMs - receivedAtMs);
+        return;
+      }
+      if (
+        acceptedAtMs !== null &&
+        !firstActivityRecorded &&
+        isFirstVisibleProviderActivity(event.event)
+      ) {
+        firstActivityRecorded = true;
+        const firstActivityMs = performance.now() - acceptedAtMs;
+        logLatency(
+          "Provider acceptance-to-first-activity latency",
+          firstActivityMs,
+          3_000,
+        );
+        recordLatency("accept-to-first-activity", firstActivityMs);
+      }
+    };
+    let result: unknown;
+    try {
+      result = await dispatchCommand(
+        command,
+        this.createDispatchOptions(onEvent),
+      );
+    } finally {
+      clearTimeout(acceptanceWarning);
+      clearTimeout(acceptanceStall);
+    }
     // Commands that emit thread events before completing preserve the previous
     // event-before-result ordering under live RPC.
     if (shouldFlushEventsBeforeReportingCommandResult(command)) {
@@ -503,14 +709,24 @@ export class CommandRouter {
     );
   }
 
-  private createDispatchOptions(): CommandDispatchOptions {
+  private createDispatchOptions(
+    onEvent?: (event: { event: ThreadEvent; threadId: string }) => void,
+  ): CommandDispatchOptions {
     return {
       fetchProjectAttachment: this.options.fetchProjectAttachment,
       fetchSkillTree: this.options.fetchSkillTree,
       runtimeManager: this.options.runtimeManager,
       terminalManager: this.options.terminalManager,
       dataDir: this.options.dataDir,
-      eventSink: this.options.eventSink,
+      eventSink: onEvent
+        ? {
+            emit: (event) => {
+              onEvent(event);
+              this.options.eventSink.emit(event);
+            },
+            flush: () => this.options.eventSink.flush(),
+          }
+        : this.options.eventSink,
       listModels: this.options.listModels,
       resolveInteractiveRequest: this.options.resolveInteractiveRequest,
       caffeinateManager: this.options.caffeinateManager,

@@ -2342,6 +2342,20 @@ describe("codex provider adapter", () => {
     }
   });
 
+  it("translateEvent never persists hook lifecycle notifications", () => {
+    const adapter = createCodexProviderAdapter();
+
+    for (const method of ["hook/started", "hook/completed"]) {
+      expect(
+        adapter.translateEvent({
+          jsonrpc: "2.0",
+          method,
+          params: { threadId: "t1", turnId: "turn-1" },
+        }),
+      ).toEqual([]);
+    }
+  });
+
   it("translateEvent turn/completed with status and error", () => {
     const adapter = createCodexProviderAdapter();
     const events = adapter.translateEvent(
