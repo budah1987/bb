@@ -5,13 +5,13 @@ import {
   type PluginNewThreadEmptyStateProps,
   type PluginSidebarThread,
 } from "@bb/plugin-sdk/app";
-import { Icon } from "@/components/ui/icon";
+import { Icon } from "../components/ui/icon";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+} from "../components/ui/dropdown-menu";
 import { ThreadPixelMatrix } from "./PixelMatrix";
 import { buildConductorProjection, threadDisplayTitle } from "./projection";
 import { loadClosedTabIds } from "./sidebar-preferences";

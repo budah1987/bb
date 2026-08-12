@@ -2,9 +2,14 @@ import { describe, expect, it } from "vitest";
 import type { PluginThreadListSlot } from "@/lib/plugin-slots";
 import {
   BUILT_IN_THREAD_LIST_PROVIDER,
+  mergeThreadListProviders,
   resolveThreadListProvider,
   threadListProviderKey,
 } from "./threadListProvider";
+import {
+  CONDUCTOR_THREAD_LIST_PROVIDER_KEY,
+  conductorThreadListProvider,
+} from "../conductor/conductorThreadListProvider";
 
 function slot(pluginId: string, id: string): PluginThreadListSlot {
   return {
@@ -36,6 +41,12 @@ describe("resolveThreadListProvider", () => {
     ).toBe(registered);
   });
 
+  it("resolves the saved Conductor key to the host presentation", () => {
+    expect(
+      resolveThreadListProvider([], CONDUCTOR_THREAD_LIST_PROVIDER_KEY),
+    ).toBe(conductorThreadListProvider);
+  });
+
   // The whole point of the fallback: a disabled or still-loading plugin must
   // leave the user with bb's list, not an empty sidebar.
   it("falls back to the built-in list when the chosen plugin is gone", () => {
@@ -49,5 +60,23 @@ describe("resolveThreadListProvider", () => {
     expect(
       resolveThreadListProvider([mine, theirs], threadListProviderKey(theirs)),
     ).toBe(theirs);
+  });
+});
+
+describe("mergeThreadListProviders", () => {
+  it("keeps Conductor available without the plugin", () => {
+    expect(mergeThreadListProviders([])).toEqual([
+      conductorThreadListProvider,
+    ]);
+  });
+
+  it("keeps plugin alternatives and removes the old Conductor duplicate", () => {
+    const oldConductor = slot("conductor-workspaces", "conductor");
+    const t3 = slot("t3sidebar", "inbox");
+
+    expect(mergeThreadListProviders([oldConductor, t3])).toEqual([
+      conductorThreadListProvider,
+      t3,
+    ]);
   });
 });

@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import { useIsCompactViewport } from "@bb/shared-ui/hooks/use-compact-viewport";
 import { useThreadListProvider } from "@/components/sidebar/threadListProvider";
 import { PluginSlotMount } from "./PluginSlotMount";
@@ -24,11 +25,13 @@ export function PluginNewThreadEmptyState({
       instanceId={environmentId ?? `unassigned:${projectId}`}
       crashFallback={null}
     >
-      <Component
-        projectId={projectId}
-        environmentId={environmentId}
-        isCompactViewport={isCompactViewport}
-      />
+      <Suspense fallback={null}>
+        <Component
+          projectId={projectId}
+          environmentId={environmentId}
+          isCompactViewport={isCompactViewport}
+        />
+      </Suspense>
     </PluginSlotMount>
   );
 }

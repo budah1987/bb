@@ -14,8 +14,8 @@ import {
   BUILT_IN_THREAD_LIST_PROVIDER,
   threadListProviderAtom,
   threadListProviderKey,
+  useThreadListProviders,
 } from "@/components/sidebar/threadListProvider";
-import { usePluginSlots } from "@/lib/plugin-slots";
 
 const BUILT_IN_OPTION = {
   key: BUILT_IN_THREAD_LIST_PROVIDER,
@@ -29,7 +29,7 @@ const BUILT_IN_OPTION = {
  * the capability rather than sitting inert for everyone else.
  */
 export function SidebarThreadListSetting() {
-  const { threadLists } = usePluginSlots();
+  const threadLists = useThreadListProviders();
   const [preference, setPreference] = useAtom(threadListProviderAtom);
 
   if (threadLists.length === 0) return null;

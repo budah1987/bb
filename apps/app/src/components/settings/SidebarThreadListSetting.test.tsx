@@ -26,8 +26,29 @@ afterEach(() => {
 });
 
 describe("SidebarThreadListSetting", () => {
-  it("keeps sidebar providers available as a touch-friendly PWA drawer", async () => {
-    setPluginSlotRegistrations("conductor-workspaces", {
+  it("keeps Conductor available without a plugin registration", async () => {
+    render(
+      <CompactViewportOverrideProvider isCompactViewport>
+        <SidebarThreadListSetting />
+      </CompactViewportOverrideProvider>,
+    );
+
+    const trigger = screen.getByRole("button", {
+      name: "Sidebar thread list",
+    });
+    fireEvent.click(trigger);
+    fireEvent.click(await screen.findByRole("menuitem", { name: /BBamir/ }));
+
+    expect(trigger.textContent).toContain("BBamir");
+    expect(
+      JSON.parse(
+        window.localStorage.getItem("bb.sidebar.threadListProvider") ?? '""',
+      ),
+    ).toBe("conductor-workspaces/conductor");
+  });
+
+  it("keeps plugin providers available in the touch-friendly drawer", async () => {
+    setPluginSlotRegistrations("t3sidebar", {
       homepageSections: [],
       settingsSections: [],
       navPanels: [],
@@ -35,9 +56,9 @@ describe("SidebarThreadListSetting", () => {
       sidebarFooterActions: [],
       threadLists: [
         {
-          id: "conductor",
-          title: "BBamir",
-          description: "Repositories, workspaces, and conversation tabs.",
+          id: "inbox",
+          title: "T3",
+          description: "Conversation inbox.",
           component: BbamirSidebar,
         },
       ],
@@ -61,13 +82,13 @@ describe("SidebarThreadListSetting", () => {
     expect(
       await screen.findByRole("dialog", { name: "Sidebar layout" }),
     ).toBeDefined();
-    fireEvent.click(screen.getByRole("menuitem", { name: /BBamir/ }));
+    fireEvent.click(screen.getByRole("menuitem", { name: /T3/ }));
 
-    expect(trigger.textContent).toContain("BBamir");
+    expect(trigger.textContent).toContain("T3");
     expect(
       JSON.parse(
         window.localStorage.getItem("bb.sidebar.threadListProvider") ?? '""',
       ),
-    ).toBe("conductor-workspaces/conductor");
+    ).toBe("t3sidebar/inbox");
   });
 });

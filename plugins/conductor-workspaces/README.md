@@ -1,10 +1,9 @@
 # BBamir Workspaces
 
-The monorepo-owned BBamir plugin that projects native BB repositories,
-environments, and threads into the BBamir sidebar. It requires BB
-0.36.0-bbamir.1 or newer because it uses the generic sidebar thread-list,
-thread context bar, close-handler, and environment rename APIs added for
-third-party sidebar providers.
+The compatibility plugin for BBamir's Conductor presentation. The BB app shell
+now loads the sidebar, context bars, repository details, and action routes from
+this package into the host bundle. The app does not require the plugin runtime
+or its frontend assets to render Conductor.
 
 The plugin changes presentation only. Thread ids, environment ids, parent
 relationships, drafts, unread state, archives, and deep links remain native BB
@@ -13,28 +12,26 @@ data, so switching back to BB's standard sidebar is lossless.
 ## Use in BBamir
 
 The authoritative source lives at `plugins/conductor-workspaces` on the
-`bbamir/main` branch of `budah1987/bb`. BBamir bundles, installs, and enables
-the plugin automatically. Existing direct installations keep a valid selected
-source path. BBamir replaces a missing direct source with its bundled copy.
+`bbamir/main` branch of `budah1987/bb`. BBamir compiles the presentation into
+the app bundle. The app keeps the `conductor-workspaces` identity so existing
+sidebar preferences and deep links remain valid.
 
 Choose **BBamir** under **Settings → Appearance → Sidebar** on each client.
-The desktop and mobile web apps load the same plugin bundle, but the sidebar
-choice is client-local so mobile can be enabled and tested independently.
+The desktop and mobile web apps load the same host bundle. The sidebar choice
+is client-local, so each client can select BBamir, BB, or T3 independently.
 
-Plugin changes now ship with the BBamir branch instead of a separate Git
-repository. The manifest's `engines.bb` and `engines.bbPluginSdk` ranges still
-prevent an incompatible build from being installed.
+The plugin runtime remains available for legacy reconciliation, conversation
+transcript mentions, and rollback testing. Core Conductor behavior continues
+when the plugin is disabled.
 
 ## Keep BB current
 
 The maintenance boundary is intentional:
 
-- BB core owns only generic plugin hooks, native environment rename behavior,
-  and host-level shortcut interception. Those changes should be contributed to
-  upstream BB and contain no BBamir-specific policy.
-- This directory owns the layout, projection, activity animation, tab model,
-  menus, gestures, and shortcuts. Merging upstream BB into `bbamir/main`
-  preserves those changes as ordinary BBamir commits.
+- The app shell owns Conductor selection, loading, navigation, responsive
+  mounting, repository details, and core SDK actions.
+- This package supplies the shared presentation source and the compatibility
+  plugin. Both compile from one source tree, so they cannot drift.
 - UI primitives under `components/ui/` are vendored source. They preserve BB's
   theme and responsive drawer behavior without importing the private
   `@bb/shared-ui` workspace package.
@@ -44,8 +41,8 @@ The maintenance boundary is intentional:
   unpublished monorepo package.
 
 When BB ships a new version, fast-forward the fork's `main` branch and merge it
-into `bbamir/main`. If BB changes a generic API, update the plugin's engine
-range and vendored UI components in the same BBamir change.
+into `bbamir/main`. Update the host and compatibility builds together when an
+SDK contract changes.
 
 To refresh a vendored component against the BB release declared in
 `components.json`:
@@ -86,7 +83,8 @@ not need to commit generated bundles.
 
 ## Reconciliation
 
-The plugin upgrades the orphaned `conductor-workspaces` prototype in place.
+The compatibility plugin upgrades the orphaned `conductor-workspaces`
+prototype in place.
 Its migration zero preserves the prototype's `workspaces` table, and projection
 version 2 treats those anchor threads as legacy organizers: they are hidden by
 the BBamir view but never deleted. Every other active thread is grouped by
@@ -98,7 +96,8 @@ non-organizer conversation must appear exactly once; missing or duplicate
 conversations abort recording; archived and unassigned counts remain explicit;
 and rerunning with the same native state is idempotent. The record is
 observability metadata only, so reconciliation never changes a BB thread or
-environment.
+environment. The host treats unavailable plugin storage as an empty legacy
+projection, so this database is never a runtime dependency.
 
 ## Conversation signals
 

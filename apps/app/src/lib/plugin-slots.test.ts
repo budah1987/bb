@@ -173,7 +173,9 @@ describe("plugin slot store", () => {
     expect(listener).toHaveBeenCalledTimes(1);
 
     removePluginSlotRegistrations("demo");
-    expect(getPluginSlotSnapshot().navPanels).toHaveLength(0);
+    expect(getPluginSlotSnapshot().navPanels.map((panel) => panel.id)).toEqual([
+      "repository-details",
+    ]);
     expect(listener).toHaveBeenCalledTimes(2);
 
     // Removing an unknown plugin is a no-op (no extra notification).
@@ -186,6 +188,35 @@ describe("plugin slot store", () => {
     setPluginSlotRegistrations("demo", registrationSet());
     const first = getPluginSlotSnapshot();
     expect(getPluginSlotSnapshot()).toBe(first);
+  });
+
+  it("keeps one core repository panel across plugin reloads", () => {
+    setPluginSlotRegistrations(
+      "conductor-workspaces",
+      registrationSet({
+        navPanels: [
+          {
+            id: "repository-details",
+            title: "Plugin repository details",
+            icon: "GitBranch",
+            path: "repository-details",
+            component: PanelComponent,
+          },
+        ],
+      }),
+    );
+
+    expect(
+      getPluginSlotSnapshot().navPanels.filter(
+        (panel) => panel.pluginId === "conductor-workspaces",
+      ),
+    ).toHaveLength(1);
+    removePluginSlotRegistrations("conductor-workspaces");
+    expect(
+      getPluginSlotSnapshot().navPanels.filter(
+        (panel) => panel.pluginId === "conductor-workspaces",
+      ),
+    ).toHaveLength(1);
   });
 
   it("flattens messageDirectives sorted by plugin id with generation metadata", () => {

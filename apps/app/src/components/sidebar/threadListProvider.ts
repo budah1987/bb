@@ -1,5 +1,10 @@
 import { atomWithStorage } from "jotai/utils";
 import { useAtomValue } from "jotai";
+import { useMemo } from "react";
+import {
+  CONDUCTOR_THREAD_LIST_PROVIDER_KEY,
+  conductorThreadListProvider,
+} from "@/components/conductor/conductorThreadListProvider";
 import { createJsonLocalStorage } from "@/lib/browser-storage";
 import { usePluginSlots, type PluginThreadListSlot } from "@/lib/plugin-slots";
 
@@ -18,7 +23,7 @@ export const BUILT_IN_THREAD_LIST_PROVIDER = "__builtin__";
  */
 export const threadListProviderAtom = atomWithStorage<string>(
   THREAD_LIST_PROVIDER_STORAGE_KEY,
-  BUILT_IN_THREAD_LIST_PROVIDER,
+  CONDUCTOR_THREAD_LIST_PROVIDER_KEY,
   createJsonLocalStorage<string>(),
   { getOnInit: true },
 );
@@ -42,14 +47,35 @@ export function resolveThreadListProvider(
   preference: string,
 ): PluginThreadListSlot | null {
   if (preference === BUILT_IN_THREAD_LIST_PROVIDER) return null;
+  if (preference === CONDUCTOR_THREAD_LIST_PROVIDER_KEY) {
+    return conductorThreadListProvider;
+  }
   return (
     slots.find((slot) => threadListProviderKey(slot) === preference) ?? null
   );
 }
 
+export function mergeThreadListProviders(
+  slots: readonly PluginThreadListSlot[],
+): readonly PluginThreadListSlot[] {
+  return [
+    conductorThreadListProvider,
+    ...slots.filter(
+      (slot) =>
+        threadListProviderKey(slot) !== CONDUCTOR_THREAD_LIST_PROVIDER_KEY,
+    ),
+  ];
+}
+
+/** Core presentations plus plugin-provided alternatives for the picker. */
+export function useThreadListProviders(): readonly PluginThreadListSlot[] {
+  const { threadLists } = usePluginSlots();
+  return useMemo(() => mergeThreadListProviders(threadLists), [threadLists]);
+}
+
 /** The resolved thread-list slot for the sidebar, or null for the built-in. */
 export function useThreadListProvider(): PluginThreadListSlot | null {
-  const { threadLists } = usePluginSlots();
+  const threadLists = useThreadListProviders();
   const preference = useAtomValue(threadListProviderAtom);
   return resolveThreadListProvider(threadLists, preference);
 }

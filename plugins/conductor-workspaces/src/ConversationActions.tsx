@@ -1,13 +1,13 @@
 import { useEffect, useState, type FormEvent, type ReactNode } from "react";
 import type { PluginSidebarThread } from "@bb/plugin-sdk/app";
-import { Button } from "@/components/ui/button";
+import { Button } from "../components/ui/button";
 import {
   ContextMenu,
   ContextMenuContent,
   ContextMenuItem,
   ContextMenuSeparator,
   ContextMenuTrigger,
-} from "@/components/ui/context-menu";
+} from "../components/ui/context-menu";
 import {
   Dialog,
   DialogContent,
@@ -15,9 +15,9 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from "@/components/ui/dialog";
-import { Icon } from "@/components/ui/icon";
-import { Input } from "@/components/ui/input";
+} from "../components/ui/dialog";
+import { Icon } from "../components/ui/icon";
+import { Input } from "../components/ui/input";
 import { threadDisplayTitle } from "./projection";
 
 export function ConversationActionMenu({

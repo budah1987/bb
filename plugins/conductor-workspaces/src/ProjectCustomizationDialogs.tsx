@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from "react";
-import { Button } from "@/components/ui/button";
+import { Button } from "../components/ui/button";
 import {
   Dialog,
   DialogContent,
@@ -7,9 +7,9 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from "@/components/ui/dialog";
-import { Icon } from "@/components/ui/icon";
-import { Input } from "@/components/ui/input";
+} from "../components/ui/dialog";
+import { Icon } from "../components/ui/icon";
+import { Input } from "../components/ui/input";
 import type { ProjectIconValue } from "./project-customizations";
 import {
   ProjectGlyphIcon,

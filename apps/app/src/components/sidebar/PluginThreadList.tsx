@@ -1,9 +1,11 @@
-import { useCallback, type ReactNode } from "react";
+import { Suspense, useCallback, type ReactNode } from "react";
 import { toast } from "sonner";
 import { PluginSlotMount } from "@/components/plugin/PluginSlotMount";
+import { CONDUCTOR_THREAD_LIST_PROVIDER_KEY } from "@/components/conductor/conductorThreadListProvider";
 import { useSidebar } from "@/components/ui/sidebar.js";
 import { useRouteState } from "@/hooks/useRouteState";
 import type { PluginThreadListSlot } from "@/lib/plugin-slots";
+import { threadListProviderKey } from "./threadListProvider";
 import type { SpaceResponse } from "@bb/server-contract";
 
 /** Shared by the mount and the host's crash check. */
@@ -45,6 +47,14 @@ export function PluginThreadList({
   const { projectId, threadId } = useRouteState();
   const { isCompactViewport } = useSidebar();
   const Component = slot.component;
+  const loadingFallback =
+    threadListProviderKey(slot) === CONDUCTOR_THREAD_LIST_PROVIDER_KEY ? (
+      <p className="px-3 py-6 text-xs text-muted-foreground">
+        Loading workspaces…
+      </p>
+    ) : (
+      builtInFallback
+    );
 
   const handleCrash = useCallback(
     (pluginId: string) => {
@@ -64,23 +74,25 @@ export function PluginThreadList({
       crashFallback={builtInFallback}
       onCrash={handleCrash}
     >
-      <Component
-        activeThreadId={threadId ?? null}
-        activeProjectId={projectId ?? null}
-        experimental_spaces={{
-          activeSpaceId,
-          spaces: spaces.map((space) => ({
-            id: space.id,
-            name: space.name,
-            projectIds: space.projectIds,
-          })),
-          moveProject,
-          moveProjects,
-        }}
-        isCompactViewport={isCompactViewport}
-        onNavigate={onNavigate}
-        searchQuery={searchQuery}
-      />
+      <Suspense fallback={loadingFallback}>
+        <Component
+          activeThreadId={threadId ?? null}
+          activeProjectId={projectId ?? null}
+          experimental_spaces={{
+            activeSpaceId,
+            spaces: spaces.map((space) => ({
+              id: space.id,
+              name: space.name,
+              projectIds: space.projectIds,
+            })),
+            moveProject,
+            moveProjects,
+          }}
+          isCompactViewport={isCompactViewport}
+          onNavigate={onNavigate}
+          searchQuery={searchQuery}
+        />
+      </Suspense>
     </PluginSlotMount>
   );
 }

@@ -14,8 +14,8 @@ import {
   type PluginNavPanelProps,
   type PluginSidebarThread,
 } from "@bb/plugin-sdk/app";
-import { Button } from "@/components/ui/button";
-import { Icon } from "@/components/ui/icon";
+import { Button } from "../components/ui/button";
+import { Icon } from "../components/ui/icon";
 import {
   buildConductorProjection,
   pickWorkspaceThread,
@@ -28,7 +28,7 @@ import {
   workspaceSignal,
 } from "./thread-state";
 import { useReconciliation } from "./useReconciliation";
-import type { conductorRpcContract } from "./server";
+import type { conductorRpcContract } from "./rpc-contract";
 
 const REPOSITORY_DETAILS_PATH = "repository-details";
 const REPOSITORY_DETAIL_TABS = ["overview", "git", "manager"] as const;
