@@ -166,6 +166,31 @@ describe("bb terminal command output", () => {
     });
   });
 
+  it("creates a command terminal with a development server port", async () => {
+    const create = vi.fn(async () => makeTerminalSession());
+    stubServerApi({ "v1.terminals.$post": create });
+
+    await runCommand(
+      [
+        "terminal",
+        "create",
+        "--thread",
+        "thr-1",
+        "--title",
+        "Web dev server",
+        "--command",
+        "pnpm dev",
+        "--dev-server-port",
+        "5173",
+      ],
+      register,
+    );
+
+    expect(create).toHaveBeenCalledWith({
+      json: expect.objectContaining({ devServerPort: 5173 }),
+    });
+  });
+
   it("creates a machine terminal at host home with an explicit host ID", async () => {
     const hosts = vi.fn(async () => [makeHost()]);
     const create = vi.fn(async () =>
