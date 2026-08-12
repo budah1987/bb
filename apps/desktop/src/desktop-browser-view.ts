@@ -77,6 +77,7 @@ const ERR_ABORTED = -3;
 interface BrowserViewEntry {
   view: WebContentsView;
   lastErrorText: string | null;
+  isRendererRecoveryPending: boolean;
   currentMainFrameLocalOriginKey: string | null;
   /**
    * The last renderer-measured panel rect. The renderer is the placement
@@ -627,11 +628,27 @@ export function createDesktopBrowserViewManager(
     webContents.on("did-start-loading", refresh);
     webContents.on("did-stop-loading", refresh);
     webContents.on("did-finish-load", () => {
+      entry.isRendererRecoveryPending = false;
       if (entry.annotationEnabled) {
         entry.annotationRun += 1;
         armAnnotationDraft();
         syncAnnotationMarkers();
       }
+    });
+    webContents.on("render-process-gone", () => {
+      const key = browserViewKey(hostWindow, tabId);
+      if (
+        entries.get(key) !== entry ||
+        hostWindow.isDestroyed() ||
+        webContents.isDestroyed() ||
+        webContents.getURL().length === 0 ||
+        entry.isRendererRecoveryPending
+      ) {
+        return;
+      }
+      entry.isRendererRecoveryPending = true;
+      entry.lastErrorText = null;
+      webContents.reload();
     });
     webContents.on("did-navigate", (_event, url) => {
       commitEntryMainFrameUrl(entry, url);
@@ -684,6 +701,7 @@ export function createDesktopBrowserViewManager(
     const entry: BrowserViewEntry = {
       view,
       lastErrorText: null,
+      isRendererRecoveryPending: false,
       currentMainFrameLocalOriginKey: null,
       desiredBounds: args.desiredBounds,
       popupTimestamps: [],
@@ -816,6 +834,15 @@ export function createDesktopBrowserViewManager(
         const wasVisible = entry.visible;
         entry.visible = request.visible;
         applyEntryVisibility(entry, hostWindow);
+        if (
+          request.visible &&
+          !wasVisible &&
+          entry.lastErrorText !== null &&
+          entry.view.webContents.getURL().length > 0
+        ) {
+          entry.lastErrorText = null;
+          entry.view.webContents.reload();
+        }
         // Focus the view only on a real not-visible → visible transition so the
         // Edit-menu copy/cut/paste roles and Cmd+C target this view's
         // webContents (the focused one). Skip redundant re-syncs so we never

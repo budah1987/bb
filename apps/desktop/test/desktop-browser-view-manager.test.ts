@@ -112,6 +112,7 @@ interface FakeWebContentsEventMap {
   "did-start-loading": FakeVoidWebContentsListener;
   "did-stop-loading": FakeVoidWebContentsListener;
   "did-finish-load": FakeVoidWebContentsListener;
+  "render-process-gone": FakeVoidWebContentsListener;
   "did-navigate": FakeDidNavigateListener;
   "did-navigate-in-page": FakeDidNavigateInPageListener;
   "did-start-navigation": FakeVoidWebContentsListener;
@@ -259,6 +260,7 @@ const electronMock = vi.hoisted(() => {
     public historyEntries: Array<{ title: string; url: string }> = [];
     public readonly id: number;
     public readonly loadURLCalls: string[] = [];
+    public reloadCalls = 0;
     public readonly isolatedWorldScripts: string[] = [];
     public readonly pendingCaptureResolvers: Array<
       (image: FakeNativeImage) => void
@@ -271,6 +273,7 @@ const electronMock = vi.hoisted(() => {
       "did-start-loading": [],
       "did-stop-loading": [],
       "did-finish-load": [],
+      "render-process-gone": [],
       "did-navigate": [],
       "did-navigate-in-page": [],
       "did-start-navigation": [],
@@ -351,7 +354,9 @@ const electronMock = vi.hoisted(() => {
       this.listeners[eventName].push(listener);
     }
 
-    reload(): void {}
+    reload(): void {
+      this.reloadCalls += 1;
+    }
 
     setWindowOpenHandler(handler: FakeWindowOpenHandler): void {
       this.windowOpenHandler = handler;
@@ -368,6 +373,18 @@ const electronMock = vi.hoisted(() => {
           args.validatedURL,
           args.isMainFrame,
         );
+      }
+    }
+
+    emitDidFinishLoad(): void {
+      for (const listener of this.listeners["did-finish-load"]) {
+        listener();
+      }
+    }
+
+    emitRenderProcessGone(): void {
+      for (const listener of this.listeners["render-process-gone"]) {
+        listener();
       }
     }
 
@@ -1069,6 +1086,71 @@ describe("DesktopBrowserViewManager", () => {
         webContentsId: view.webContents.id,
       }),
     ).toBe(false);
+  });
+
+  it("reloads a retained browser page after its renderer process exits", () => {
+    const manager = createDesktopBrowserViewManager({
+      partition: "persist:test",
+    });
+    const hostWindow = new FakeHostWindow({
+      contentBounds: { width: 700, height: 450 },
+      webContentsId: 62,
+    });
+
+    attachBrowserTab({
+      manager,
+      hostWindow,
+      tabId: "browser:a",
+      url: "http://localhost:5173/",
+    });
+    const webContents = requireFakeView(0).webContents;
+
+    webContents.emitRenderProcessGone();
+    webContents.emitRenderProcessGone();
+    expect(webContents.reloadCalls).toBe(1);
+
+    webContents.emitDidFinishLoad();
+    webContents.emitRenderProcessGone();
+    expect(webContents.reloadCalls).toBe(2);
+  });
+
+  it("retries a failed retained page when the panel reveals it", () => {
+    const manager = createDesktopBrowserViewManager({
+      partition: "persist:test",
+    });
+    const hostWindow = new FakeHostWindow({
+      contentBounds: { width: 700, height: 450 },
+      webContentsId: 63,
+    });
+
+    attachBrowserTab({
+      manager,
+      hostWindow,
+      tabId: "browser:a",
+      url: "http://localhost:5173/",
+    });
+    const webContents = requireFakeView(0).webContents;
+    webContents.emitDidFailLoad({
+      errorCode: -102,
+      errorDescription: "ERR_CONNECTION_REFUSED",
+      isMainFrame: true,
+      validatedURL: "http://localhost:5173/",
+    });
+
+    manager.setVisible({
+      hostWindow,
+      request: { tabId: "browser:a", visible: false },
+    });
+    manager.setVisible({
+      hostWindow,
+      request: { tabId: "browser:a", visible: true },
+    });
+    manager.setVisible({
+      hostWindow,
+      request: { tabId: "browser:a", visible: true },
+    });
+
+    expect(webContents.reloadCalls).toBe(1);
   });
 
   it("clears local subresource access after a local page commits to a public page", () => {
