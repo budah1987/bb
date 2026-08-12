@@ -1204,6 +1204,7 @@ function StandaloneWorkspaceSurface({
   return (
     <CompactWorkspaceSwipeHost
       contentKey={paneContentRoute(content)}
+      conversationThreadId={content.kind === "thread" ? content.threadId : null}
       panes={panes}
       focusedPaneId={layout.focusedPaneId}
       // Already on the Command Center: offer the return, not another open.

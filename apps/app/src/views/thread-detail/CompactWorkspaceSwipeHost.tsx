@@ -2,10 +2,6 @@ import { useEffect, useRef, useState } from "react";
 import type { PointerEvent as ReactPointerEvent, ReactNode } from "react";
 import { flushSync } from "react-dom";
 import { useMediaQuery } from "@bb/shared-ui/hooks/use-media-query";
-import {
-  cycleCompactConversation,
-  hasCompactConversationCycleHandler,
-} from "bb-plugin-conductor-workspaces/compact-conversation-navigation";
 import { isBlockingOverlayOpen } from "@/lib/swipe-gesture-targets";
 import type { PaneContent, PaneNode } from "@/lib/split-layout";
 import { CompactWorkspacePreviewSurface } from "./CompactWorkspacePreviewSurface";
@@ -26,6 +22,13 @@ import {
 } from "./workspaceSwipeGesture";
 
 const REDUCED_MOTION_QUERY = "(prefers-reduced-motion: reduce)";
+const CONVERSATION_SWIPE_COMMIT_RATIO = 0.18;
+const CONVERSATION_SWIPE_MIN_COMMIT_PX = 52;
+const CONVERSATION_SWIPE_MAX_COMMIT_PX = 72;
+const CONVERSATION_SWIPE_MAX_SHORT_TRAVEL_PX = 44;
+const LONG_WORKSPACE_SWIPE_RATIO = 0.68;
+const CONDUCTOR_CONVERSATION_CYCLE_EVENT =
+  "bb:conductor-compact-conversation-cycle";
 
 /** The whole standalone surface travels as one layer; both share this box. */
 const SWIPE_LAYER_CLASS = "flex min-h-0 min-w-0 flex-1 flex-col p-4 md:p-5";
@@ -61,14 +64,21 @@ interface SwipeSession {
 }
 
 function cycleConversation(
+  threadId: string,
   direction: WorkspaceSwipeDirection,
 ): void {
-  cycleCompactConversation(direction);
+  window.dispatchEvent(
+    new CustomEvent(CONDUCTOR_CONVERSATION_CYCLE_EVENT, {
+      detail: { threadId, direction },
+    }),
+  );
 }
 
 export interface CompactWorkspaceSwipeHostProps {
   /** The complete standalone page surface: header, body, composer, accessories. */
   children: ReactNode;
+  /** Visible thread whose Conductor context bar owns conversation cycling. */
+  conversationThreadId: string | null;
   /**
    * Identifies what the source layer is showing. Any external change — a
    * sidebar pick, a deep link, an agent-driven open — invalidates an in-flight
@@ -159,6 +169,37 @@ function clearLayer(element: HTMLElement | null) {
   element.style.opacity = "";
 }
 
+function conversationCommitDistance(width: number): number {
+  return Math.min(
+    CONVERSATION_SWIPE_MAX_COMMIT_PX,
+    Math.max(
+      CONVERSATION_SWIPE_MIN_COMMIT_PX,
+      width * CONVERSATION_SWIPE_COMMIT_RATIO,
+    ),
+  );
+}
+
+/**
+ * Matches the Command Center's restrained 44px short-swipe travel, then grows
+ * continuously into the full-page Command Center or right-panel transition.
+ */
+function conversationDragOffset(deltaX: number, width: number): number {
+  const direction = Math.sign(deltaX);
+  const distance = Math.abs(deltaX);
+  const shortCommit = conversationCommitDistance(width);
+  if (distance <= shortCommit) {
+    return direction * Math.min(distance, CONVERSATION_SWIPE_MAX_SHORT_TRAVEL_PX);
+  }
+  const longCommit = width * LONG_WORKSPACE_SWIPE_RATIO;
+  if (longCommit <= shortCommit || distance >= longCommit) return deltaX;
+  const progress = (distance - shortCommit) / (longCommit - shortCommit);
+  return (
+    direction *
+    (CONVERSATION_SWIPE_MAX_SHORT_TRAVEL_PX +
+      progress * (longCommit - CONVERSATION_SWIPE_MAX_SHORT_TRAVEL_PX))
+  );
+}
+
 /**
  * The standalone-compact workspace gesture: a horizontal drag moves the whole
  * page surface — header, body, composer, and accessories together — to the
@@ -171,6 +212,7 @@ function clearLayer(element: HTMLElement | null) {
  */
 export function CompactWorkspaceSwipeHost({
   children,
+  conversationThreadId,
   contentKey,
   panes,
   focusedPaneId,
@@ -262,11 +304,15 @@ export function CompactWorkspaceSwipeHost({
       }
       return;
     }
-    moveLayer(sourceRef.current, deltaX, settling);
     const current = previewRef.current;
+    const visualDeltaX =
+      current?.destination.kind === "conversation"
+        ? conversationDragOffset(deltaX, width)
+        : deltaX;
+    moveLayer(sourceRef.current, visualDeltaX, settling);
     if (current !== null) {
       const entering = current.direction === "right" ? -width : width;
-      moveLayer(previewLayerRef.current, deltaX + entering, settling);
+      moveLayer(previewLayerRef.current, visualDeltaX + entering, settling);
     }
   };
 
@@ -318,7 +364,7 @@ export function CompactWorkspaceSwipeHost({
     if (target.kind === "right-panel") {
       return { direction: "left", destination: target };
     }
-    if (hasCompactConversationCycleHandler()) {
+    if (conversationThreadId !== null) {
       return {
         direction: target.direction,
         destination: { kind: "conversation" },
@@ -363,6 +409,18 @@ export function CompactWorkspaceSwipeHost({
       allowsRightPanel,
     });
     const { destination } = current;
+    if (destination.kind === "conversation") {
+      if (Math.abs(session.deltaX) < conversationCommitDistance(session.width)) {
+        return null;
+      }
+      return {
+        announcement:
+          current.direction === "left"
+            ? "Next conversation"
+            : "Previous conversation",
+        run: () => cycleConversation(conversationThreadId, current.direction),
+      };
+    }
     if (
       outcome.kind === "command-center" &&
       destination.kind === "command-center"
@@ -377,15 +435,6 @@ export function CompactWorkspaceSwipeHost({
     }
     if (outcome.kind !== "pane") {
       return null;
-    }
-    if (destination.kind === "conversation") {
-      return {
-        announcement:
-          current.direction === "left"
-            ? "Next conversation"
-            : "Previous conversation",
-        run: () => cycleConversation(current.direction),
-      };
     }
     if (destination.kind === "pane") {
       return {

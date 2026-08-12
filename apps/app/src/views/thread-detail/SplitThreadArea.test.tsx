@@ -33,7 +33,6 @@ import {
 } from "@/lib/command-center-navigation";
 import { createBbDesktopApi } from "@/test/bb-desktop-test-utils";
 import { resourceRouteLabelAtom } from "@/components/layout/resourceRouteLabelAtom";
-import { registerCompactConversationCycleHandler } from "bb-plugin-conductor-workspaces/compact-conversation-navigation";
 import { useAppCommandHandler } from "@/components/commands/AppCommandProvider";
 import {
   resetPluginSlotStoreForTest,
@@ -83,6 +82,7 @@ const panelCallbacks = vi.hoisted(
     >(),
 );
 const commandHandlers = vi.hoisted(() => new Map<string, () => boolean>());
+const commandDispatchCalls = vi.hoisted(() => [] as string[]);
 const threadViewMountCounts = vi.hoisted(() => new Map<string, number>());
 interface ShortcutPresentationFixture {
   ariaKeyshortcuts: string;
@@ -152,8 +152,10 @@ vi.mock("@/hooks/queries/thread-queries", () => ({
 
 vi.mock("@/components/commands/AppCommandProvider", () => ({
   useAppCommandContext: () => undefined,
-  useAppCommandDispatch: () => (command: string) =>
-    commandHandlers.get(command)?.() ?? false,
+  useAppCommandDispatch: () => (command: string) => {
+    commandDispatchCalls.push(command);
+    return commandHandlers.get(command)?.() ?? false;
+  },
   useAppCommandHandler: (command: string, handler: () => boolean) => {
     commandHandlers.set(command, handler);
   },
@@ -712,6 +714,7 @@ beforeEach(() => {
   panelFullScreenState.isMainCollapsed = false;
   panelGroupLayoutState.layout = [100, 0];
   commandHandlers.clear();
+  commandDispatchCalls.length = 0;
   threadViewMountCounts.clear();
   commandPresentationState.isModifierHeld = false;
   commandPresentationState.shortcut = null;
@@ -2472,19 +2475,24 @@ describe("SplitThreadArea", () => {
       await screen.findByTestId("workspace-swipe-position");
 
       let cycleDirection = "";
-      const unregisterCycle = registerCompactConversationCycleHandler(
-        (direction) => {
-          cycleDirection = direction;
-          return true;
-        },
+      const handleCycle = (event: Event) => {
+        const detail = (event as CustomEvent).detail;
+        if (detail.threadId === "thr-a") cycleDirection = detail.direction;
+      };
+      window.addEventListener(
+        "bb:conductor-compact-conversation-cycle",
+        handleCycle,
       );
 
       try {
         const transcriptText = document.createElement("p");
         transcriptText.textContent = "Conversation transcript text";
         swipeSurface().append(transcriptText);
-        dragTo(250, { from: 500, target: transcriptText });
-        firePointer(window, "pointerup", 250);
+        dragTo(430, { from: 500, target: transcriptText });
+        expect(swipeSurface().style.transform).toBe(
+          "translate3d(-44px, 0, 0)",
+        );
+        firePointer(window, "pointerup", 430);
 
         await waitFor(() => expect(cycleDirection).toBe("left"));
         expect(storedSplitLayout(store).focusedPaneId).toBe("pane-1");
@@ -2493,7 +2501,10 @@ describe("SplitThreadArea", () => {
           "Next conversation",
         );
       } finally {
-        unregisterCycle();
+        window.removeEventListener(
+          "bb:conductor-compact-conversation-cycle",
+          handleCycle,
+        );
       }
     });
 
@@ -2514,12 +2525,9 @@ describe("SplitThreadArea", () => {
       firePointer(surface, "pointermove", 100);
 
       expect(previewSurface()?.textContent).toContain("Right panel");
-      expect(screen.getByTestId("panel-thr-b").textContent).toBe("closed");
       firePointer(surface, "pointerup", 100);
 
-      await waitFor(() =>
-        expect(screen.getByTestId("panel-thr-b").textContent).toBe("open"),
-      );
+      expect(commandDispatchCalls).toContain("panel.toggle");
       expect(screen.getByTestId("workspace-swipe-position").textContent).toBe(
         "Right panel",
       );

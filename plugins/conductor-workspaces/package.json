@@ -13,12 +13,7 @@
       "types": "./src/rpc-contract.ts",
       "default": "./src/rpc-contract.ts"
     },
-    "./conductor.css": "./src/conductor.css",
-    "./compact-conversation-navigation": {
-      "source": "./src/compact-conversation-navigation.ts",
-      "types": "./src/compact-conversation-navigation.ts",
-      "default": "./src/compact-conversation-navigation.ts"
-    }
+    "./conductor.css": "./src/conductor.css"
   },
   "description": "The BBamir repository, workspace, and conversation sidebar for BB.",
   "license": "MIT",

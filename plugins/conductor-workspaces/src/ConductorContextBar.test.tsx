@@ -17,10 +17,6 @@ import {
 } from "@testing-library/react";
 import { loadPluginApp, renderSlot } from "@bb/plugin-sdk/testing/app";
 import type { PluginSidebarThread } from "@bb/plugin-sdk/app";
-import {
-  cycleCompactConversation,
-  hasCompactConversationCycleHandler,
-} from "./compact-conversation-navigation";
 
 const app = await loadPluginApp(() => import("../app"));
 const contextComponent = app.threadLists[0]?.experimental_contextBar;
@@ -203,9 +199,12 @@ describe("ConductorContextBar compact layout", () => {
     const rail = await screen.findByRole("navigation", {
       name: "Workspace conversations",
     });
-    expect(hasCompactConversationCycleHandler()).toBe(true);
     act(() => {
-      expect(cycleCompactConversation("left")).toBe(true);
+      window.dispatchEvent(
+        new CustomEvent("bb:conductor-compact-conversation-cycle", {
+          detail: { threadId: "thread-2", direction: "left" },
+        }),
+      );
     });
     expect(rendered.sidebarActionCalls.at(-1)).toEqual({
       method: "open",
@@ -792,6 +791,42 @@ describe("ConductorContextBar compact layout", () => {
     });
   });
 
+  it("closes a tab with the middle mouse button", async () => {
+    const rendered = renderSlot(
+      contextBar,
+      {
+        threadId: "thread-2",
+        projectId: "project-1",
+        environmentId: "environment-1",
+        isCompactViewport: false,
+      },
+      {
+        sidebarThreads: {
+          status: "ready",
+          threads: [thread(1), thread(2), thread(3)],
+          projects: [{ id: "project-1", name: "BB", isPersonal: false }],
+        },
+        rpc: {
+          readReconciliation: () => ({
+            legacyWorkspaces: [],
+            recordedSignature: null,
+          }),
+        },
+      },
+    );
+
+    fireEvent(
+      await screen.findByRole("button", { name: "Conversation 2" }),
+      new MouseEvent("auxclick", { bubbles: true, button: 1 }),
+    );
+
+    expect(rendered.sidebarActionCalls.at(-1)).toEqual({
+      method: "open",
+      threadId: "thread-3",
+      options: undefined,
+    });
+  });
+
   it("closes the focused tab and reopens it with Shift+Command+W", async () => {
     let closeHandler: (() => boolean) | null = null;
     const rendered = renderSlot(
@@ -892,6 +927,41 @@ describe("ConductorContextBar compact layout", () => {
         },
       },
     ]);
+  });
+
+  it("closes a split pane when its final tab closes", async () => {
+    const closePane = vi.fn();
+    const rendered = renderSlot(
+      contextBar,
+      {
+        threadId: "thread-1",
+        projectId: "project-1",
+        environmentId: "environment-1",
+        isCompactViewport: false,
+        experimental_closePane: closePane,
+      },
+      {
+        sidebarThreads: {
+          status: "ready",
+          threads: [thread(1)],
+          projects: [{ id: "project-1", name: "BB", isPersonal: false }],
+        },
+        rpc: {
+          readReconciliation: () => ({
+            legacyWorkspaces: [],
+            recordedSignature: null,
+          }),
+        },
+      },
+    );
+
+    fireEvent(
+      await screen.findByRole("button", { name: "Conversation 1" }),
+      new MouseEvent("auxclick", { bubbles: true, button: 1 }),
+    );
+
+    expect(closePane).toHaveBeenCalledOnce();
+    expect(rendered.sidebarActionCalls).toEqual([]);
   });
 
   it("adds a workspace transcript to a blank conversation", async () => {

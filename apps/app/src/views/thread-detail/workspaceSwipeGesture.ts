@@ -20,7 +20,7 @@ export const WORKSPACE_SWIPE_FLING_VELOCITY_PX_PER_SEC = 360;
  * or a quick flick would replace the whole surface.
  */
 export const WORKSPACE_SWIPE_COMMAND_CENTER_RATIO = 0.68;
-/** A deliberate leftward drag opens the current task's right rail. */
+/** A deliberate leftward drag opens the current task's right panel. */
 export const WORKSPACE_SWIPE_RIGHT_PANEL_RATIO = 0.68;
 /**
  * How recent the last movement sample must be to describe the release. A finger
@@ -118,7 +118,7 @@ export interface WorkspaceSwipeInput {
   width: number;
   /** Whether a long rightward drag may open the Command Center here. */
   allowsCommandCenter: boolean;
-  /** Whether a long leftward drag may open the current task's right rail. */
+  /** Whether a long leftward drag may open the current task's right panel. */
   allowsRightPanel: boolean;
 }
 

@@ -38,10 +38,12 @@ import {
   RenameConversationDialog,
   pickDeleteFallbackThread,
 } from "./ConversationActions";
-import { registerCompactConversationCycleHandler } from "./compact-conversation-navigation";
 
 const COMPACT_TAB_SWIPE_INTENT_PX = 10;
 const COMPACT_TAB_SWIPE_COMMIT_PX = 36;
+const COMPACT_CONVERSATION_CYCLE_EVENT =
+  "bb:conductor-compact-conversation-cycle";
+const TAB_CLOSE_TRANSITION_MS = 150;
 
 interface CompactTabSwipeSession {
   active: boolean;
@@ -56,6 +58,7 @@ export function ConductorContextBar({
   environmentId,
   isCompactViewport,
   experimental_registerCloseHandler,
+  experimental_closePane,
 }: PluginThreadContextBarProps) {
   return (
     <ConductorWorkspaceContextBar
@@ -64,6 +67,7 @@ export function ConductorContextBar({
       environmentId={environmentId}
       isCompactViewport={isCompactViewport}
       registerCloseHandler={experimental_registerCloseHandler}
+      closePane={experimental_closePane}
     />
   );
 }
@@ -73,6 +77,7 @@ export function ConductorNewThreadContextBar({
   environmentId,
   isCompactViewport,
   experimental_registerCloseHandler,
+  experimental_closePane,
 }: PluginNewThreadContextBarProps) {
   return (
     <ConductorWorkspaceContextBar
@@ -81,6 +86,7 @@ export function ConductorNewThreadContextBar({
       environmentId={environmentId}
       isCompactViewport={isCompactViewport}
       registerCloseHandler={experimental_registerCloseHandler}
+      closePane={experimental_closePane}
     />
   );
 }
@@ -91,12 +97,14 @@ function ConductorWorkspaceContextBar({
   environmentId,
   isCompactViewport,
   registerCloseHandler,
+  closePane,
 }: {
   activeThreadId: string | null;
   projectId: string;
   environmentId: string | null;
   isCompactViewport: boolean;
   registerCloseHandler?: (handler: (() => boolean) | null) => void;
+  closePane?: () => void;
 }) {
   const state = useSidebarThreads();
   const actions = useSidebarThreadActions();
@@ -107,7 +115,9 @@ function ConductorWorkspaceContextBar({
   const closeInFlightRef = useRef(false);
   const tabSwipeRef = useRef<CompactTabSwipeSession | null>(null);
   const suppressTabClickRef = useRef(false);
+  const closingTabIdsRef = useRef(new Set<string>());
   const [tabRailWidth, setTabRailWidth] = useState<number | null>(null);
+  const [, setTabRevision] = useState(0);
   const [renameThread, setRenameThread] = useState<PluginSidebarThread | null>(
     null,
   );
@@ -156,36 +166,60 @@ function ConductorWorkspaceContextBar({
   const closeConversation = useCallback(
     (threadId: string): boolean => {
       if (!workspace) return false;
-      if (closeInFlightRef.current) return true;
+      if (
+        closeInFlightRef.current ||
+        closingTabIdsRef.current.has(threadId)
+      ) {
+        return true;
+      }
 
       const closingIndex = openThreads.findIndex(
         (thread) => thread.id === threadId,
       );
       if (closingIndex < 0) return false;
 
-      saveClosedTabIds(workspace.key, [
-        threadId,
-        ...loadClosedTabIds(workspace.key).filter(
-          (closedId) => closedId !== threadId,
-        ),
-      ]);
-
-      if (threadId !== cycleThreadIdRef.current) return true;
-
-      const fallback =
-        openThreads[closingIndex + 1] ?? openThreads[closingIndex - 1] ?? null;
-      closeInFlightRef.current = true;
-      if (fallback) {
-        cycleThreadIdRef.current = fallback.id;
-        actions.open(fallback.id);
-        return true;
+      closingTabIdsRef.current.add(threadId);
+      if (threadId === cycleThreadIdRef.current) {
+        closeInFlightRef.current = true;
       }
+      const tab = Array.from(
+        tabRailRef.current?.querySelectorAll<HTMLElement>(
+          "[data-conductor-thread-id]",
+        ) ?? [],
+      ).find((candidate) => candidate.dataset.conductorThreadId === threadId);
+      runTabCloseTransition(tab ?? null, () => {
+        closingTabIdsRef.current.delete(threadId);
+        saveClosedTabIds(workspace.key, [
+          threadId,
+          ...loadClosedTabIds(workspace.key).filter(
+            (closedId) => closedId !== threadId,
+          ),
+        ]);
 
-      cycleThreadIdRef.current = null;
-      openNewConversation();
+        if (threadId !== cycleThreadIdRef.current) {
+          setTabRevision((revision) => revision + 1);
+          return;
+        }
+        if (openThreads.length === 1 && closePane) {
+          cycleThreadIdRef.current = null;
+          closePane();
+          return;
+        }
+
+        const fallback =
+          openThreads[closingIndex + 1] ?? openThreads[closingIndex - 1] ?? null;
+        if (fallback) {
+          cycleThreadIdRef.current = fallback.id;
+          actions.open(fallback.id);
+          return;
+        }
+
+        cycleThreadIdRef.current = null;
+        openNewConversation();
+      });
       return true;
     },
-    [actions, openNewConversation, openThreads, workspace],
+    [actions, closePane, openNewConversation, openThreads, workspace],
   );
 
   useLayoutEffect(() => {
@@ -225,7 +259,12 @@ function ConductorWorkspaceContextBar({
     );
     if (activeIndex < 0) {
       const fallback = openThreads[0];
-      if (!fallback) return false;
+      if (!fallback) {
+        if (!closePane) return false;
+        closeInFlightRef.current = true;
+        closePane();
+        return true;
+      }
       closeInFlightRef.current = true;
       cycleThreadIdRef.current = fallback.id;
       actions.open(fallback.id);
@@ -233,7 +272,18 @@ function ConductorWorkspaceContextBar({
     }
     const activeThread = openThreads[activeIndex];
     return activeThread ? closeConversation(activeThread.id) : true;
-  }, [actions, closeConversation, openThreads, workspace]);
+  }, [actions, closeConversation, closePane, openThreads, workspace]);
+
+  const closeNewConversation = useCallback((): boolean => {
+    if (openThreads.length === 0 && !closePane) return false;
+    const tab = tabRailRef.current?.querySelector<HTMLElement>(
+      "[data-new-conversation]",
+    );
+    runTabCloseTransition(tab ?? null, () => {
+      closeFocusedConversation();
+    });
+    return true;
+  }, [closeFocusedConversation, closePane, openThreads.length]);
 
   const openConversation = useCallback(
     (threadId: string) => {
@@ -260,14 +310,28 @@ function ConductorWorkspaceContextBar({
   );
 
   useLayoutEffect(() => {
-    if (!isCompactViewport || !workspace) return;
-    return registerCompactConversationCycleHandler((direction) => {
+    if (!isCompactViewport || !workspace || activeThreadId === null) return;
+    const handleConversationCycle = (event: Event) => {
+      if (!("detail" in event)) return;
+      const detail: unknown = event.detail;
+      if (typeof detail !== "object" || detail === null) return;
+      if (Reflect.get(detail, "threadId") !== activeThreadId) return;
+      const direction = Reflect.get(detail, "direction");
+      if (direction !== "left" && direction !== "right") return;
       const currentThreadId = cycleThreadIdRef.current;
-      if (currentThreadId === null || openThreads.length < 2) return false;
+      if (currentThreadId === null || openThreads.length < 2) return;
       openAdjacentConversation(currentThreadId, direction === "left" ? 1 : -1);
-      return true;
-    });
-  }, [isCompactViewport, openAdjacentConversation, openThreads.length, workspace]);
+    };
+    window.addEventListener(
+      COMPACT_CONVERSATION_CYCLE_EVENT,
+      handleConversationCycle,
+    );
+    return () =>
+      window.removeEventListener(
+        COMPACT_CONVERSATION_CYCLE_EVENT,
+        handleConversationCycle,
+      );
+  }, [activeThreadId, isCompactViewport, openAdjacentConversation, openThreads.length, workspace]);
 
   const resetTabSwipe = useCallback(() => {
     tabSwipeRef.current = null;
@@ -513,6 +577,12 @@ function ConductorWorkspaceContextBar({
             className="conductor-conversation-tab conductor-new-conversation-tab"
             data-active
             data-new-conversation
+            onAuxClick={(event) => {
+              if (event.button !== 1) return;
+              event.preventDefault();
+              event.stopPropagation();
+              closeNewConversation();
+            }}
           >
             <button
               type="button"
@@ -532,7 +602,7 @@ function ConductorWorkspaceContextBar({
               className="conductor-conversation-tab-close"
               aria-label="Close new conversation"
               title="Close new conversation"
-              onClick={closeFocusedConversation}
+              onClick={closeNewConversation}
             >
               <Icon name="X" className="size-3" aria-hidden />
             </button>
@@ -577,6 +647,40 @@ function runStableNewTabTransition(navigate: () => void): void {
   });
 }
 
+function runTabCloseTransition(
+  tab: HTMLElement | null,
+  close: () => void,
+): void {
+  if (
+    tab === null ||
+    window.matchMedia("(prefers-reduced-motion: reduce)").matches
+  ) {
+    close();
+    return;
+  }
+
+  let finished = false;
+  const finish = () => {
+    if (finished) return;
+    finished = true;
+    window.clearTimeout(timeoutId);
+    tab.removeEventListener("animationend", handleAnimationEnd);
+    close();
+  };
+  const handleAnimationEnd = (event: AnimationEvent) => {
+    if (
+      event.target !== tab ||
+      event.animationName !== "conductor-tab-close"
+    ) {
+      return;
+    }
+    finish();
+  };
+  const timeoutId = window.setTimeout(finish, TAB_CLOSE_TRANSITION_MS + 50);
+  tab.addEventListener("animationend", handleAnimationEnd);
+  tab.dataset.closing = "";
+}
+
 function isCycleBlockedTarget(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) return false;
   return target.closest('[role="dialog"], [role="menu"]') !== null;
@@ -605,6 +709,13 @@ const ConversationTab = forwardRef<HTMLDivElement, ConversationTabProps>(
         ref={ref}
         className="conductor-conversation-tab"
         data-active={active || undefined}
+        data-conductor-thread-id={thread.id}
+        onAuxClick={(event) => {
+          if (event.button !== 1) return;
+          event.preventDefault();
+          event.stopPropagation();
+          onClose();
+        }}
       >
         <button
           type="button"

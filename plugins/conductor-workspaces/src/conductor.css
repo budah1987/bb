@@ -1688,6 +1688,22 @@
   }
 }
 
+@keyframes conductor-tab-close {
+  from {
+    opacity: 1;
+    scale: 1;
+  }
+  to {
+    opacity: 0;
+    scale: 0.99;
+  }
+}
+
+.conductor-conversation-tab[data-closing] {
+  pointer-events: none;
+  animation: conductor-tab-close 150ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
 html[data-conductor-new-tab-transition] [data-conversation-surface] {
   view-transition-name: conductor-new-tab-content !important;
 }
@@ -1837,6 +1853,10 @@ html[data-conductor-new-tab-transition] [data-conversation-surface] {
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .conductor-conversation-tab[data-closing] {
+    animation: none;
+  }
+
   .conductor-section-caret,
   .conductor-section-content,
   .conductor-sidebar section,
