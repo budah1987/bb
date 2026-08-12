@@ -9,6 +9,7 @@ import {
 import { pathExists } from "./path-exists.js";
 import { isRescanRequiredMessage } from "./watch-recovery.js";
 import { toWatchErrorMessage } from "./watch-error.js";
+import { jitterRetryDelay } from "./retry-delay.js";
 
 export type {
   ParcelWatcherEventBatch,
@@ -116,11 +117,13 @@ export class RootSubscription {
         this.retryTimer = null;
         this.start();
       },
-      calculateExponentialBackoffDelay({
-        attempt: this.retryAttempt,
-        baseDelayMs: this.args.retryDelayMs,
-        maxDelayMs: this.args.maxRetryDelayMs,
-      }),
+      jitterRetryDelay(
+        calculateExponentialBackoffDelay({
+          attempt: this.retryAttempt,
+          baseDelayMs: this.args.retryDelayMs,
+          maxDelayMs: this.args.maxRetryDelayMs,
+        }),
+      ),
     );
   }
 

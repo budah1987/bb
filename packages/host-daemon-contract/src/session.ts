@@ -49,6 +49,7 @@ export type HostDaemonLoadedEnvironment = z.infer<
 export const hostDaemonWatchSetWorkspaceTargetSchema = z
   .object({
     environmentId: z.string().min(1),
+    priority: z.enum(["foreground", "background"]),
     workspaceContext: workspaceContextSchema,
   })
   .strict();

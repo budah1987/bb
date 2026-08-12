@@ -748,6 +748,13 @@ export function translateCodexEvent(
     ...(envelope.data.params ? { params: envelope.data.params } : {}),
   };
 
+  if (
+    rawEvent.method === "hook/started" ||
+    rawEvent.method === "hook/completed"
+  ) {
+    return [];
+  }
+
   const parsed = codexHandledEventSchema.safeParse(rawEvent);
   if (!parsed.success) {
     return isHandledCodexMethod(rawEvent.method)

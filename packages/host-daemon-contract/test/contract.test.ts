@@ -1276,7 +1276,7 @@ describe("host-daemon command schemas", () => {
   // build claims the current version to force every older daemon to update
   // before it connects.
   it("uses protocol version 100 for the current wire surface", () => {
-    expect(HOST_DAEMON_PROTOCOL_VERSION).toBe(101);
+    expect(HOST_DAEMON_PROTOCOL_VERSION).toBe(102);
   });
 
   it("binds Plan cancellation to a required turn id and typed result", () => {
@@ -3616,6 +3616,7 @@ describe("host-daemon session schemas", () => {
         workspaceTargets: [
           {
             environmentId: "env_123",
+            priority: "foreground",
             workspaceContext: {
               workspacePath: "/tmp/env-123",
               workspaceProvisionType: "unmanaged",

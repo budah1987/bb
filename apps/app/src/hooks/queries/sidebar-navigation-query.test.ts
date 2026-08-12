@@ -13,7 +13,7 @@ import {
 const listThreadsMock = vi.hoisted(() => vi.fn());
 
 vi.mock("@/lib/sdk", () => ({
-  sdk: { threads: { list: listThreadsMock } },
+  sdk: { projects: { sidebarThreads: listThreadsMock } },
 }));
 
 function makeProject(
@@ -50,6 +50,10 @@ describe("sidebar navigation on-demand pagination", () => {
     const navigation: SidebarNavigationCacheResponse = {
       sections: [],
       spaces: [],
+      nextThreadCursorByProjectId: {
+        personal: null,
+        proj_test: "cursor-50",
+      },
       projects: [makeProject("proj_test", initialThreads)],
       personalProject: makeProject("personal", []),
       _threadPagination: {
@@ -57,15 +61,17 @@ describe("sidebar navigation on-demand pagination", () => {
         completeProjectIds: ["personal"],
         generation: 1,
         initialLimit: 50,
-        nextOffsetByProjectId: { personal: 50, proj_test: 50 },
+        nextCursorByProjectId: { personal: null, proj_test: "cursor-50" },
       },
     };
     const queryClient = new QueryClient();
     queryClient.setQueryData(sidebarNavigationQueryKey(), navigation);
-    listThreadsMock.mockImplementation(
-      async ({ offset }: { offset?: number }) =>
-        offset === 50 ? allThreads.slice(50, 250) : [],
-    );
+    listThreadsMock
+      .mockResolvedValueOnce({
+        threads: allThreads.slice(50, 250),
+        nextCursor: "cursor-250",
+      })
+      .mockResolvedValueOnce({ threads: [], nextCursor: null });
 
     await ensureSidebarNavigationHydrated(queryClient, navigation);
 
@@ -79,13 +85,13 @@ describe("sidebar navigation on-demand pagination", () => {
     expect(listThreadsMock).toHaveBeenCalledTimes(2);
     expect(listThreadsMock).toHaveBeenNthCalledWith(
       1,
-      expect.objectContaining({ limit: 200, offset: 50 }),
+      expect.objectContaining({ cursor: "cursor-50", limit: "200" }),
     );
     expect(listThreadsMock).toHaveBeenNthCalledWith(
       2,
-      expect.objectContaining({ limit: 200, offset: 250 }),
+      expect.objectContaining({ cursor: "cursor-250", limit: "200" }),
     );
-    expect(sdk.threads.list).toBe(listThreadsMock);
+    expect(sdk.projects.sidebarThreads).toBe(listThreadsMock);
   });
 
   it("restarts pagination when a bootstrap refetch replaces the cache", async () => {
@@ -98,6 +104,10 @@ describe("sidebar navigation on-demand pagination", () => {
     const firstNavigation: SidebarNavigationCacheResponse = {
       sections: [],
       spaces: [],
+      nextThreadCursorByProjectId: {
+        personal: null,
+        proj_test: "cursor-50",
+      },
       projects: [makeProject("proj_test", initialThreads)],
       personalProject: makeProject("personal", []),
       _threadPagination: {
@@ -105,7 +115,7 @@ describe("sidebar navigation on-demand pagination", () => {
         completeProjectIds: ["personal"],
         generation: 2,
         initialLimit: 50,
-        nextOffsetByProjectId: { personal: 50, proj_test: 50 },
+        nextCursorByProjectId: { personal: null, proj_test: "cursor-50" },
       },
     };
     const secondNavigation: SidebarNavigationCacheResponse = {
@@ -115,27 +125,29 @@ describe("sidebar navigation on-demand pagination", () => {
         completeProjectIds: ["personal"],
         generation: 3,
         initialLimit: 50,
-        nextOffsetByProjectId: { personal: 50, proj_test: 50 },
+        nextCursorByProjectId: { personal: null, proj_test: "cursor-50" },
       },
     };
     const queryClient = new QueryClient();
     queryClient.setQueryData(sidebarNavigationQueryKey(), firstNavigation);
-    let resolveFirstPage: ((threads: never[]) => void) | undefined;
+    let resolveFirstPage:
+      | ((page: { threads: never[]; nextCursor: null }) => void)
+      | undefined;
     listThreadsMock
       .mockImplementationOnce(
         () =>
-          new Promise<never[]>((resolve) => {
+          new Promise<{ threads: never[]; nextCursor: null }>((resolve) => {
             resolveFirstPage = resolve;
           }),
       )
-      .mockResolvedValueOnce([]);
+      .mockResolvedValueOnce({ threads: [], nextCursor: null });
 
     const firstHydration = ensureSidebarNavigationHydrated(
       queryClient,
       firstNavigation,
     );
     queryClient.setQueryData(sidebarNavigationQueryKey(), secondNavigation);
-    resolveFirstPage?.([]);
+    resolveFirstPage?.({ threads: [], nextCursor: null });
     await firstHydration;
 
     expect(
@@ -153,6 +165,10 @@ describe("sidebar navigation on-demand pagination", () => {
     const navigation: SidebarNavigationCacheResponse = {
       sections: [],
       spaces: [],
+      nextThreadCursorByProjectId: {
+        personal: null,
+        proj_test: "cursor-50",
+      },
       projects: [makeProject("proj_test", initialThreads)],
       personalProject: makeProject("personal", []),
       _threadPagination: {
@@ -160,19 +176,20 @@ describe("sidebar navigation on-demand pagination", () => {
         completeProjectIds: ["personal"],
         generation: 4,
         initialLimit: 50,
-        nextOffsetByProjectId: { personal: 50, proj_test: 50 },
+        nextCursorByProjectId: { personal: null, proj_test: "cursor-50" },
       },
     };
     const queryClient = new QueryClient();
     queryClient.setQueryData(sidebarNavigationQueryKey(), navigation);
-    listThreadsMock.mockResolvedValue(
-      Array.from({ length: 200 }, (_, index) =>
+    listThreadsMock.mockResolvedValue({
+      threads: Array.from({ length: 200 }, (_, index) =>
         makeThreadListEntry({
           id: `thr_${index + 50}`,
           projectId: "proj_test",
         }),
       ),
-    );
+      nextCursor: "cursor-250",
+    });
 
     await loadMoreSidebarProjectThreads(queryClient, "proj_test");
 

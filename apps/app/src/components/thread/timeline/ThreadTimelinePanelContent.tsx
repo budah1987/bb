@@ -7,6 +7,7 @@ import { ConversationTimeline } from "@/components/ui/conversation.js";
 import { useThread } from "@/hooks/queries/thread-queries";
 import { BbHttpError } from "@/lib/sdk";
 import { isRunningThreadRuntimeDisplayStatus } from "./thread-runtime-status.js";
+import { resolveThreadProgressLabel } from "./thread-progress-label.js";
 import {
   ThreadTimelineSurface,
   type ThreadTimelineSurfaceProps,
@@ -90,12 +91,20 @@ export function ThreadTimelinePanelContent({
     displayStatus === "idle" && hasActiveBackgroundWork
       ? "Background work running"
       : undefined;
+  const timelineRows = resolvedTimeline.timelineRows;
+  const requestProgressLabel = resolveThreadProgressLabel({
+    activeThinking: resolvedTimeline.activeThinking !== null,
+    displayStatus,
+    isTurnSubmitting,
+    rows: timelineRows,
+  });
   const ongoingIndicatorLabel =
     displayStatus === "host-reconnecting"
       ? "Waiting for reconnection"
-      : isProvisioningDisplayStatus
-        ? provisioningLabel
-        : backgroundOnlyIndicatorLabel;
+      : (requestProgressLabel ??
+        (isProvisioningDisplayStatus
+          ? provisioningLabel
+          : backgroundOnlyIndicatorLabel));
   const showOngoingIndicator =
     threadQuery.data?.status !== "stopping" &&
     (isProvisioningDisplayStatus ||
@@ -103,7 +112,6 @@ export function ThreadTimelinePanelContent({
         (isTurnSubmitting ||
           isRunningThreadRuntimeDisplayStatus(displayStatus) ||
           backgroundOnlyIndicatorLabel !== undefined)));
-  const timelineRows = resolvedTimeline.timelineRows;
   const isChildThreadMissing =
     threadQuery.error instanceof BbHttpError &&
     threadQuery.error.status === 404;

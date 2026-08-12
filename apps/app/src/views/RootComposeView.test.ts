@@ -316,6 +316,7 @@ describe("buildMobileSessionThreads", () => {
     const sidebarNavigation: SidebarBootstrapResponse = {
       sections: [],
       spaces: [],
+      nextThreadCursorByProjectId: {},
       personalProject: makeProject({
         id: PERSONAL_PROJECT_ID,
         kind: "personal",

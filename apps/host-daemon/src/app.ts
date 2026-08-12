@@ -63,6 +63,8 @@ import {
   type HostWatcher,
 } from "@bb/host-watcher";
 import { SimulatorManager } from "./simulator/simulator-manager.js";
+import { createGitScanWorker } from "./git-scan-worker.js";
+import { getGitCommonDir } from "@bb/host-workspace";
 
 interface SessionState {
   value: string | null;
@@ -435,9 +437,54 @@ export async function createHostDaemonApp(
   });
 
   let sendServerMessage = (_message: HostDaemonDaemonWsMessage) => false;
+  const gitScanPauseReasons = new Set<string>();
+  let gitScanPauseStartedAt: number | null = null;
+  let gitScanQueueDepth = 0;
+  let router: CommandRouter | null = null;
+  const gitScanWorker = createGitScanWorker({
+    logger: options.logger,
+    onHealth: (health) => {
+      gitScanQueueDepth = health.queueDepth;
+    },
+    onUnavailable: () => {
+      options.logger.warn(
+        {},
+        "Git scan worker is unavailable; workspace state remains stale until daemon restart",
+      );
+    },
+  });
+  const setGitScanPause = (reason: string, paused: boolean): void => {
+    const wasPaused = gitScanPauseReasons.size > 0;
+    if (paused) gitScanPauseReasons.add(reason);
+    else gitScanPauseReasons.delete(reason);
+    const isPaused = gitScanPauseReasons.size > 0;
+    gitScanWorker.setBackgroundPaused(isPaused);
+    router?.setBackgroundPaused(isPaused);
+    if (!wasPaused && isPaused) {
+      gitScanPauseStartedAt = Date.now();
+      options.logger.debug(
+        { queueDepth: gitScanQueueDepth },
+        "Background host work paused",
+      );
+    } else if (wasPaused && !isPaused) {
+      options.logger.debug(
+        {
+          pauseDurationMs:
+            gitScanPauseStartedAt === null
+              ? 0
+              : Date.now() - gitScanPauseStartedAt,
+          queueDepth: gitScanQueueDepth,
+        },
+        "Background host work resumed",
+      );
+      gitScanPauseStartedAt = null;
+    }
+  };
   watchManager = new WatchManager({
     dataDir: options.dataDir,
+    gitScanWorker,
     hostWatcher: options.hostWatcher,
+    resolveRepositoryKey: getGitCommonDir,
     refreshWorkspace: (args) =>
       runtimeManager.refreshEnvironmentWorkspace(args),
     threadStorageRootPath,
@@ -739,7 +786,7 @@ export async function createHostDaemonApp(
     getShellEnv: () => runtimeManager.getShellEnv(),
   });
 
-  const router = new CommandRouter({
+  router = new CommandRouter({
     dataDir: options.dataDir,
     fetchProjectAttachment: (args) =>
       runSessionRequest({
@@ -768,6 +815,9 @@ export async function createHostDaemonApp(
     caffeinateManager,
     threadStorageRootPath,
     logger: options.logger,
+    onForegroundDispatchStateChange: (active) => {
+      setGitScanPause("provider-dispatch", active);
+    },
     eventSink: {
       emit: (event) => eventSink.emit(event),
       flush: () => eventSink.flush(),
@@ -878,8 +928,21 @@ export async function createHostDaemonApp(
         getConnected: () => connection.sessionId != null,
       })
     : null;
+  let healthyEventLoopSamples = 0;
   const eventLoopStallMonitor = startEventLoopStallMonitor({
     logger: options.logger,
+    onSample: ({ maxDelayMs }) => {
+      if (maxDelayMs > 200) {
+        healthyEventLoopSamples = 0;
+        setGitScanPause("event-loop-pressure", true);
+        return;
+      }
+      healthyEventLoopSamples =
+        maxDelayMs < 100 ? healthyEventLoopSamples + 1 : 0;
+      if (healthyEventLoopSamples >= 3) {
+        setGitScanPause("event-loop-pressure", false);
+      }
+    },
   });
   const hostDaemonHealthMonitor = startHostDaemonHealthMonitor({
     logger: options.logger,
@@ -911,6 +974,7 @@ export async function createHostDaemonApp(
       await localApi?.close();
       connectTunnel.shutdown();
       await watchManager.shutdown();
+      await gitScanWorker.shutdown();
       // Tear down the isolated parcel watcher child (SIGKILL + clear timers) so
       // the daemon's event loop can drain and the child is not orphaned.
       disposeParcelWatcherBackend();

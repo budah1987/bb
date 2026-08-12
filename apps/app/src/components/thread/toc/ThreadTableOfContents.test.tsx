@@ -247,6 +247,7 @@ function sidebarNavigation(
   return {
     sections: [],
     spaces: [],
+    nextThreadCursorByProjectId: {},
     projects: [
       {
         id: "proj_toc",

@@ -26,7 +26,10 @@ import {
   updateTerminalSessionTitleById,
   type TerminalSessionRow,
 } from "@bb/db";
-import type { TerminalSessionCloseReason } from "@bb/domain";
+import {
+  isVisibleTerminalSessionStatus,
+  type TerminalSessionCloseReason,
+} from "@bb/domain";
 import type {
   HostDaemonDaemonWsMessage,
   HostDaemonServerWsMessage,
@@ -69,6 +72,7 @@ const HOST_HOME_INITIAL_CWD = "~";
 const BROWSER_TERMINAL_REPLAY_MAX_BYTES = 512 * 1024;
 const TERMINAL_SCROLLBACK_MAX_BYTES = 4 * 1024 * 1024;
 const DEFAULT_RESTORE_RETRY_DELAYS_MS = [1_000, 2_000, 5_000, 10_000, 30_000];
+export const MAX_RETAINED_TERMINALS_PER_WORKSPACE = 12;
 
 type TerminalOpenedMessage = Extract<
   HostDaemonDaemonWsMessage,
@@ -628,6 +632,9 @@ export class TerminalSessionLifecycle {
       target.kind === "thread"
         ? this.resolveThreadTerminalCreateTarget(target.threadId)
         : target;
+    if (launchTarget.kind === "environment") {
+      this.assertWorkspaceTerminalBudget(launchTarget.environmentId);
+    }
     const start = args.payload.start ?? DEFAULT_TERMINAL_START;
     const isNamedCommand =
       start.mode === "command" && args.payload.title !== undefined;
@@ -678,6 +685,23 @@ export class TerminalSessionLifecycle {
             (target.cwd === null || session.initialCwd === target.cwd),
         ).length;
     }
+  }
+
+  private assertWorkspaceTerminalBudget(environmentId: string): void {
+    const retainedCount = listTerminalSessionsByEnvironment(
+      this.options.db,
+      environmentId,
+    ).filter((session) =>
+      isVisibleTerminalSessionStatus(session.status),
+    ).length;
+    if (retainedCount < MAX_RETAINED_TERMINALS_PER_WORKSPACE) {
+      return;
+    }
+    throw new ApiError(
+      409,
+      "resource_limit",
+      `Workspace terminal limit reached (${MAX_RETAINED_TERMINALS_PER_WORKSPACE})`,
+    );
   }
 
   private resolveThreadTerminalCreateTarget(

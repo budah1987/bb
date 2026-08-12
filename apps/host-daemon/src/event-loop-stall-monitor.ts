@@ -3,6 +3,7 @@ import type { HostDaemonLogger } from "./logger.js";
 
 interface EventLoopStallMonitorOptions {
   logger: Pick<HostDaemonLogger, "warn">;
+  onSample?: (sample: { maxDelayMs: number; p99DelayMs: number }) => void;
 }
 
 interface EventLoopStallMonitor {
@@ -33,6 +34,8 @@ export function startEventLoopStallMonitor(
 
   const timer = setInterval(() => {
     const maxDelayMs = nanosecondsToMilliseconds(histogram.max);
+    const p99DelayMs = nanosecondsToMilliseconds(histogram.percentile(99));
+    options.onSample?.({ maxDelayMs, p99DelayMs });
     if (maxDelayMs >= thresholdMs) {
       options.logger.warn(
         {
@@ -41,9 +44,7 @@ export function startEventLoopStallMonitor(
           meanDelayMs: roundDurationMs(
             nanosecondsToMilliseconds(histogram.mean),
           ),
-          p99DelayMs: roundDurationMs(
-            nanosecondsToMilliseconds(histogram.percentile(99)),
-          ),
+          p99DelayMs: roundDurationMs(p99DelayMs),
           resolutionMs,
           thresholdMs,
         },

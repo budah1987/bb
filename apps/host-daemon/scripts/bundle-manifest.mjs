@@ -91,4 +91,14 @@ export const bundleTargets = [
     label: "parcel watcher child",
     outfile: resolve(packageRoot, "dist", "bb-parcel-watcher-child.mjs"),
   },
+  {
+    banner: NODE_ESM_REQUIRE_BANNER,
+    entryPoint: resolve(
+      packageRoot,
+      "src",
+      "git-scan-worker-entry.ts",
+    ),
+    label: "git scan worker",
+    outfile: resolve(packageRoot, "dist", "bb-git-scan-worker.mjs"),
+  },
 ];

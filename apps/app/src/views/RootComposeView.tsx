@@ -226,7 +226,11 @@ import {
   resolveRootComposeProjectRouting,
   resolveRootComposeProviderRouting,
 } from "./root-compose-environment-selection";
-import { RootComposeMobileSessions } from "./RootComposeMobileSessions";
+const RootComposeMobileSessions = lazy(() =>
+  import("./RootComposeMobileSessions").then((module) => ({
+    default: module.RootComposeMobileSessions,
+  })),
+);
 import { useRootComposeProviderAuthLoginOpen } from "@/components/provider-auth/provider-auth-mobile-view-store";
 import { CommandCenterUsageRail } from "@/components/usage/CompactUsageLimits";
 import { RootComposeEmptyWelcome } from "./RootComposeEmptyWelcome";
@@ -4153,12 +4157,14 @@ export function RootComposeView() {
                     />
                   </div>
                 ) : null}
-                <RootComposeMobileSessions
-                  highlightedThreadId={lastCreatedThreadId}
-                  projectNamesById={mobileSessionProjectNamesById}
-                  showCreatingRow={createThread.isPending}
-                  threads={mobileSessionThreads}
-                />
+                <Suspense fallback={null}>
+                  <RootComposeMobileSessions
+                    highlightedThreadId={lastCreatedThreadId}
+                    projectNamesById={mobileSessionProjectNamesById}
+                    showCreatingRow={createThread.isPending}
+                    threads={mobileSessionThreads}
+                  />
+                </Suspense>
                 <div className="sticky bottom-0 z-10 -mx-1 mt-4 bg-background/95 px-1 pb-[max(0.25rem,env(safe-area-inset-bottom))] pt-2 backdrop-blur-sm md:static md:mx-0 md:mt-0 md:bg-transparent md:p-0 md:backdrop-blur-none">
                   <OverflowFade
                     placement="above"

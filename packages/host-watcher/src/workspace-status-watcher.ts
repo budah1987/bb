@@ -9,6 +9,7 @@ import {
 import { createDebouncedCallbackScheduler } from "./watch-callback-scheduler.js";
 import { pathExists } from "./path-exists.js";
 import { toWatchErrorMessage } from "./watch-error.js";
+import { jitterRetryDelay } from "./retry-delay.js";
 import {
   collectWorkspaceStatusChanges,
   resolveMetadataWatchSpecs,
@@ -396,11 +397,13 @@ export class WorkspaceStatusWatcher {
         this.metadataStartRetryTimer = null;
         this.startMetadataWatchSubscriptions();
       },
-      calculateExponentialBackoffDelay({
-        attempt: this.metadataRetryAttempt,
-        baseDelayMs: this.args.retryDelayMs,
-        maxDelayMs: this.args.maxRetryDelayMs,
-      }),
+      jitterRetryDelay(
+        calculateExponentialBackoffDelay({
+          attempt: this.metadataRetryAttempt,
+          baseDelayMs: this.args.retryDelayMs,
+          maxDelayMs: this.args.maxRetryDelayMs,
+        }),
+      ),
     );
   }
 

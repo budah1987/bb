@@ -17,6 +17,12 @@ import type {
   WorkspaceStatusWatchChangeKind,
   WorkspaceWatchError,
 } from "@bb/host-watcher";
+import type { GitScanWorker } from "./git-scan-worker.js";
+import {
+  GIT_SCAN_PROTOCOL_VERSION,
+  type GitScanKind,
+  type GitScanTriggerReason,
+} from "./git-scan-contract.js";
 import { reconnectProvisionArgsFromWorkspaceContext } from "./workspace-provision-target.js";
 
 type StopWatching = () => void | Promise<void>;
@@ -34,6 +40,8 @@ interface WorkspaceWatchState {
   lastSharedRefsFingerprint: string | null;
   pendingKinds: Set<WorkspaceStatusWatchChangeKind>;
   processing: Promise<void> | null;
+  sequence: number;
+  triggerReason: GitScanTriggerReason;
 }
 
 interface WorkspaceWatchEntry {
@@ -41,6 +49,7 @@ interface WorkspaceWatchEntry {
   target: HostDaemonWatchSetWorkspaceTarget;
   watchState: WorkspaceWatchState;
   workspace: HostWorkspace;
+  repositoryKey: string;
 }
 
 interface RefreshWorkspaceArgs {
@@ -73,6 +82,8 @@ export interface WatchManagerOptions {
     workspace: DiscoveredWorkspaceProperties;
   }) => void;
   onWorkspaceStatusWatchError?: (args: { error: WorkspaceWatchError }) => void;
+  gitScanWorker?: GitScanWorker;
+  resolveRepositoryKey?: (workspacePath: string) => Promise<string>;
 }
 
 function toErrorMessage(error: Error): string {
@@ -117,6 +128,8 @@ export class WatchManager {
     HostDaemonWatchSetThreadStorageTarget
   >();
   private readonly workspaceEntries = new Map<string, WorkspaceWatchEntry>();
+  private readonly gitScanWorker;
+  private readonly resolveRepositoryKey;
   private latestAppliedWatchSetGeneration = -1;
   private watchSetMutationTail: Promise<void> = Promise.resolve();
   private stopWatchingThreadStorageRoot: StopWatching = STOP_WATCHING;
@@ -126,8 +139,10 @@ export class WatchManager {
     this.provisionWorkspace = options.provisionWorkspace ?? provisionWorkspace;
     this.refreshWorkspace =
       options.refreshWorkspace ??
-      ((args: RefreshWorkspaceArgs) =>
-        this.provisionWorkspace(args.provision));
+      ((args: RefreshWorkspaceArgs) => this.provisionWorkspace(args.provision));
+    this.gitScanWorker = options.gitScanWorker;
+    this.resolveRepositoryKey =
+      options.resolveRepositoryKey ?? (async (workspacePath) => workspacePath);
   }
 
   async replaceWatchSet(watchSet: HostDaemonWatchSet): Promise<void> {
@@ -183,6 +198,7 @@ export class WatchManager {
     for (const [environmentId, entry] of this.workspaceEntries) {
       const nextTarget = nextTargets.get(environmentId);
       if (nextTarget && sameWorkspaceTarget(entry.target, nextTarget)) {
+        entry.target = nextTarget;
         nextTargets.delete(environmentId);
         continue;
       }
@@ -244,6 +260,9 @@ export class WatchManager {
           workspaceContext: target.workspaceContext,
         }),
       );
+      const repositoryKey = workspace.isGitRepo
+        ? await this.resolveRepositoryKey(workspace.path)
+        : workspace.path;
       const entry: WorkspaceWatchEntry = {
         stopWatchingStatus: STOP_WATCHING,
         target,
@@ -252,8 +271,11 @@ export class WatchManager {
           lastSharedRefsFingerprint: null,
           pendingKinds: new Set(),
           processing: null,
+          sequence: 0,
+          triggerReason: "startup-recovery",
         },
         workspace,
+        repositoryKey,
       };
       this.workspaceEntries.set(target.environmentId, entry);
       entry.stopWatchingStatus = this.hostWatcher.watchWorkspace({
@@ -263,6 +285,7 @@ export class WatchManager {
           this.queueWorkspaceWatchChange({
             changeKinds: event.changeKinds,
             entry,
+            triggerReason: "watch-change",
           });
         },
         // Parcel subscriptions are established asynchronously. Reconcile once
@@ -272,6 +295,7 @@ export class WatchManager {
           this.queueWorkspaceWatchChange({
             changeKinds: ["workspace-content-changed"],
             entry,
+            triggerReason: "watch-ready",
           });
         },
         onWatchError: (error) => {
@@ -302,16 +326,20 @@ export class WatchManager {
       return;
     }
     try {
-      const [lastLocalFingerprint, lastSharedRefsFingerprint] =
-        await Promise.all([
-          entry.workspace.getLocalStateFingerprint(),
-          entry.workspace.getSharedGitRefsFingerprint(),
-        ]);
+      const fingerprints = await this.scanWorkspace(
+        entry,
+        ["local", "shared-refs"],
+        "startup-recovery",
+      );
+      if (fingerprints === null) {
+        return;
+      }
       if (this.workspaceEntries.get(entry.target.environmentId) !== entry) {
         return;
       }
-      entry.watchState.lastLocalFingerprint = lastLocalFingerprint;
-      entry.watchState.lastSharedRefsFingerprint = lastSharedRefsFingerprint;
+      entry.watchState.lastLocalFingerprint = fingerprints.localFingerprint;
+      entry.watchState.lastSharedRefsFingerprint =
+        fingerprints.sharedRefsFingerprint;
     } catch (error) {
       if (this.workspaceEntries.get(entry.target.environmentId) !== entry) {
         return;
@@ -323,6 +351,7 @@ export class WatchManager {
   private queueWorkspaceWatchChange(args: {
     changeKinds: readonly WorkspaceStatusWatchChangeKind[];
     entry: WorkspaceWatchEntry;
+    triggerReason: GitScanTriggerReason;
   }): void {
     if (
       this.workspaceEntries.get(args.entry.target.environmentId) !== args.entry
@@ -341,6 +370,7 @@ export class WatchManager {
     for (const changeKind of args.changeKinds) {
       args.entry.watchState.pendingKinds.add(changeKind);
     }
+    args.entry.watchState.triggerReason = args.triggerReason;
     if (args.entry.watchState.processing) {
       return;
     }
@@ -365,45 +395,20 @@ export class WatchManager {
     entry: WorkspaceWatchEntry;
   }): Promise<void> {
     const pendingKinds = Array.from(args.entry.watchState.pendingKinds);
+    const triggerReason = args.entry.watchState.triggerReason;
     args.entry.watchState.pendingKinds.clear();
 
     try {
-      const changeKinds: HostDaemonEnvironmentChange[] = [];
-      if (workspaceWatchKindsIncludeLocalState(pendingKinds)) {
-        if (
-          pendingKinds.includes("workspace-git-repository-created") &&
-          !args.entry.workspace.isGitRepo
-        ) {
-          await this.refreshGitWorkspaceMetadata(args.entry);
-        }
-        const workspaceContentChanged = pendingKinds.includes(
-          "workspace-content-changed",
-        );
-        if (args.entry.workspace.isGitRepo && !workspaceContentChanged) {
-          const nextLocalFingerprint =
-            await args.entry.workspace.getLocalStateFingerprint();
-          if (
-            args.entry.watchState.lastLocalFingerprint !== nextLocalFingerprint
-          ) {
-            args.entry.watchState.lastLocalFingerprint = nextLocalFingerprint;
-            changeKinds.push("work-status-changed");
-          }
-        }
-      }
+      const changeKinds = await this.recomputeWorkspaceWatchChanges(
+        args.entry,
+        pendingKinds,
+        triggerReason,
+      );
       if (
-        args.entry.workspace.isGitRepo &&
-        workspaceWatchKindsIncludeSharedRefs(pendingKinds)
+        this.workspaceEntries.get(args.entry.target.environmentId) !==
+        args.entry
       ) {
-        const nextSharedRefsFingerprint =
-          await args.entry.workspace.getSharedGitRefsFingerprint();
-        if (
-          args.entry.watchState.lastSharedRefsFingerprint !==
-          nextSharedRefsFingerprint
-        ) {
-          args.entry.watchState.lastSharedRefsFingerprint =
-            nextSharedRefsFingerprint;
-          changeKinds.push("git-refs-changed");
-        }
+        return;
       }
       if (changeKinds.length === 0) {
         return;
@@ -415,6 +420,95 @@ export class WatchManager {
     } catch (error) {
       this.reportWorkspaceWatchError(args.entry, error);
     }
+  }
+
+  private async recomputeWorkspaceWatchChanges(
+    entry: WorkspaceWatchEntry,
+    pendingKinds: readonly WorkspaceStatusWatchChangeKind[],
+    triggerReason: GitScanTriggerReason,
+  ): Promise<HostDaemonEnvironmentChange[]> {
+    const changeKinds: HostDaemonEnvironmentChange[] = [];
+    if (workspaceWatchKindsIncludeLocalState(pendingKinds)) {
+      if (
+        pendingKinds.includes("workspace-git-repository-created") &&
+        !entry.workspace.isGitRepo
+      ) {
+        await this.refreshGitWorkspaceMetadata(entry);
+      }
+      const workspaceContentChanged = pendingKinds.includes(
+        "workspace-content-changed",
+      );
+      if (entry.workspace.isGitRepo && !workspaceContentChanged) {
+        const scan = await this.scanWorkspace(entry, ["local"], triggerReason);
+        if (scan === null || scan.stale) return changeKinds;
+        const nextLocalFingerprint = scan.localFingerprint;
+        if (entry.watchState.lastLocalFingerprint !== nextLocalFingerprint) {
+          entry.watchState.lastLocalFingerprint = nextLocalFingerprint;
+          changeKinds.push("work-status-changed");
+        }
+      }
+    }
+    if (
+      entry.workspace.isGitRepo &&
+      workspaceWatchKindsIncludeSharedRefs(pendingKinds)
+    ) {
+      const scan = await this.scanWorkspace(
+        entry,
+        ["shared-refs"],
+        triggerReason,
+      );
+      if (scan === null || scan.stale) return changeKinds;
+      const nextSharedRefsFingerprint = scan.sharedRefsFingerprint;
+      if (
+        entry.watchState.lastSharedRefsFingerprint !== nextSharedRefsFingerprint
+      ) {
+        entry.watchState.lastSharedRefsFingerprint = nextSharedRefsFingerprint;
+        changeKinds.push("git-refs-changed");
+      }
+    }
+    return changeKinds;
+  }
+
+  private scanWorkspace(
+    entry: WorkspaceWatchEntry,
+    scanKinds: GitScanKind[],
+    triggerReason: GitScanTriggerReason,
+  ) {
+    entry.watchState.sequence += 1;
+    const sequence = entry.watchState.sequence;
+    if (!this.options.gitScanWorker) {
+      return Promise.all([
+        scanKinds.includes("local")
+          ? entry.workspace.getLocalStateFingerprint()
+          : Promise.resolve(null),
+        scanKinds.includes("shared-refs")
+          ? entry.workspace.getSharedGitRefsFingerprint()
+          : Promise.resolve(null),
+      ]).then(([localFingerprint, sharedRefsFingerprint]) => ({
+        requestId: `${entry.target.environmentId}:${sequence}`,
+        workspaceKey: entry.target.environmentId,
+        repositoryKey: entry.repositoryKey,
+        sequence,
+        localFingerprint,
+        sharedRefsFingerprint,
+        stale: sequence !== entry.watchState.sequence,
+      }));
+    }
+    const gitScanWorker = this.gitScanWorker;
+    if (!gitScanWorker) {
+      throw new Error("Git scan worker is unavailable");
+    }
+    return gitScanWorker.scan({
+      version: GIT_SCAN_PROTOCOL_VERSION,
+      requestId: `${entry.target.environmentId}:${sequence}`,
+      workspaceKey: entry.target.environmentId,
+      repositoryKey: entry.repositoryKey,
+      workspacePath: entry.workspace.path,
+      sequence,
+      scanKinds,
+      priority: entry.target.priority,
+      triggerReason,
+    });
   }
 
   private reportWorkspaceWatchError(
@@ -460,14 +554,19 @@ export class WatchManager {
       return;
     }
 
-    const [branchName, resolvedDefaultBranch, sharedRefsFingerprint] =
-      await Promise.all([
-        workspace.getCurrentBranch(),
-        workspace.getDefaultBranch(),
-        workspace.getSharedGitRefsFingerprint(),
-      ]);
+    const branchName = await workspace.getCurrentBranch();
+    const resolvedDefaultBranch = await workspace.getDefaultBranch();
     entry.workspace = workspace;
-    entry.watchState.lastSharedRefsFingerprint = sharedRefsFingerprint;
+    entry.repositoryKey = await this.resolveRepositoryKey(workspace.path);
+    const sharedRefsScan = await this.scanWorkspace(
+      entry,
+      ["shared-refs"],
+      "watch-recovery",
+    );
+    if (sharedRefsScan !== null && !sharedRefsScan.stale) {
+      entry.watchState.lastSharedRefsFingerprint =
+        sharedRefsScan.sharedRefsFingerprint;
+    }
     this.options.onWorkspaceMetadataChanged?.({
       environmentId: entry.target.environmentId,
       workspace: {

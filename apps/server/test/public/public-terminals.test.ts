@@ -42,6 +42,7 @@ import {
   handleHostSessionOpened,
 } from "../../src/internal/session-owner-side-effects.js";
 import { onDaemonSocketOpen } from "../../src/ws/daemon-protocol.js";
+import { MAX_RETAINED_TERMINALS_PER_WORKSPACE } from "../../src/services/terminals/terminal-session-lifecycle.js";
 
 interface FakeDaemonSocket {
   close(code?: number, reason?: string): void;
@@ -323,6 +324,45 @@ describe("public terminal routes", () => {
         title: "Terminal 1",
       }),
     ]);
+  });
+
+  it("rejects a terminal when its workspace reaches the retained limit", async () => {
+    const fixture = await createTerminalRouteFixture();
+    harnesses.push(fixture.harness);
+    for (
+      let index = 0;
+      index < MAX_RETAINED_TERMINALS_PER_WORKSPACE;
+      index += 1
+    ) {
+      createTerminalSession(fixture.harness.db, {
+        cols: 100,
+        daemonSessionId: fixture.session.id,
+        environmentId: fixture.environment.id,
+        hostId: fixture.host.id,
+        initialCwd: fixture.environment.path ?? "/tmp/terminal-workspace",
+        rows: 30,
+        status: "running",
+        threadId: fixture.thread.id,
+        title: `Terminal ${index + 1}`,
+      });
+    }
+
+    const response = await fixture.harness.app.request("/api/v1/terminals", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        cols: 100,
+        rows: 30,
+        target: { kind: "thread", threadId: fixture.thread.id },
+      }),
+    });
+
+    expect(response.status).toBe(409);
+    expect(apiErrorSchema.parse(await readJson(response))).toMatchObject({
+      code: "resource_limit",
+      message: `Workspace terminal limit reached (${MAX_RETAINED_TERMINALS_PER_WORKSPACE})`,
+    });
+    expect(fixture.socket.sentMessages).toEqual([]);
   });
 
   it("gets and renames a terminal by ID without a redundant scope", async () => {

@@ -75,6 +75,7 @@ describe("WatchInterestCoordinator", () => {
       workspaceTargets: [
         {
           environmentId: environment.id,
+          priority: "background",
           workspaceContext: {
             workspacePath: "/tmp/test-workspace",
             workspaceProvisionType: "unmanaged",
@@ -160,6 +161,7 @@ describe("WatchInterestCoordinator", () => {
       workspaceTargets: [
         {
           environmentId: environment.id,
+          priority: "background",
           workspaceContext: {
             workspacePath: "/tmp/test-workspace",
             workspaceProvisionType: "unmanaged",
@@ -297,7 +299,12 @@ describe("WatchInterestCoordinator", () => {
           threadId: thread.id,
         },
       ],
-      workspaceTargets: [],
+      workspaceTargets: [
+        {
+          environmentId: environment.id,
+          priority: "foreground",
+        },
+      ],
     });
   });
 
@@ -330,7 +337,12 @@ describe("WatchInterestCoordinator", () => {
           threadId: thread.id,
         },
       ],
-      workspaceTargets: [],
+      workspaceTargets: [
+        {
+          environmentId: environment.id,
+          priority: "foreground",
+        },
+      ],
     });
   });
 });

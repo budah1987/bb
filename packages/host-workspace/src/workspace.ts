@@ -947,36 +947,41 @@ export class Workspace {
   }
 
   async getLocalStateFingerprint(): Promise<string> {
-    const [headSha, status] = await Promise.all([
-      this.getHeadSha(),
-      this.getStatus(),
-    ]);
-    return JSON.stringify({
-      checkout: status.checkout,
-      currentBranch: status.branch.currentBranch,
-      headSha,
-      workingTree: status.workingTree,
+    await ensureGitRepo(this.path, {
+      timeoutMs: WORKSPACE_STATUS_GIT_TIMEOUT_MS,
     });
+    const status = await runGit(
+      [
+        "--no-optional-locks",
+        "status",
+        "--porcelain=v1",
+        "--branch",
+        "--untracked-files=all",
+      ],
+      { cwd: this.path, timeoutMs: WORKSPACE_STATUS_GIT_TIMEOUT_MS },
+    );
+    return status.stdout;
   }
 
   async getSharedGitRefsFingerprint(): Promise<string> {
     await ensureGitRepo(this.path);
 
-    const [refs, remoteHead] = await Promise.all([
-      runGit(
-        [
-          "for-each-ref",
-          "--format=%(refname)%00%(objectname)",
-          "refs/heads",
-          "refs/remotes",
-        ],
-        { cwd: this.path },
-      ),
-      runGit(["symbolic-ref", "--quiet", "refs/remotes/origin/HEAD"], {
+    const refs = await runGit(
+      [
+        "for-each-ref",
+        "--format=%(refname)%00%(objectname)",
+        "refs/heads",
+        "refs/remotes",
+      ],
+      { cwd: this.path },
+    );
+    const remoteHead = await runGit(
+      ["symbolic-ref", "--quiet", "refs/remotes/origin/HEAD"],
+      {
         cwd: this.path,
         allowFailure: true,
-      }),
-    ]);
+      },
+    );
 
     return JSON.stringify({
       refs: parseNonEmptyLines(refs.stdout),

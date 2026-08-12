@@ -5,6 +5,7 @@ import {
   createBrowserViewVisibilityCoordinator,
   destroyPersistedBrowserViewsForEnvironment,
   destroyPersistedBrowserViewsForThread,
+  MAX_RETAINED_BROWSER_VIEWS_PER_WORKSPACE,
   registerBrowserView,
   resetBrowserViewPersistence,
 } from "./browserViewVisibilityCoordinator";
@@ -117,11 +118,13 @@ describe("browserViewVisibilityCoordinator", () => {
   it("destroys registered views for a deleted thread only", () => {
     const { api, detachments, visibility } = createRecordingApi();
     registerBrowserView({
+      desktopBrowser: api,
       environmentId: "environment-a",
       tabId: "thread-a-tab",
       threadId: "thread-a",
     });
     registerBrowserView({
+      desktopBrowser: api,
       environmentId: "environment-b",
       tabId: "thread-b-tab",
       threadId: "thread-b",
@@ -139,11 +142,13 @@ describe("browserViewVisibilityCoordinator", () => {
   it("destroys registered views for a deleted environment only", () => {
     const { api, detachments, visibility } = createRecordingApi();
     registerBrowserView({
+      desktopBrowser: api,
       environmentId: "environment-a",
       tabId: "thread-a-tab",
       threadId: "thread-a",
     });
     registerBrowserView({
+      desktopBrowser: api,
       environmentId: "environment-b",
       tabId: "thread-b-tab",
       threadId: "thread-b",
@@ -156,5 +161,23 @@ describe("browserViewVisibilityCoordinator", () => {
 
     expect(visibility).toEqual([{ tabId: "thread-b-tab", visible: false }]);
     expect(detachments).toEqual(["thread-b-tab"]);
+  });
+
+  it("evicts the oldest hidden view when a workspace exceeds its budget", () => {
+    const { api, detachments } = createRecordingApi();
+    for (
+      let index = 0;
+      index < MAX_RETAINED_BROWSER_VIEWS_PER_WORKSPACE + 1;
+      index += 1
+    ) {
+      registerBrowserView({
+        desktopBrowser: api,
+        environmentId: "environment-a",
+        tabId: `tab-${index}`,
+        threadId: `thread-${index}`,
+      });
+    }
+
+    expect(detachments).toEqual(["tab-0"]);
   });
 });

@@ -24,7 +24,7 @@ interface SidebarThreadPaginationState {
   completeProjectIds: string[];
   generation: number;
   initialLimit: number;
-  nextOffsetByProjectId: Record<string, number>;
+  nextCursorByProjectId: Record<string, string | null>;
 }
 
 export type SidebarNavigationCacheResponse = SidebarBootstrapResponse & {
@@ -61,7 +61,7 @@ export function fetchSidebarNavigation(
     const projects = [...response.projects, response.personalProject];
     const completeProjectIds = projects
       .filter(
-        (project) => project.threads.length < SIDEBAR_INITIAL_THREAD_LIMIT,
+        (project) => response.nextThreadCursorByProjectId[project.id] === null,
       )
       .map((project) => project.id);
     return {
@@ -71,9 +71,7 @@ export function fetchSidebarNavigation(
         completeProjectIds,
         generation: (sidebarNavigationGeneration += 1),
         initialLimit: SIDEBAR_INITIAL_THREAD_LIMIT,
-        nextOffsetByProjectId: Object.fromEntries(
-          projects.map((project) => [project.id, SIDEBAR_INITIAL_THREAD_LIMIT]),
-        ),
+        nextCursorByProjectId: response.nextThreadCursorByProjectId,
       },
     };
   });
@@ -119,17 +117,18 @@ export function loadMoreSidebarProjectThreads(
   if (currentLoad !== undefined) return currentLoad;
 
   const generation = navigation!._threadPagination.generation;
-  const offset =
-    navigation!._threadPagination.nextOffsetByProjectId[projectId] ??
-    SIDEBAR_INITIAL_THREAD_LIMIT;
-  const load = sdk.threads
-    .list({
-      archived: false,
-      limit: SIDEBAR_BACKGROUND_THREAD_PAGE_SIZE,
-      offset,
+  const cursor = navigation!._threadPagination.nextCursorByProjectId[projectId];
+  if (cursor === null || cursor === undefined) {
+    return Promise.resolve();
+  }
+  const load = sdk.projects
+    .sidebarThreads({
+      cursor,
+      limit: String(SIDEBAR_BACKGROUND_THREAD_PAGE_SIZE),
       projectId,
     })
-    .then((page) => {
+    .then((response) => {
+      const page = response.threads;
       queryClient.setQueryData<SidebarNavigationCacheResponse>(
         sidebarNavigationQueryKey(),
         (current) => {
@@ -140,7 +139,7 @@ export function loadMoreSidebarProjectThreads(
             return current;
           }
           const completeProjectIds =
-            page.length < SIDEBAR_BACKGROUND_THREAD_PAGE_SIZE
+            response.nextCursor === null
               ? [
                   ...new Set([
                     ...current._threadPagination.completeProjectIds,
@@ -153,9 +152,9 @@ export function loadMoreSidebarProjectThreads(
             ...current._threadPagination,
             complete: completeProjectIds.length === projects.length,
             completeProjectIds,
-            nextOffsetByProjectId: {
-              ...current._threadPagination.nextOffsetByProjectId,
-              [projectId]: offset + page.length,
+            nextCursorByProjectId: {
+              ...current._threadPagination.nextCursorByProjectId,
+              [projectId]: response.nextCursor,
             },
           };
           if (current.personalProject.id === projectId) {

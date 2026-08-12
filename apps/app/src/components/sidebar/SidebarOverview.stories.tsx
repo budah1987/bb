@@ -91,6 +91,7 @@ const personalProject = makeProject({
 const loadedSidebarNavigation = {
   sections: [],
   spaces: [],
+  nextThreadCursorByProjectId: {},
   personalProject: {
     ...personalProject,
     defaultExecutionOptions: null,

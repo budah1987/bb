@@ -355,6 +355,27 @@ export interface ListInitialSidebarThreadsForProjectsOptions {
   projectIds: readonly string[];
 }
 
+export interface SidebarThreadCursor {
+  createdAt: number;
+  id: string;
+}
+
+export interface InitialSidebarThreadsForProjectsResult {
+  nextCursorByProjectId: ReadonlyMap<string, SidebarThreadCursor | null>;
+  threads: ThreadWithPendingInteractionState[];
+}
+
+export interface ListSidebarThreadPageOptions {
+  cursor: SidebarThreadCursor | null;
+  limit: number;
+  projectId: string;
+}
+
+export interface SidebarThreadPage {
+  nextCursor: SidebarThreadCursor | null;
+  threads: ThreadWithPendingInteractionState[];
+}
+
 export interface PinThreadArgs {
   pinnedAt?: number;
   threadId: string;
@@ -1176,6 +1197,12 @@ export function listThreadsWithPendingInteractionStateForProjects(
 }
 
 interface InitialSidebarThreadIdRow {
+  createdAt: number;
+  id: string;
+  projectId: string;
+}
+
+interface SidebarThreadIdRow {
   id: string;
 }
 
@@ -1218,9 +1245,9 @@ function listSidebarThreadParentRows(
 export function listInitialSidebarThreadsWithPendingInteractionStateForProjects(
   db: DbConnection,
   options: ListInitialSidebarThreadsForProjectsOptions,
-): ThreadWithPendingInteractionState[] {
+): InitialSidebarThreadsForProjectsResult {
   if (options.projectIds.length === 0) {
-    return [];
+    return { nextCursorByProjectId: new Map(), threads: [] };
   }
 
   const projectFilter = inArray(threads.projectId, [...options.projectIds]);
@@ -1234,24 +1261,43 @@ export function listInitialSidebarThreadsWithPendingInteractionStateForProjects(
 
   const recentIdQueries = options.projectIds.map(
     (projectId) => sql`
-      SELECT id FROM (
-        SELECT ${threads.id} AS id
+      SELECT id, project_id AS projectId, created_at AS createdAt FROM (
+        SELECT
+          ${threads.id} AS id,
+          ${threads.projectId} AS project_id,
+          ${threads.createdAt} AS created_at
         FROM ${threads}
         WHERE ${threads.projectId} = ${projectId}
+          AND ${threads.pinnedAt} IS NULL
           AND ${threads.visibility} = 'visible'
           AND ${threads.archivedAt} IS NULL
           AND ${threads.deletedAt} IS NULL
         ORDER BY ${threads.createdAt} DESC, ${threads.id} DESC
-        LIMIT ${options.limitPerProject}
+        LIMIT ${options.limitPerProject + 1}
       )
     `,
   );
-  const recentIds = db.all<InitialSidebarThreadIdRow>(
+  const recentRows = db.all<InitialSidebarThreadIdRow>(
     sql`${sql.join(recentIdQueries, sql` UNION ALL `)}`,
   );
-  for (const row of recentIds) selectedThreadIds.add(row.id);
+  const nextCursorByProjectId = new Map<
+    string,
+    SidebarThreadCursor | null
+  >();
+  for (const projectId of options.projectIds) {
+    const projectRows = recentRows.filter((row) => row.projectId === projectId);
+    const selectedRows = projectRows.slice(0, options.limitPerProject);
+    for (const row of selectedRows) selectedThreadIds.add(row.id);
+    const lastSelectedRow = selectedRows.at(-1);
+    nextCursorByProjectId.set(
+      projectId,
+      projectRows.length > options.limitPerProject && lastSelectedRow
+        ? { createdAt: lastSelectedRow.createdAt, id: lastSelectedRow.id }
+        : null,
+    );
+  }
 
-  const priorityIdGroups: InitialSidebarThreadIdRow[][] = [
+  const priorityIdGroups: SidebarThreadIdRow[][] = [
     db
       .select({ id: threads.id })
       .from(threads)
@@ -1328,7 +1374,7 @@ export function listInitialSidebarThreadsWithPendingInteractionStateForProjects(
   }
 
   if (selectedThreadIds.size === 0) {
-    return [];
+    return { nextCursorByProjectId, threads: [] };
   }
 
   const rows = threadWithPendingInteractionBaseQuery(db)
@@ -1336,7 +1382,49 @@ export function listInitialSidebarThreadsWithPendingInteractionStateForProjects(
     .orderBy(...buildActiveProjectThreadOrderBy())
     .all();
 
-  return rows.map(toThreadWithPendingInteractionState);
+  return {
+    nextCursorByProjectId,
+    threads: rows.map(toThreadWithPendingInteractionState),
+  };
+}
+
+export function listSidebarThreadPage(
+  db: DbConnection,
+  options: ListSidebarThreadPageOptions,
+): SidebarThreadPage {
+  const cursorFilter =
+    options.cursor === null
+      ? undefined
+      : or(
+          lt(threads.createdAt, options.cursor.createdAt),
+          and(
+            eq(threads.createdAt, options.cursor.createdAt),
+            lt(threads.id, options.cursor.id),
+          ),
+        );
+  const rows = threadWithPendingInteractionBaseQuery(db)
+    .where(
+      and(
+        ...buildListThreadsFilters({
+          archived: false,
+          projectId: options.projectId,
+        }),
+        isNull(threads.pinnedAt),
+        cursorFilter,
+      ),
+    )
+    .orderBy(desc(threads.createdAt), desc(threads.id))
+    .limit(options.limit + 1)
+    .all();
+  const pageRows = rows.slice(0, options.limit);
+  const lastRow = pageRows.at(-1);
+  return {
+    nextCursor:
+      rows.length > options.limit && lastRow
+        ? { createdAt: lastRow.createdAt, id: lastRow.id }
+        : null,
+    threads: pageRows.map(toThreadWithPendingInteractionState),
+  };
 }
 
 export function countLiveThreadsInEnvironment(
