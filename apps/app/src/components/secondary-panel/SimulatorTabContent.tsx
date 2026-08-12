@@ -13,17 +13,36 @@ import type {
   SimulatorStreamConnection,
 } from "@bb/server-contract";
 import { Button } from "@bb/shared-ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@bb/shared-ui/dropdown-menu";
 import { Icon } from "@bb/shared-ui/icon";
 import { cn } from "@bb/shared-ui/lib/utils";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@bb/shared-ui/tooltip";
 import { sdk } from "@/lib/sdk";
 import { useEnvironmentSimulatorStatus } from "@/hooks/queries/environment-queries";
 import { invalidateEnvironmentSimulatorStatus } from "@/hooks/cache-owners/simulator-cache-owner";
 import { MjpegFrameBuffer } from "./mjpeg-frame-buffer";
 import { SECONDARY_PANEL_TOP_CHROME_BACKGROUND_CLASS } from "./panelChromeClasses";
+import {
+  getBbDesktopInfo,
+  MACOS_APP_REGION_NO_DRAG_CLASS,
+  MACOS_WINDOW_DRAG_CLASS,
+} from "@/lib/bb-desktop";
 
 interface SimulatorTabContentProps {
   environmentId: string;
   isActive: boolean;
+  presentation?: "panel" | "popout";
 }
 
 interface NormalizedPoint {
@@ -39,6 +58,54 @@ interface DragState {
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : "Simulator request failed.";
+}
+
+function savePngScreenshot(args: {
+  dataBase64: string;
+  deviceName: string;
+}): void {
+  const safeDeviceName = args.deviceName
+    .toLowerCase()
+    .replaceAll(/[^a-z0-9]+/gu, "-")
+    .replaceAll(/^-|-$/gu, "");
+  const link = document.createElement("a");
+  link.download = `${safeDeviceName || "ios-simulator"}-${Date.now()}.png`;
+  link.href = `data:image/png;base64,${args.dataBase64}`;
+  document.body.append(link);
+  link.click();
+  link.remove();
+}
+
+const SIMULATOR_TOOLBAR_BUTTON_CLASS =
+  "flex size-9 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-[scale,background-color,color] duration-150 ease-out hover:bg-state-hover hover:text-foreground active:scale-[0.96] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-40 motion-reduce:transition-none";
+
+function SimulatorToolbarButton({
+  disabled,
+  icon,
+  label,
+  onClick,
+}: {
+  disabled?: boolean;
+  icon: "Camera" | "Circle" | "Home" | "Maximize2" | "RotateCcw" | "Square";
+  label: string;
+  onClick: () => void;
+}) {
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <button
+          type="button"
+          aria-label={label}
+          disabled={disabled}
+          className={SIMULATOR_TOOLBAR_BUTTON_CLASS}
+          onClick={onClick}
+        >
+          <Icon name={icon} className="size-4" aria-hidden />
+        </button>
+      </TooltipTrigger>
+      <TooltipContent>{label}</TooltipContent>
+    </Tooltip>
+  );
 }
 
 function useMjpegFrame(
@@ -149,6 +216,7 @@ function normalizedPoint(
 export function SimulatorTabContent({
   environmentId,
   isActive,
+  presentation = "panel",
 }: SimulatorTabContentProps) {
   const queryClient = useQueryClient();
   const status = useEnvironmentSimulatorStatus(environmentId);
@@ -200,8 +268,21 @@ export function SimulatorTabContent({
       await refreshStatus();
     },
   });
+  const screenshot = useMutation({
+    mutationFn: () => sdk.environments.simulatorScreenshot({ environmentId }),
+    onSuccess: (result) => {
+      savePngScreenshot({
+        dataBase64: result.dataBase64,
+        deviceName: status.data?.active?.deviceName ?? "iOS Simulator",
+      });
+    },
+  });
 
   const activeSession = status.data?.active ?? null;
+  const activeDevice = status.data?.devices.find(
+    (device) => device.udid === activeSession?.deviceUdid,
+  );
+  const desktop = getBbDesktopInfo();
   const requestLease = lease.mutate;
   const isLeasePending = lease.isPending;
   const effectiveSelectedDevice = status.data?.devices.some(
@@ -226,7 +307,8 @@ export function SimulatorTabContent({
     (attachCancelled ? null : attach.error) ??
     lease.error ??
     control.error ??
-    stop.error;
+    stop.error ??
+    screenshot.error;
 
   const sendControl = useCallback(
     (action: SimulatorControlAction) => control.mutate(action),
@@ -426,45 +508,133 @@ export function SimulatorTabContent({
     <div className="flex h-full min-h-0 flex-col bg-sidebar">
       <div
         className={cn(
-          "flex h-10 shrink-0 items-center gap-2 border-b border-border px-2",
+          "flex shrink-0 items-center gap-1 border-b border-border",
+          presentation === "popout" ? "h-12 pl-[84px] pr-2" : "h-10 px-2",
+          presentation === "popout" && MACOS_WINDOW_DRAG_CLASS,
           SECONDARY_PANEL_TOP_CHROME_BACKGROUND_CLASS,
         )}
       >
-        <div className="min-w-0 flex-1 truncate text-sm">
-          {activeSession.deviceName}{" "}
-          <span className="text-muted-foreground">
-            · {disconnected ? "Reconnecting…" : "Booted"}
-          </span>
+        <div className="min-w-0 flex-1 leading-tight">
+          <div className="truncate text-sm font-medium">
+            {activeSession.deviceName}
+          </div>
+          {presentation === "popout" ? (
+            <div className="truncate text-xs text-muted-foreground">
+              {activeDevice?.runtime ??
+                (disconnected ? "Reconnecting…" : "Booted")}
+            </div>
+          ) : (
+            <span className="text-xs text-muted-foreground">
+              {disconnected ? "Reconnecting…" : "Booted"}
+            </span>
+          )}
         </div>
-        <Button
-          variant="ghost"
-          size="icon"
-          aria-label="Home"
-          onClick={() => sendControl({ kind: "button", button: "home" })}
-        >
-          <Icon name="Circle" className="size-4" />
-        </Button>
-        <Button
-          variant="ghost"
-          size="icon"
-          aria-label="Rotate"
-          onClick={() => {
-            const next =
-              orientation === "portrait" ? "landscape_left" : "portrait";
-            setOrientation(next);
-            sendControl({ kind: "rotate", orientation: next });
-          }}
-        >
-          <Icon name="RotateCcw" className="size-4" />
-        </Button>
-        <Button
-          variant="ghost"
-          size="icon"
-          aria-label="Stop simulator"
-          onClick={() => stop.mutate()}
-        >
-          <Icon name="Square" className="size-4 text-destructive" />
-        </Button>
+        <TooltipProvider delayDuration={300}>
+          <div
+            className={cn(
+              "flex items-center gap-0.5",
+              presentation === "popout" && MACOS_APP_REGION_NO_DRAG_CLASS,
+            )}
+          >
+            <SimulatorToolbarButton
+              icon={presentation === "popout" ? "Home" : "Circle"}
+              label="Home"
+              onClick={() => sendControl({ kind: "button", button: "home" })}
+            />
+            {presentation === "popout" ? (
+              <SimulatorToolbarButton
+                disabled={screenshot.isPending}
+                icon="Camera"
+                label={
+                  screenshot.isPending ? "Saving screenshot" : "Save screenshot"
+                }
+                onClick={() => screenshot.mutate()}
+              />
+            ) : null}
+            <SimulatorToolbarButton
+              icon="RotateCcw"
+              label="Rotate device"
+              onClick={() => {
+                const next =
+                  orientation === "portrait" ? "landscape_left" : "portrait";
+                setOrientation(next);
+                sendControl({ kind: "rotate", orientation: next });
+              }}
+            />
+            {presentation === "panel" && desktop?.openSimulatorPopout ? (
+              <SimulatorToolbarButton
+                icon="Maximize2"
+                label="Open simulator in a separate window"
+                onClick={() => desktop.openSimulatorPopout?.({ environmentId })}
+              />
+            ) : null}
+            {presentation === "popout" ? (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button
+                    type="button"
+                    aria-label="Device controls"
+                    className={SIMULATOR_TOOLBAR_BUTTON_CLASS}
+                  >
+                    <Icon
+                      name="MoreHorizontal"
+                      className="size-4"
+                      aria-hidden
+                    />
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-48">
+                  <DropdownMenuItem
+                    onSelect={() =>
+                      sendControl({ kind: "button", button: "app_switcher" })
+                    }
+                  >
+                    <Icon name="GridView" aria-hidden />
+                    App switcher
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    onSelect={() =>
+                      sendControl({ kind: "button", button: "lock" })
+                    }
+                  >
+                    <Icon name="Lock" aria-hidden />
+                    Lock screen
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    onSelect={() =>
+                      sendControl({ kind: "button", button: "siri" })
+                    }
+                  >
+                    <Icon name="Mic" aria-hidden />
+                    Siri
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    onSelect={() =>
+                      sendControl({ kind: "button", button: "side_button" })
+                    }
+                  >
+                    <Icon name="Power" aria-hidden />
+                    Side button
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem
+                    className="text-destructive focus:text-destructive"
+                    onSelect={() => stop.mutate()}
+                  >
+                    <Icon name="Square" aria-hidden />
+                    Stop simulator
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            ) : (
+              <SimulatorToolbarButton
+                icon="Square"
+                label="Stop simulator"
+                onClick={() => stop.mutate()}
+              />
+            )}
+          </div>
+        </TooltipProvider>
       </div>
       <div className="relative flex min-h-0 flex-1 items-center justify-center overflow-hidden p-3">
         <div

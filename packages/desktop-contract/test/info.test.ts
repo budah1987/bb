@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { bbDesktopInfoSchema } from "../src/info.js";
+import {
+  bbDesktopInfoSchema,
+  bbDesktopSimulatorPopoutRequestSchema,
+} from "../src/info.js";
 
 const baseInfo = {
   lastCheckedAt: null,
@@ -27,6 +30,26 @@ describe("bbDesktopInfoSchema", () => {
       bbDesktopInfoSchema.safeParse({
         ...baseInfo,
         downloadState: "available",
+      }).success,
+    ).toBe(false);
+  });
+});
+
+describe("bbDesktopSimulatorPopoutRequestSchema", () => {
+  it("accepts only a non-empty environment ID", () => {
+    expect(
+      bbDesktopSimulatorPopoutRequestSchema.safeParse({
+        environmentId: "env_ios",
+      }).success,
+    ).toBe(true);
+    expect(
+      bbDesktopSimulatorPopoutRequestSchema.safeParse({ environmentId: "" })
+        .success,
+    ).toBe(false);
+    expect(
+      bbDesktopSimulatorPopoutRequestSchema.safeParse({
+        environmentId: "env_ios",
+        url: "https://example.com",
       }).success,
     ).toBe(false);
   });
