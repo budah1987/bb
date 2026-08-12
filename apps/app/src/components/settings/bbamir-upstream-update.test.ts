@@ -45,6 +45,7 @@ function navigation(
   return {
     sections: [],
     spaces: [],
+    nextThreadCursorByProjectId: {},
     projects: [...projects],
     personalProject: {
       ...project,

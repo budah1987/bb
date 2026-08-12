@@ -131,6 +131,7 @@ export interface CommandRouterOptions {
 const HOST_COMMAND_LIFECYCLE_LOG_THRESHOLD_MS = 1_000;
 const CODEX_PROVIDER_ID = "codex";
 const MAX_CONCURRENT_WORKSPACE_STATUS_REFRESHES = 4;
+const MAX_CONCURRENT_WORKSPACE_STATUS_REFRESHES_PER_ENVIRONMENT = 1;
 
 function roundDurationMs(durationMs: number): number {
   return Math.round(durationMs * 10) / 10;
@@ -148,7 +149,15 @@ export class CommandRouter {
     WorkspaceStatusRefreshState
   >();
   private activeWorkspaceStatusRefreshes = 0;
-  private readonly workspaceStatusRefreshQueue: Array<() => void> = [];
+  private readonly activeWorkspaceStatusRefreshesByEnvironment = new Map<
+    string,
+    number
+  >();
+  private readonly workspaceStatusRefreshQueueByEnvironment = new Map<
+    string,
+    Array<() => void>
+  >();
+  private readonly workspaceStatusRefreshEnvironmentQueue: string[] = [];
   // Per-thread barrier keyed by threadId. A turn submission
   // (turn.submit/thread.start) waits for an in-flight thread.unarchive of the
   // same thread so it cannot resume a still-archived provider session.
@@ -253,7 +262,7 @@ export class CommandRouter {
     }
 
     const run = () =>
-      this.runWithWorkspaceStatusSlot(() =>
+      this.runWithWorkspaceStatusSlot(command.environmentId, () =>
         this.runInEnvironmentLane(command.environmentId, "read", () =>
           dispatchOnlineRpcCommand(command, this.createDispatchOptions()),
         ).then((value) =>
@@ -282,27 +291,104 @@ export class CommandRouter {
   }
 
   private async runWithWorkspaceStatusSlot<T>(
+    environmentId: string,
     work: () => Promise<T>,
   ): Promise<T> {
-    if (
-      this.activeWorkspaceStatusRefreshes >=
-      MAX_CONCURRENT_WORKSPACE_STATUS_REFRESHES
-    ) {
-      await new Promise<void>((resolve) => {
-        this.workspaceStatusRefreshQueue.push(resolve);
-      });
-    } else {
-      this.activeWorkspaceStatusRefreshes += 1;
-    }
+    await this.acquireWorkspaceStatusSlot(environmentId);
     try {
       return await work();
     } finally {
-      const next = this.workspaceStatusRefreshQueue.shift();
-      if (next) {
-        next();
-      } else {
-        this.activeWorkspaceStatusRefreshes -= 1;
+      this.releaseWorkspaceStatusSlot(environmentId);
+    }
+  }
+
+  private acquireWorkspaceStatusSlot(environmentId: string): Promise<void> {
+    const environmentActiveCount =
+      this.activeWorkspaceStatusRefreshesByEnvironment.get(environmentId) ?? 0;
+    if (
+      this.workspaceStatusRefreshEnvironmentQueue.length === 0 &&
+      this.activeWorkspaceStatusRefreshes <
+        MAX_CONCURRENT_WORKSPACE_STATUS_REFRESHES &&
+      environmentActiveCount <
+        MAX_CONCURRENT_WORKSPACE_STATUS_REFRESHES_PER_ENVIRONMENT
+    ) {
+      this.admitWorkspaceStatusRefresh(environmentId);
+      return Promise.resolve();
+    }
+    return new Promise<void>((resolve) => {
+      const queue =
+        this.workspaceStatusRefreshQueueByEnvironment.get(environmentId) ?? [];
+      if (queue.length === 0) {
+        this.workspaceStatusRefreshEnvironmentQueue.push(environmentId);
       }
+      queue.push(resolve);
+      this.workspaceStatusRefreshQueueByEnvironment.set(environmentId, queue);
+      this.drainWorkspaceStatusRefreshQueue();
+    });
+  }
+
+  private admitWorkspaceStatusRefresh(environmentId: string): void {
+    this.activeWorkspaceStatusRefreshes += 1;
+    this.activeWorkspaceStatusRefreshesByEnvironment.set(
+      environmentId,
+      (this.activeWorkspaceStatusRefreshesByEnvironment.get(environmentId) ??
+        0) + 1,
+    );
+  }
+
+  private releaseWorkspaceStatusSlot(environmentId: string): void {
+    this.activeWorkspaceStatusRefreshes -= 1;
+    const environmentActiveCount =
+      (this.activeWorkspaceStatusRefreshesByEnvironment.get(environmentId) ??
+        1) - 1;
+    if (environmentActiveCount === 0) {
+      this.activeWorkspaceStatusRefreshesByEnvironment.delete(environmentId);
+    } else {
+      this.activeWorkspaceStatusRefreshesByEnvironment.set(
+        environmentId,
+        environmentActiveCount,
+      );
+    }
+    this.drainWorkspaceStatusRefreshQueue();
+  }
+
+  private drainWorkspaceStatusRefreshQueue(): void {
+    let remainingEnvironmentChecks =
+      this.workspaceStatusRefreshEnvironmentQueue.length;
+    while (
+      this.activeWorkspaceStatusRefreshes <
+        MAX_CONCURRENT_WORKSPACE_STATUS_REFRESHES &&
+      remainingEnvironmentChecks > 0
+    ) {
+      const environmentId = this.workspaceStatusRefreshEnvironmentQueue.shift();
+      if (environmentId === undefined) return;
+      remainingEnvironmentChecks -= 1;
+      const environmentActiveCount =
+        this.activeWorkspaceStatusRefreshesByEnvironment.get(environmentId) ??
+        0;
+      const queue =
+        this.workspaceStatusRefreshQueueByEnvironment.get(environmentId);
+      if (queue === undefined || queue.length === 0) {
+        this.workspaceStatusRefreshQueueByEnvironment.delete(environmentId);
+        continue;
+      }
+      if (
+        environmentActiveCount >=
+        MAX_CONCURRENT_WORKSPACE_STATUS_REFRESHES_PER_ENVIRONMENT
+      ) {
+        this.workspaceStatusRefreshEnvironmentQueue.push(environmentId);
+        continue;
+      }
+      const resolve = queue.shift();
+      if (queue.length === 0) {
+        this.workspaceStatusRefreshQueueByEnvironment.delete(environmentId);
+      } else {
+        this.workspaceStatusRefreshEnvironmentQueue.push(environmentId);
+      }
+      this.admitWorkspaceStatusRefresh(environmentId);
+      resolve?.();
+      remainingEnvironmentChecks =
+        this.workspaceStatusRefreshEnvironmentQueue.length;
     }
   }
 

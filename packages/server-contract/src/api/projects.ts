@@ -155,6 +155,20 @@ export const sidebarBootstrapQuerySchema = z.object({
 });
 export type SidebarBootstrapQuery = z.infer<typeof sidebarBootstrapQuerySchema>;
 
+export const sidebarThreadCursorSchema = z
+  .string()
+  .min(1)
+  .max(512)
+  .regex(/^[A-Za-z0-9_-]+$/);
+
+export const projectSidebarThreadsQuerySchema = z.object({
+  cursor: sidebarThreadCursorSchema.optional(),
+  limit: z.string().regex(/^\d+$/),
+});
+export type ProjectSidebarThreadsQuery = z.infer<
+  typeof projectSidebarThreadsQuerySchema
+>;
+
 const projectWorkspaceRoutingFields = {
   hostId: z.string().min(1),
   environmentId: z.preprocess(
@@ -589,9 +603,21 @@ export const sidebarBootstrapResponseSchema = z.object({
   spaces: z.array(spaceResponseSchema),
   projects: z.array(projectWithThreadsResponseSchema),
   personalProject: projectWithThreadsResponseSchema,
+  nextThreadCursorByProjectId: z.record(
+    z.string().min(1),
+    sidebarThreadCursorSchema.nullable(),
+  ),
 });
 export type SidebarBootstrapResponse = z.infer<
   typeof sidebarBootstrapResponseSchema
+>;
+
+export const projectSidebarThreadsResponseSchema = z.object({
+  threads: z.array(threadListEntrySchema),
+  nextCursor: sidebarThreadCursorSchema.nullable(),
+});
+export type ProjectSidebarThreadsResponse = z.infer<
+  typeof projectSidebarThreadsResponseSchema
 >;
 
 export const uploadedPromptAttachmentSchema = z.object({

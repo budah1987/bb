@@ -13,8 +13,16 @@ export interface BundleBootChunk {
 }
 
 export interface BundleStats {
+  chunks: BundleChunk[];
   entry: string;
   bootChunks: BundleBootChunk[];
+}
+
+export interface BundleChunk extends BundleBootChunk {
+  dynamicEntry: boolean;
+  entry: boolean;
+  moduleCount: number;
+  topModules: Array<{ bytes: number; id: string }>;
 }
 
 /**
@@ -46,6 +54,27 @@ export function bundleStats(): Plugin {
       walk(entry.fileName);
 
       const bootChunks: BundleBootChunk[] = [];
+      const chunks: BundleChunk[] = [];
+      for (const output of Object.values(bundle)) {
+        if (output.type !== "chunk") continue;
+        const packages = new Set<string>();
+        for (const moduleId of output.moduleIds ?? []) {
+          const name = packageNameOf(moduleId);
+          if (name !== null) packages.add(name);
+        }
+        chunks.push({
+          fileName: output.fileName,
+          bytes: Buffer.byteLength(output.code),
+          packages: [...packages].sort(),
+          dynamicEntry: output.isDynamicEntry,
+          entry: output.isEntry,
+          moduleCount: Object.keys(output.modules).length,
+          topModules: Object.entries(output.modules)
+            .map(([id, info]) => ({ bytes: info.renderedLength, id }))
+            .sort((a, b) => b.bytes - a.bytes)
+            .slice(0, 20),
+        });
+      }
       for (const fileName of [...bootFileNames].sort()) {
         const chunk = bundle[fileName];
         if (chunk === undefined || chunk.type !== "chunk") continue;
@@ -61,7 +90,11 @@ export function bundleStats(): Plugin {
         });
       }
 
-      const stats: BundleStats = { entry: entry.fileName, bootChunks };
+      const stats: BundleStats = {
+        entry: entry.fileName,
+        bootChunks,
+        chunks: chunks.sort((a, b) => b.bytes - a.bytes),
+      };
       const target = resolve(appDir, "bundle-stats.json");
       await mkdir(dirname(target), { recursive: true });
       await writeFile(target, `${JSON.stringify(stats, null, 2)}\n`);

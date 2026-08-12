@@ -18,6 +18,7 @@ import {
   listThreadEnvironmentAssignmentsOnHost,
   listThreads,
   listInitialSidebarThreadsWithPendingInteractionStateForProjects,
+  listSidebarThreadPage,
   listThreadsWithPendingInteractionStateForProjects,
   listThreadsWithPendingInteractionState,
   updateThread,
@@ -221,7 +222,7 @@ describe("threads", () => {
         listInitialSidebarThreadsWithPendingInteractionStateForProjects(db, {
           limitPerProject: 2,
           projectIds: [project.id, otherProject.id],
-        });
+        }).threads;
 
       expect(initialThreads).toHaveLength(4);
       expect(
@@ -270,7 +271,7 @@ describe("threads", () => {
         listInitialSidebarThreadsWithPendingInteractionStateForProjects(db, {
           limitPerProject: 3,
           projectIds: [project.id],
-        });
+        }).threads;
       const initialThreadIds = new Set(
         initialThreads.map((thread) => thread.id),
       );
@@ -281,6 +282,49 @@ describe("threads", () => {
       expect(initialThreadIds).toEqual(
         new Set([parent.id, activeChild.id, ...recentThreadIds.slice(-3)]),
       );
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("keeps cursor pages stable after a newer thread is deleted", () => {
+    vi.useFakeTimers();
+    try {
+      const { db, project } = setup();
+      const created = [];
+      for (let index = 0; index < 6; index += 1) {
+        vi.setSystemTime(index + 1);
+        created.push(
+          createThread(db, noopNotifier, {
+            projectId: project.id,
+            providerId: "codex",
+            status: "idle",
+          }),
+        );
+      }
+      const initial =
+        listInitialSidebarThreadsWithPendingInteractionStateForProjects(db, {
+          limitPerProject: 2,
+          projectIds: [project.id],
+        });
+      const cursor = initial.nextCursorByProjectId.get(project.id);
+      expect(cursor).toEqual({ createdAt: 5, id: created[4]?.id });
+
+      markThreadDeleted(db, noopNotifier, { threadId: created[5]!.id });
+      const page = listSidebarThreadPage(db, {
+        cursor: cursor ?? null,
+        limit: 2,
+        projectId: project.id,
+      });
+
+      expect(page.threads.map((thread) => thread.id)).toEqual([
+        created[3]?.id,
+        created[2]?.id,
+      ]);
+      expect(page.nextCursor).toEqual({
+        createdAt: 3,
+        id: created[2]?.id,
+      });
     } finally {
       vi.useRealTimers();
     }

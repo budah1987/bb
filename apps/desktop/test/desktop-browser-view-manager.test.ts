@@ -1894,6 +1894,37 @@ describe("DesktopBrowserViewManager", () => {
     expect(view.visible).toBe(false);
   });
 
+  it("trims the oldest hidden view while preserving visible pages", () => {
+    const manager = createDesktopBrowserViewManager({
+      partition: "persist:test",
+    });
+    const hostWindow = new FakeHostWindow({
+      contentBounds: { width: 700, height: 450 },
+      webContentsId: 74,
+    });
+    for (const tabId of ["browser:a", "browser:b", "browser:c"]) {
+      attachBrowserTab({
+        manager,
+        hostWindow,
+        tabId,
+        url: `https://example.com/${tabId}`,
+      });
+    }
+    manager.setVisible({
+      hostWindow,
+      request: { tabId: "browser:a", visible: false },
+    });
+    manager.setVisible({
+      hostWindow,
+      request: { tabId: "browser:b", visible: false },
+    });
+
+    expect(manager.trimHiddenViews(2)).toBe(1);
+    expect(requireFakeView(0).webContents.destroyed).toBe(true);
+    expect(requireFakeView(1).webContents.destroyed).toBe(false);
+    expect(requireFakeView(2).webContents.destroyed).toBe(false);
+  });
+
   it("focuses a freshly-attached active tab so Cmd+C targets its webContents", () => {
     const manager = createDesktopBrowserViewManager({
       partition: "persist:test",

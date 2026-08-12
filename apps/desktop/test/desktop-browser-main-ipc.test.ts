@@ -163,6 +163,10 @@ class RecordingDesktopBrowserViewManager implements DesktopBrowserViewManager {
     this.releaseWindowCalls.push(hostWebContentsId);
   }
 
+  trimHiddenViews(_maxRetainedPerWindow: number): number {
+    return 0;
+  }
+
   reload(args: TabCommandCall): void {
     this.reloadCalls.push(args);
   }

@@ -23,6 +23,50 @@ export const sharedViteConfig = {
   build: {
     // Skip compressed-size calculation to keep production app builds fast.
     reportCompressedSize: false,
+    // Single generated language modules can exceed Vite's default warning.
+    // CI separately caps every multi-module chunk at 650 KB.
+    chunkSizeWarningLimit: 800,
+    rolldownOptions: {
+      output: {
+        // Keep optional editor, Markdown, and file-tree engines out of one
+        // multi-megabyte workspace chunk. These package families have stable
+        // public boundaries and no app-owned side-effect ordering.
+        codeSplitting: {
+          groups: [
+            {
+              name: "editor-vendor",
+              test: /node_modules[\\/](?:@tiptap[\\/]|prosemirror-|orderedmap|rope-sequence|w3c-keyname)/,
+              maxSize: 350_000,
+              priority: 30,
+            },
+            {
+              name: "markdown-vendor",
+              test: /node_modules[\\/](?:react-markdown|remark-|rehype-|mdast-|micromark|hast-|unified|vfile|parse5|entities)/,
+              maxSize: 350_000,
+              priority: 25,
+            },
+            {
+              name: "syntax-vendor",
+              test: /node_modules[\\/](?:@shikijs[\\/]|shiki[\\/]|oniguruma|regex-recursion|regex-utilities)/,
+              maxSize: 350_000,
+              priority: 20,
+            },
+            {
+              name: "workspace-tree-vendor",
+              test: /node_modules[\\/](?:@pierre[\\/]trees|handlebars|preact)/,
+              maxSize: 350_000,
+              priority: 15,
+            },
+            {
+              name: "diff-vendor",
+              test: /node_modules[\\/](?:@pierre[\\/]diffs|@pierre[\\/]utils)/,
+              maxSize: 350_000,
+              priority: 15,
+            },
+          ],
+        },
+      },
+    },
   },
   optimizeDeps: {
     // The terminal imports xterm lazily when the panel mounts. Pre-optimize

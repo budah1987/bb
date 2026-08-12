@@ -1,7 +1,7 @@
+import { lazy, Suspense } from "react";
 import type { PluginPanelActionEntry } from "@/components/plugin/PluginPanelActions";
 import {
   NewTabActions,
-  NewTabFileSearch,
   type NewTabFileSearchProps,
   type OpenBrowserHandler,
   type OpenNotesHandler,
@@ -11,6 +11,12 @@ import {
 import { useEnvironmentSimulatorStatus } from "@/hooks/queries/environment-queries";
 
 type NewTabPageFileSearchProps = Omit<NewTabFileSearchProps, "idleActions">;
+
+const NewTabFileSearch = lazy(() =>
+  import("./NewTabFileSearch").then((module) => ({
+    default: module.NewTabFileSearch,
+  })),
+);
 
 export interface NewTabPageProps extends NewTabPageFileSearchProps {
   onOpenBrowser?: OpenBrowserHandler;
@@ -79,7 +85,8 @@ export function NewTabPage({
 }: NewTabPageProps) {
   return (
     <div className="flex min-h-full flex-col gap-3 bg-sidebar px-4 pb-3 pt-1">
-      <NewTabFileSearch
+      <Suspense fallback={null}>
+        <NewTabFileSearch
         projectId={projectId}
         environmentId={environmentId}
         hostId={hostId}
@@ -110,7 +117,8 @@ export function NewTabPage({
         onSelect={onSelect}
         recentItemsThreadId={recentItemsThreadId}
         showFileSearch={showFileSearch}
-      />
+        />
+      </Suspense>
     </div>
   );
 }
