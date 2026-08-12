@@ -9,6 +9,8 @@ import type {
   ProjectFileContentQuery,
   ProjectFilesQuery,
   ProjectResponse,
+  ProjectSidebarThreadsQuery,
+  ProjectSidebarThreadsResponse,
   ProjectWithThreadsResponse,
   ProjectListQuery,
   ProjectPathsQuery,
@@ -56,6 +58,11 @@ export interface ProjectReorderArgs extends ReorderProjectRequest {
 }
 
 export interface ProjectPromptHistoryArgs extends PromptHistoryQuery {
+  projectId: string;
+  signal?: AbortSignal;
+}
+
+export interface ProjectSidebarThreadsArgs extends ProjectSidebarThreadsQuery {
   projectId: string;
   signal?: AbortSignal;
 }
@@ -197,6 +204,7 @@ export type ProjectListResult =
   | ProjectWithThreadsResponse[];
 export type ProjectPathsResult = WorkspacePathListResponse;
 export type ProjectPromptHistoryResult = PromptHistoryResponse;
+export type ProjectSidebarThreadsResult = ProjectSidebarThreadsResponse;
 export type ProjectReorderResult = ProjectResponse[];
 export type ProjectSourceAddResult = ProjectSource;
 export type ProjectSourceDeleteResult = { ok: true };
@@ -240,6 +248,9 @@ export interface ProjectsArea {
     args: ProjectPromptHistoryArgs,
   ): Promise<ProjectPromptHistoryResult>;
   reorder(args: ProjectReorderArgs): Promise<ProjectReorderResult>;
+  sidebarThreads(
+    args: ProjectSidebarThreadsArgs,
+  ): Promise<ProjectSidebarThreadsResult>;
   sources: ProjectSourcesArea;
   update(args: ProjectUpdateArgs): Promise<ProjectUpdateResult>;
 }
@@ -590,6 +601,18 @@ export function createProjectsArea(args: CreateSdkAreaArgs): ProjectsArea {
             query: { limit: input.limit },
           },
           ...signalRequestArgs(input.signal),
+        ),
+      );
+    },
+    async sidebarThreads(input) {
+      const { projectId, signal, ...query } = input;
+      return transport.readJson(
+        transport.api.v1.projects[":id"]["sidebar-threads"].$get(
+          {
+            param: { id: projectId },
+            query,
+          },
+          ...signalRequestArgs(signal),
         ),
       );
     },

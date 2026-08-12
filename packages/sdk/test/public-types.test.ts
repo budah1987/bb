@@ -340,6 +340,7 @@ type ExpectedProjectsKey =
   | "paths"
   | "promptHistory"
   | "reorder"
+  | "sidebarThreads"
   | "sources"
   | "update";
 

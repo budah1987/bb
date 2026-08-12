@@ -94,6 +94,7 @@ function makeSidebarNavigation(
   return {
     sections: [],
     spaces: [],
+    nextThreadCursorByProjectId: {},
     projects: [
       {
         id: "project-1",

@@ -13,6 +13,7 @@ import {
   listProjectSourcesByProjectIds,
   listThreadSections,
   listInitialSidebarThreadsWithPendingInteractionStateForProjects,
+  listSidebarThreadPage,
   listThreadsWithPendingInteractionStateForProjects,
   reorderProject,
   updateProject,
@@ -22,6 +23,7 @@ import {
   getProjectManagerSettings,
   upsertProjectManagerSettings,
   type ReorderProjectResult,
+  type SidebarThreadCursor,
 } from "@bb/db";
 import {
   projectListIncludeOptionSchema,
@@ -30,6 +32,7 @@ import {
   type ProjectListIncludeOption,
   type ProjectListQuery,
   type ProjectResponse,
+  type ProjectSidebarThreadsResponse,
   type ProjectWithThreadsResponse,
   type PublicApiSchema,
   type ProjectManagerSettings,
@@ -293,28 +296,38 @@ function buildProjectsWithThreadsResponse(
   return buildProjectsWithThreadsResponseFromRows(
     deps,
     listDiscoverableProjects(deps, options),
-  );
+  ).projects;
+}
+
+interface ProjectsWithThreadsResult {
+  nextCursorByProjectId: ReadonlyMap<string, SidebarThreadCursor | null>;
+  projects: ProjectWithThreadsResponse[];
 }
 
 function buildProjectsWithThreadsResponseFromRows(
   deps: AppDeps,
   projectRows: ProjectResponseRow[],
   options: { threadLimit?: number } = {},
-): ProjectWithThreadsResponse[] {
+): ProjectsWithThreadsResult {
   const projects = buildProjectResponsesFromRows(deps, projectRows);
   const projectIds = projects.map((project) => project.id);
-  const threadRows =
+  const initialThreads =
     options.threadLimit === undefined
-      ? listThreadsWithPendingInteractionStateForProjects(deps.db, {
-          archived: false,
-          projectIds,
-        })
+      ? {
+          nextCursorByProjectId: new Map(
+            projectIds.map((projectId) => [projectId, null]),
+          ),
+          threads: listThreadsWithPendingInteractionStateForProjects(deps.db, {
+            archived: false,
+            projectIds,
+          }),
+        }
       : listInitialSidebarThreadsWithPendingInteractionStateForProjects(
           deps.db,
           { limitPerProject: options.threadLimit, projectIds },
         );
   const threadResponses = toThreadListEntryResponses(deps, {
-    threads: threadRows,
+    threads: initialThreads.threads,
   });
   const threadsByProjectId = new Map<
     string,
@@ -333,13 +346,44 @@ function buildProjectsWithThreadsResponseFromRows(
     { projectIds },
   );
 
-  return projects.map((project) => ({
-    ...project,
-    threads: threadsByProjectId.get(project.id) ?? [],
-    defaultExecutionOptions: resolveCreateThreadExecutionDefaults({
-      storedDefaults: defaultsByProjectId.get(project.id) ?? null,
-    }).executionDefaults,
-  }));
+  return {
+    nextCursorByProjectId: initialThreads.nextCursorByProjectId,
+    projects: projects.map((project) => ({
+      ...project,
+      threads: threadsByProjectId.get(project.id) ?? [],
+      defaultExecutionOptions: resolveCreateThreadExecutionDefaults({
+        storedDefaults: defaultsByProjectId.get(project.id) ?? null,
+      }).executionDefaults,
+    })),
+  };
+}
+
+function encodeSidebarThreadCursor(cursor: SidebarThreadCursor): string {
+  return Buffer.from(JSON.stringify(cursor)).toString("base64url");
+}
+
+function decodeSidebarThreadCursor(value: string): SidebarThreadCursor {
+  try {
+    const parsed: unknown = JSON.parse(
+      Buffer.from(value, "base64url").toString("utf8"),
+    );
+    if (
+      typeof parsed !== "object" ||
+      parsed === null ||
+      !("createdAt" in parsed) ||
+      typeof parsed.createdAt !== "number" ||
+      !Number.isSafeInteger(parsed.createdAt) ||
+      parsed.createdAt < 0 ||
+      !("id" in parsed) ||
+      typeof parsed.id !== "string" ||
+      parsed.id.length === 0
+    ) {
+      throw new Error("invalid cursor payload");
+    }
+    return { createdAt: parsed.createdAt, id: parsed.id };
+  } catch {
+    throw new ApiError(400, "invalid_request", "cursor is invalid");
+  }
 }
 
 function buildSidebarBootstrapResponse(
@@ -354,11 +398,12 @@ function buildSidebarBootstrapResponse(
       "Personal project is not initialized",
     );
   }
-  const personalProjectResponse = buildProjectsWithThreadsResponseFromRows(
+  const personalProjectResult = buildProjectsWithThreadsResponseFromRows(
     deps,
     [personalProject],
     options,
-  )[0];
+  );
+  const personalProjectResponse = personalProjectResult.projects[0];
   if (!personalProjectResponse) {
     throw new ApiError(
       500,
@@ -366,15 +411,26 @@ function buildSidebarBootstrapResponse(
       "Personal project response was not built",
     );
   }
+  const projectResult = buildProjectsWithThreadsResponseFromRows(
+    deps,
+    listPublicProjects(deps.db),
+    options,
+  );
+  const nextCursorByProjectId = new Map([
+    ...projectResult.nextCursorByProjectId,
+    ...personalProjectResult.nextCursorByProjectId,
+  ]);
   return {
     sections: listThreadSections(deps.db),
     spaces: buildSpaceResponses(deps),
-    projects: buildProjectsWithThreadsResponseFromRows(
-      deps,
-      listPublicProjects(deps.db),
-      options,
-    ),
+    projects: projectResult.projects,
     personalProject: personalProjectResponse,
+    nextThreadCursorByProjectId: Object.fromEntries(
+      [...nextCursorByProjectId].map(([projectId, cursor]) => [
+        projectId,
+        cursor === null ? null : encodeSidebarThreadCursor(cursor),
+      ]),
+    ),
   };
 }
 
@@ -462,6 +518,32 @@ export function registerProjectRoutes(app: Hono, deps: AppDeps): void {
             value: query.threadLimit,
           });
     return context.json(buildSidebarBootstrapResponse(deps, { threadLimit }));
+  });
+
+  get(routes.sidebarThreads, (context, query) => {
+    const projectId = context.req.param("id");
+    requirePublicProject(deps.db, projectId);
+    const limit = parseBoundedPositiveOptionalInteger({
+      defaultValue: 200,
+      max: 200,
+      name: "limit",
+      value: query.limit,
+    });
+    const page = listSidebarThreadPage(deps.db, {
+      cursor:
+        query.cursor === undefined
+          ? null
+          : decodeSidebarThreadCursor(query.cursor),
+      limit,
+      projectId,
+    });
+    return context.json({
+      threads: toThreadListEntryResponses(deps, { threads: page.threads }),
+      nextCursor:
+        page.nextCursor === null
+          ? null
+          : encodeSidebarThreadCursor(page.nextCursor),
+    } satisfies ProjectSidebarThreadsResponse);
   });
 
   post(routes.create, async (context, payload) => {

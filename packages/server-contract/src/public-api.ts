@@ -149,6 +149,8 @@ import type {
   ProjectManagerSettings,
   ProjectPathsQuery,
   ProjectResponse,
+  ProjectSidebarThreadsQuery,
+  ProjectSidebarThreadsResponse,
   ProjectSkillsQuery,
   DeleteSkillRequest,
   SkillListResponse,
@@ -337,6 +339,7 @@ import {
   projectFileContentQuerySchema,
   projectFilesQuerySchema,
   projectListQuerySchema,
+  projectSidebarThreadsQuerySchema,
   sidebarBootstrapQuerySchema,
   projectPathsQuerySchema,
   projectSkillsQuerySchema,
@@ -468,6 +471,14 @@ export const publicApiRoutes = {
         sidebarBootstrapQuerySchema,
       ),
       response: jsonResponse<SidebarBootstrapResponse>(),
+    }),
+    sidebarThreads: defineRoute({
+      path: "/projects/:id/sidebar-threads",
+      method: "get",
+      request: queryRequest<PathProjectId, ProjectSidebarThreadsQuery>(
+        projectSidebarThreadsQuerySchema,
+      ),
+      response: jsonResponse<ProjectSidebarThreadsResponse>(),
     }),
     get: defineRoute({
       path: "/projects/:id",
