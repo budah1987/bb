@@ -358,7 +358,7 @@ environment pull-request show <id>`. Diff commands require an explicit target
   commits safe local changes, integrates the source branch, and stops on a
   conflict.
 - `bb environment update-from-main <id>` fetches `origin/main` and rebases a
-  clean managed worktree onto it. BB aborts the rebase and reports conflicting
+  clean Git worktree onto it. BB aborts the rebase and reports conflicting
   files when the update conflicts.
 - The official Ingestion Desk plugin exposes `bb ingestion`. Use `status`,
   `show`, `create`, and `source add` to manage source cases. Use `draft` to

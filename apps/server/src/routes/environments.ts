@@ -1342,14 +1342,11 @@ export function registerEnvironmentRoutes(app: Hono, deps: AppDeps): void {
         });
       }
       case "update_from_main": {
-        if (
-          !environment.isGitRepo ||
-          environment.workspaceProvisionType !== "managed-worktree"
-        ) {
+        if (!environment.isGitRepo || !environment.isWorktree) {
           throw new ApiError(
             409,
             "invalid_request",
-            "Updating from main requires a managed Git worktree",
+            "Updating from main requires a Git worktree",
           );
         }
 
