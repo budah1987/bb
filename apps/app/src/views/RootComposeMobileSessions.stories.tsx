@@ -37,7 +37,7 @@ const sessions = [
     titleFallback: "Approve mobile environment access",
     environmentId: "env_mobile_activity",
     environmentName: "Activity visualization",
-    environmentBranchName: "amir/activity-visualization",
+    environmentBranchName: "budah1987/activity-visualization",
     hasPendingInteraction: true,
     pinnedAt: 500,
     status: "active",

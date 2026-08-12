@@ -37,7 +37,7 @@ describe("sanitizeGeneratedBranchSlug", () => {
 describe("buildManagedBranchName", () => {
   it("falls back to the full thread ID", () => {
     expect(buildManagedBranchName({ threadId: "thr_abc123def456" })).toBe(
-      "amir/thr_abc123def456",
+      "budah1987/thr_abc123def456",
     );
   });
 
@@ -47,7 +47,7 @@ describe("buildManagedBranchName", () => {
         branchSlug: "Fix login flow!",
         threadId: "thr_abc123def456",
       }),
-    ).toBe("amir/fix-login-flow-thr_abc123def456");
+    ).toBe("budah1987/fix-login-flow-thr_abc123def456");
   });
 
   it("falls back to the full thread ID when the slug is empty after sanitizing", () => {
@@ -56,7 +56,7 @@ describe("buildManagedBranchName", () => {
         branchSlug: "!!!",
         threadId: "thr_abc123def456",
       }),
-    ).toBe("amir/thr_abc123def456");
+    ).toBe("budah1987/thr_abc123def456");
   });
 
   it("produces unique names for threads with the same slug", () => {

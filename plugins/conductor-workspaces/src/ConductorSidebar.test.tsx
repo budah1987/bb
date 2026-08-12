@@ -612,8 +612,8 @@ describe("ConductorSidebar", () => {
               latestAttentionAt: 1,
               environment: {
                 id: "environment-branch",
-                name: "amir/user-activation-fix",
-                branchName: "amir/user-activation-fix",
+                name: "budah1987/user-activation-fix",
+                branchName: "budah1987/user-activation-fix",
                 workspaceDisplayKind: "other",
               },
             }),
@@ -643,7 +643,7 @@ describe("ConductorSidebar", () => {
 
     fireEvent.contextMenu(
       await screen.findByRole("button", {
-        name: /amir\/user-activation-fix/u,
+        name: /budah1987\/user-activation-fix/u,
       }),
     );
     expect(

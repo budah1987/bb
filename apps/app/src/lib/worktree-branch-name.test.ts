@@ -26,6 +26,6 @@ describe("buildWorktreeBranchName", () => {
   });
 
   it("defers empty names to the server-generated default", () => {
-    expect(buildWorktreeBranchName("amir", "")).toBeNull();
+    expect(buildWorktreeBranchName("budah1987", "")).toBeNull();
   });
 });

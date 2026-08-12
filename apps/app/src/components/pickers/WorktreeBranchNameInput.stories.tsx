@@ -6,7 +6,7 @@ import {
 } from "@/lib/worktree-branch-name";
 
 export const Default = () => {
-  const [prefix, setPrefix] = useState<WorktreeBranchPrefix>("amir");
+  const [prefix, setPrefix] = useState<WorktreeBranchPrefix>("budah1987");
   const [slug, setSlug] = useState("");
   const branchName = buildWorktreeBranchName(prefix, slug);
 
@@ -23,7 +23,7 @@ export const Default = () => {
           onSlugChange={setSlug}
         />
         <span className="min-h-4 text-xs text-muted-foreground">
-          {branchName ?? "BB will generate an amir/ branch name."}
+          {branchName ?? "BB will generate a budah1987/ branch name."}
         </span>
       </div>
     </div>
@@ -33,7 +33,7 @@ export const Default = () => {
 Default.storyName = "Worktree branch name";
 
 export const Mobile = () => {
-  const [prefix, setPrefix] = useState<WorktreeBranchPrefix>("amir");
+  const [prefix, setPrefix] = useState<WorktreeBranchPrefix>("budah1987");
   const [slug, setSlug] = useState("improve-worktree-naming");
 
   return (

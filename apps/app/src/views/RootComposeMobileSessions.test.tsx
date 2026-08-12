@@ -273,7 +273,7 @@ describe("RootComposeMobileSessions", () => {
       id: "thr_focused",
       environmentId: "env_focus",
       environmentName: "Activity workspace",
-      environmentBranchName: "amir/activity",
+      environmentBranchName: "budah1987/activity",
       pinnedAt: 10,
       status: "active",
       runtime: { displayStatus: "active", hostReconnectGraceExpiresAt: null },
@@ -282,7 +282,7 @@ describe("RootComposeMobileSessions", () => {
       id: "thr_sibling",
       environmentId: "env_focus",
       environmentName: "Activity workspace",
-      environmentBranchName: "amir/activity",
+      environmentBranchName: "budah1987/activity",
       title: "Research tab",
     });
 

@@ -50,8 +50,8 @@ export function buildManagedBranchName(args: ManagedBranchNameArgs): string {
     ? sanitizeGeneratedBranchSlug(args.branchSlug)
     : null;
   return branchSlug
-    ? `amir/${branchSlug}-${args.threadId}`
-    : `amir/${args.threadId}`;
+    ? `budah1987/${branchSlug}-${args.threadId}`
+    : `budah1987/${args.threadId}`;
 }
 
 export function buildUnmanagedBranchName(args: ManagedBranchNameArgs): string {

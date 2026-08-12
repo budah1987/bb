@@ -191,7 +191,7 @@ describe("resolveRootComposeThreadEnvironment", () => {
           isNew: true,
           requestedName: "fix/github-workflow-name",
         },
-        worktreeBranchName: "amir/composer-name",
+        worktreeBranchName: "budah1987/composer-name",
       }),
     ).toMatchObject({
       workspace: {

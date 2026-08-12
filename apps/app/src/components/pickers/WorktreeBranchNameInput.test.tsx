@@ -27,7 +27,7 @@ describe("WorktreeBranchNameInput", () => {
   it("uses a full-width touch layout for the mobile PWA", () => {
     render(
       <WorktreeBranchNameInput
-        prefix="amir"
+        prefix="budah1987"
         slug="mobile-worktree"
         onPrefixChange={vi.fn()}
         onSlugChange={vi.fn()}

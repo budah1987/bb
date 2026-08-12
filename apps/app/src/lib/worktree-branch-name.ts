@@ -1,5 +1,5 @@
 export const WORKTREE_BRANCH_PREFIXES = [
-  { value: "amir", label: "Amir" },
+  { value: "budah1987", label: "Budah1987" },
   { value: "feature", label: "Feature" },
   { value: "fix", label: "Fix" },
   { value: "hotfix", label: "Hotfix" },
