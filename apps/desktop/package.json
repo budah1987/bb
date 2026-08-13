@@ -17,6 +17,7 @@
     "package": "pnpm run prepare-runtime && pnpm run build && node scripts/run-electron-builder.mjs --mac --dir --arm64",
     "prepare-runtime": "pnpm exec turbo run build --filter=bb-app --output-logs=new-only",
     "performance:check": "tsx scripts/check-performance-run.mts",
+    "performance:record": "tsx scripts/record-packaged-performance.mts",
     "smoke:packaged": "node scripts/smoke-packaged-app.mjs",
     "start": "pnpm run package && node scripts/run-packaged-app.mjs",
     "test": "vitest run --config vitest.config.ts",
