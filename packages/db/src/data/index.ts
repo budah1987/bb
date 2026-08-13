@@ -399,6 +399,7 @@ export {
   scopedItemRefKey,
   listStoredThreadProvisioningRowsByProvisioningId,
   listStoredTimelineWindowEventRows,
+  listStoredLegacyModelFallbackRows,
   listStoredToolCallRowsByItemIds,
   listStoredTurnInputAcceptedRowsByClientRequestIds,
   listStoredTurnCompletedRowsByTurnIds,

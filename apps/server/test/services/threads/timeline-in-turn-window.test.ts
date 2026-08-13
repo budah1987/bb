@@ -945,6 +945,67 @@ describe("timeline window event exclusions", () => {
     );
     expect(withDiffs.response.rows).toEqual(withoutDiffs.response.rows);
   });
+
+  it("skips hidden provider diagnostics but retains legacy model fallback", () => {
+    const { db, thread } = setup();
+    seedTurns(db, thread, { completeLastTurn: true, itemsPerTurn: [5] });
+    const baseline = buildPage(db, thread, LARGE_BUDGET, null);
+    const diagnosticEvents: EventInput[] = Array.from(
+      { length: 50 },
+      (_, index) => ({
+        threadId: thread.id,
+        sequence: 500 + index,
+        type: "provider/unhandled",
+        scope: turnScope("turn-1"),
+        providerThreadId,
+        itemId: null,
+        itemKind: null,
+        data: JSON.stringify({
+          providerId: "claude-code",
+          rawType: "sdk/example",
+          rawEvent: { method: "sdk/message", params: { type: "example" } },
+        }),
+      }),
+    );
+    diagnosticEvents.push({
+      threadId: thread.id,
+      sequence: 550,
+      type: "provider/unhandled",
+      scope: turnScope("turn-1"),
+      providerThreadId,
+      itemId: null,
+      itemKind: null,
+      data: JSON.stringify({
+        providerId: "claude-code",
+        rawType: "sdk/system",
+        rawEvent: {
+          jsonrpc: "2.0",
+          method: "sdk/message",
+          params: {
+            message: {
+              type: "system",
+              subtype: "model_refusal_fallback",
+              original_model: "claude-fable-5",
+              fallback_model: "claude-opus-4-8",
+              content: "Switched to Opus after a refusal.",
+            },
+          },
+        },
+      }),
+    });
+    insertEvents(db, noopNotifier, diagnosticEvents);
+
+    const result = buildPage(db, thread, LARGE_BUDGET, null);
+    expect(result.profile.eventRowCount).toBe(
+      baseline.profile.eventRowCount + 1,
+    );
+    expect(result.response.modelFallback).toMatchObject({
+      sourceSeq: 550,
+      originalModel: "claude-fable-5",
+      fallbackModel: "claude-opus-4-8",
+      reason: "refusal",
+    });
+  });
 });
 
 describe("timeline inline output reads", () => {

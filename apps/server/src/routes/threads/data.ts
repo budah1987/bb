@@ -355,9 +355,9 @@ export function registerThreadDataRoutes(app: Hono, deps: AppDeps): void {
   const slowTimelineBuildLogger = createSlowThreadTimelineBuildLogger({
     logger: deps.logger,
   });
-  // The conversation outline reprojects the entire thread, so memoize it per
-  // (thread, maxSeq): repeated polls at a stable revision are served from
-  // cache. Any appended event bumps maxSeq and forces a rebuild, so a thread
+  // The conversation outline reprojects the entire thread, so memoize its
+  // latest revision per thread. Repeated polls at a stable revision are served
+  // from cache. Any appended event bumps maxSeq and replaces that revision, so
   // streaming many deltas rebuilds per batch — acceptable because the client
   // only fetches the outline when the minimap is mounted and refetches are
   // driven by the (debounced) realtime invalidation, not per token. The key
@@ -367,7 +367,7 @@ export function registerThreadDataRoutes(app: Hono, deps: AppDeps): void {
   // value. A small LRU bounds memory across many viewed threads.
   const conversationOutlineCache = new Map<
     string,
-    ThreadConversationOutlineResponse
+    { maxSeq: number; response: ThreadConversationOutlineResponse }
   >();
   const CONVERSATION_OUTLINE_CACHE_MAX_ENTRIES = 128;
 
@@ -432,15 +432,23 @@ export function registerThreadDataRoutes(app: Hono, deps: AppDeps): void {
       query.afterSequence,
       "afterSequence",
     );
-    const paramsKey = buildThreadTimelineParamsKey(keyArgs);
-    const previous = timelineLatestRowsCache.get(paramsKey);
+    const tracksLatestRows = page.kind === "latest";
+    const paramsKey = tracksLatestRows
+      ? buildThreadTimelineParamsKey(keyArgs)
+      : undefined;
+    const previous =
+      paramsKey === undefined
+        ? undefined
+        : timelineLatestRowsCache.get(paramsKey);
     const delta =
       afterSequence !== undefined &&
       previous !== undefined &&
       previous.maxSeq === afterSequence
         ? computeTimelineRowDelta(previous.rows, full.rows)
         : undefined;
-    timelineLatestRowsCache.set(paramsKey, { maxSeq, rows: full.rows });
+    if (paramsKey !== undefined) {
+      timelineLatestRowsCache.set(paramsKey, { maxSeq, rows: full.rows });
+    }
 
     return context.json(
       delta === undefined ? full : { ...full, rows: [], delta },
@@ -450,13 +458,13 @@ export function registerThreadDataRoutes(app: Hono, deps: AppDeps): void {
   get(routes.conversationOutline, (context) => {
     const thread = requirePublicThread(deps.db, context.req.param("id"));
     const maxSeq = getLatestThreadSequence(deps.db, { threadId: thread.id });
-    const cacheKey = `${thread.id}:${maxSeq}`;
+    const cacheKey = thread.id;
     const cached = conversationOutlineCache.get(cacheKey);
-    if (cached !== undefined) {
+    if (cached?.maxSeq === maxSeq) {
       // Re-insert to mark most-recently-used.
       conversationOutlineCache.delete(cacheKey);
       conversationOutlineCache.set(cacheKey, cached);
-      return context.json(cached);
+      return context.json(cached.response);
     }
     const response = buildThreadConversationOutline(deps.db, thread, {
       maxSeq,
@@ -465,7 +473,7 @@ export function registerThreadDataRoutes(app: Hono, deps: AppDeps): void {
         thread.providerId,
       ),
     });
-    conversationOutlineCache.set(cacheKey, response);
+    conversationOutlineCache.set(cacheKey, { maxSeq, response });
     while (
       conversationOutlineCache.size > CONVERSATION_OUTLINE_CACHE_MAX_ENTRIES
     ) {

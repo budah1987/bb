@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { threadScope, turnScope } from "@bb/domain";
+import {
+  encodeClientTurnRequestIdNumber,
+  threadScope,
+  turnScope,
+} from "@bb/domain";
 import {
   applyTimelineDelta,
   threadTimelineResponseSchema,
@@ -191,6 +195,72 @@ describe("GET /threads/:id/timeline?afterSequence (row-patch delta)", () => {
       expect(applyTimelineDelta(before.rows, delta.delta!)).toEqual(
         before.rows,
       );
+    });
+  });
+
+  it("does not retain row snapshots for older pages", async () => {
+    await withTestHarness(async (harness) => {
+      const { environment, thread } = seedThreadFixture(harness);
+      for (const [sequence, text] of [
+        [1, "first"],
+        [2, "second"],
+      ] as const) {
+        seedEvent(harness.deps, {
+          threadId: thread.id,
+          environmentId: environment.id,
+          sequence,
+          type: "client/turn/requested",
+          scope: threadScope(),
+          data: {
+            direction: "outbound",
+            requestId: encodeClientTurnRequestIdNumber({ value: sequence }),
+            source: "tell",
+            initiator: "user",
+            senderThreadId: null,
+            input: [{ type: "text", text, mentions: [] }],
+            target:
+              sequence === 1 ? { kind: "thread-start" } : { kind: "new-turn" },
+            request: { method: "turn/start", params: {} },
+            execution: {
+              model: "gpt-5",
+              serviceTier: "default",
+              reasoningLevel: "medium",
+              permissionMode: "full",
+              source: "client/turn/requested",
+            },
+          },
+        });
+      }
+
+      const latestResponse = await harness.app.request(
+        `/api/v1/threads/${thread.id}/timeline?segmentLimit=1`,
+      );
+      const latest = threadTimelineResponseSchema.parse(
+        await readJson(latestResponse),
+      );
+      const cursor = latest.timelinePage.olderCursor;
+      expect(cursor).not.toBeNull();
+      if (cursor === null) {
+        throw new Error("expected an older-page cursor");
+      }
+      const olderUrl =
+        `/api/v1/threads/${thread.id}/timeline?segmentLimit=1` +
+        `&beforeAnchorSeq=${cursor.anchorSeq}` +
+        `&beforeAnchorId=${encodeURIComponent(cursor.anchorId)}`;
+      const first = threadTimelineResponseSchema.parse(
+        await readJson(await harness.app.request(olderUrl)),
+      );
+      const repeated = threadTimelineResponseSchema.parse(
+        await readJson(
+          await harness.app.request(
+            `${olderUrl}&afterSequence=${first.maxSeq}`,
+          ),
+        ),
+      );
+
+      expect(first.timelinePage.kind).toBe("older");
+      expect(repeated.delta).toBeUndefined();
+      expect(repeated.rows).toEqual(first.rows);
     });
   });
 });
