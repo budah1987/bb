@@ -21,6 +21,7 @@ export interface BundleStats {
 export interface BundleChunk extends BundleBootChunk {
   dynamicEntry: boolean;
   entry: boolean;
+  imports: string[];
   moduleCount: number;
   topModules: Array<{ bytes: number; id: string }>;
 }
@@ -68,6 +69,7 @@ export function bundleStats(): Plugin {
           packages: [...packages].sort(),
           dynamicEntry: output.isDynamicEntry,
           entry: output.isEntry,
+          imports: [...output.imports].sort(),
           moduleCount: Object.keys(output.modules).length,
           topModules: Object.entries(output.modules)
             .map(([id, info]) => ({ bytes: info.renderedLength, id }))

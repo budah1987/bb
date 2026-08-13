@@ -36,31 +36,32 @@ export const sharedViteConfig = {
             {
               name: "editor-vendor",
               test: /node_modules[\\/](?:@tiptap[\\/]|prosemirror-|orderedmap|rope-sequence|w3c-keyname)/,
-              maxSize: 350_000,
+              // Keep each lazy entry's circular module graph together.
+              entriesAware: true,
               priority: 30,
             },
             {
               name: "markdown-vendor",
               test: /node_modules[\\/](?:react-markdown|remark-|rehype-|mdast-|micromark|hast-|unified|vfile|parse5|entities)/,
-              maxSize: 350_000,
+              entriesAware: true,
               priority: 25,
             },
             {
               name: "syntax-vendor",
               test: /node_modules[\\/](?:@shikijs[\\/]|shiki[\\/]|oniguruma|regex-recursion|regex-utilities)/,
-              maxSize: 350_000,
+              entriesAware: true,
               priority: 20,
             },
             {
               name: "workspace-tree-vendor",
               test: /node_modules[\\/](?:@pierre[\\/]trees|handlebars|preact)/,
-              maxSize: 350_000,
+              entriesAware: true,
               priority: 15,
             },
             {
               name: "diff-vendor",
               test: /node_modules[\\/](?:@pierre[\\/]diffs|@pierre[\\/]utils)/,
-              maxSize: 350_000,
+              entriesAware: true,
               priority: 15,
             },
           ],
