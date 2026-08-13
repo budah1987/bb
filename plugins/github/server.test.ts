@@ -1,4 +1,4 @@
-import { describe, expect, expectTypeOf, it, vi } from "vitest";
+import { describe, expect, expectTypeOf, it } from "vitest";
 import { defineRpcContract } from "@bb/plugin-sdk";
 import type { PluginRpcClient, PluginRpcHandlers } from "@bb/plugin-sdk";
 import { createFakePluginHost } from "@bb/plugin-sdk/testing";
@@ -6,7 +6,7 @@ import {
   fetchRepoItems,
   githubRpcContract,
   parsePaginatedGhApi,
-  runGithubSyncService,
+  shouldRefreshGithubCache,
   validateGithubCliArgs,
 } from "./server";
 
@@ -142,28 +142,16 @@ describe("GitHub RPC contract", () => {
     );
   });
 
-  it("defers the first background sync and stops cleanly", async () => {
-    vi.useFakeTimers();
-    try {
-      const controller = new AbortController();
-      const sync = vi.fn(async () => undefined);
-      const service = runGithubSyncService({
-        signal: controller.signal,
-        sync,
-        startupDelayMs: 30_000,
-        intervalMs: 300_000,
-      });
-
-      await vi.advanceTimersByTimeAsync(29_999);
-      expect(sync).not.toHaveBeenCalled();
-      await vi.advanceTimersByTimeAsync(1);
-      expect(sync).toHaveBeenCalledTimes(1);
-
-      controller.abort();
-      await service;
-    } finally {
-      vi.useRealTimers();
-    }
+  it("refreshes GitHub data only when the persisted cache is stale", () => {
+    const now = Date.parse("2026-08-12T20:00:00.000Z");
+    expect(shouldRefreshGithubCache(null, now)).toBe(true);
+    expect(shouldRefreshGithubCache("invalid", now)).toBe(true);
+    expect(
+      shouldRefreshGithubCache("2026-08-12T19:56:00.000Z", now),
+    ).toBe(false);
+    expect(
+      shouldRefreshGithubCache("2026-08-12T19:55:00.000Z", now),
+    ).toBe(true);
   });
 
   it("infers parsed handler inputs and frontend results", () => {

@@ -11,8 +11,7 @@ import { execFile } from "node:child_process";
 import { defineRpcContract, type BbPluginApi } from "@bb/plugin-sdk";
 import { z } from "zod";
 
-const SYNC_INTERVAL_MS = 5 * 60_000;
-const STARTUP_SYNC_DELAY_MS = 30_000;
+const DEMAND_SYNC_STALE_MS = 5 * 60_000;
 const ISSUE_PAGE = 100;
 const CLOSED_ISSUE_PAGE = 50;
 const PR_PAGE = 50;
@@ -391,32 +390,13 @@ export function validateGithubCliArgs(argv: string[]): string | null {
   return null;
 }
 
-function waitForSyncDelay(signal: AbortSignal, delayMs: number): Promise<void> {
-  return new Promise<void>((resolve) => {
-    const finish = () => {
-      clearTimeout(timer);
-      signal.removeEventListener("abort", finish);
-      resolve();
-    };
-    const timer = setTimeout(finish, delayMs);
-    signal.addEventListener("abort", finish, { once: true });
-  });
-}
-
-export async function runGithubSyncService(args: {
-  signal: AbortSignal;
-  sync: () => Promise<unknown>;
-  startupDelayMs?: number;
-  intervalMs?: number;
-}): Promise<void> {
-  const startupDelayMs = args.startupDelayMs ?? STARTUP_SYNC_DELAY_MS;
-  const intervalMs = args.intervalMs ?? SYNC_INTERVAL_MS;
-  if (args.signal.aborted) return;
-  await waitForSyncDelay(args.signal, startupDelayMs);
-  while (!args.signal.aborted) {
-    await args.sync();
-    await waitForSyncDelay(args.signal, intervalMs);
-  }
+export function shouldRefreshGithubCache(
+  lastSyncedAt: string | null,
+  nowMs = Date.now(),
+): boolean {
+  if (lastSyncedAt === null) return true;
+  const lastSyncedMs = Date.parse(lastSyncedAt);
+  return !Number.isFinite(lastSyncedMs) || nowMs - lastSyncedMs >= DEMAND_SYNC_STALE_MS;
 }
 
 function toItems(raw: string, repo: string, kind: "issue" | "pr"): CachedItem[] {
@@ -503,7 +483,7 @@ export default async function plugin(bb: BbPluginApi) {
   // common install locations once and remember the winner.
   // ------------------------------------------------------------------
   let ghPath: string | null = null;
-  let ghAuthError: string | null = "checking gh…";
+  let ghAuthError: string | null = null;
 
   async function resolveGh(): Promise<string> {
     if (ghPath !== null) return ghPath;
@@ -747,6 +727,7 @@ export default async function plugin(bb: BbPluginApi) {
       repos: repos.length,
       items: total,
     });
+    bb.realtime.publish("sync-changed", {});
     if (before !== after) {
       bb.realtime.publish("data-changed", { items: total });
     }
@@ -755,6 +736,7 @@ export default async function plugin(bb: BbPluginApi) {
   }
 
   let syncInFlight: Promise<{ repos: number; items: number }> | null = null;
+  let nextDemandSyncAtMs = 0;
   function requestSync(force = false): Promise<{ repos: number; items: number }> {
     if (syncInFlight !== null) return syncInFlight;
     const request = syncAll(force).finally(() => {
@@ -762,27 +744,6 @@ export default async function plugin(bb: BbPluginApi) {
     });
     syncInFlight = request;
     return request;
-  }
-
-  // Serve the persisted cache during startup. Defer network and `gh` process
-  // work until after the app's critical startup window, then refresh normally.
-  bb.background.service("sync", {
-    async start(signal) {
-      await runGithubSyncService({
-        signal,
-        sync: () => requestSync(),
-      });
-    },
-  });
-
-  // Surface an unconfigured gh immediately instead of waiting for the
-  // service's first crash.
-  try {
-    await checkAuth();
-  } catch (error) {
-    bb.status.needsConfiguration(
-      error instanceof Error ? error.message : String(error),
-    );
   }
 
   // ------------------------------------------------------------------
@@ -941,6 +902,21 @@ export default async function plugin(bb: BbPluginApi) {
         items: number;
       }>("sync-cursor");
       const repos = await discoverRepos();
+      if (
+        shouldRefreshGithubCache(cursor?.lastSyncedAt ?? null) &&
+        Date.now() >= nextDemandSyncAtMs
+      ) {
+        nextDemandSyncAtMs = Date.now() + DEMAND_SYNC_STALE_MS;
+        void requestSync().catch((error: unknown) => {
+          bb.status.needsConfiguration(
+            error instanceof Error ? error.message : String(error),
+          );
+          bb.log.warn(
+            `on-demand sync failed: ${error instanceof Error ? error.message : String(error)}`,
+          );
+          bb.realtime.publish("sync-changed", {});
+        });
+      }
       return {
         ghOk: ghAuthError === null,
         ghError: ghAuthError,
