@@ -95,7 +95,7 @@ describe("environment reprovisioning", () => {
       );
       const managedCommand =
         requireManagedWorktreeEnvironmentProvisionLiveCommand(queued);
-      expect(managedCommand.command.branchName).toBe(`bb/${thread.id}`);
+      expect(managedCommand.command.branchName).toBe(`budah1987/${thread.id}`);
       expect(managedCommand.command.type).toBe("environment.provision");
     });
   });
