@@ -99,7 +99,7 @@ disable installed skills, automation execution, plugin runtimes, CLI commands,
 or backend APIs.
 
 Thread timeline windows are bounded by event count as well as user-message
-count (`BB_FF_TIMELINE_WINDOW_EVENT_BUDGET`, default 1500), so a long thread
+count (`BB_FF_TIMELINE_WINDOW_EVENT_BUDGET`, default 850), so a long thread
 stops reprojecting its whole history — and blocking the server event loop — on
 every update. A turn still running is cut at the budget too, so a very long
 turn costs the budget per update instead of growing without limit. Older

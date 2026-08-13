@@ -140,7 +140,7 @@ message agents, or inspect projects, providers, and environments.
   `bb settings experiment newOnboarding <true|false>`. Use
   `bb settings replay-onboarding` to enable it and show the guide again.
 - Thread timeline windows are capped by event count as well as by user-message
-  count (`BB_FF_TIMELINE_WINDOW_EVENT_BUDGET`, default 1500), because a thread
+  count (`BB_FF_TIMELINE_WINDOW_EVENT_BUDGET`, default 850), because a thread
   with few user messages but many events would otherwise reproject its whole
   history on every timeline request, blocking the server event loop and
   delaying the daemon endpoints the agent awaits between tool calls. A turn

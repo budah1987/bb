@@ -951,6 +951,12 @@ export interface ListStoredTimelineWindowEventRowsArgs {
   threadId: string;
 }
 
+export interface ListStoredLegacyModelFallbackRowsArgs {
+  beforeSequence?: number;
+  sequenceStart: number;
+  threadId: string;
+}
+
 export type GetStoredTimelineWindowEventDataBytesArgs =
   ListStoredTimelineWindowEventRowsArgs;
 
@@ -2749,6 +2755,41 @@ export function listStoredTimelineWindowEventRows(
     .select(storedEventRowFieldsWithInlineOutputLimit(args.maxInlineOutputChars))
     .from(events)
     .where(and(...storedTimelineWindowConditions(args)))
+    .orderBy(events.sequence)
+    .all();
+}
+
+/**
+ * Legacy Claude model-fallback notices were stored as provider/unhandled.
+ * Timeline reads normally skip hidden provider diagnostics, so fetch only this
+ * operational subset through the thread/type/sequence index.
+ */
+export function listStoredLegacyModelFallbackRows(
+  db: DbConnection,
+  args: ListStoredLegacyModelFallbackRowsArgs,
+): StoredEventRow[] {
+  const conditions: SQL[] = [
+    eq(events.threadId, args.threadId),
+    eq(events.type, "provider/unhandled"),
+    gte(events.sequence, args.sequenceStart),
+    eq(sql`json_extract(${events.data}, '$.rawType')`, "sdk/system"),
+    eq(
+      sql`json_extract(${events.data}, '$.rawEvent.method')`,
+      "sdk/message",
+    ),
+    inArray(sql`json_extract(${events.data}, '$.rawEvent.params.message.subtype')`, [
+      "model_fallback",
+      "model_refusal_fallback",
+    ]),
+  ];
+  if (args.beforeSequence !== undefined) {
+    conditions.push(lt(events.sequence, args.beforeSequence));
+  }
+
+  return db
+    .select(storedEventRowFields)
+    .from(events)
+    .where(and(...conditions))
     .orderBy(events.sequence)
     .all();
 }
