@@ -74,8 +74,24 @@ pnpm exec turbo run smoke:packaged --filter=@bb/desktop
 
 ## Packaged performance budget
 
-Record renderer samples every five seconds during the standard 30-minute
-packaged stress run. Save them in this format:
+Package the app before starting the recorder:
+
+```bash
+pnpm exec turbo run package --filter=@bb/desktop
+```
+
+The recorder creates a deterministic performance fixture in a temporary
+directory. It never reads or writes production data. It switches available
+sidebar tasks for 25 minutes, samples renderer processes every five seconds,
+and initializes one hidden native browser view. It then records five idle
+minutes:
+
+```bash
+pnpm --dir apps/desktop performance:record -- \
+  --output ../../performance-run.json
+```
+
+The recorder writes this format atomically after every sample:
 
 ```json
 {
@@ -92,9 +108,10 @@ packaged stress run. Save them in this format:
 }
 ```
 
-Use Electron renderer process metrics only. Do not use the total app working
-set. Initialize browser tabs during warmup, then count every native browser
-attach. Mark samples as `idle` only when no scripted interaction runs.
+Working set and CPU include only descendant Electron renderer processes. The
+browser counter tracks distinct native page targets reported by CDP. It stays
+cumulative if a target closes. Samples are `idle` only after task switching
+stops.
 
 Verify the completed artifact from the repository root:
 
