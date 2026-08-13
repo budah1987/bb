@@ -4,6 +4,7 @@ import type { PluginRpcClient, PluginRpcHandlers } from "@bb/plugin-sdk";
 import { createFakePluginHost } from "@bb/plugin-sdk/testing";
 import {
   fetchRepoItems,
+  githubReposFromProjects,
   githubRpcContract,
   parsePaginatedGhApi,
   shouldRefreshGithubCache,
@@ -152,6 +153,22 @@ describe("GitHub RPC contract", () => {
     expect(validateGithubCliArgs(["repos", "--json"])).toContain(
       "does not accept arguments",
     );
+  });
+
+  it("uses stored project remotes without scanning local checkouts", () => {
+    expect(
+      githubReposFromProjects([
+        {
+          id: "project-1",
+          gitRemoteUrl: "git@github.com:acme/widgets.git",
+        },
+        {
+          id: "project-2",
+          gitRemoteUrl: "https://github.com/acme/widgets.git",
+        },
+        { id: "project-3", gitRemoteUrl: null },
+      ]),
+    ).toEqual([{ repo: "acme/widgets", projectId: "project-1" }]);
   });
 
   it("refreshes GitHub data only when the persisted cache is stale", () => {
