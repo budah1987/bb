@@ -9,6 +9,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { BbHttpError, sdk } from "@/lib/sdk";
 import { OPTIMISTIC_TIMELINE_ROW_ID_PREFIX } from "@/lib/optimistic-timeline-row";
 import { threadTimelineQueryKey } from "@/hooks/queries/query-keys";
+import { THREAD_TIMELINE_GC_TIME_MS } from "@/hooks/queries/thread-queries";
 import { createQueryClientTestHarness } from "@/test/queryClientTestHarness";
 import {
   mergeLatestTimelineRows,
@@ -36,9 +37,13 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
-function makeTimelineResponse(): ThreadTimelineResponse {
+function makeTimelineResponse(args: {
+  olderCursor?: ThreadTimelineResponse["timelinePage"]["olderCursor"];
+  rows?: ThreadTimelineResponse["rows"];
+} = {}): ThreadTimelineResponse {
+  const olderCursor = args.olderCursor ?? null;
   return {
-    rows: [],
+    rows: args.rows ?? [],
     activePromptMode: null,
     activeThinking: null,
     activeWorkflows: [],
@@ -50,9 +55,9 @@ function makeTimelineResponse(): ThreadTimelineResponse {
     timelinePage: {
       kind: "latest",
       segmentLimit: 20,
-      returnedSegmentCount: 0,
-      hasOlderRows: false,
-      olderCursor: null,
+      returnedSegmentCount: args.rows?.length ?? 0,
+      hasOlderRows: olderCursor !== null,
+      olderCursor,
     },
   };
 }
@@ -127,6 +132,114 @@ describe("mergeLatestTimelineRows", () => {
 });
 
 describe("useThreadTimelineController", () => {
+  it("uses the bounded timeline cache lifetime", async () => {
+    vi.mocked(sdk.threads.timeline).mockResolvedValue(makeTimelineResponse());
+    const { queryClient, wrapper } = createQueryClientTestHarness();
+    renderHook(() => useThreadTimelineController({ threadId: "thread-1" }), {
+      wrapper,
+    });
+
+    await waitFor(() =>
+      expect(
+        queryClient.getQueryState(threadTimelineQueryKey("thread-1"))?.status,
+      ).toBe("success"),
+    );
+    expect(
+      queryClient.getQueryCache().find({
+        queryKey: threadTimelineQueryKey("thread-1"),
+      })?.gcTime,
+    ).toBe(THREAD_TIMELINE_GC_TIME_MS);
+  });
+
+  it("aborts an older-page request when its surface unmounts", async () => {
+    const initialResponse = makeTimelineResponse({
+      olderCursor: { anchorId: "older-anchor", anchorSeq: 10 },
+      rows: [makeUserRow("latest-row", 20)],
+    });
+    let resolveOlderPage: (value: ThreadTimelineResponse) => void = () => {};
+    vi.mocked(sdk.threads.timeline)
+      .mockResolvedValueOnce(initialResponse)
+      .mockImplementationOnce(
+        () =>
+          new Promise<ThreadTimelineResponse>((resolve) => {
+            resolveOlderPage = resolve;
+          }),
+      );
+
+    const { wrapper } = createQueryClientTestHarness();
+    const { result, unmount } = renderHook(
+      () => useThreadTimelineController({ threadId: "thread-1" }),
+      { wrapper },
+    );
+    await waitFor(() => expect(result.current.hasOlderTimelineRows).toBe(true));
+
+    let paginationPromise: Promise<void> | undefined;
+    act(() => {
+      paginationPromise = result.current.loadOlderTimelineRows();
+    });
+    await waitFor(() => expect(sdk.threads.timeline).toHaveBeenCalledTimes(2));
+    const signal = vi.mocked(sdk.threads.timeline).mock.calls[1]?.[0].signal;
+    expect(signal?.aborted).toBe(false);
+
+    unmount();
+    expect(signal?.aborted).toBe(true);
+    resolveOlderPage(makeTimelineResponse());
+    await act(async () => {
+      await paginationPromise;
+    });
+  });
+
+  it("ignores an older-page result that resolves after a surface change", async () => {
+    const initialResponse = makeTimelineResponse({
+      olderCursor: { anchorId: "older-anchor", anchorSeq: 10 },
+      rows: [makeUserRow("latest-row", 20)],
+    });
+    const staleOlderRow = makeUserRow("stale-older-row", 5);
+    let resolveOlderPage: (value: ThreadTimelineResponse) => void = () => {};
+    vi.mocked(sdk.threads.timeline)
+      .mockResolvedValueOnce(initialResponse)
+      .mockImplementationOnce(
+        () =>
+          new Promise<ThreadTimelineResponse>((resolve) => {
+            resolveOlderPage = resolve;
+          }),
+      );
+
+    const { wrapper } = createQueryClientTestHarness();
+    const { result, rerender } = renderHook(
+      ({ surfaceKey }: { surfaceKey: string }) =>
+        useThreadTimelineController({
+          surfaceKey,
+          threadId: "thread-1",
+        }),
+      { initialProps: { surfaceKey: "surface-a" }, wrapper },
+    );
+    await waitFor(() => expect(result.current.hasOlderTimelineRows).toBe(true));
+
+    let paginationPromise: Promise<void> | undefined;
+    act(() => {
+      paginationPromise = result.current.loadOlderTimelineRows();
+    });
+    await waitFor(() => expect(sdk.threads.timeline).toHaveBeenCalledTimes(2));
+    const signal = vi.mocked(sdk.threads.timeline).mock.calls[1]?.[0].signal;
+
+    rerender({ surfaceKey: "surface-b" });
+    expect(signal?.aborted).toBe(true);
+    resolveOlderPage(
+      makeTimelineResponse({
+        rows: [staleOlderRow],
+      }),
+    );
+    await act(async () => {
+      await paginationPromise;
+    });
+
+    expect(result.current.isLoadingOlderTimelineRows).toBe(false);
+    expect(result.current.timelineRows.map((row) => row.id)).toEqual([
+      "latest-row",
+    ]);
+  });
+
   it("keeps an initial timeline refetch in loading state instead of showing the previous error", async () => {
     const response = makeTimelineResponse();
     let resolveRefetch: (value: ThreadTimelineResponse) => void = () => {};

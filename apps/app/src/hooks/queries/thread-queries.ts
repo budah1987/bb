@@ -83,6 +83,7 @@ import { ingestThreadDetailBootstrap } from "../cache-owners/thread-detail-cache
 
 interface QueryOptions {
   enabled?: boolean;
+  gcTime?: number;
   refetchOnMount?: boolean | "always";
   staleTime?: number;
 }
@@ -90,6 +91,7 @@ interface QueryOptions {
 const THREAD_LIST_STALE_TIME_MS = 10_000;
 const THREAD_SEARCH_STALE_TIME_MS = 10_000;
 const THREAD_DETAIL_STALE_TIME_MS = 5_000;
+export const THREAD_TIMELINE_GC_TIME_MS = 30_000;
 export const THREAD_MENTION_CANDIDATE_LIMIT = 200;
 export const THREAD_SEARCH_DEBOUNCE_MS = 150;
 export const THREAD_SEARCH_LIMIT_PER_GROUP = 20;
@@ -572,6 +574,7 @@ export function useThreadDetailBootstrap(
       // through bb connect's edge + tunnel path.
       if (timelinePrefetch) {
         void queryClient.prefetchQuery({
+          gcTime: THREAD_TIMELINE_GC_TIME_MS,
           queryKey: threadTimelineQueryKey(threadId),
           queryFn: ({ signal: timelineSignal }) =>
             fetchThreadTimeline({
@@ -833,6 +836,7 @@ export function useThreadTimeline(
       });
     },
     enabled,
+    gcTime: options?.gcTime ?? THREAD_TIMELINE_GC_TIME_MS,
     refetchOnMount: options?.refetchOnMount ?? true,
     ...(options?.staleTime === undefined
       ? {}

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type {
   ThreadTimelineResponse,
   TimelinePaginationCursor,
@@ -78,6 +78,16 @@ interface PreserveTimelineRowIdentityArgs {
 interface AreTimelineRowReferencesEqualArgs {
   left: readonly TimelineRow[];
   right: readonly TimelineRow[];
+}
+
+interface OlderTimelineRequest {
+  controller: AbortController;
+  surfaceKey: string;
+}
+
+interface OlderTimelineLoadingState {
+  isLoading: boolean;
+  surfaceKey: string;
 }
 
 export interface PrependOlderTimelineRowsArgs {
@@ -432,8 +442,15 @@ export function useThreadTimelineController({
         surfaceKey,
       }),
   );
-  const [isLoadingOlderTimelineRows, setIsLoadingOlderTimelineRows] =
-    useState(false);
+  const [olderTimelineLoadingState, setOlderTimelineLoadingState] =
+    useState<OlderTimelineLoadingState>({
+      isLoading: false,
+      surfaceKey,
+    });
+  const olderTimelineRequestRef = useRef<OlderTimelineRequest | null>(null);
+  const isLoadingOlderTimelineRows =
+    olderTimelineLoadingState.surfaceKey === surfaceKey &&
+    olderTimelineLoadingState.isLoading;
   const latestTimeline = useMemo(() => {
     if (!latestTimelineQuery.data) {
       return undefined;
@@ -466,6 +483,17 @@ export function useThreadTimelineController({
       }),
     );
   }, [latestTimeline, surfaceKey]);
+  useEffect(
+    () => () => {
+      const request = olderTimelineRequestRef.current;
+      if (request?.surfaceKey !== surfaceKey) {
+        return;
+      }
+      olderTimelineRequestRef.current = null;
+      request.controller.abort();
+    },
+    [surfaceKey],
+  );
   const refetchLatestTimeline = latestTimelineQuery.refetch;
 
   const nextOlderCursor =
@@ -478,18 +506,30 @@ export function useThreadTimelineController({
       !enabled ||
       !nextOlderCursor ||
       !threadId ||
-      isLoadingOlderTimelineRows
+      olderTimelineRequestRef.current !== null
     ) {
       return;
     }
 
-    setIsLoadingOlderTimelineRows(true);
+    const request: OlderTimelineRequest = {
+      controller: new AbortController(),
+      surfaceKey,
+    };
+    olderTimelineRequestRef.current = request;
+    setOlderTimelineLoadingState({ isLoading: true, surfaceKey });
     try {
       const response = await sdk.threads.timeline({
         beforeAnchorId: nextOlderCursor.anchorId,
         beforeAnchorSeq: String(nextOlderCursor.anchorSeq),
+        signal: request.controller.signal,
         threadId,
       });
+      if (
+        request.controller.signal.aborted ||
+        olderTimelineRequestRef.current !== request
+      ) {
+        return;
+      }
       const olderRows = filterTimelineRows({
         rowFilter,
         rows: response.rows,
@@ -514,6 +554,12 @@ export function useThreadTimelineController({
       });
     } catch (error) {
       if (
+        request.controller.signal.aborted ||
+        olderTimelineRequestRef.current !== request
+      ) {
+        return;
+      }
+      if (
         !(error instanceof Error) ||
         !isStaleTimelinePaginationCursorError(error)
       ) {
@@ -521,6 +567,12 @@ export function useThreadTimelineController({
       }
 
       const latestTimelineResult = await refetchLatestTimeline();
+      if (
+        request.controller.signal.aborted ||
+        olderTimelineRequestRef.current !== request
+      ) {
+        return;
+      }
       const recoveredLatestTimeline = latestTimelineResult.data
         ? filterThreadTimelineResponse({
             response: latestTimelineResult.data,
@@ -544,11 +596,13 @@ export function useThreadTimelineController({
         });
       });
     } finally {
-      setIsLoadingOlderTimelineRows(false);
+      if (olderTimelineRequestRef.current === request) {
+        olderTimelineRequestRef.current = null;
+        setOlderTimelineLoadingState({ isLoading: false, surfaceKey });
+      }
     }
   }, [
     enabled,
-    isLoadingOlderTimelineRows,
     latestTimeline,
     nextOlderCursor,
     refetchLatestTimeline,
