@@ -572,6 +572,53 @@ describe("claude-code background task translation", () => {
     });
   });
 
+  it("hides the process owned by a persistent Monitor", () => {
+    const adapter = createClaudeCodeProviderAdapter();
+    const context = { threadId: "bb-thread-1" };
+
+    adapter.translateEvent(
+      {
+        type: "assistant",
+        message: {
+          role: "assistant",
+          content: [
+            {
+              type: "tool_use",
+              id: "monitor-1",
+              name: "Monitor",
+              input: {
+                command: "while true; do check-status; sleep 30; done",
+                description: "Watch delegated work",
+                persistent: true,
+              },
+            },
+          ],
+        },
+        session_id: "s-1",
+      },
+      context,
+    );
+
+    const started = adapter.translateEvent(
+      {
+        type: "system",
+        subtype: "task_started",
+        task_id: "monitor-task-1",
+        tool_use_id: "monitor-1",
+        description: "Watch delegated work",
+        task_type: "local_bash",
+        uuid: "u-1",
+        session_id: "s-1",
+      },
+      context,
+    );
+
+    expect(backgroundTaskItem(collectTaskEvents(started)[0]!)).toMatchObject({
+      id: "task:monitor-task-1",
+      skipTranscript: true,
+    });
+  });
+
   it("materializes background subagents with legacy task_type local_subagent", () => {
     const adapter = createClaudeCodeProviderAdapter();
     const events = adapter.translateEvent(
