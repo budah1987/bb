@@ -103,7 +103,7 @@ interface PullFile {
   patch: string | null;
 }
 
-interface PullDetail {
+interface PullSummary {
   repo: string;
   number: number;
   title: string;
@@ -124,10 +124,12 @@ interface PullDetail {
   mergeStateStatus: string;
   reviewRequests: string[];
   checks: PullCheck[];
+}
+
+interface PullActivity {
   comments: IssueComment[];
   reviews: PullReview[];
   reviewThreads: ReviewThread[];
-  files: PullFile[];
 }
 
 interface RepoInfo {
@@ -1724,23 +1726,25 @@ type PullTimelineEntry =
   | { type: "comment"; author: string; body: string; createdAt: string }
   | { type: "review"; author: string; state: string; body: string; createdAt: string };
 
-function PullTimeline({ pull }: { pull: PullDetail }) {
+function PullTimeline({ activity }: { activity: PullActivity }) {
   const entries = useMemo<PullTimelineEntry[]>(() => {
     const merged: PullTimelineEntry[] = [
-      ...pull.comments.map((comment) => ({ type: "comment" as const, ...comment })),
+      ...activity.comments.map((comment) => ({ type: "comment" as const, ...comment })),
       // Body-less COMMENTED reviews are the containers of inline threads
       // (rendered separately below); showing them here would be noise.
-      ...pull.reviews
+      ...activity.reviews
         .filter((review) => review.body.length > 0 || review.state !== "COMMENTED")
         .map((review) => ({ type: "review" as const, ...review })),
     ];
     return merged.sort((a, b) => a.createdAt.localeCompare(b.createdAt));
-  }, [pull]);
-  if (entries.length === 0 && pull.reviewThreads.length === 0) return null;
+  }, [activity]);
+  if (entries.length === 0 && activity.reviewThreads.length === 0) {
+    return <p className="text-sm text-muted-foreground">No activity yet</p>;
+  }
   return (
     <div className="flex flex-col gap-2">
       <h3 className="text-xs font-semibold text-muted-foreground">
-        Activity · {entries.length + pull.reviewThreads.length}
+        Activity · {entries.length + activity.reviewThreads.length}
       </h3>
       {entries.map((entry, index) => (
         <div key={index} className="rounded-lg border border-border bg-card p-3">
@@ -1757,17 +1761,23 @@ function PullTimeline({ pull }: { pull: PullDetail }) {
           {entry.body.length > 0 ? <Markdown content={entry.body} className="text-sm" /> : null}
         </div>
       ))}
-      {pull.reviewThreads.map((thread, index) => (
+      {activity.reviewThreads.map((thread, index) => (
         <ReviewThreadCard key={index} thread={thread} />
       ))}
     </div>
   );
 }
 
-function PullReviewersList({ pull }: { pull: PullDetail }) {
+function PullReviewersList({
+  pull,
+  reviews,
+}: {
+  pull: PullSummary;
+  reviews: PullReview[];
+}) {
   const rows = useMemo(() => {
     const latest = new Map<string, { login: string; state: string }>();
-    for (const review of pull.reviews) {
+    for (const review of reviews) {
       if (review.author.length > 0) {
         latest.set(review.author, { login: review.author, state: review.state });
       }
@@ -1776,7 +1786,7 @@ function PullReviewersList({ pull }: { pull: PullDetail }) {
       latest.set(login, { login, state: "PENDING" });
     }
     return [...latest.values()];
-  }, [pull]);
+  }, [pull.reviewRequests, reviews]);
   if (rows.length === 0) return <p className="text-sm text-muted-foreground">No reviewers</p>;
   return (
     <>
@@ -1850,13 +1860,19 @@ function PullDetailView({
   const rpc = useRpc<typeof githubRpcContract>();
   const links = useLinks();
   const { spawn, spawningKey } = useSpawn();
-  const [pull, setPull] = useState<PullDetail | null>(null);
+  const [pull, setPull] = useState<PullSummary | null>(null);
+  const [activity, setActivity] = useState<PullActivity | null>(null);
+  const [files, setFiles] = useState<PullFile[] | null>(null);
+  const [activityLoading, setActivityLoading] = useState(false);
+  const [filesLoading, setFilesLoading] = useState(false);
+  const [activityError, setActivityError] = useState<string | null>(null);
+  const [filesError, setFilesError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(() => {
     rpc.call("getPull", { repo, number }).then(
       (result) => {
-        const detail = (result as { pull?: PullDetail })?.pull;
+        const detail = (result as { pull?: PullSummary })?.pull;
         if (detail === undefined) throw new Error("malformed getPull result");
         setPull(detail);
         setError(null);
@@ -1864,8 +1880,36 @@ function PullDetailView({
       (err: unknown) => setError(errorText(err)),
     );
   }, [rpc, repo, number]);
+  const loadActivity = useCallback(() => {
+    setActivityLoading(true);
+    setActivityError(null);
+    rpc.call("getPullActivity", { repo, number }).then(
+      (result) => {
+        const detail = (result as { activity?: PullActivity })?.activity;
+        if (detail === undefined) throw new Error("malformed getPullActivity result");
+        setActivity(detail);
+      },
+      (err: unknown) => setActivityError(errorText(err)),
+    ).finally(() => setActivityLoading(false));
+  }, [rpc, repo, number]);
+  const loadFiles = useCallback(() => {
+    setFilesLoading(true);
+    setFilesError(null);
+    rpc.call("getPullFiles", { repo, number }).then(
+      (result) => {
+        const detail = (result as { files?: PullFile[] })?.files;
+        if (detail === undefined) throw new Error("malformed getPullFiles result");
+        setFiles(detail);
+      },
+      (err: unknown) => setFilesError(errorText(err)),
+    ).finally(() => setFilesLoading(false));
+  }, [rpc, repo, number]);
   useEffect(() => {
     setPull(null);
+    setActivity(null);
+    setFiles(null);
+    setActivityError(null);
+    setFilesError(null);
     load();
   }, [load]);
 
@@ -1900,24 +1944,63 @@ function PullDetailView({
         </div>
       </div>
 
-      <PullTimeline pull={pull} />
+      {activity === null ? (
+        <div className="flex flex-col gap-2">
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={activityLoading}
+            onClick={loadActivity}
+          >
+            {activityLoading ? "Loading activity…" : "Load activity"}
+          </Button>
+          {activityError !== null ? (
+            <p className="text-sm text-destructive">{activityError}</p>
+          ) : null}
+        </div>
+      ) : (
+        <PullTimeline activity={activity} />
+      )}
 
-      {pull.files.length > 0 ? (
+      {pull.changedFiles === 0 ? null : files === null ? (
+        <div className="flex flex-col gap-2">
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={filesLoading}
+            onClick={loadFiles}
+          >
+            {filesLoading
+              ? "Loading files…"
+              : `Load ${pull.changedFiles} changed file${pull.changedFiles === 1 ? "" : "s"}`}
+          </Button>
+          {filesError !== null ? (
+            <p className="text-sm text-destructive">{filesError}</p>
+          ) : null}
+        </div>
+      ) : files.length > 0 ? (
         <div className="flex flex-col gap-2">
           <h3 className="text-xs font-semibold text-muted-foreground">
-            Files changed · {pull.files.length}
+            Files changed · {files.length}
             <span className="ml-2 font-normal">
               <span className="text-green-600 dark:text-green-400">+{pull.additions}</span>{" "}
               <span className="text-red-600 dark:text-red-400">−{pull.deletions}</span>
             </span>
           </h3>
-          {pull.files.map((file) => (
+          {files.map((file) => (
             <FileDiffCard key={file.path} file={file} url={pull.url} />
           ))}
         </div>
       ) : null}
 
-      <PullCommentBox repo={repo} number={number} onPosted={load} />
+      <PullCommentBox
+        repo={repo}
+        number={number}
+        onPosted={() => {
+          load();
+          if (activity !== null) loadActivity();
+        }}
+      />
     </div>
   );
 
@@ -1981,7 +2064,7 @@ function PullDetailView({
           <aside className="flex w-full shrink-0 flex-col gap-5 lg:w-56">
             <div className="flex flex-col gap-1">
               <SidebarHeading>Reviewers</SidebarHeading>
-              <PullReviewersList pull={pull} />
+              <PullReviewersList pull={pull} reviews={activity?.reviews ?? []} />
             </div>
             <div className="flex flex-col gap-1">
               <SidebarHeading>Assignees</SidebarHeading>

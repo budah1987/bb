@@ -44,6 +44,29 @@ function assertGithubFrontendInference(
           status: "success" | "failure" | "pending" | "neutral";
           url: string;
         }>;
+      };
+    }>
+  >();
+
+  expectTypeOf(
+    client.call("getPullFiles", { repo: "get-bb/bb", number: 694 }),
+  ).toEqualTypeOf<
+    Promise<{
+      files: Array<{
+        path: string;
+        status: string;
+        additions: number;
+        deletions: number;
+        patch: string | null;
+      }>;
+    }>
+  >();
+
+  expectTypeOf(
+    client.call("getPullActivity", { repo: "get-bb/bb", number: 694 }),
+  ).toEqualTypeOf<
+    Promise<{
+      activity: {
         comments: Array<{ author: string; body: string; createdAt: string }>;
         reviews: Array<{
           author: string;
@@ -55,18 +78,7 @@ function assertGithubFrontendInference(
           path: string;
           line: number | null;
           diffHunk: string;
-          comments: Array<{
-            author: string;
-            body: string;
-            createdAt: string;
-          }>;
-        }>;
-        files: Array<{
-          path: string;
-          status: string;
-          additions: number;
-          deletions: number;
-          patch: string | null;
+          comments: Array<{ author: string; body: string; createdAt: string }>;
         }>;
       };
     }>
