@@ -93,6 +93,7 @@ const panelCallbacks = vi.hoisted(
 const commandHandlers = vi.hoisted(() => new Map<string, () => boolean>());
 const threadViewMountCounts = vi.hoisted(() => new Map<string, number>());
 const threadViewRenderCounts = vi.hoisted(() => new Map<string, number>());
+const threadViewUnmountCounts = vi.hoisted(() => new Map<string, number>());
 interface ShortcutPresentationFixture {
   ariaKeyshortcuts: string;
   label: string;
@@ -251,11 +252,9 @@ vi.mock("@/hooks/queries/sidebar-navigation-query", () => ({
 // test exercises SplitThreadArea's wiring without its dependency tree.
 vi.mock("./ThreadDetailView", () => ({
   ThreadDetailView: ({
-    isRetainedViewActive,
     projectId = "proj_personal",
     threadId = "thr-a",
   }: {
-    isRetainedViewActive?: boolean;
     projectId: string;
     threadId: string;
   }) => {
@@ -269,6 +268,15 @@ vi.mock("./ThreadDetailView", () => ({
         (threadViewMountCounts.get(threadId) ?? 0) + 1,
       );
     });
+    useEffect(
+      () => () => {
+        threadViewUnmountCounts.set(
+          threadId,
+          (threadViewUnmountCounts.get(threadId) ?? 0) + 1,
+        );
+      },
+      [threadId],
+    );
     const pane = useContext(PaneContext);
     const [isPanelOpen, setIsPanelOpen] = useState(threadId === "thr-a");
     useEffect(() => {
@@ -332,7 +340,6 @@ vi.mock("./ThreadDetailView", () => ({
       <div
         data-testid={`pane-${threadId}`}
         data-focused={pane?.isFocused ? "true" : "false"}
-        data-retained-view-active={isRetainedViewActive ? "true" : "false"}
         data-window-top-left-owner={pane?.ownsWindowTopLeft ? "true" : "false"}
       >
         <div
@@ -744,6 +751,7 @@ beforeEach(() => {
   commandHandlers.clear();
   threadViewMountCounts.clear();
   threadViewRenderCounts.clear();
+  threadViewUnmountCounts.clear();
   commandPresentationState.isModifierHeld = false;
   commandPresentationState.shortcut = null;
   threadStore.set("thr-a", { archivedAt: null, deletedAt: null });
@@ -762,7 +770,7 @@ afterEach(() => {
 });
 
 describe("SplitThreadArea", () => {
-  it("keeps recent single-pane thread views mounted while cycling", async () => {
+  it("remounts one single-pane thread view while preserving its draft", async () => {
     renderSplitArea({
       path: threadPath("thr-a"),
       layout: {
@@ -785,8 +793,10 @@ describe("SplitThreadArea", () => {
     fireEvent.click(screen.getByTestId("history-back"));
     expect(await screen.findByTestId("pane-thr-a")).toBeTruthy();
 
-    expect(threadViewMountCounts.get("thr-a")).toBe(1);
+    expect(threadViewMountCounts.get("thr-a")).toBe(2);
     expect(threadViewMountCounts.get("thr-b")).toBe(1);
+    expect(threadViewUnmountCounts.get("thr-a")).toBe(1);
+    expect(threadViewUnmountCounts.get("thr-b")).toBe(1);
     expect(
       (screen.getByTestId("draft-thr-a") as HTMLTextAreaElement).value,
     ).toBe("keep this draft");
@@ -816,7 +826,7 @@ describe("SplitThreadArea", () => {
     );
   });
 
-  it("maximizes without changing the split tree and restores mounted pane state", async () => {
+  it("unmounts concealed pane content and restores durable pane state", async () => {
     const initialLayout = twoPaneLayout("pane-1");
     const store = renderSplitArea({
       path: threadPath("thr-a"),
@@ -825,6 +835,13 @@ describe("SplitThreadArea", () => {
     fireEvent.change(await screen.findByTestId("draft-thr-b"), {
       target: { value: "preserve this hidden draft" },
     });
+    await waitFor(() =>
+      expect(
+        window.localStorage.getItem(
+          "bb.promptbox.contents-proj_personal-thr-b-3",
+        ),
+      ).toContain("preserve this hidden draft"),
+    );
 
     fireEvent.click(screen.getByTestId("maximize-thr-a"));
 
@@ -839,7 +856,8 @@ describe("SplitThreadArea", () => {
     expect(paneB?.className).toContain("invisible");
     expect(paneB?.getAttribute("aria-hidden")).toBe("true");
     expect(paneB?.style.contentVisibility).toBe("hidden");
-    expect(screen.getByTestId("draft-thr-b")).toBeTruthy();
+    expect(screen.queryByTestId("pane-thr-b")).toBeNull();
+    expect(threadViewUnmountCounts.get("thr-b")).toBe(1);
     expect(store.get(splitLayoutAtom)?.root).toEqual(initialLayout.root);
     expect(store.get(maximizedPaneIdAtom)).toBe("pane-1");
 
@@ -882,37 +900,22 @@ describe("SplitThreadArea", () => {
     });
   });
 
-  it("preserves a hidden pane's mounted scroll position through restore", async () => {
+  it("keeps only the maximized pane's thread view mounted", async () => {
     renderSplitArea({
       path: threadPath("thr-a"),
       layout: twoPaneLayout("pane-1"),
     });
-    const hiddenScroller = screen.getByTestId("scroll-thr-b");
-    hiddenScroller.scrollTop = 12;
-    fireEvent.scroll(hiddenScroller);
+    expect(screen.getAllByTestId(/^pane-thr-/)).toHaveLength(2);
 
     fireEvent.click(screen.getByTestId("maximize-thr-a"));
-    const hiddenPane = screen
-      .getByTestId("pane-thr-b")
-      .closest("[data-split-pane-id]");
-    await waitFor(() =>
-      expect(hiddenPane?.getAttribute("aria-hidden")).toBe("true"),
-    );
+    expect(screen.getAllByTestId(/^pane-thr-/)).toEqual([
+      screen.getByTestId("pane-thr-a"),
+    ]);
+    expect(threadViewUnmountCounts.get("thr-b")).toBe(1);
 
-    // Emulate the browser/timeline normalization observed in real-product QA.
-    hiddenScroller.scrollTop = 0;
-    fireEvent.scroll(hiddenScroller);
     fireEvent.click(screen.getByTestId("maximize-thr-a"));
-
-    await waitFor(() => expect(hiddenScroller.scrollTop).toBe(12));
-    expect(hiddenPane?.getAttribute("aria-hidden")).toBeNull();
-
-    hiddenScroller.scrollTop = 0;
-    fireEvent.click(screen.getByTestId("maximize-thr-a"));
-    fireEvent.click(screen.getByTestId("maximize-thr-a"));
-    // The restore transition no longer owns this element after the intentional
-    // visible scroll to zero, so it does not replay the older saved offset.
-    await waitFor(() => expect(hiddenScroller.scrollTop).toBe(0));
+    expect(screen.getAllByTestId(/^pane-thr-/)).toHaveLength(2);
+    expect(threadViewMountCounts.get("thr-b")).toBe(2);
   });
 
   it("toggles the focused pane through the discoverable app command", async () => {
@@ -1812,23 +1815,12 @@ describe("SplitThreadArea", () => {
 
     fireEvent.click(screen.getByTestId("external-nav"));
 
-    // Focused pane now shows thr-c. Its prior thread stays hidden for fast back
-    // navigation, while the unfocused pane remains visible and untouched.
+    // Focused pane now shows thr-c. The prior thread unmounts, while the
+    // unfocused pane remains visible and untouched.
     expect(await screen.findByTestId("pane-thr-c")).toBeTruthy();
     expect(screen.getByTestId("pane-thr-a")).toBeTruthy();
-    const retainedThread = screen.getByTestId("pane-thr-b");
-    expect(retainedThread.getAttribute("data-retained-view-active")).toBe(
-      "false",
-    );
-    expect(
-      screen
-        .getByTestId("pane-thr-c")
-        .getAttribute("data-retained-view-active"),
-    ).toBe("true");
-    expect(retainedThread.style.display).toBe("none");
-    expect(retainedThread.style.getPropertyPriority("display")).toBe(
-      "important",
-    );
+    expect(screen.queryByTestId("pane-thr-b")).toBeNull();
+    expect(threadViewUnmountCounts.get("thr-b")).toBe(1);
     expect(
       screen
         .getAllByTestId(/^pane-thr-/)
@@ -3175,7 +3167,7 @@ describe("SplitThreadArea", () => {
       expect(listPanes(storedSplitLayout(store).root)).toHaveLength(1);
     });
     expect(screen.getByTestId("pane-thr-a")).toBeTruthy();
-    expect(screen.getByTestId("pane-thr-b").style.display).toBe("none");
+    expect(screen.queryByTestId("pane-thr-b")).toBeNull();
     await waitFor(() => {
       expect(screen.getByTestId("location").textContent).toBe(
         threadPath("thr-a"),
