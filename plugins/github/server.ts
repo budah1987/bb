@@ -12,6 +12,7 @@ import { defineRpcContract, type BbPluginApi } from "@bb/plugin-sdk";
 import { z } from "zod";
 
 const DEMAND_SYNC_STALE_MS = 5 * 60_000;
+const VIEWER_CACHE_TTL_MS = 60_000;
 const ISSUE_PAGE = 100;
 const CLOSED_ISSUE_PAGE = 50;
 const PR_PAGE = 50;
@@ -310,7 +311,7 @@ interface ThreadLink {
 
 interface BbProjectSummary {
   id: string;
-  sources?: Array<{ type: string; path: string }>;
+  gitRemoteUrl?: string | null;
 }
 
 interface SpawnedThreadSummary {
@@ -330,6 +331,19 @@ export function parseGithubRemote(url: string): string | null {
     .match(/github\.com[:/]([^/\s]+)\/([^/\s]+?)(?:\.git)?\/?$/);
   if (match === null) return null;
   return `${match[1]}/${match[2]}`;
+}
+
+export function githubReposFromProjects(
+  projects: readonly BbProjectSummary[],
+): RepoInfo[] {
+  const byRepo = new Map<string, RepoInfo>();
+  for (const project of projects) {
+    const repo = parseGithubRemote(project.gitRemoteUrl ?? "");
+    if (repo !== null && !byRepo.has(repo)) {
+      byRepo.set(repo, { repo, projectId: project.id });
+    }
+  }
+  return [...byRepo.values()];
 }
 
 function isRepoName(value: unknown): value is string {
@@ -541,23 +555,8 @@ export default async function plugin(bb: BbPluginApi) {
     const byRepo = new Map<string, RepoInfo>();
     try {
       const projects = (await bb.sdk.projects.list()) as unknown as BbProjectSummary[];
-      for (const project of projects) {
-        for (const source of project.sources ?? []) {
-          if (source.type !== "local_path") continue;
-          try {
-            const { stdout } = await run(
-              "git",
-              ["-C", source.path, "remote", "get-url", "origin"],
-              5_000,
-            );
-            const repo = parseGithubRemote(stdout);
-            if (repo !== null && !byRepo.has(repo)) {
-              byRepo.set(repo, { repo, projectId: project.id });
-            }
-          } catch {
-            // no remote / not a git checkout — skip this source
-          }
-        }
+      for (const info of githubReposFromProjects(projects)) {
+        byRepo.set(info.repo, info);
       }
     } catch (error) {
       bb.log.warn(
@@ -716,6 +715,7 @@ export default async function plugin(bb: BbPluginApi) {
 
   async function syncAll(force = false): Promise<{ repos: number; items: number }> {
     await checkAuth();
+    await ensureCacheAccount();
     const repos = await discoverRepos(force);
     const before = JSON.stringify(
       db.prepare("SELECT repo, kind, number, updated_at FROM items ORDER BY repo, kind, number").all(),
@@ -806,6 +806,7 @@ export default async function plugin(bb: BbPluginApi) {
     repo: string,
     number: number,
   ): Promise<{ threadId: string }> {
+    await ensureCacheAccount();
     const item = getCachedItem(kind, repo, number);
     const title = item?.title ?? `${kind === "pr" ? "PR" : "issue"} #${number}`;
     const projectId = await resolveProjectId(repo);
@@ -858,15 +859,39 @@ export default async function plugin(bb: BbPluginApi) {
   // filter chips and assignee picker don't hit the network on every render.
   // ------------------------------------------------------------------
   let viewerCache: { login: string; fetchedAt: number } | null = null;
+  let viewerInFlight: Promise<string> | null = null;
+  let verifiedCacheLogin: string | null = null;
 
   async function getViewer(): Promise<string> {
-    if (viewerCache !== null && Date.now() - viewerCache.fetchedAt < 60 * 60_000) {
+    if (viewerCache !== null && Date.now() - viewerCache.fetchedAt < VIEWER_CACHE_TTL_MS) {
       return viewerCache.login;
     }
-    const raw = await gh(["api", "user"], 15_000);
-    const login = String((JSON.parse(raw) as { login?: unknown })?.login ?? "");
-    if (login.length === 0) throw new Error("could not resolve the gh viewer login");
-    viewerCache = { login, fetchedAt: Date.now() };
+    if (viewerInFlight !== null) return viewerInFlight;
+    const request = gh(["api", "user"], 15_000)
+      .then((raw) => {
+        const login = String((JSON.parse(raw) as { login?: unknown })?.login ?? "");
+        if (login.length === 0) throw new Error("could not resolve the gh viewer login");
+        viewerCache = { login, fetchedAt: Date.now() };
+        return login;
+      })
+      .finally(() => {
+        if (viewerInFlight === request) viewerInFlight = null;
+      });
+    viewerInFlight = request;
+    return request;
+  }
+
+  async function ensureCacheAccount(): Promise<string> {
+    const login = await getViewer();
+    if (verifiedCacheLogin === login) return login;
+    const cachedLogin = await bb.storage.kv.get<string>("cache-account-login");
+    if (cachedLogin !== login) {
+      db.prepare("DELETE FROM items").run();
+      await bb.storage.kv.delete("sync-cursor");
+      await bb.storage.kv.set("cache-account-login", login);
+      bb.realtime.publish("data-changed", { items: 0 });
+    }
+    verifiedCacheLogin = login;
     return login;
   }
 
@@ -909,12 +934,22 @@ export default async function plugin(bb: BbPluginApi) {
   bb.rpc.register(githubRpcContract, {
     /** () → auth/sync status for the panel banner. */
     async status() {
+      const repos = await discoverRepos();
+      try {
+        await ensureCacheAccount();
+      } catch (error) {
+        return {
+          ghOk: false,
+          ghError: error instanceof Error ? error.message : String(error),
+          repos,
+          lastSyncedAt: null,
+        };
+      }
       const cursor = await bb.storage.kv.get<{
         lastSyncedAt: string;
         repos: number;
         items: number;
       }>("sync-cursor");
-      const repos = await discoverRepos();
       if (
         shouldRefreshGithubCache(cursor?.lastSyncedAt ?? null) &&
         Date.now() >= nextDemandSyncAtMs
@@ -945,20 +980,21 @@ export default async function plugin(bb: BbPluginApi) {
 
     /** { kind?, repo?, query?, state?, mine? } → cached items, newest first. */
     async listItems(input) {
+      await ensureCacheAccount();
       return {
         items: listCachedItems({
           kind: input.kind,
           repo: input.repo,
           query: input.query,
           state: input.state,
-          assignee: input.mine === true ? await getViewer() : undefined,
+          assignee: input.mine === true ? await ensureCacheAccount() : undefined,
         }),
       };
     },
 
     /** () → the authenticated gh login, for "assign to me" affordances. */
     async viewer() {
-      return { login: await getViewer() };
+      return { login: await ensureCacheAccount() };
     },
 
     /** { repo } → logins that can be assigned to issues in that repo. */
@@ -973,6 +1009,7 @@ export default async function plugin(bb: BbPluginApi) {
 
     /** { repo, number, state: "open"|"closed" } → close or reopen an issue. */
     async setIssueState({ repo, number, state }): Promise<{ ok: true }> {
+      await ensureCacheAccount();
       await gh([
         "issue", state === "closed" ? "close" : "reopen", String(number), "-R", repo,
       ]);
@@ -988,6 +1025,7 @@ export default async function plugin(bb: BbPluginApi) {
       number,
       assignees,
     }): Promise<{ ok: true; assignees: string[] }> {
+      await ensureCacheAccount();
       const next = [...new Set(assignees)];
       const current = getCachedItem("issue", repo, number)?.assignees ?? [];
       const add = next.filter((login) => !current.includes(login));
@@ -1007,6 +1045,7 @@ export default async function plugin(bb: BbPluginApi) {
       number,
       labels,
     }): Promise<{ ok: true; labels: string[] }> {
+      await ensureCacheAccount();
       const next = [
         ...new Set(labels.map((label) => label.trim()).filter(Boolean)),
       ];
@@ -1323,6 +1362,7 @@ export default async function plugin(bb: BbPluginApi) {
 
     /** { repo, title, body? } → create an issue, sync, return number+url. */
     async createIssue(input) {
+      await ensureCacheAccount();
       const body = input.body ?? "";
       const stdout = await gh([
         "issue", "create", "-R", input.repo,
@@ -1361,6 +1401,7 @@ export default async function plugin(bb: BbPluginApi) {
   // and falls back to the cache so a network blip doesn't block the send.
   // ------------------------------------------------------------------
   function mentionItems(kind: "issue" | "pr", query: string) {
+    if (verifiedCacheLogin === null) return [];
     return listCachedItems({ kind, query, state: "open" })
       .slice(0, 8)
       .map((item) => ({
@@ -1380,6 +1421,7 @@ export default async function plugin(bb: BbPluginApi) {
     kind: "issue" | "pr",
     itemId: string,
   ): Promise<{ context: string }> {
+    await ensureCacheAccount();
     const { repo, number } = parseMentionId(itemId);
     const noun = kind === "pr" ? "pull request" : "issue";
     try {
@@ -1487,6 +1529,7 @@ export default async function plugin(bb: BbPluginApi) {
           };
         }
         if (sub === "issues" || sub === "prs") {
+          await ensureCacheAccount();
           const items = listCachedItems({
             kind: sub === "prs" ? "pr" : "issue",
             repo: isRepoName(arg) ? arg : undefined,
