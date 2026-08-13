@@ -87,6 +87,13 @@ function stubSidebarBootstrapFetch(): void {
     vi.fn().mockResolvedValue(
       new Response(
         JSON.stringify({
+          sections: [],
+          spaces: [],
+          nextThreadCursorByProjectId: {
+            personal: null,
+            proj_1: null,
+            proj_2: null,
+          },
           projects: [
             {
               id: "proj_1",
@@ -102,6 +109,11 @@ function stubSidebarBootstrapFetch(): void {
               threads: [],
             },
           ],
+          personalProject: {
+            id: "personal",
+            sources: [],
+            threads: [],
+          },
         }),
         { status: 200, headers: { "content-type": "application/json" } },
       ),
