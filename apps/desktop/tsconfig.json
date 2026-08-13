@@ -7,5 +7,5 @@
     "rootDir": ".",
     "types": ["node", "vitest/globals"]
   },
-  "include": ["src", "test"]
+  "include": ["scripts/*.mts", "src", "test"]
 }

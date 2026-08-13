@@ -72,6 +72,39 @@ pnpm exec turbo run desktop:build --filter=@bb/desktop
 pnpm exec turbo run smoke:packaged --filter=@bb/desktop
 ```
 
+## Packaged performance budget
+
+Record renderer samples every five seconds during the standard 30-minute
+packaged stress run. Save them in this format:
+
+```json
+{
+  "schemaVersion": 1,
+  "samples": [
+    {
+      "elapsedMs": 0,
+      "phase": "workload",
+      "rendererWorkingSetKb": 700000,
+      "rendererCpuPercent": 20,
+      "browserAttachCount": 2
+    }
+  ]
+}
+```
+
+Use Electron renderer process metrics only. Do not use the total app working
+set. Initialize browser tabs during warmup, then count every native browser
+attach. Mark samples as `idle` only when no scripted interaction runs.
+
+Verify the completed artifact from the repository root:
+
+```bash
+pnpm --dir apps/desktop performance:check ../../performance-run.json
+```
+
+The command rejects short or discontinuous runs. It also checks renderer
+memory, idle CPU, post-warmup growth, and extra browser instances.
+
 Artifacts are written under `apps/desktop/release/`. The desktop build is
 macOS-only and Apple Silicon arm64-only. Without signing secrets, local builds
 sign with a code-signing identity auto-discovered from the keychain and skip
