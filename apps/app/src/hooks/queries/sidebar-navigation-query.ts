@@ -32,9 +32,234 @@ export type SidebarNavigationCacheResponse = SidebarBootstrapResponse & {
   _threadPagination: SidebarThreadPaginationState;
 };
 
-const sidebarProjectLoads = new WeakMap<
+interface DeferredPageLoad {
+  reject(error: unknown): void;
+  resolve(): void;
+}
+
+interface ForegroundPageLoad {
+  deferreds: DeferredPageLoad[];
+  projectId: string;
+}
+
+interface ActivePageLoad {
+  background: boolean;
+  controller: AbortController;
+  foregroundDeferreds: DeferredPageLoad[];
+  projectId: string;
+}
+
+interface HydrationCompletionWaiter {
+  reject(error: unknown): void;
+  resolve(): void;
+}
+
+class SidebarThreadHydrationCoordinator {
+  private active: ActivePageLoad | null = null;
+  private backgroundProjectIndex = 0;
+  private backgroundPausedAfterError = false;
+  private readonly completionWaiters = new Set<HydrationCompletionWaiter>();
+  private readonly foregroundByProjectId = new Map<
+    string,
+    ForegroundPageLoad
+  >();
+  private readonly foregroundQueue: ForegroundPageLoad[] = [];
+  private leaseCount = 0;
+  private visibilityListenerInstalled = false;
+
+  constructor(private readonly queryClient: QueryClient) {}
+
+  retainBackgroundHydration(): () => void {
+    this.leaseCount += 1;
+    this.backgroundPausedAfterError = false;
+    this.syncVisibilityListener();
+    this.pump();
+
+    let released = false;
+    return () => {
+      if (released) return;
+      released = true;
+      this.leaseCount = Math.max(0, this.leaseCount - 1);
+      if (!this.hasBackgroundDemand()) {
+        this.abortUnclaimedBackgroundLoad();
+      }
+      this.syncVisibilityListener();
+    };
+  }
+
+  ensureHydrated(): Promise<void> {
+    const navigation = this.getNavigation();
+    if (navigation === undefined || navigation._threadPagination.complete) {
+      return Promise.resolve();
+    }
+    this.backgroundPausedAfterError = false;
+    const completion = new Promise<void>((resolve, reject) => {
+      this.completionWaiters.add({ reject, resolve });
+    });
+    this.syncVisibilityListener();
+    this.pump();
+    return completion;
+  }
+
+  loadForegroundPage(projectId: string): Promise<void> {
+    const navigation = this.getNavigation();
+    if (!sidebarProjectHasMore(navigation, projectId)) {
+      return Promise.resolve();
+    }
+
+    const completion = new Promise<void>((resolve, reject) => {
+      const deferred = { reject, resolve };
+      if (
+        this.active?.projectId === projectId &&
+        !this.active.controller.signal.aborted
+      ) {
+        this.active.foregroundDeferreds.push(deferred);
+        return;
+      }
+      const queued = this.foregroundByProjectId.get(projectId);
+      if (queued !== undefined) {
+        queued.deferreds.push(deferred);
+        return;
+      }
+      const request = { deferreds: [deferred], projectId };
+      this.foregroundByProjectId.set(projectId, request);
+      this.foregroundQueue.push(request);
+    });
+    this.pump();
+    return completion;
+  }
+
+  private abortUnclaimedBackgroundLoad(): void {
+    if (this.active !== null && this.active.foregroundDeferreds.length === 0) {
+      this.active.controller.abort();
+    }
+  }
+
+  private completeHydration(): void {
+    for (const waiter of this.completionWaiters) waiter.resolve();
+    this.completionWaiters.clear();
+    this.syncVisibilityListener();
+  }
+
+  private failHydration(error: unknown): void {
+    for (const waiter of this.completionWaiters) waiter.reject(error);
+    this.completionWaiters.clear();
+    this.syncVisibilityListener();
+  }
+
+  private getNavigation(): SidebarNavigationCacheResponse | undefined {
+    return this.queryClient.getQueryData<SidebarNavigationCacheResponse>(
+      sidebarNavigationQueryKey(),
+    );
+  }
+
+  private hasBackgroundDemand(): boolean {
+    return this.leaseCount > 0 || this.completionWaiters.size > 0;
+  }
+
+  private isDocumentHidden(): boolean {
+    return (
+      typeof document !== "undefined" && document.visibilityState === "hidden"
+    );
+  }
+
+  private nextBackgroundProjectId(
+    navigation: SidebarNavigationCacheResponse,
+  ): string | null {
+    const projectIds = [
+      ...navigation.projects.map((project) => project.id),
+      navigation.personalProject.id,
+    ].filter((projectId) => sidebarProjectHasMore(navigation, projectId));
+    if (projectIds.length === 0) return null;
+    const index = this.backgroundProjectIndex % projectIds.length;
+    this.backgroundProjectIndex = (index + 1) % projectIds.length;
+    return projectIds[index] ?? null;
+  }
+
+  private pump(): void {
+    if (this.active !== null) return;
+
+    const foreground = this.foregroundQueue.shift();
+    if (foreground !== undefined) {
+      this.foregroundByProjectId.delete(foreground.projectId);
+      this.startPageLoad(foreground.projectId, foreground.deferreds, false);
+      return;
+    }
+
+    if (!this.hasBackgroundDemand()) {
+      this.syncVisibilityListener();
+      return;
+    }
+    const navigation = this.getNavigation();
+    if (navigation === undefined || navigation._threadPagination.complete) {
+      this.completeHydration();
+      return;
+    }
+    if (this.backgroundPausedAfterError || this.isDocumentHidden()) {
+      this.syncVisibilityListener();
+      return;
+    }
+    const projectId = this.nextBackgroundProjectId(navigation);
+    if (projectId === null) {
+      this.completeHydration();
+      return;
+    }
+    this.startPageLoad(projectId, [], true);
+  }
+
+  private startPageLoad(
+    projectId: string,
+    foregroundDeferreds: DeferredPageLoad[],
+    background: boolean,
+  ): void {
+    const controller = new AbortController();
+    const active = { background, controller, foregroundDeferreds, projectId };
+    this.active = active;
+    void loadSidebarProjectThreadPage(
+      this.queryClient,
+      projectId,
+      controller.signal,
+    )
+      .then(() => {
+        for (const deferred of active.foregroundDeferreds) deferred.resolve();
+      })
+      .catch((error: unknown) => {
+        for (const deferred of active.foregroundDeferreds) {
+          deferred.reject(error);
+        }
+        if (!controller.signal.aborted && active.background) {
+          this.backgroundPausedAfterError = true;
+          this.failHydration(error);
+        }
+      })
+      .then(() => {
+        if (this.active === active) this.active = null;
+        this.pump();
+      });
+  }
+
+  private syncVisibilityListener(): void {
+    if (typeof document === "undefined") return;
+    const needed = this.hasBackgroundDemand();
+    if (needed && !this.visibilityListenerInstalled) {
+      document.addEventListener("visibilitychange", this.onVisibilityChange);
+      this.visibilityListenerInstalled = true;
+      return;
+    }
+    if (!needed && this.visibilityListenerInstalled) {
+      document.removeEventListener("visibilitychange", this.onVisibilityChange);
+      this.visibilityListenerInstalled = false;
+    }
+  }
+
+  private readonly onVisibilityChange = (): void => {
+    if (!this.isDocumentHidden()) this.pump();
+  };
+}
+
+const sidebarHydrationCoordinators = new WeakMap<
   QueryClient,
-  Map<string, Promise<void>>
+  SidebarThreadHydrationCoordinator
 >();
 let sidebarNavigationGeneration = 0;
 
@@ -48,6 +273,17 @@ interface QueryOptions {
 
 export function sidebarNavigationQueryKey(): SidebarNavigationQueryKey {
   return [SIDEBAR_NAVIGATION_QUERY_KEY];
+}
+
+function getSidebarHydrationCoordinator(
+  queryClient: QueryClient,
+): SidebarThreadHydrationCoordinator {
+  let coordinator = sidebarHydrationCoordinators.get(queryClient);
+  if (coordinator === undefined) {
+    coordinator = new SidebarThreadHydrationCoordinator(queryClient);
+    sidebarHydrationCoordinators.set(queryClient, coordinator);
+  }
+  return coordinator;
 }
 
 export function fetchSidebarNavigation(
@@ -99,9 +335,10 @@ export function sidebarProjectHasMore(
   );
 }
 
-export function loadMoreSidebarProjectThreads(
+async function loadSidebarProjectThreadPage(
   queryClient: QueryClient,
   projectId: string,
+  signal: AbortSignal,
 ): Promise<void> {
   const navigation = queryClient.getQueryData<SidebarNavigationCacheResponse>(
     sidebarNavigationQueryKey(),
@@ -109,115 +346,104 @@ export function loadMoreSidebarProjectThreads(
   if (!sidebarProjectHasMore(navigation, projectId)) {
     return Promise.resolve();
   }
-  let projectLoads = sidebarProjectLoads.get(queryClient);
-  if (projectLoads === undefined) {
-    projectLoads = new Map();
-    sidebarProjectLoads.set(queryClient, projectLoads);
-  }
-  const currentLoad = projectLoads.get(projectId);
-  if (currentLoad !== undefined) return currentLoad;
-
   const generation = navigation!._threadPagination.generation;
   const cursor = navigation!._threadPagination.nextCursorByProjectId[projectId];
   if (cursor === null || cursor === undefined) {
     return Promise.resolve();
   }
-  const load = sdk.projects
-    .sidebarThreads({
-      cursor,
-      limit: String(SIDEBAR_BACKGROUND_THREAD_PAGE_SIZE),
-      projectId,
-    })
-    .then((response) => {
-      const page = response.threads;
-      updateCachedSidebarNavigation<SidebarNavigationCacheResponse>({
-        queryClient,
-        updater: (current) => {
-          if (
-            current === undefined ||
-            current._threadPagination.generation !== generation
-          ) {
-            return current;
-          }
-          const completeProjectIds =
-            response.nextCursor === null
-              ? [
-                  ...new Set([
-                    ...current._threadPagination.completeProjectIds,
-                    projectId,
-                  ]),
-                ]
-              : current._threadPagination.completeProjectIds;
-          const projects = [...current.projects, current.personalProject];
-          const pagination = {
-            ...current._threadPagination,
-            complete: completeProjectIds.length === projects.length,
-            completeProjectIds,
-            nextCursorByProjectId: {
-              ...current._threadPagination.nextCursorByProjectId,
-              [projectId]: response.nextCursor,
-            },
-          };
-          if (current.personalProject.id === projectId) {
-            return {
-              ...current,
-              _threadPagination: pagination,
-              personalProject: {
-                ...current.personalProject,
-                threads: mergeSidebarThreadPage(
-                  current.personalProject.threads,
-                  page,
-                ),
-              },
-            };
-          }
-          return {
-            ...current,
-            _threadPagination: pagination,
-            projects: current.projects.map((project) =>
-              project.id === projectId
-                ? {
-                    ...project,
-                    threads: mergeSidebarThreadPage(project.threads, page),
-                  }
-                : project,
-            ),
-          };
+  const response = await sdk.projects.sidebarThreads({
+    cursor,
+    limit: String(SIDEBAR_BACKGROUND_THREAD_PAGE_SIZE),
+    projectId,
+    signal,
+  });
+  signal.throwIfAborted();
+  const page = response.threads;
+  updateCachedSidebarNavigation<SidebarNavigationCacheResponse>({
+    queryClient,
+    updater: (current) => {
+      if (
+        current === undefined ||
+        current._threadPagination.generation !== generation
+      ) {
+        return current;
+      }
+      const completeProjectIds =
+        response.nextCursor === null
+          ? [
+              ...new Set([
+                ...current._threadPagination.completeProjectIds,
+                projectId,
+              ]),
+            ]
+          : current._threadPagination.completeProjectIds;
+      const projects = [...current.projects, current.personalProject];
+      const pagination = {
+        ...current._threadPagination,
+        complete: completeProjectIds.length === projects.length,
+        completeProjectIds,
+        nextCursorByProjectId: {
+          ...current._threadPagination.nextCursorByProjectId,
+          [projectId]: response.nextCursor,
         },
-      });
-    })
-    .finally(() => {
-      projectLoads?.delete(projectId);
-    });
-  projectLoads.set(projectId, load);
-  return load;
+      };
+      if (current.personalProject.id === projectId) {
+        return {
+          ...current,
+          _threadPagination: pagination,
+          personalProject: {
+            ...current.personalProject,
+            threads: mergeSidebarThreadPage(
+              current.personalProject.threads,
+              page,
+            ),
+          },
+        };
+      }
+      return {
+        ...current,
+        _threadPagination: pagination,
+        projects: current.projects.map((project) =>
+          project.id === projectId
+            ? {
+                ...project,
+                threads: mergeSidebarThreadPage(project.threads, page),
+              }
+            : project,
+        ),
+      };
+    },
+  });
 }
 
-async function hydrateSidebarProjectThreads(
+export function loadMoreSidebarProjectThreads(
   queryClient: QueryClient,
   projectId: string,
 ): Promise<void> {
-  while (true) {
-    const navigation = queryClient.getQueryData<SidebarNavigationCacheResponse>(
-      sidebarNavigationQueryKey(),
-    );
-    if (!sidebarProjectHasMore(navigation, projectId)) return;
-    await loadMoreSidebarProjectThreads(queryClient, projectId);
-  }
+  return getSidebarHydrationCoordinator(queryClient).loadForegroundPage(
+    projectId,
+  );
 }
 
-export async function ensureSidebarNavigationHydrated(
+/**
+ * Keep full sidebar hydration active for one mounted consumer. All consumers
+ * on a query client share one page request. The final release cancels
+ * background work, while explicit pagination requests remain independent.
+ */
+export function retainSidebarNavigationHydration(
+  queryClient: QueryClient,
+): () => void {
+  return getSidebarHydrationCoordinator(
+    queryClient,
+  ).retainBackgroundHydration();
+}
+
+export function ensureSidebarNavigationHydrated(
   queryClient: QueryClient,
   navigation: SidebarNavigationCacheResponse,
 ): Promise<void> {
-  const projects = [...navigation.projects, navigation.personalProject].filter(
-    (project) => sidebarProjectHasMore(navigation, project.id),
-  );
-  await Promise.all(
-    projects.map((project) =>
-      hydrateSidebarProjectThreads(queryClient, project.id),
-    ),
-  );
+  if (navigation._threadPagination.complete) return Promise.resolve();
+  return getSidebarHydrationCoordinator(queryClient).ensureHydrated();
 }
 
 export async function loadMoreSidebarThreads(
