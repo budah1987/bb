@@ -43,6 +43,7 @@ interface ResolveGitProcessEnvArgs {
 
 export interface GitTimeoutOptions {
   timeoutMs?: number;
+  signal?: AbortSignal;
 }
 
 export interface FetchRemoteBranchesResult {
@@ -488,6 +489,7 @@ export async function detectGitRepo(
     cwd,
     allowFailure: true,
     timeoutMs: options.timeoutMs,
+    signal: options.signal,
   });
   return result.exitCode === 0 && trimOutput(result.stdout) === "true";
 }
@@ -514,6 +516,7 @@ async function readHeadSha(
     cwd,
     allowFailure: true,
     timeoutMs: options.timeoutMs,
+    signal: options.signal,
   });
   if (result.exitCode !== 0) {
     return null;
@@ -535,6 +538,7 @@ export async function getCurrentBranch(
     cwd,
     allowFailure: true,
     timeoutMs: options.timeoutMs,
+    signal: options.signal,
   });
   if (result.exitCode !== 0) {
     return undefined;
@@ -557,6 +561,7 @@ export async function getCheckoutRef(
       cwd,
       allowFailure: true,
       timeoutMs: options.timeoutMs,
+      signal: options.signal,
     }),
     readHeadSha(cwd, options),
   ]);
@@ -934,7 +939,12 @@ export async function readDefaultBranch(
 
   const originHead = await runGit(
     ["symbolic-ref", "--quiet", "refs/remotes/origin/HEAD"],
-    { cwd, allowFailure: true, timeoutMs: options.timeoutMs },
+    {
+      cwd,
+      allowFailure: true,
+      timeoutMs: options.timeoutMs,
+      signal: options.signal,
+    },
   );
   const remoteHead = trimOutput(originHead.stdout);
   if (remoteHead.startsWith("refs/remotes/origin/")) {
@@ -943,7 +953,7 @@ export async function readDefaultBranch(
 
   const branches = await runGit(
     ["for-each-ref", "--format=%(refname:short)", "refs/heads"],
-    { cwd, timeoutMs: options.timeoutMs },
+    { cwd, timeoutMs: options.timeoutMs, signal: options.signal },
   );
   const localBranches = branches.stdout
     .split("\n")
@@ -1207,6 +1217,7 @@ export async function readMergeBaseRef(
     cwd,
     allowFailure: true,
     timeoutMs: options.timeoutMs,
+    signal: options.signal,
   });
   if (result.exitCode !== 0) {
     return undefined;

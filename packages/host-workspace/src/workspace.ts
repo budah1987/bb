@@ -32,7 +32,6 @@ import {
   listBranches,
   parseNameStatusEntries,
   parseNameStatusSourceEntries,
-  parseNumstatCount,
   parseNumstatEntriesZ,
   parsePorcelainEntries,
   pathExists,
@@ -42,7 +41,6 @@ import {
   revParse,
   runGit,
   type GitCommandResult,
-  type NumstatEntry,
   type RunGitOptions,
   runShellPipeline,
   summarizeNumstat,
@@ -64,6 +62,7 @@ export interface DiffOptions {
 
 export interface StatusOptions {
   mergeBaseBranch?: string;
+  signal?: AbortSignal;
 }
 
 export type DiffResult = ThreadGitDiffResponse;
@@ -185,6 +184,8 @@ type DiffSummary = {
 
 export interface DiffFilesArgs {
   target: WorkspaceDiffTarget;
+  /** Maximum useful result size. One extra entry reports that the limit was exceeded. */
+  maxFiles: number;
 }
 
 export interface DiffFilesResult {
@@ -249,12 +250,6 @@ type ReadUntrackedDiffArtifactsArgs = DiffOutputLimits & {
 
 type ReadUntrackedDiffArtifactArgs = DiffOutputLimits & {
   relativePath: string;
-};
-
-type ReadUntrackedNumstatEntriesArgs = {
-  workspacePath: string;
-  relativePaths: readonly string[];
-  timeoutMs?: number;
 };
 
 type TruncatedOutput = {
@@ -624,6 +619,7 @@ function buildDiffOutputGitOptions(
 async function readHeadNumstat(
   workspacePath: string,
   timeoutMs?: number,
+  signal?: AbortSignal,
 ): Promise<string> {
   const runUncommittedDiff = createUncommittedDiffRunner(
     workspacePath,
@@ -631,7 +627,7 @@ async function readHeadNumstat(
   );
   const result = await runUncommittedDiff(
     (baseRef) => ["diff", "--numstat", "-z", baseRef, "--"],
-    { cwd: workspacePath, timeoutMs },
+    { cwd: workspacePath, timeoutMs, signal },
   );
   return result.stdout;
 }
@@ -695,55 +691,6 @@ function createUncommittedDiffRunner(
     );
     return runGit(buildArgs(await emptyTreeShaPromise), options);
   };
-}
-
-async function readUntrackedNumstatEntries(
-  args: ReadUntrackedNumstatEntriesArgs,
-): Promise<NumstatEntry[]> {
-  if (args.relativePaths.length === 0) {
-    return [];
-  }
-
-  const entries: NumstatEntry[] = [];
-  for (
-    let index = 0;
-    index < args.relativePaths.length;
-    index += UNTRACKED_DIFF_BATCH_SIZE
-  ) {
-    const batchPaths = args.relativePaths.slice(
-      index,
-      index + UNTRACKED_DIFF_BATCH_SIZE,
-    );
-    entries.push(
-      ...(await Promise.all(
-        batchPaths.map(async (relativePath) => {
-          const result = await runGit(
-            [
-              "diff",
-              "--no-index",
-              "--numstat",
-              "--",
-              "/dev/null",
-              relativePath,
-            ],
-            {
-              cwd: args.workspacePath,
-              allowFailure: true,
-              timeoutMs: args.timeoutMs,
-            },
-          );
-          const [line = ""] = result.stdout.split("\n");
-          const [insertionsText = "", deletionsText = ""] = line.split("\t");
-          return {
-            path: relativePath,
-            insertions: parseNumstatCount(insertionsText),
-            deletions: parseNumstatCount(deletionsText),
-          };
-        }),
-      )),
-    );
-  }
-  return entries;
 }
 
 export class Workspace {
@@ -845,6 +792,7 @@ export class Workspace {
   async getStatus(options: StatusOptions = {}): Promise<WorkspaceStatus> {
     await ensureGitRepo(this.path, {
       timeoutMs: WORKSPACE_STATUS_GIT_TIMEOUT_MS,
+      signal: options.signal,
     });
 
     const mergeBaseBranch = options.mergeBaseBranch;
@@ -860,35 +808,40 @@ export class Workspace {
             "--branch",
             "--untracked-files=all",
           ],
-          { cwd: this.path, timeoutMs: WORKSPACE_STATUS_GIT_TIMEOUT_MS },
+          {
+            cwd: this.path,
+            timeoutMs: WORKSPACE_STATUS_GIT_TIMEOUT_MS,
+            signal: options.signal,
+          },
         ),
-        readHeadNumstat(this.path, WORKSPACE_STATUS_GIT_TIMEOUT_MS),
+        readHeadNumstat(
+          this.path,
+          WORKSPACE_STATUS_GIT_TIMEOUT_MS,
+          options.signal,
+        ),
         getCheckoutRef(this.path, {
           timeoutMs: WORKSPACE_STATUS_GIT_TIMEOUT_MS,
+          signal: options.signal,
         }),
         readDefaultBranch(this.path, {
           timeoutMs: WORKSPACE_STATUS_GIT_TIMEOUT_MS,
+          signal: options.signal,
         }),
         mergeBaseBranch
           ? this.readCachedMergeBaseStatus(
               mergeBaseBranch,
               WORKSPACE_STATUS_GIT_TIMEOUT_MS,
+              options.signal,
             )
           : null,
       ]);
 
     const entries = parsePorcelainEntries(statusOutput.stdout);
-    const untrackedPaths = entries
-      .filter((entry) => entry.status === "??")
-      .map((entry) => entry.path);
-    const numstatEntries = [
-      ...parseNumstatEntriesZ(diffOutput),
-      ...(await readUntrackedNumstatEntries({
-        workspacePath: this.path,
-        relativePaths: untrackedPaths,
-        timeoutMs: WORKSPACE_STATUS_GIT_TIMEOUT_MS,
-      })),
-    ];
+    // `git diff --numstat` does not include untracked files. Keep their line
+    // counts unknown instead of starting one `git diff --no-index` per path.
+    // Exact untracked statistics remain available through the on-demand diff
+    // routes, where callers can apply explicit work limits.
+    const numstatEntries = parseNumstatEntriesZ(diffOutput);
     const numstatByPath = new Map(
       numstatEntries.map((entry) => [entry.path, entry] as const),
     );
@@ -1011,6 +964,13 @@ export class Workspace {
   async diffFiles(args: DiffFilesArgs): Promise<DiffFilesResult> {
     await ensureGitRepo(this.path);
 
+    if (!Number.isSafeInteger(args.maxFiles) || args.maxFiles <= 0) {
+      throw new WorkspaceError(
+        "invalid_request",
+        "Diff file limit must be a positive integer",
+      );
+    }
+
     const stats = await this.readDiffStatArtifacts(args.target);
     const numstatByPath = new Map(
       parseNumstatEntriesZ(stats.numstat).map(
@@ -1035,6 +995,31 @@ export class Workspace {
         origin: "tracked",
       };
     });
+
+    const resultLimit = args.maxFiles + 1;
+    if (files.length + stats.untrackedPaths.length > args.maxFiles) {
+      // The caller only needs to know that its limit was exceeded. Return one
+      // extra entry without starting per-file Git commands for untracked paths.
+      const untrackedFiles: RawDiffFileStat[] = stats.untrackedPaths
+        .slice(0, Math.max(0, resultLimit - files.length))
+        .map((path) => ({
+          path,
+          previousPath: null,
+          statusLetter: "A",
+          additions: 0,
+          deletions: 0,
+          binary: false,
+          origin: "untracked",
+        }));
+      return {
+        files: [...files.slice(0, resultLimit), ...untrackedFiles].slice(
+          0,
+          resultLimit,
+        ),
+        shortstat: stats.shortstat,
+        mergeBaseRef: stats.mergeBaseRef,
+      };
+    }
 
     const untrackedFiles = await this.readUntrackedDiffFileStats(
       stats.untrackedPaths,
@@ -1887,6 +1872,7 @@ export class Workspace {
   private async readPatchUniqueCommitSummaries(
     mergeBaseBranch: string,
     timeoutMs?: number,
+    signal?: AbortSignal,
   ): Promise<WorkspaceCommitSummary[]> {
     const log = await runGit(
       [
@@ -1897,7 +1883,7 @@ export class Workspace {
         "--format=%H%x1f%h%x1f%s%x1f%an%x1f%at",
         `${mergeBaseBranch}...HEAD`,
       ],
-      { cwd: this.path, allowFailure: true, timeoutMs },
+      { cwd: this.path, allowFailure: true, timeoutMs, signal },
     );
 
     return log.stdout
@@ -1919,10 +1905,11 @@ export class Workspace {
   private async readMergeBaseStatus(
     mergeBaseBranch: string,
     timeoutMs?: number,
+    signal?: AbortSignal,
   ): Promise<MergeBaseStatus> {
     const [mergeBaseRef, aheadBehindCounts, commits, nameStatus, numstat] =
       await Promise.all([
-        readMergeBaseRef(this.path, mergeBaseBranch, { timeoutMs }),
+        readMergeBaseRef(this.path, mergeBaseBranch, { timeoutMs, signal }),
         runGit(
           [
             "rev-list",
@@ -1932,9 +1919,9 @@ export class Workspace {
             "--count",
             `${mergeBaseBranch}...HEAD`,
           ],
-          { cwd: this.path, allowFailure: true, timeoutMs },
+          { cwd: this.path, allowFailure: true, timeoutMs, signal },
         ),
-        this.readPatchUniqueCommitSummaries(mergeBaseBranch, timeoutMs),
+        this.readPatchUniqueCommitSummaries(mergeBaseBranch, timeoutMs, signal),
         runGit(
           [
             "diff",
@@ -1943,7 +1930,7 @@ export class Workspace {
             "-z",
             `${mergeBaseBranch}...HEAD`,
           ],
-          { cwd: this.path, allowFailure: true, timeoutMs },
+          { cwd: this.path, allowFailure: true, timeoutMs, signal },
         ),
         runGit(
           [
@@ -1953,7 +1940,7 @@ export class Workspace {
             "-z",
             `${mergeBaseBranch}...HEAD`,
           ],
-          { cwd: this.path, allowFailure: true, timeoutMs },
+          { cwd: this.path, allowFailure: true, timeoutMs, signal },
         ),
       ]);
     if (aheadBehindCounts.exitCode !== 0) {
@@ -2053,17 +2040,20 @@ export class Workspace {
   private async readCachedMergeBaseStatus(
     mergeBaseBranch: string,
     timeoutMs?: number,
+    signal?: AbortSignal,
   ): Promise<MergeBaseStatus> {
     const [headRef, baseRef] = await Promise.all([
       runGit(["rev-parse", "--verify", "HEAD^{commit}"], {
         cwd: this.path,
         allowFailure: true,
         timeoutMs,
+        signal,
       }),
       runGit(["rev-parse", "--verify", `${mergeBaseBranch}^{commit}`], {
         cwd: this.path,
         allowFailure: true,
         timeoutMs,
+        signal,
       }),
     ]);
     const key = [
@@ -2077,7 +2067,7 @@ export class Workspace {
       return this.mergeBaseStatusCache.value;
     }
 
-    const value = this.readMergeBaseStatus(mergeBaseBranch, timeoutMs);
+    const value = this.readMergeBaseStatus(mergeBaseBranch, timeoutMs, signal);
     this.mergeBaseStatusCache = { key, value };
     try {
       return await value;

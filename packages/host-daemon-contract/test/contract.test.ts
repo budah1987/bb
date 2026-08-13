@@ -1279,6 +1279,25 @@ describe("host-daemon command schemas", () => {
     expect(HOST_DAEMON_PROTOCOL_VERSION).toBe(103);
   });
 
+  it("requires a positive preflight file limit for workspace diff lists", () => {
+    const command = {
+      type: "workspace.diffFiles",
+      environmentId: "env_123",
+      workspaceContext: {
+        workspacePath: "/tmp/workspace",
+        workspaceProvisionType: "managed-worktree",
+      },
+      target: { type: "uncommitted" },
+    };
+
+    expect(
+      hostDaemonOnlineRpcCommandSchema.parse({ ...command, maxFiles: 5000 }),
+    ).toMatchObject({ maxFiles: 5000 });
+    expect(hostDaemonOnlineRpcCommandSchema.safeParse(command).success).toBe(
+      false,
+    );
+  });
+
   it("binds Plan cancellation to a required turn id and typed result", () => {
     expect(
       hostDaemonCommandSchema.parse({
@@ -3607,6 +3626,16 @@ describe("host-daemon session schemas", () => {
       type: "host-rpc.request",
       requestId: "rpc-1",
       command: { type: "provider.list_models", providerId: "codex" },
+    });
+
+    expect(
+      hostDaemonServerWsMessageSchema.parse({
+        type: "host-rpc.cancel",
+        requestId: "rpc-1",
+      }),
+    ).toEqual({
+      type: "host-rpc.cancel",
+      requestId: "rpc-1",
     });
 
     expect(

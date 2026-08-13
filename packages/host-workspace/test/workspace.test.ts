@@ -140,11 +140,11 @@ describe("Workspace", () => {
       {
         path: "notes.txt",
         status: "??",
-        insertions: 1,
-        deletions: 0,
+        insertions: null,
+        deletions: null,
       },
     ]);
-    expect(untrackedStatus.workingTree.insertions).toBe(1);
+    expect(untrackedStatus.workingTree.insertions).toBe(0);
     expect(untrackedStatus.workingTree.deletions).toBe(0);
 
     await fs.writeFile(
@@ -155,6 +155,17 @@ describe("Workspace", () => {
     const mixedStatus = await workspace.getStatus();
     expect(mixedStatus.workingTree.state).toBe("dirty_uncommitted");
     expect(mixedStatus.workingTree.files).toHaveLength(2);
+  });
+
+  it("cancels status Git work through its abort signal", async () => {
+    const repoPath = await initRepo();
+    const workspace = new Workspace(repoPath);
+    const abortController = new AbortController();
+    abortController.abort(new Error("request timed out"));
+
+    await expect(
+      workspace.getStatus({ signal: abortController.signal }),
+    ).rejects.toMatchObject({ code: "provision_cancelled" });
   });
 
   it("reports deleted tracked files as dirty file changes", async () => {
@@ -340,8 +351,8 @@ describe("Workspace", () => {
       {
         path: "notes.txt",
         status: "??",
-        insertions: 1,
-        deletions: 0,
+        insertions: null,
+        deletions: null,
       },
     ]);
     expect(status.mergeBase).toMatchObject({
@@ -556,11 +567,11 @@ describe("Workspace", () => {
       {
         path: "notes.txt",
         status: "??",
-        insertions: 1,
-        deletions: 0,
+        insertions: null,
+        deletions: null,
       },
     ]);
-    expect(status.workingTree.insertions).toBe(2);
+    expect(status.workingTree.insertions).toBe(1);
     expect(status.workingTree.deletions).toBe(0);
     expect(status.mergeBase).toEqual({
       mergeBaseBranch: "main",
@@ -654,7 +665,7 @@ describe("Workspace", () => {
     expect(bannerStats).toEqual(parseShortstat(committedChanges.shortstat));
   });
 
-  it("aligns uncommitted-only status stats with all and uncommitted diffs", async () => {
+  it("keeps untracked line counts out of automatic uncommitted status", async () => {
     const repoPath = await initRepo();
     await fs.writeFile(
       path.join(repoPath, "README.md"),
@@ -675,11 +686,16 @@ describe("Workspace", () => {
     });
     const bannerStats = tallyWorkspaceStats(status.workingTree);
 
-    expect(bannerStats).toEqual(parseShortstat(allChanges.shortstat));
-    expect(bannerStats).toEqual(parseShortstat(uncommittedChanges.shortstat));
+    expect(bannerStats).toEqual({
+      filesCount: 2,
+      insertions: 1,
+      deletions: 0,
+    });
+    expect(parseShortstat(allChanges.shortstat).insertions).toBe(2);
+    expect(parseShortstat(uncommittedChanges.shortstat).insertions).toBe(2);
   });
 
-  it("aligns mixed status working-tree stats with uncommitted diffs", async () => {
+  it("keeps untracked line counts out of automatic mixed status", async () => {
     const repoPath = await initRepo();
     await runGit(["checkout", "-b", "feature"], { cwd: repoPath });
     await fs.writeFile(path.join(repoPath, "README.md"), "feature\n", "utf8");
@@ -704,7 +720,12 @@ describe("Workspace", () => {
     });
     const bannerStats = tallyWorkspaceStats(status.workingTree);
 
-    expect(bannerStats).toEqual(parseShortstat(uncommittedChanges.shortstat));
+    expect(bannerStats).toEqual({
+      filesCount: 2,
+      insertions: 1,
+      deletions: 0,
+    });
+    expect(parseShortstat(uncommittedChanges.shortstat).insertions).toBe(2);
     expect(bannerStats).not.toEqual(parseShortstat(allChanges.shortstat));
   });
 

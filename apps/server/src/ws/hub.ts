@@ -653,6 +653,16 @@ export class NotificationHub implements DbNotifier {
           sessionId,
           timeout: setTimeout(() => {
             this.deleteHostOnlineRpcWaiter(args.message.requestId, waiter);
+            try {
+              session.socket.send(
+                JSON.stringify({
+                  type: "host-rpc.cancel",
+                  requestId: args.message.requestId,
+                }),
+              );
+            } catch {
+              // The timeout remains authoritative when the socket is already gone.
+            }
             reject(new HostOnlineRpcTimeoutError());
           }, args.timeoutMs),
         };

@@ -388,6 +388,44 @@ describe("NotificationHub", () => {
     });
   });
 
+  it("cancels daemon work when a host RPC request times out", async () => {
+    vi.useFakeTimers();
+    try {
+      const hub = new NotificationHub();
+      const socket = createMockHubSocket();
+      hub.registerDaemon("session-1", "host-1", socket);
+
+      const wait = hub.requestHostOnlineRpc({
+        hostId: "host-1",
+        timeoutMs: 1_000,
+        message: {
+          type: "host-rpc.request",
+          requestId: "rpc-timeout",
+          command: { type: "provider.list_models", providerId: "codex" },
+        },
+      });
+      const rejection = expect(wait).rejects.toThrow(
+        "Timed out waiting for host RPC response",
+      );
+
+      await vi.advanceTimersByTimeAsync(1_000);
+
+      await rejection;
+      expect(socket.messages.map((message) => JSON.parse(message))).toEqual([
+        expect.objectContaining({
+          type: "host-rpc.request",
+          requestId: "rpc-timeout",
+        }),
+        {
+          type: "host-rpc.cancel",
+          requestId: "rpc-timeout",
+        },
+      ]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("rejects in-flight host RPC requests when the daemon unregisters", async () => {
     const hub = new NotificationHub();
     const socket = createMockHubSocket();

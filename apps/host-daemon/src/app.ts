@@ -858,6 +858,9 @@ export async function createHostDaemonApp(
       const response = await router.handleOnlineRpcRequest(message);
       sendServerMessage(response);
     },
+    onHostRpcCancel: (message) => {
+      router.cancelOnlineRpcRequest(message.requestId);
+    },
     onWatchSetReplace: async (message) => {
       await watchManager.replaceWatchSet({
         generation: message.generation,

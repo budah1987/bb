@@ -4,6 +4,7 @@ import {
   type HostDaemonLoadedEnvironment,
   type HostDaemonConnectSharesReplaceMessage,
   type HostDaemonOnlineRpcRequestMessage,
+  type HostDaemonOnlineRpcCancelMessage,
   type HostDaemonServerWsMessage,
   type HostDaemonSessionCloseReason,
   type HostDaemonSessionOpenRequest,
@@ -46,6 +47,7 @@ export type HostDaemonServerTerminalMessage = Exclude<
   HostDaemonServerWsMessage,
   | { type: "session-close" }
   | HostDaemonOnlineRpcRequestMessage
+  | HostDaemonOnlineRpcCancelMessage
   | HostDaemonWatchSetReplaceMessage
   | HostDaemonConnectSharesReplaceMessage
 >;
@@ -76,6 +78,9 @@ export interface ServerConnectionOptions {
   ) => void | Promise<void>;
   onHostRpcRequest?: (
     message: HostDaemonOnlineRpcRequestMessage,
+  ) => void | Promise<void>;
+  onHostRpcCancel?: (
+    message: HostDaemonOnlineRpcCancelMessage,
   ) => void | Promise<void>;
   onWatchSetReplace?: (
     message: HostDaemonWatchSetReplaceMessage,

@@ -943,6 +943,7 @@ export function registerEnvironmentRoutes(app: Hono, deps: AppDeps): void {
         environmentId: target.environmentId,
         workspaceContext: target.workspaceContext,
         target: toWorkspaceDiffTarget(query),
+        maxFiles: DIFF_FILES_MAX_COUNT,
       },
     });
     if (result.outcome === "unavailable") {
