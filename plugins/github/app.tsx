@@ -2215,6 +2215,7 @@ function useStatus(): { status: Status | null; refetch: () => void } {
   useEffect(() => {
     refetch();
   }, [refetch]);
+  useRealtime("sync-changed", refetch);
   useRealtime("data-changed", refetch);
   return { status, refetch };
 }
