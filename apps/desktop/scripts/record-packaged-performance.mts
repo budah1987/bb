@@ -226,25 +226,33 @@ async function waitForTaskLinks(
 }
 
 async function switchTask(client: CdpClient, taskIndex: number): Promise<void> {
-  const result = await client.evaluate(`(() => {
-    const links = [...document.querySelectorAll('[data-sidebar-thread-shortcut-target][data-sidebar-thread-id]')]
-      .filter((element) => element instanceof HTMLAnchorElement);
-    if (links.length < 2) return { count: links.length, switched: false };
-    const currentPath = window.location.pathname;
-    const candidates = links.filter((link) => new URL(link.href).pathname !== currentPath);
-    const target = candidates[${String(taskIndex)} % candidates.length];
-    if (!(target instanceof HTMLAnchorElement)) return { count: links.length, switched: false };
-    target.click();
-    return { count: links.length, switched: true };
-  })()`);
-  if (
-    typeof result !== "object" ||
-    result === null ||
-    !("switched" in result) ||
-    result.switched !== true
-  ) {
-    throw new Error("Could not switch between isolated fixture tasks");
+  const deadline = Date.now() + 5_000;
+  while (Date.now() < deadline) {
+    const result = await client.evaluate(`(() => {
+      const targets = [...document.querySelectorAll('[data-sidebar-thread-shortcut-target][data-sidebar-thread-id]')]
+        .filter((element) => element instanceof HTMLElement);
+      if (targets.length < 2) return { count: targets.length, switched: false };
+      const inactiveTargets = targets.filter((target) =>
+        target.getAttribute('aria-current') !== 'page' &&
+        !target.hasAttribute('data-active')
+      );
+      const candidates = inactiveTargets.length > 0 ? inactiveTargets : targets;
+      const target = candidates[${String(taskIndex)} % candidates.length];
+      if (!(target instanceof HTMLElement)) return { count: targets.length, switched: false };
+      target.click();
+      return { count: targets.length, switched: true };
+    })()`);
+    if (
+      typeof result === "object" &&
+      result !== null &&
+      "switched" in result &&
+      result.switched === true
+    ) {
+      return;
+    }
+    await new Promise((resolvePromise) => setTimeout(resolvePromise, 100));
   }
+  throw new Error("Could not switch between isolated fixture tasks");
 }
 
 async function initializeNativeBrowser(client: CdpClient): Promise<boolean> {
@@ -444,7 +452,12 @@ async function main(): Promise<void> {
     process.off("SIGTERM", handleInterrupt);
     client?.close();
     if (child !== null) await stopChild(child);
-    await rm(runRoot, { force: true, recursive: true });
+    await rm(runRoot, {
+      force: true,
+      maxRetries: 10,
+      recursive: true,
+      retryDelay: 200,
+    });
   }
 }
 
