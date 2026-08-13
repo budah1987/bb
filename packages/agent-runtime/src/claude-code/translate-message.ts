@@ -658,6 +658,7 @@ export function translateClaudeSdkMessage(
         now: Date.now(),
         tasks: state.tasksById,
         threadId,
+        toolItemsByCallId: state.toolItemsByCallId,
       });
       if (taskEvents !== null) {
         events.push(...taskEvents);

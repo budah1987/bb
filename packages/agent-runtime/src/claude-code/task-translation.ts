@@ -3,6 +3,7 @@ import type {
   BackgroundTaskUsage,
   ThreadEvent,
   ThreadEventBackgroundTaskItem,
+  ThreadEventItem,
   WorkflowAgentSnapshot,
   WorkflowAgentState,
   WorkflowPhaseSnapshot,
@@ -73,6 +74,7 @@ export interface TranslateClaudeTaskMessageArgs {
   now: number;
   tasks: ClaudeTaskMap;
   threadId: string;
+  toolItemsByCallId: ReadonlyMap<string, ThreadEventItem>;
 }
 
 export function hasOpenClaudeBackgroundTasks(tasks: ClaudeTaskMap): boolean {
@@ -117,6 +119,19 @@ export function hasCompletionBlockingClaudeTasks(
 
 function buildClaudeTaskItemId(taskId: string, generation: number): string {
   return generation > 1 ? `task:${taskId}#${generation}` : `task:${taskId}`;
+}
+
+function isPersistentMonitorTask(
+  toolUseId: string | undefined,
+  toolItemsByCallId: ReadonlyMap<string, ThreadEventItem>,
+): boolean {
+  if (!toolUseId) return false;
+  const spawningItem = toolItemsByCallId.get(toolUseId);
+  return (
+    spawningItem?.type === "toolCall" &&
+    spawningItem.tool === "Monitor" &&
+    spawningItem.arguments?.persistent === true
+  );
 }
 
 function toBackgroundTaskUsage(usage: ClaudeTaskUsage): BackgroundTaskUsage {
@@ -344,7 +359,13 @@ export function translateClaudeTaskMessage(
       workflowName: message.workflow_name,
       description: message.description,
       taskStatus: "running",
-      skipTranscript: message.skip_transcript ?? false,
+      // A persistent Monitor already owns the user-facing lifecycle. Its
+      // local_bash task is only the monitor's process, so a second background
+      // command row would duplicate the same work.
+      skipTranscript:
+        message.skip_transcript === true ||
+        (taskType === LOCAL_BASH_TASK_TYPE &&
+          isPersistentMonitorTask(message.tool_use_id, args.toolItemsByCallId)),
       phasesByIndex: new Map(),
       agentsByIndex: new Map(),
       usage: undefined,
