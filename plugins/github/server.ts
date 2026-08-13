@@ -66,7 +66,7 @@ const threadLinkSchema = z
     createdAt: z.string(),
   })
   .strict();
-const pullSchema = z
+const pullSummarySchema = z
   .object({
     repo: repoNameSchema,
     number: itemNumberSchema,
@@ -96,6 +96,10 @@ const pullSchema = z
         })
         .strict(),
     ),
+  })
+  .strict();
+const pullActivitySchema = z
+  .object({
     comments: z.array(commentSchema),
     reviews: z.array(
       z
@@ -117,19 +121,20 @@ const pullSchema = z
         })
         .strict(),
     ),
-    files: z.array(
-      z
-        .object({
-          path: z.string(),
-          status: z.string(),
-          additions: z.number().nonnegative(),
-          deletions: z.number().nonnegative(),
-          patch: z.string().nullable(),
-        })
-        .strict(),
-    ),
   })
   .strict();
+const pullFilesSchema = z
+  .array(
+    z
+      .object({
+        path: z.string(),
+        status: z.string(),
+        additions: z.number().nonnegative(),
+        deletions: z.number().nonnegative(),
+        patch: z.string().nullable(),
+      })
+      .strict(),
+  );
 
 export const githubRpcContract = defineRpcContract({
   status: {
@@ -212,7 +217,15 @@ export const githubRpcContract = defineRpcContract({
   },
   getPull: {
     input: itemInputSchema,
-    output: z.object({ pull: pullSchema }).strict(),
+    output: z.object({ pull: pullSummarySchema }).strict(),
+  },
+  getPullActivity: {
+    input: itemInputSchema,
+    output: z.object({ activity: pullActivitySchema }).strict(),
+  },
+  getPullFiles: {
+    input: itemInputSchema,
+    output: z.object({ files: pullFilesSchema }).strict(),
   },
   commentPull: {
     input: itemInputSchema.extend({ body: nonBlankStringSchema }).strict(),
@@ -1051,28 +1064,19 @@ export default async function plugin(bb: BbPluginApi) {
       };
     },
 
-    /** { repo, number } → full PR detail: overview, checks, reviews, timeline
-        comments, inline review threads (with diff hunks), and per-file
-        patches. Three live calls in parallel: `gh pr view` covers the
-        overview + reviews + issue-style comments, the REST pulls API covers
-        what it cannot — inline review comments and file patches. */
+    /** { repo, number } → fast PR overview and checks. Activity and file
+        patches have separate calls so the first panel render starts one
+        `gh` process instead of three. */
     async getPull({ repo, number }) {
       const prFields =
         "number,title,body,state,isDraft,author,createdAt,updatedAt,labels," +
         "assignees,url,baseRefName,headRefName,additions,deletions," +
         "changedFiles,reviewDecision,mergeStateStatus,statusCheckRollup," +
-        "comments,reviews,reviewRequests";
-      const [viewRaw, reviewCommentsRaw, filesRaw] = await Promise.all([
-        gh(["pr", "view", String(number), "-R", repo, "--json", prFields], 30_000),
-        gh(
-          ["api", "--paginate", "--slurp", `repos/${repo}/pulls/${number}/comments?per_page=100`],
-          30_000,
-        ),
-        gh(
-          ["api", "--paginate", "--slurp", `repos/${repo}/pulls/${number}/files?per_page=100`],
-          30_000,
-        ),
-      ]);
+        "reviewRequests";
+      const viewRaw = await gh(
+        ["pr", "view", String(number), "-R", repo, "--json", prFields],
+        30_000,
+      );
 
       interface GhPullView extends GhListEntry {
         isDraft?: unknown;
@@ -1093,17 +1097,6 @@ export default async function plugin(bb: BbPluginApi) {
           state?: unknown;
           detailsUrl?: unknown;
           targetUrl?: unknown;
-        }>;
-        comments?: Array<{
-          author?: { login?: unknown };
-          body?: unknown;
-          createdAt?: unknown;
-        }>;
-        reviews?: Array<{
-          author?: { login?: unknown };
-          state?: unknown;
-          body?: unknown;
-          submittedAt?: unknown;
         }>;
         reviewRequests?: Array<{ login?: unknown; name?: unknown; slug?: unknown }>;
       }
@@ -1133,6 +1126,61 @@ export default async function plugin(bb: BbPluginApi) {
         };
       });
 
+      return {
+        pull: {
+          repo,
+          number,
+          title: String(view.title ?? ""),
+          state: view.isDraft === true && String(view.state ?? "") === "OPEN"
+            ? "DRAFT"
+            : String(view.state ?? ""),
+          author: String(view.author?.login ?? ""),
+          body: typeof view.body === "string" ? view.body : "",
+          url: String(view.url ?? ""),
+          createdAt: String(view.createdAt ?? ""),
+          updatedAt: String(view.updatedAt ?? ""),
+          baseRefName: String(view.baseRefName ?? ""),
+          headRefName: String(view.headRefName ?? ""),
+          additions: Number(view.additions ?? 0),
+          deletions: Number(view.deletions ?? 0),
+          changedFiles: Number(view.changedFiles ?? 0),
+          labels: (view.labels ?? []).map((label) => String(label?.name ?? "")),
+          assignees: (view.assignees ?? []).map((user) => String(user?.login ?? "")),
+          reviewDecision: String(view.reviewDecision ?? ""),
+          mergeStateStatus: String(view.mergeStateStatus ?? ""),
+          reviewRequests: (view.reviewRequests ?? [])
+            .map((entry) => String(entry.login ?? entry.name ?? entry.slug ?? ""))
+            .filter((name) => name.length > 0),
+          checks,
+        },
+      };
+    },
+
+    /** { repo, number } → comments, reviews, and inline review threads. */
+    async getPullActivity({ repo, number }) {
+      const [viewRaw, reviewCommentsRaw] = await Promise.all([
+        gh(
+          ["pr", "view", String(number), "-R", repo, "--json", "comments,reviews"],
+          30_000,
+        ),
+        gh(
+          ["api", "--paginate", "--slurp", `repos/${repo}/pulls/${number}/comments?per_page=100`],
+          30_000,
+        ),
+      ]);
+      const view = JSON.parse(viewRaw) as {
+        comments?: Array<{
+          author?: { login?: unknown };
+          body?: unknown;
+          createdAt?: unknown;
+        }>;
+        reviews?: Array<{
+          author?: { login?: unknown };
+          state?: unknown;
+          body?: unknown;
+          submittedAt?: unknown;
+        }>;
+      };
       interface GhReviewComment {
         id?: unknown;
         in_reply_to_id?: unknown;
@@ -1179,6 +1227,30 @@ export default async function plugin(bb: BbPluginApi) {
       }
       const reviewThreads = [...new Set(threadByRootId.values())];
 
+      return {
+        activity: {
+          comments: (view.comments ?? []).map((comment) => ({
+            author: String(comment.author?.login ?? ""),
+            body: typeof comment.body === "string" ? comment.body : "",
+            createdAt: String(comment.createdAt ?? ""),
+          })),
+          reviews: (view.reviews ?? []).map((review) => ({
+            author: String(review.author?.login ?? ""),
+            state: String(review.state ?? ""),
+            body: typeof review.body === "string" ? review.body : "",
+            createdAt: String(review.submittedAt ?? ""),
+          })),
+          reviewThreads,
+        },
+      };
+    },
+
+    /** { repo, number } → changed files and bounded patches. */
+    async getPullFiles({ repo, number }) {
+      const filesRaw = await gh(
+        ["api", "--paginate", "--slurp", `repos/${repo}/pulls/${number}/files?per_page=100`],
+        30_000,
+      );
       interface GhPullFile {
         filename?: unknown;
         status?: unknown;
@@ -1198,47 +1270,7 @@ export default async function plugin(bb: BbPluginApi) {
         };
       });
 
-      return {
-        pull: {
-          repo,
-          number,
-          title: String(view.title ?? ""),
-          state: view.isDraft === true && String(view.state ?? "") === "OPEN"
-            ? "DRAFT"
-            : String(view.state ?? ""),
-          author: String(view.author?.login ?? ""),
-          body: typeof view.body === "string" ? view.body : "",
-          url: String(view.url ?? ""),
-          createdAt: String(view.createdAt ?? ""),
-          updatedAt: String(view.updatedAt ?? ""),
-          baseRefName: String(view.baseRefName ?? ""),
-          headRefName: String(view.headRefName ?? ""),
-          additions: Number(view.additions ?? 0),
-          deletions: Number(view.deletions ?? 0),
-          changedFiles: Number(view.changedFiles ?? files.length),
-          labels: (view.labels ?? []).map((label) => String(label?.name ?? "")),
-          assignees: (view.assignees ?? []).map((user) => String(user?.login ?? "")),
-          reviewDecision: String(view.reviewDecision ?? ""),
-          mergeStateStatus: String(view.mergeStateStatus ?? ""),
-          reviewRequests: (view.reviewRequests ?? [])
-            .map((entry) => String(entry.login ?? entry.name ?? entry.slug ?? ""))
-            .filter((name) => name.length > 0),
-          checks,
-          comments: (view.comments ?? []).map((comment) => ({
-            author: String(comment.author?.login ?? ""),
-            body: typeof comment.body === "string" ? comment.body : "",
-            createdAt: String(comment.createdAt ?? ""),
-          })),
-          reviews: (view.reviews ?? []).map((review) => ({
-            author: String(review.author?.login ?? ""),
-            state: String(review.state ?? ""),
-            body: typeof review.body === "string" ? review.body : "",
-            createdAt: String(review.submittedAt ?? ""),
-          })),
-          reviewThreads,
-          files,
-        },
-      };
+      return { files };
     },
 
     /** { repo, number, body } → add a PR conversation comment. */
