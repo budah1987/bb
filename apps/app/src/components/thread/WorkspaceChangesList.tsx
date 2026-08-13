@@ -1,3 +1,5 @@
+import { useRef } from "react";
+import { useVirtualizer } from "@tanstack/react-virtual";
 import type { WorkspaceStatus } from "@bb/domain";
 import { DiffStatsTally } from "@/components/ui/diff-stats-tally.js";
 import { EmptyState } from "@bb/shared-ui/empty-state";
@@ -33,6 +35,8 @@ interface WorkspaceChangesListItemProps {
 
 const WORKSPACE_CHANGE_ROW_CLASS =
   "grid grid-cols-[1.5rem_minmax(0,1fr)_auto] items-start gap-x-3";
+const WORKSPACE_CHANGE_ROW_HEIGHT_PX = 24;
+const WORKSPACE_CHANGE_OVERSCAN = 6;
 
 function fileKey(file: WorkspaceChangedFile): string {
   return `${file.status}:${file.path}`;
@@ -91,6 +95,17 @@ export function WorkspaceChangesList({
   onFileClick,
   limit,
 }: WorkspaceChangesListProps) {
+  const scrollRef = useRef<HTMLDivElement | null>(null);
+  // TanStack Virtual manages its own stable callbacks and measurement cache.
+  // eslint-disable-next-line react-hooks/incompatible-library
+  const virtualizer = useVirtualizer({
+    count: limit === undefined ? files.length : 0,
+    getScrollElement: () => scrollRef.current,
+    estimateSize: () => WORKSPACE_CHANGE_ROW_HEIGHT_PX,
+    getItemKey: (index) => (files[index] ? fileKey(files[index]) : index),
+    overscan: WORKSPACE_CHANGE_OVERSCAN,
+  });
+
   if (!files || files.length === 0) {
     return <EmptyState message={emptyMessage} />;
   }
@@ -109,12 +124,37 @@ export function WorkspaceChangesList({
   }
 
   return (
-    <ul className={cn("space-y-1 overflow-auto", className)}>
-      {files.map((file) => (
-        <li key={fileKey(file)}>
-          <WorkspaceChangesListItem file={file} onFileClick={onFileClick} />
-        </li>
-      ))}
-    </ul>
+    <div
+      ref={scrollRef}
+      role="list"
+      className={cn("overflow-auto", className)}
+    >
+      <div
+        className="relative"
+        style={{ height: virtualizer.getTotalSize() }}
+      >
+        {virtualizer.getVirtualItems().map((item) => {
+          const file = files[item.index];
+          if (!file) {
+            return null;
+          }
+          return (
+            <div
+              key={fileKey(file)}
+              role="listitem"
+              data-index={item.index}
+              ref={virtualizer.measureElement}
+              className="absolute left-0 w-full pb-1"
+              style={{ transform: `translateY(${item.start}px)` }}
+            >
+              <WorkspaceChangesListItem
+                file={file}
+                onFileClick={onFileClick}
+              />
+            </div>
+          );
+        })}
+      </div>
+    </div>
   );
 }
