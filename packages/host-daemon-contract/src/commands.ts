@@ -1275,6 +1275,7 @@ const workspaceDiffCommandSchema = hostDaemonWorkspaceTargetSchema.extend({
 const workspaceDiffFilesCommandSchema = hostDaemonWorkspaceTargetSchema.extend({
   type: z.literal("workspace.diffFiles"),
   target: workspaceDiffTargetSchema,
+  maxFiles: z.number().int().positive(),
 });
 
 const workspaceDiffPatchCommandSchema = hostDaemonWorkspaceTargetSchema.extend({

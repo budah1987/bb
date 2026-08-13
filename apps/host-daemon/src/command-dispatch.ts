@@ -716,6 +716,7 @@ const onlineRpcHandlers: OnlineRpcHandlerMap = {
         outcome: "available",
         workspaceStatus: await resolution.entry.workspace.getStatus({
           mergeBaseBranch: command.mergeBaseBranch,
+          signal: options.signal,
         }),
       };
     } catch (error) {
@@ -884,6 +885,7 @@ const onlineRpcHandlers: OnlineRpcHandlerMap = {
         outcome: "available",
         ...(await resolution.entry.workspace.diffFiles({
           target: command.target,
+          maxFiles: command.maxFiles,
         })),
       };
     } catch (error) {

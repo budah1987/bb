@@ -641,6 +641,18 @@ export class ServerConnection {
       return;
     }
 
+    if (message.data.type === "host-rpc.cancel") {
+      void Promise.resolve(this.options.onHostRpcCancel?.(message.data)).catch(
+        (error) => {
+          this.options.logger.warn(
+            runtimeErrorLogFields(error),
+            "Online host RPC cancellation failed",
+          );
+        },
+      );
+      return;
+    }
+
     if (message.data.type === "watch-set.replace") {
       const watchSetMessage = message.data;
       void Promise.resolve(

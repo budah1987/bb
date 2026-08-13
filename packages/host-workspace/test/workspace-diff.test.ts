@@ -128,7 +128,10 @@ describe("Workspace.diffFiles", () => {
     const workspace = new Workspace(repoPath);
 
     const diff = await workspace.getDiff({ target: UNCOMMITTED });
-    const files = await workspace.diffFiles({ target: UNCOMMITTED });
+    const files = await workspace.diffFiles({
+      target: UNCOMMITTED,
+      maxFiles: 5000,
+    });
     const patches = await workspace.diffPatch({
       target: UNCOMMITTED,
       paths: ["staged.txt", "untracked.txt"],
@@ -178,7 +181,10 @@ describe("Workspace.diffFiles", () => {
     await runGit(["add", "added.txt"], { cwd: repoPath });
 
     const workspace = new Workspace(repoPath);
-    const result = await workspace.diffFiles({ target: UNCOMMITTED });
+    const result = await workspace.diffFiles({
+      target: UNCOMMITTED,
+      maxFiles: 5000,
+    });
 
     const added = findFile(result.files, "added.txt");
     expect(added).toEqual({
@@ -216,6 +222,7 @@ describe("Workspace.diffFiles", () => {
     const workspace = new Workspace(repoPath);
     const result = await workspace.diffFiles({
       target: { type: "commit", sha: "HEAD" },
+      maxFiles: 5000,
     });
 
     const renamed = findFile(result.files, "renamed.txt");
@@ -233,7 +240,10 @@ describe("Workspace.diffFiles", () => {
     await fs.symlink("target.txt", path.join(repoPath, "thing"));
 
     const workspace = new Workspace(repoPath);
-    const result = await workspace.diffFiles({ target: UNCOMMITTED });
+    const result = await workspace.diffFiles({
+      target: UNCOMMITTED,
+      maxFiles: 5000,
+    });
 
     const typeChanged = findFile(result.files, "thing");
     expect(typeChanged?.statusLetter).toBe("T");
@@ -251,7 +261,10 @@ describe("Workspace.diffFiles", () => {
     );
 
     const workspace = new Workspace(repoPath);
-    const result = await workspace.diffFiles({ target: UNCOMMITTED });
+    const result = await workspace.diffFiles({
+      target: UNCOMMITTED,
+      maxFiles: 5000,
+    });
 
     const binary = findFile(result.files, "image.bin");
     expect(binary?.binary).toBe(true);
@@ -269,7 +282,10 @@ describe("Workspace.diffFiles", () => {
     await write(repoPath, "untracked.txt", "fresh\ncontent\n");
 
     const workspace = new Workspace(repoPath);
-    const result = await workspace.diffFiles({ target: UNCOMMITTED });
+    const result = await workspace.diffFiles({
+      target: UNCOMMITTED,
+      maxFiles: 5000,
+    });
 
     const tracked = findFile(result.files, "tracked.txt");
     expect(tracked?.origin).toBe("tracked");
@@ -297,10 +313,34 @@ describe("Workspace.diffFiles", () => {
     const workspace = new Workspace(repoPath);
     const result = await workspace.diffFiles({
       target: { type: "commit", sha: "HEAD" },
+      maxFiles: 5000,
     });
 
     expect(findFile(result.files, "b.txt")).toBeDefined();
     expect(findFile(result.files, "untracked.txt")).toBeUndefined();
+  });
+
+  it("stops before untracked file statistics when the file limit is exceeded", async () => {
+    const repoPath = await initRepo();
+    await write(repoPath, "one.txt", "one\ntwo\n");
+    await write(repoPath, "two.txt", "one\ntwo\n");
+    await write(repoPath, "three.txt", "one\ntwo\n");
+    const workspace = new Workspace(repoPath);
+
+    const result = await workspace.diffFiles({
+      target: UNCOMMITTED,
+      maxFiles: 2,
+    });
+
+    expect(result.files).toHaveLength(3);
+    expect(result.files).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          additions: 0,
+          origin: "untracked",
+        }),
+      ]),
+    );
   });
 });
 

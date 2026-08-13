@@ -86,6 +86,13 @@ export type CachedSidebarNavigationSnapshot =
   | SidebarBootstrapResponse
   | undefined;
 
+interface UpdateCachedSidebarNavigationArgs<
+  Navigation extends SidebarBootstrapResponse,
+> {
+  queryClient: QueryClient;
+  updater: (current: Navigation | undefined) => Navigation | undefined;
+}
+
 function getThreadListFiltersFromQueryKey(
   queryKey: QueryKey,
 ): ThreadListQueryFilters | undefined {
@@ -279,6 +286,15 @@ function mapSidebarNavigationProjectThreads(
     ...project,
     threads: mapper(project.threads),
   };
+}
+
+export function updateCachedSidebarNavigation<
+  Navigation extends SidebarBootstrapResponse,
+>({
+  queryClient,
+  updater,
+}: UpdateCachedSidebarNavigationArgs<Navigation>): void {
+  queryClient.setQueryData<Navigation>(sidebarNavigationQueryKey(), updater);
 }
 
 export function applyToCachedSidebarNavigationThreads({

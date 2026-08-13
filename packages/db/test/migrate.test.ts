@@ -251,7 +251,7 @@ const latestMigrationWhen = Math.max(
 
 function dropColumnIfPresent(
   db: DbConnection,
-  tableName: "app_settings" | "terminal_sessions",
+  tableName: "app_settings" | "events" | "terminal_sessions",
   columnName: string,
 ): void {
   const columns = db.$client
@@ -264,7 +264,18 @@ function dropColumnIfPresent(
   }
 }
 
+function dropLatestPerformanceSchema(db: DbConnection): void {
+  db.$client.exec(`
+    DROP INDEX IF EXISTS threads_sidebar_recent_idx;
+    DROP INDEX IF EXISTS threads_sidebar_active_idx;
+    DROP INDEX IF EXISTS threads_sidebar_unread_idx;
+    DROP INDEX IF EXISTS events_daemon_event_id_idx;
+  `);
+  dropColumnIfPresent(db, "events", "daemon_event_id");
+}
+
 function dropLatestFeatureSchema(db: DbConnection): void {
+  dropLatestPerformanceSchema(db);
   db.$client.prepare("DROP TABLE IF EXISTS browser_annotations").run();
   db.$client.prepare("DROP TABLE IF EXISTS project_manager_settings").run();
   db.$client
@@ -3674,6 +3685,7 @@ describe("migrate", () => {
         "item_kind",
         "data",
         "created_at",
+        "daemon_event_id",
       ]);
       const eventIndexNames = readIndexNames({
         db,
@@ -3682,6 +3694,7 @@ describe("migrate", () => {
       expect(eventIndexNames).toEqual([
         "events_background_task_thread_type_item_sequence_idx",
         "events_completed_item_truncation_idx",
+        "events_daemon_event_id_idx",
         "events_environment_idx",
         "events_goal_thread_sequence_idx",
         "events_thread_sequence_idx",
@@ -3944,6 +3957,7 @@ describe("migrate", () => {
       db.$client
         .prepare("ALTER TABLE terminal_sessions DROP COLUMN supervision_id")
         .run();
+      dropLatestPerformanceSchema(db);
       // Rewinding past 0092 also rewinds past upstream's 0095 experiments
       // rebuild, so the wide table has to come back before migrating forward.
       restoreWideExperimentsTable(db);

@@ -7,6 +7,7 @@ import type {
 import { apiClient } from "@/lib/api-server";
 import { request, requestOptions } from "@/lib/api";
 import { sdk } from "@/lib/sdk";
+import { updateCachedSidebarNavigation } from "@/hooks/cache-owners/query-cache";
 import {
   useEnvironmentListRealtimeSubscription,
   useHostListRealtimeSubscription,
@@ -129,9 +130,9 @@ export function loadMoreSidebarProjectThreads(
     })
     .then((response) => {
       const page = response.threads;
-      queryClient.setQueryData<SidebarNavigationCacheResponse>(
-        sidebarNavigationQueryKey(),
-        (current) => {
+      updateCachedSidebarNavigation<SidebarNavigationCacheResponse>({
+        queryClient,
+        updater: (current) => {
           if (
             current === undefined ||
             current._threadPagination.generation !== generation
@@ -183,7 +184,7 @@ export function loadMoreSidebarProjectThreads(
             ),
           };
         },
-      );
+      });
     })
     .finally(() => {
       projectLoads?.delete(projectId);

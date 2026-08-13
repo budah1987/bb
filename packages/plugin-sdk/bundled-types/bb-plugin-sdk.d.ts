@@ -155,13 +155,13 @@ declare const changedMessageSchema: z$1.ZodDiscriminatedUnion<[z$1.ZodObject<{
     id: z$1.ZodOptional<z$1.ZodString>;
     metadata: z$1.ZodOptional<z$1.ZodObject<{
         backgroundActivityChanged: z$1.ZodOptional<z$1.ZodBoolean>;
-        eventTypes: z$1.ZodOptional<z$1.ZodReadonly<z$1.ZodArray<z$1.ZodString & z$1.ZodType<"provider/unhandled" | "item/toolCall/progress" | "thread/started" | "thread/identity" | "turn/started" | "turn/completed" | "turn/input/accepted" | "thread/name/updated" | "thread/compacted" | "thread/goal/updated" | "thread/goal/cleared" | "item/started" | "item/completed" | "item/agentMessage/delta" | "item/commandExecution/outputDelta" | "item/fileChange/outputDelta" | "item/reasoning/summaryTextDelta" | "item/reasoning/textDelta" | "item/plan/delta" | "item/mcpToolCall/progress" | "item/backgroundTask/progress" | "item/backgroundTask/completed" | "thread/tokenUsage/updated" | "thread/contextWindowUsage/updated" | "turn/plan/updated" | "turn/diff/updated" | "provider/error" | "provider/rateLimits/updated" | "provider/warning" | "provider/modelFallback" | "client/thread/start" | "client/turn/requested" | "client/turn/start" | "system/error" | "system/manager/user_message" | "system/thread/interrupted" | "system/operation" | "system/permissionGrant/lifecycle" | "system/userQuestion/lifecycle" | "system/thread-provisioning" | "system/provider-turn-watchdog", string, z$1.core.$ZodTypeInternals<"provider/unhandled" | "item/toolCall/progress" | "thread/started" | "thread/identity" | "turn/started" | "turn/completed" | "turn/input/accepted" | "thread/name/updated" | "thread/compacted" | "thread/goal/updated" | "thread/goal/cleared" | "item/started" | "item/completed" | "item/agentMessage/delta" | "item/commandExecution/outputDelta" | "item/fileChange/outputDelta" | "item/reasoning/summaryTextDelta" | "item/reasoning/textDelta" | "item/plan/delta" | "item/mcpToolCall/progress" | "item/backgroundTask/progress" | "item/backgroundTask/completed" | "thread/tokenUsage/updated" | "thread/contextWindowUsage/updated" | "turn/plan/updated" | "turn/diff/updated" | "provider/error" | "provider/rateLimits/updated" | "provider/warning" | "provider/modelFallback" | "client/thread/start" | "client/turn/requested" | "client/turn/start" | "system/error" | "system/manager/user_message" | "system/thread/interrupted" | "system/operation" | "system/permissionGrant/lifecycle" | "system/userQuestion/lifecycle" | "system/thread-provisioning" | "system/provider-turn-watchdog", string>>>>>;
+        eventTypes: z$1.ZodOptional<z$1.ZodReadonly<z$1.ZodArray<z$1.ZodString & z$1.ZodType<"thread/started" | "thread/identity" | "turn/started" | "turn/completed" | "turn/input/accepted" | "thread/name/updated" | "thread/compacted" | "thread/goal/updated" | "thread/goal/cleared" | "item/started" | "item/completed" | "item/agentMessage/delta" | "item/commandExecution/outputDelta" | "item/fileChange/outputDelta" | "item/reasoning/summaryTextDelta" | "item/reasoning/textDelta" | "item/plan/delta" | "item/mcpToolCall/progress" | "item/toolCall/progress" | "item/backgroundTask/progress" | "item/backgroundTask/completed" | "thread/tokenUsage/updated" | "thread/contextWindowUsage/updated" | "turn/plan/updated" | "turn/diff/updated" | "provider/error" | "provider/rateLimits/updated" | "provider/warning" | "provider/modelFallback" | "provider/unhandled" | "client/thread/start" | "client/turn/requested" | "client/turn/start" | "system/error" | "system/manager/user_message" | "system/thread/interrupted" | "system/operation" | "system/permissionGrant/lifecycle" | "system/userQuestion/lifecycle" | "system/thread-provisioning" | "system/provider-turn-watchdog", string, z$1.core.$ZodTypeInternals<"thread/started" | "thread/identity" | "turn/started" | "turn/completed" | "turn/input/accepted" | "thread/name/updated" | "thread/compacted" | "thread/goal/updated" | "thread/goal/cleared" | "item/started" | "item/completed" | "item/agentMessage/delta" | "item/commandExecution/outputDelta" | "item/fileChange/outputDelta" | "item/reasoning/summaryTextDelta" | "item/reasoning/textDelta" | "item/plan/delta" | "item/mcpToolCall/progress" | "item/toolCall/progress" | "item/backgroundTask/progress" | "item/backgroundTask/completed" | "thread/tokenUsage/updated" | "thread/contextWindowUsage/updated" | "turn/plan/updated" | "turn/diff/updated" | "provider/error" | "provider/rateLimits/updated" | "provider/warning" | "provider/modelFallback" | "provider/unhandled" | "client/thread/start" | "client/turn/requested" | "client/turn/start" | "system/error" | "system/manager/user_message" | "system/thread/interrupted" | "system/operation" | "system/permissionGrant/lifecycle" | "system/userQuestion/lifecycle" | "system/thread-provisioning" | "system/provider-turn-watchdog", string>>>>>;
         hasPendingInteraction: z$1.ZodOptional<z$1.ZodBoolean>;
         projectId: z$1.ZodOptional<z$1.ZodString>;
     }, z$1.core.$strict>>;
     changes: z$1.ZodReadonly<z$1.ZodArray<z$1.ZodEnum<{
-        "thread-deleted": "thread-deleted";
         "thread-created": "thread-created";
+        "thread-deleted": "thread-deleted";
         "events-appended": "events-appended";
         "interactions-changed": "interactions-changed";
         "status-changed": "status-changed";
@@ -273,8 +273,8 @@ declare const hostSchema: z$1.ZodObject<{
     }>;
     maxPermissionMode: z$1.ZodEnum<{
         full: "full";
-        "accept-edits": "accept-edits";
         auto: "auto";
+        "accept-edits": "accept-edits";
     }>;
     lastSeenAt: z$1.ZodNullable<z$1.ZodNumber>;
     lastRejectedProtocolVersion: z$1.ZodNullable<z$1.ZodNumber>;
@@ -327,9 +327,9 @@ declare const providerPendingInteractionSchema: z$1.ZodObject<{
     threadId: z$1.ZodString;
     status: z$1.ZodEnum<{
         pending: "pending";
+        interrupted: "interrupted";
         resolving: "resolving";
         resolved: "resolved";
-        interrupted: "interrupted";
     }>;
     statusReason: z$1.ZodNullable<z$1.ZodString>;
     createdAt: z$1.ZodNumber;
@@ -470,9 +470,9 @@ declare const pluginPendingInteractionSchema: z$1.ZodObject<{
     threadId: z$1.ZodString;
     status: z$1.ZodEnum<{
         pending: "pending";
+        interrupted: "interrupted";
         resolving: "resolving";
         resolved: "resolved";
-        interrupted: "interrupted";
     }>;
     statusReason: z$1.ZodNullable<z$1.ZodString>;
     createdAt: z$1.ZodNumber;
@@ -526,8 +526,8 @@ declare const serviceTierSchema: z$1.ZodEnum<{
 type ServiceTier = z$1.infer<typeof serviceTierSchema>;
 declare const permissionModeSchema: z$1.ZodEnum<{
     full: "full";
-    "accept-edits": "accept-edits";
     auto: "auto";
+    "accept-edits": "accept-edits";
 }>;
 type PermissionMode = z$1.infer<typeof permissionModeSchema>;
 declare const promptInputSchema: z$1.ZodDiscriminatedUnion<[z$1.ZodObject<{
@@ -631,8 +631,8 @@ declare const resolvedThreadExecutionOptionsSchema: z$1.ZodObject<{
     }>;
     permissionMode: z$1.ZodEnum<{
         full: "full";
-        "accept-edits": "accept-edits";
         auto: "auto";
+        "accept-edits": "accept-edits";
     }>;
     source: z$1.ZodEnum<{
         "client/thread/start": "client/thread/start";
@@ -660,8 +660,8 @@ declare const projectExecutionDefaultsSchema: z$1.ZodObject<{
     }>;
     permissionMode: z$1.ZodEnum<{
         full: "full";
-        "accept-edits": "accept-edits";
         auto: "auto";
+        "accept-edits": "accept-edits";
     }>;
 }, z$1.core.$strip>;
 type ProjectExecutionDefaults = z$1.infer<typeof projectExecutionDefaultsSchema>;
@@ -1531,8 +1531,8 @@ declare const threadEventSchema: z$1.ZodPipe<z$1.ZodUnknown, z$1.ZodUnion<readon
     originalModel: z$1.ZodString;
     fallbackModel: z$1.ZodString;
     reason: z$1.ZodEnum<{
-        provider: "provider";
         refusal: "refusal";
+        provider: "provider";
     }>;
     message: z$1.ZodString;
 }, z$1.core.$strip>, z$1.ZodObject<{
@@ -1565,8 +1565,8 @@ declare const threadEventSchema: z$1.ZodPipe<z$1.ZodUnknown, z$1.ZodUnion<readon
     }>;
     initiator: z$1.ZodEnum<{
         user: "user";
-        agent: "agent";
         system: "system";
+        agent: "agent";
     }>;
     request: z$1.ZodObject<{
         method: z$1.ZodEnum<{
@@ -1587,8 +1587,8 @@ declare const threadEventSchema: z$1.ZodPipe<z$1.ZodUnknown, z$1.ZodUnion<readon
     }>;
     initiator: z$1.ZodEnum<{
         user: "user";
-        agent: "agent";
         system: "system";
+        agent: "agent";
     }>;
     senderThreadId: z$1.ZodNullable<z$1.ZodString>;
     systemMessageKind: z$1.ZodOptional<z$1.ZodEnum<{
@@ -1814,8 +1814,8 @@ declare const threadEventSchema: z$1.ZodPipe<z$1.ZodUnknown, z$1.ZodUnion<readon
         permissionMode: z$1.ZodEnum<{
             readonly: "readonly";
             full: "full";
-            "accept-edits": "accept-edits";
             auto: "auto";
+            "accept-edits": "accept-edits";
             "workspace-write": "workspace-write";
         }>;
     }, z$1.core.$strip>;
@@ -1829,8 +1829,8 @@ declare const threadEventSchema: z$1.ZodPipe<z$1.ZodUnknown, z$1.ZodUnion<readon
     }>;
     initiator: z$1.ZodEnum<{
         user: "user";
-        agent: "agent";
         system: "system";
+        agent: "agent";
     }>;
     request: z$1.ZodObject<{
         method: z$1.ZodEnum<{
@@ -1877,9 +1877,9 @@ declare const threadEventSchema: z$1.ZodPipe<z$1.ZodUnknown, z$1.ZodUnion<readon
     providerRequestId: z$1.ZodString;
     status: z$1.ZodEnum<{
         pending: "pending";
+        interrupted: "interrupted";
         resolving: "resolving";
         resolved: "resolved";
-        interrupted: "interrupted";
     }>;
     resolution: z$1.ZodDefault<z$1.ZodNullable<z$1.ZodDiscriminatedUnion<[z$1.ZodObject<{
         decision: z$1.ZodLiteral<"allow_once">;
@@ -1929,9 +1929,9 @@ declare const threadEventSchema: z$1.ZodPipe<z$1.ZodUnknown, z$1.ZodUnion<readon
     providerRequestId: z$1.ZodString;
     status: z$1.ZodEnum<{
         pending: "pending";
+        interrupted: "interrupted";
         resolving: "resolving";
         resolved: "resolved";
-        interrupted: "interrupted";
     }>;
     resolution: z$1.ZodDefault<z$1.ZodNullable<z$1.ZodObject<{
         kind: z$1.ZodLiteral<"user_answer">;
@@ -2019,8 +2019,8 @@ declare const providerInfoSchema: z$1.ZodObject<{
         supportsFork: z$1.ZodBoolean;
         supportedPermissionModes: z$1.ZodArray<z$1.ZodEnum<{
             full: "full";
-            "accept-edits": "accept-edits";
             auto: "auto";
+            "accept-edits": "accept-edits";
         }>>;
     }, z$1.core.$strip>;
     composerActions: z$1.ZodArray<z$1.ZodDiscriminatedUnion<[z$1.ZodObject<{
@@ -2210,8 +2210,8 @@ declare const threadQueuedMessageSchema: z$1.ZodObject<{
     }>;
     permissionMode: z$1.ZodEnum<{
         full: "full";
-        "accept-edits": "accept-edits";
         auto: "auto";
+        "accept-edits": "accept-edits";
     }>;
     serviceTier: z$1.ZodEnum<{
         default: "default";
@@ -3384,8 +3384,8 @@ declare const environmentDiffFileResponseSchema: z$1.ZodObject<{
     path: z$1.ZodString;
     content: z$1.ZodString;
     contentEncoding: z$1.ZodEnum<{
-        utf8: "utf8";
         base64: "base64";
+        utf8: "utf8";
     }>;
     mimeType: z$1.ZodOptional<z$1.ZodString>;
     sizeBytes: z$1.ZodNumber;
@@ -7103,6 +7103,7 @@ declare const hostDaemonCommandRegistry: {
             type: z$1.ZodLiteral<"commit">;
             sha: z$1.ZodString;
         }, z$1.core.$strip>], "type">;
+        maxFiles: z$1.ZodNumber;
     }, z$1.core.$strict>, z$1.ZodDiscriminatedUnion<[z$1.ZodObject<{
         outcome: z$1.ZodLiteral<"available">;
         files: z$1.ZodArray<z$1.ZodObject<{

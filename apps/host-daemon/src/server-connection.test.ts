@@ -27,6 +27,10 @@ interface ConnectionFixtureArgs extends CreateServerClientFixtureArgs {
   machineCredential?: string;
   protocolSelfUpdater?: ProtocolSelfUpdater;
   onSelfUpdateInstalled?: () => void | Promise<void>;
+  onHostRpcCancel?: (message: {
+    type: "host-rpc.cancel";
+    requestId: string;
+  }) => void | Promise<void>;
   startupTimeoutMs?: number;
 }
 
@@ -181,6 +185,7 @@ function createConnectionFixture(args: ConnectionFixtureArgs = {}) {
     serverUrl: "http://127.0.0.1:3334",
     protocolSelfUpdater: args.protocolSelfUpdater,
     onSelfUpdateInstalled: args.onSelfUpdateInstalled,
+    onHostRpcCancel: args.onHostRpcCancel,
     startupTimeoutMs: args.startupTimeoutMs,
     setSession,
     createWebSocket: webSocket.createWebSocket,
@@ -201,6 +206,36 @@ afterEach(() => {
 });
 
 describe("ServerConnection", () => {
+  it("routes host RPC cancellation without disconnecting", async () => {
+    const onHostRpcCancel = vi.fn();
+    const { connection, setSession, webSocket } = createConnectionFixture({
+      onHostRpcCancel,
+    });
+    try {
+      await connection.start();
+      const socket = webSocket.sockets[0];
+      if (!socket) {
+        throw new Error("Expected test socket");
+      }
+
+      socket.onmessage?.({
+        data: JSON.stringify({
+          type: "host-rpc.cancel",
+          requestId: "rpc-cancelled",
+        }),
+      });
+
+      expect(onHostRpcCancel).toHaveBeenCalledWith({
+        type: "host-rpc.cancel",
+        requestId: "rpc-cancelled",
+      });
+      expect(socket.close).not.toHaveBeenCalled();
+      expect(setSession).not.toHaveBeenLastCalledWith(null);
+    } finally {
+      await connection.shutdown();
+    }
+  });
+
   it("runs protocol self-update handling only for protocol mismatch rejection", async () => {
     const handleProtocolMismatch = vi.fn(async () => "updated" as const);
     const onSelfUpdateInstalled = vi.fn();

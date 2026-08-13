@@ -111,8 +111,14 @@ interface InFlightThreadProviderLane {
 }
 
 interface WorkspaceStatusRefreshState {
-  current: Promise<WorkspaceStatusResult>;
-  trailing: Promise<WorkspaceStatusResult> | null;
+  current: WorkspaceStatusRefreshTask;
+  trailing: WorkspaceStatusRefreshTask | null;
+}
+
+interface WorkspaceStatusRefreshTask {
+  abortController: AbortController;
+  promise: Promise<WorkspaceStatusResult>;
+  waiterCount: number;
 }
 
 type CommandRouterTask = Promise<HostDaemonCommandResultForCommand>;
@@ -190,6 +196,10 @@ export class CommandRouter {
     Array<() => void>
   >();
   private readonly workspaceStatusRefreshEnvironmentQueue: string[] = [];
+  private readonly onlineRpcAbortControllers = new Map<
+    string,
+    AbortController
+  >();
   // Per-thread barrier keyed by threadId. A turn submission
   // (turn.submit/thread.start) waits for an in-flight thread.unarchive of the
   // same thread so it cannot resume a still-archived provider session.
@@ -217,8 +227,13 @@ export class CommandRouter {
     message: HostDaemonOnlineRpcRequestMessage,
   ): Promise<HostDaemonOnlineRpcResponseMessage> {
     const handlerStartedAtMs = performance.now();
+    const abortController = new AbortController();
+    this.onlineRpcAbortControllers.set(message.requestId, abortController);
     try {
-      const result = await this.executeHostRpcCommand(message.command);
+      const result = await this.executeHostRpcCommand(
+        message.command,
+        abortController.signal,
+      );
       this.logOnlineRpc({
         commandType: message.command.type,
         handlerMs: elapsedMs(handlerStartedAtMs),
@@ -256,23 +271,38 @@ export class CommandRouter {
         errorCode,
         errorMessage: error instanceof Error ? error.message : String(error),
       };
+    } finally {
+      if (
+        this.onlineRpcAbortControllers.get(message.requestId) ===
+        abortController
+      ) {
+        this.onlineRpcAbortControllers.delete(message.requestId);
+      }
     }
+  }
+
+  cancelOnlineRpcRequest(requestId: string): void {
+    this.onlineRpcAbortControllers
+      .get(requestId)
+      ?.abort(new Error("Online host RPC request was cancelled"));
   }
 
   private executeHostRpcCommand(
     command: HostDaemonRpcCommand,
+    signal: AbortSignal,
   ): Promise<HostDaemonRpcResultForCommand> {
     if (isHostDaemonCommand(command)) {
       return this.executeLiveDaemonCommand(command);
     }
-    return this.executeOnlineRpcCommand(command);
+    return this.executeOnlineRpcCommand(command, signal);
   }
 
   private executeOnlineRpcCommand(
     command: HostDaemonOnlineRpcCommand,
+    signal: AbortSignal,
   ): Promise<HostDaemonOnlineRpcResultForCommand> {
     if (command.type === "workspace.status") {
-      return this.runWorkspaceStatusRefresh(command);
+      return this.runWorkspaceStatusRefresh(command, signal);
     }
     const environmentLaneMode = this.getEnvironmentLaneMode(command);
     const result =
@@ -281,9 +311,15 @@ export class CommandRouter {
             command.environmentId,
             environmentLaneMode,
             () =>
-              dispatchOnlineRpcCommand(command, this.createDispatchOptions()),
+              dispatchOnlineRpcCommand(
+                command,
+                this.createDispatchOptions(undefined, signal),
+              ),
           )
-        : dispatchOnlineRpcCommand(command, this.createDispatchOptions());
+        : dispatchOnlineRpcCommand(
+            command,
+            this.createDispatchOptions(undefined, signal),
+          );
     return result.then((value) =>
       parseHostDaemonOnlineRpcResultForCommand(command, value),
     );
@@ -291,40 +327,109 @@ export class CommandRouter {
 
   private runWorkspaceStatusRefresh(
     command: WorkspaceStatusCommand,
+    signal: AbortSignal,
   ): Promise<WorkspaceStatusResult> {
     const key = `${command.environmentId}\0${command.mergeBaseBranch ?? ""}`;
     const existing = this.workspaceStatusRefreshes.get(key);
     if (existing?.trailing) {
-      return existing.trailing;
+      return this.waitForWorkspaceStatusRefresh(existing.trailing, signal);
     }
 
-    const run = () =>
-      this.runWithWorkspaceStatusSlot(command.environmentId, () =>
+    const run = (workSignal: AbortSignal) => {
+      if (workSignal.aborted) {
+        return Promise.reject(
+          workSignal.reason instanceof Error
+            ? workSignal.reason
+            : new Error("Online host RPC request was cancelled"),
+        );
+      }
+      return this.runWithWorkspaceStatusSlot(command.environmentId, () =>
         this.runInEnvironmentLane(command.environmentId, "read", () =>
-          dispatchOnlineRpcCommand(command, this.createDispatchOptions()),
+          dispatchOnlineRpcCommand(
+            command,
+            this.createDispatchOptions(undefined, workSignal),
+          ),
         ).then((value) =>
           parseHostDaemonOnlineRpcResultForCommand(command, value),
         ),
       );
+    };
 
     if (!existing) {
-      const current = run();
+      const current = this.createWorkspaceStatusRefreshTask(run);
       const state: WorkspaceStatusRefreshState = { current, trailing: null };
       this.workspaceStatusRefreshes.set(key, state);
       this.deleteWorkspaceStatusRefreshWhenIdle(key, state, current);
-      return current;
+      return this.waitForWorkspaceStatusRefresh(current, signal);
     }
 
-    const trailing = existing.current
-      .catch(() => undefined)
-      .then(() => {
-        existing.current = trailing;
-        existing.trailing = null;
-        return run();
-      });
+    const trailingAbortController = new AbortController();
+    const trailing: WorkspaceStatusRefreshTask = {
+      abortController: trailingAbortController,
+      waiterCount: 0,
+      promise: existing.current.promise
+        .catch(() => undefined)
+        .then(() => {
+          existing.current = trailing;
+          existing.trailing = null;
+          return run(trailingAbortController.signal);
+        }),
+    };
     existing.trailing = trailing;
     this.deleteWorkspaceStatusRefreshWhenIdle(key, existing, trailing);
-    return trailing;
+    return this.waitForWorkspaceStatusRefresh(trailing, signal);
+  }
+
+  private createWorkspaceStatusRefreshTask(
+    work: (signal: AbortSignal) => Promise<WorkspaceStatusResult>,
+  ): WorkspaceStatusRefreshTask {
+    const abortController = new AbortController();
+    return {
+      abortController,
+      promise: work(abortController.signal),
+      waiterCount: 0,
+    };
+  }
+
+  private waitForWorkspaceStatusRefresh(
+    task: WorkspaceStatusRefreshTask,
+    signal: AbortSignal,
+  ): Promise<WorkspaceStatusResult> {
+    task.waiterCount += 1;
+    return new Promise<WorkspaceStatusResult>((resolve, reject) => {
+      let settled = false;
+      const finish = (): boolean => {
+        if (settled) return false;
+        settled = true;
+        signal.removeEventListener("abort", onAbort);
+        task.waiterCount -= 1;
+        return true;
+      };
+      const onAbort = () => {
+        if (!finish()) return;
+        if (task.waiterCount === 0) {
+          task.abortController.abort(signal.reason);
+        }
+        reject(
+          signal.reason instanceof Error
+            ? signal.reason
+            : new Error("Online host RPC request was cancelled"),
+        );
+      };
+      signal.addEventListener("abort", onAbort, { once: true });
+      if (signal.aborted) {
+        onAbort();
+        return;
+      }
+      void task.promise.then(
+        (result) => {
+          if (finish()) resolve(result);
+        },
+        (error: unknown) => {
+          if (finish()) reject(error);
+        },
+      );
+    });
   }
 
   private async runWithWorkspaceStatusSlot<T>(
@@ -435,9 +540,9 @@ export class CommandRouter {
   private deleteWorkspaceStatusRefreshWhenIdle(
     key: string,
     state: WorkspaceStatusRefreshState,
-    refresh: Promise<WorkspaceStatusResult>,
+    refresh: WorkspaceStatusRefreshTask,
   ): void {
-    void refresh.then(
+    void refresh.promise.then(
       () => {
         if (state.current === refresh && state.trailing === null) {
           this.workspaceStatusRefreshes.delete(key);
@@ -711,8 +816,10 @@ export class CommandRouter {
 
   private createDispatchOptions(
     onEvent?: (event: { event: ThreadEvent; threadId: string }) => void,
+    signal?: AbortSignal,
   ): CommandDispatchOptions {
     return {
+      signal,
       fetchProjectAttachment: this.options.fetchProjectAttachment,
       fetchSkillTree: this.options.fetchSkillTree,
       runtimeManager: this.options.runtimeManager,

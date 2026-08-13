@@ -44,6 +44,7 @@ export const noopEventSink: EventSink = {
 };
 
 export interface CommandDispatchOptions {
+  signal?: AbortSignal;
   dataDir: string;
   fetchProjectAttachment: FetchProjectAttachment;
   fetchSkillTree?: FetchSkillTree;
