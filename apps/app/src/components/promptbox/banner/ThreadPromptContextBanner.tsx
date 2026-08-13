@@ -673,7 +673,9 @@ function AnimatedBody({
           : "pointer-events-none grid-rows-[0fr] border-t border-transparent opacity-0",
       )}
     >
-      <div className="overflow-hidden bg-popover">{children}</div>
+      <div className="overflow-hidden bg-popover">
+        {isExpanded ? children : null}
+      </div>
     </section>
   );
 }

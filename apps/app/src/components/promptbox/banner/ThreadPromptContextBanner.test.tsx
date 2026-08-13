@@ -66,6 +66,25 @@ function makeGitSection(
 }
 
 describe("ThreadPromptContextBanner", () => {
+  it("does not mount changed-file rows while the git section is collapsed", () => {
+    const markup = renderToStaticMarkup(
+      <ThreadPromptContextBanner
+        gitSection={makeGitSection()}
+        gitSectionPending={false}
+        archivedSection={null}
+        environmentGoneSection={null}
+        parentThreadSection={null}
+        childThreadsSection={null}
+        pullRequestSection={null}
+        expandedSection={null}
+        onToggleSection={noop}
+      />,
+    );
+
+    expect(markup).toContain("Changed files:");
+    expect(markup).not.toContain(changedFile.path);
+  });
+
   it("renders the archived read-only status without an action", () => {
     const markup = renderToStaticMarkup(
       <ThreadPromptContextBanner
