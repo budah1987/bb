@@ -1,4 +1,16 @@
 {
+  "packagedDesktop": {
+    "finalWindowMs": 60000,
+    "maxBrowserAttachGrowthAfterWarmup": 0,
+    "maxFinalRendererWorkingSetKb": 1572864,
+    "maxIdleRendererCpuP95Percent": 10,
+    "maxPeakRendererWorkingSetKb": 2097152,
+    "maxPostWarmupGrowthKbPerMinute": 8192,
+    "maxSampleGapMs": 15000,
+    "minDurationMs": 1800000,
+    "minIdleSamples": 60,
+    "warmupMs": 300000
+  },
   "sidebar": {
     "maxInitialPayloadBytes": 1500000,
     "maxQueryMs": 1000
