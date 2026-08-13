@@ -18,7 +18,7 @@ import {
 } from "@/hooks/queries/environment-queries";
 import { useHosts } from "@/hooks/queries/host-queries";
 import {
-  ensureSidebarNavigationHydrated,
+  retainSidebarNavigationHydration,
   useSidebarNavigation,
 } from "@/hooks/queries/sidebar-navigation-query";
 import { useUpdateThread } from "@/hooks/mutations/thread-state-mutations";
@@ -60,12 +60,11 @@ export function useSidebarThreads(): PluginSidebarThreadsState {
   const query = useSidebarNavigation();
   const data = query.data;
   const queryClient = useQueryClient();
+  const needsHydration = data?._threadPagination.complete === false;
   useEffect(() => {
-    if (data?._threadPagination.complete !== false) return;
-    void ensureSidebarNavigationHydrated(queryClient, data).catch(
-      () => undefined,
-    );
-  }, [data, queryClient]);
+    if (!needsHydration) return;
+    return retainSidebarNavigationHydration(queryClient);
+  }, [needsHydration, queryClient]);
   // The sidebar already subscribes to host updates; this reads the same
   // cached list so a row can print a machine name instead of a host id.
   const { data: hosts } = useHosts();
@@ -114,12 +113,11 @@ export function useSidebarThreads(): PluginSidebarThreadsState {
 export function useThreadEntryMap(): ReadonlyMap<string, ThreadListEntry> {
   const { data } = useSidebarNavigation();
   const queryClient = useQueryClient();
+  const needsHydration = data?._threadPagination.complete === false;
   useEffect(() => {
-    if (data?._threadPagination.complete !== false) return;
-    void ensureSidebarNavigationHydrated(queryClient, data).catch(
-      () => undefined,
-    );
-  }, [data, queryClient]);
+    if (!needsHydration) return;
+    return retainSidebarNavigationHydration(queryClient);
+  }, [needsHydration, queryClient]);
   return useMemo(() => {
     if (data === undefined) return EMPTY_ENTRIES;
     const entries = new Map<string, ThreadListEntry>();
