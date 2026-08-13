@@ -34,6 +34,62 @@ const kb = (n) => `${(n / 1024).toFixed(1)} KB`;
 const failures = [];
 const MIN_COMPRESS_BYTES = 1024;
 
+const circularChunkGroups = (chunks) => {
+  const chunkFileNames = new Set(chunks.map((chunk) => chunk.fileName));
+  const importsByFile = new Map(
+    chunks.map((chunk) => [
+      chunk.fileName,
+      (chunk.imports ?? []).filter((fileName) => chunkFileNames.has(fileName)),
+    ]),
+  );
+  const indexes = new Map();
+  const lowLinks = new Map();
+  const stack = [];
+  const onStack = new Set();
+  const groups = [];
+  let nextIndex = 0;
+
+  const visit = (fileName) => {
+    indexes.set(fileName, nextIndex);
+    lowLinks.set(fileName, nextIndex);
+    nextIndex += 1;
+    stack.push(fileName);
+    onStack.add(fileName);
+
+    for (const imported of importsByFile.get(fileName) ?? []) {
+      if (!indexes.has(imported)) {
+        visit(imported);
+        lowLinks.set(
+          fileName,
+          Math.min(lowLinks.get(fileName), lowLinks.get(imported)),
+        );
+      } else if (onStack.has(imported)) {
+        lowLinks.set(
+          fileName,
+          Math.min(lowLinks.get(fileName), indexes.get(imported)),
+        );
+      }
+    }
+
+    if (lowLinks.get(fileName) !== indexes.get(fileName)) return;
+    const group = [];
+    let member;
+    do {
+      member = stack.pop();
+      onStack.delete(member);
+      group.push(member);
+    } while (member !== fileName);
+
+    const hasSelfImport = (importsByFile.get(fileName) ?? []).includes(fileName);
+    if (group.length > 1 || hasSelfImport) groups.push(group.sort());
+  };
+
+  for (const fileName of importsByFile.keys()) {
+    if (!indexes.has(fileName)) visit(fileName);
+  }
+  return groups;
+};
+
 // A large boot chunk with no .br file would otherwise weigh zero against the
 // compressed budget, so an unrun precompression step could hide real growth.
 // Treat it as an error rather than guessing a size.
@@ -91,6 +147,11 @@ for (const chunk of stats.chunks ?? []) {
   }
   failures.push(
     `${chunk.fileName} is ${kb(chunk.bytes)}, over the ${kb(budget.maxMultiModuleChunkBytes)} multi-module chunk budget.`,
+  );
+}
+for (const group of circularChunkGroups(stats.chunks ?? [])) {
+  failures.push(
+    `generated chunks import each other in a cycle: ${group.join(" -> ")}. WebKit can stop before first paint.`,
   );
 }
 
