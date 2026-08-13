@@ -347,7 +347,6 @@ interface ThreadDetailViewPageProps {
 
 interface ThreadDetailViewPaneProps extends ThreadRoutePathArgs {
   surface: "pane";
-  isRetainedViewActive?: boolean;
 }
 
 type ThreadDetailViewProps =
@@ -515,8 +514,6 @@ export function ThreadDetailView(props: ThreadDetailViewProps) {
 
 function ThreadDetailViewInternal(props: ThreadDetailViewInternalProps) {
   const { projectId, threadId } = props;
-  const isRetainedViewActive =
-    props.surface === "page" || props.isRetainedViewActive !== false;
   const { isFocused, navigateInPane, onRequestClose, isBoundedPane } =
     usePaneContext();
   const navigate = useNavigate();
@@ -582,7 +579,7 @@ function ThreadDetailViewInternal(props: ThreadDetailViewInternalProps) {
   const toggleDefaultPersistedSecondaryPanel =
     useToggleThreadSecondaryPanelSelection(threadId, threadId);
   const threadDetailBootstrapQuery = useThreadDetailBootstrap(threadId ?? "", {
-    enabled: isRetainedViewActive,
+    enabled: true,
   });
   const hasThreadDetailBootstrapSettled =
     threadDetailBootstrapQuery.isSuccess || threadDetailBootstrapQuery.isError;
@@ -592,7 +589,7 @@ function ThreadDetailViewInternal(props: ThreadDetailViewInternalProps) {
     isLoadingError,
     error,
   } = useThread(threadId ?? "", {
-    enabled: hasThreadDetailBootstrapSettled && isRetainedViewActive,
+    enabled: hasThreadDetailBootstrapSettled,
     // A successful bootstrap just populated this exact query with a fresh
     // thread response; refetching it immediately adds redundant tunnel work.
     refetchOnMount: didThreadDetailBootstrapRefreshAfterMount(
@@ -627,16 +624,15 @@ function ThreadDetailViewInternal(props: ThreadDetailViewInternalProps) {
     thread?.sourceThreadId ??
     (thread && threadOriginKind ? thread.parentThreadId : null);
   const { data: parentThread } = useThread(thread?.parentThreadId ?? "", {
-    enabled: isRetainedViewActive,
+    enabled: true,
   });
   const { data: sourceThread } = useThread(threadSourceThreadId ?? "", {
-    enabled: isRetainedViewActive,
+    enabled: true,
   });
   const pendingInteractionsQuery = useThreadPendingInteractions(
     thread?.id ?? "",
     {
       enabled:
-        isRetainedViewActive &&
         threadQueryState.status === "ready" &&
         Boolean(thread?.id),
     },
@@ -661,7 +657,7 @@ function ThreadDetailViewInternal(props: ThreadDetailViewInternalProps) {
   const [browserAddressFocusRequest, setBrowserAddressFocusRequest] =
     useState<BrowserAddressFocusRequest | null>(null);
   const shouldLoadThreadStorageFiles =
-    isRetainedViewActive && thread !== undefined && isSecondaryPanelOpen;
+    thread !== undefined && isSecondaryPanelOpen;
   const {
     isThreadStorageFilesLoading,
     refetchThreadStorageFiles,
@@ -675,7 +671,7 @@ function ThreadDetailViewInternal(props: ThreadDetailViewInternalProps) {
     threadId,
   });
   const terminalsListQuery = useThreadTerminals(threadId ?? "", {
-    enabled: isRetainedViewActive && isSecondaryPanelOpen,
+    enabled: isSecondaryPanelOpen,
   });
   const {
     activeBrowserTab,
@@ -824,7 +820,7 @@ function ThreadDetailViewInternal(props: ThreadDetailViewInternalProps) {
     isThreadRoot &&
     parentThreadsRequestedForThreadId === thread?.id;
   const parentThreadSubsetQuery = useProjectThreadSubset({
-    enabled: isRetainedViewActive && shouldLoadParentThreads,
+    enabled: shouldLoadParentThreads,
     filters: EMPTY_PROJECT_THREAD_SUBSET_FILTERS,
     projectId,
   });
@@ -836,7 +832,6 @@ function ThreadDetailViewInternal(props: ThreadDetailViewInternalProps) {
   }, [thread?.id]);
   const childThreadSubsetQuery = useProjectThreadSubset({
     enabled:
-      isRetainedViewActive &&
       threadQueryState.status === "ready" &&
       Boolean(thread?.id),
     filters: childThreadSubsetFilters,
@@ -874,7 +869,6 @@ function ThreadDetailViewInternal(props: ThreadDetailViewInternalProps) {
     timelineLoading,
     timelineRows,
   } = useThreadTimelineController({
-    enabled: isRetainedViewActive,
     threadId: threadId ?? "",
   });
   const sendMessage = useSendThreadMessage();
@@ -950,7 +944,7 @@ function ThreadDetailViewInternal(props: ThreadDetailViewInternalProps) {
     updateFixedPanelTabsState,
   ]);
   const environmentQuery = useEnvironment(thread?.environmentId, {
-    enabled: hasThreadDetailBootstrapSettled && isRetainedViewActive,
+    enabled: hasThreadDetailBootstrapSettled,
     staleTime: 5_000,
   });
   const environment = environmentQuery.data;
@@ -997,7 +991,6 @@ function ThreadDetailViewInternal(props: ThreadDetailViewInternalProps) {
       : null;
   const hostsQuery = useHosts({
     enabled:
-      isRetainedViewActive &&
       hasThreadDetailBootstrapSettled &&
       thread?.environmentId !== null &&
       thread?.environmentId !== undefined,
@@ -1287,7 +1280,6 @@ function ThreadDetailViewInternal(props: ThreadDetailViewInternalProps) {
     thread?.environmentId,
     {
       enabled:
-        isRetainedViewActive &&
         isSecondaryPanelOpen &&
         activeFixedSecondaryTab?.kind === "thread-info",
       hostId: environment?.hostId,
@@ -1806,7 +1798,7 @@ function ThreadDetailViewInternal(props: ThreadDetailViewInternalProps) {
     thread?.environmentId,
     requestedMergeBaseBranch,
     {
-      enabled: isRetainedViewActive && canUseGitUi && environment !== undefined,
+      enabled: canUseGitUi && environment !== undefined,
     },
   );
   const workspaceStatusError = workStatusQuery.error;
@@ -1822,14 +1814,13 @@ function ThreadDetailViewInternal(props: ThreadDetailViewInternalProps) {
       ? workStatusResponse.failure
       : undefined;
   const pullRequestQuery = useEnvironmentPullRequest(thread?.environmentId, {
-    enabled: isRetainedViewActive && canUseGitUi && environment !== undefined,
+    enabled: canUseGitUi && environment !== undefined,
   });
   const githubAccountsQuery = useGithubAccounts({
     ...(environment?.hostId === undefined
       ? {}
       : { hostId: environment.hostId }),
     enabled:
-      isRetainedViewActive &&
       canUseGitUi &&
       environment !== undefined &&
       (openFixedSecondaryTab?.kind === "pull-request" ||
@@ -3135,7 +3126,7 @@ function ThreadDetailViewInternal(props: ThreadDetailViewInternalProps) {
           header={timelineHeader}
           isMetadataLoading={environmentQuery.isLoading}
           isSecondaryPanelOpen={isSecondaryPanelOpen}
-          isViewActive={isRetainedViewActive}
+          isViewActive
           isConversationCollapsed={isConversationCollapsed}
           isBoundedPane={isBoundedPane}
           onToggleSecondaryPanel={toggleSecondaryPanel}
