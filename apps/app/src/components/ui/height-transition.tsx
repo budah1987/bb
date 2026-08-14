@@ -215,11 +215,9 @@ export function HeightTransition({
       style={{
         // Clip vertically (so intermediate heights during the animation
         // don't leak content past the wrapper) without turning the wrapper
-        // into a horizontal scroll container — `overflow-y: hidden` would
-        // force `overflow-x` to compute as `auto` and clip negative-margin
-        // breakouts like the markdown table's bleed past the 760px text
-        // column. `clip` doesn't establish a scroll container, so the
-        // mismatched x: visible / y: clip pair stays as specified.
+        // into a horizontal scroll container. `clip` does not establish a
+        // scroll container, so the mismatched x: visible / y: clip pair stays
+        // as specified.
         overflowX: "visible",
         overflowY: "clip",
         opacity: visible ? 1 : 0,
@@ -363,8 +361,7 @@ export function AutoHeightContainer({
       className={className}
       style={{
         // See HeightTransition: clip vertically without forcing the wrapper
-        // into a horizontal scroll container, so children with intentional
-        // horizontal bleed (markdown table breakout) aren't clipped.
+        // into a horizontal scroll container.
         overflowX: "visible",
         overflowY: "clip",
         transition: `height ${durationMs}ms ${HEIGHT_TRANSITION_EASE_CSS}`,

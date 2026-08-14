@@ -30,42 +30,17 @@ afterEach(() => {
 });
 
 describe("MarkdownPreview", () => {
-  it("observes content width only when the preview renders a table", () => {
-    const observed: Element[] = [];
-    class ResizeObserverMock {
-      constructor(_callback: ResizeObserverCallback) {}
-      observe(target: Element) {
-        observed.push(target);
-      }
-      unobserve() {}
-      disconnect() {}
-    }
-    vi.stubGlobal("ResizeObserver", ResizeObserverMock);
-    vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockReturnValue({
-      bottom: 100,
-      height: 100,
-      left: 0,
-      right: 320,
-      top: 0,
-      width: 320,
-      x: 0,
-      y: 0,
-      toJSON: () => ({}),
-    });
-
-    const plain = render(<MarkdownPreview content="Plain paragraph" />);
-    expect(observed).toHaveLength(0);
-    plain.unmount();
-
+  it("contains tables in a horizontal scroll region", () => {
     const { container } = render(
       <MarkdownPreview content={"| A |\n| - |\n| B |"} />,
     );
     const table = container.querySelector("table");
-    const breakout = table?.parentElement?.parentElement;
+    const scrollRegion = table?.parentElement;
 
-    expect(observed).toHaveLength(1);
-    expect(observed[0]?.hasAttribute("data-markdown-preview")).toBe(true);
-    expect(breakout?.style.getPropertyValue("--md-content-w")).toBe("320px");
+    expect(scrollRegion?.className).toContain("w-full");
+    expect(scrollRegion?.className).toContain("max-w-full");
+    expect(scrollRegion?.className).toContain("overflow-x-auto");
+    expect(table?.className).toContain("min-w-full");
   });
 
   it("keeps the starting number of an ordered list", () => {
