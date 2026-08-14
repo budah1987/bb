@@ -11,11 +11,7 @@ export default {
 
 // Match production PageShell: a wide outer scroll area carries
 // `@container/page`, and the inner centered div caps content at 760px.
-// Keeping these on separate elements is what gives MarkdownPreview's
-// `100cqw`-based breakout headroom — collapse them onto one element and
-// 100cqw equals the text column, so tables can't break out.
-// PAGE_SHELL_CONTENT_STYLE on the inner div sets `--md-content-w` so
-// narrow tables anchor flush with the prose, matching production.
+// Tables stay in that column and scroll within their own region when needed.
 function TimelineStage({ children }: { children: React.ReactNode }) {
   return (
     <div className="@container/page w-full">

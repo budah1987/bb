@@ -1,9 +1,7 @@
 import {
   memo,
-  useLayoutEffect,
   useContext,
   useMemo,
-  useRef,
   useState,
   type ComponentPropsWithoutRef,
   type Dispatch,
@@ -236,11 +234,6 @@ interface AreMarkdownMessageDirectivesEqualArgs {
 
 type ExpandedImageUrlSetter = Dispatch<SetStateAction<string | null>>;
 
-interface SetMarkdownContentWidthVariableArgs {
-  element: HTMLElement;
-  width: number;
-}
-
 type MarkdownPreviewPropsEqual = (
   previous: MarkdownPreviewProps,
   next: MarkdownPreviewProps,
@@ -274,8 +267,6 @@ type MarkdownTableHeaderProps = ComponentPropsWithoutRef<"th"> & ExtraProps;
 type MarkdownUnorderedListProps = ComponentPropsWithoutRef<"ul"> & ExtraProps;
 type MarkdownRehypePlugins = NonNullable<ReactMarkdownOptions["rehypePlugins"]>;
 
-const MARKDOWN_TABLE_BREAKOUT_WIDTH = "max(100%, min(1100px, 100cqw - 2rem))";
-const MARKDOWN_CONTENT_WIDTH_VARIABLE = "--md-content-w";
 const MARKDOWN_SOURCE_COLOR_SCHEME_MEDIA_PATTERN =
   /^\(\s*prefers-color-scheme\s*:\s*(dark|light)\s*\)$/iu;
 // `remark-math` emits math as `<code class="language-math">` (inline) and
@@ -905,33 +896,9 @@ function MarkdownBlockquote({ children }: MarkdownBlockquoteProps) {
 }
 
 function MarkdownTable({ children }: MarkdownTableProps) {
-  const breakoutRef = useMarkdownTableContentWidthVariable();
-
   return (
-    <div
-      ref={breakoutRef}
-      className="my-2 flex justify-center"
-      style={{
-        width: MARKDOWN_TABLE_BREAKOUT_WIDTH,
-        marginInline: `calc((100% - ${MARKDOWN_TABLE_BREAKOUT_WIDTH}) / 2)`,
-      }}
-    >
-      {/*
-        Inner wrapper anchors narrow tables, centers mid-width tables, and
-        scrolls overflow for very wide tables. The min-width is clamped by
-        100% so it never forces the wrapper wider than the breakout
-        container — without that clamp, when the viewport shrinks below
-        `--md-content-w` the wrapper extends past the container and the
-        scrollbar gets clipped.
-      */}
-      <div
-        className="w-max max-w-full overflow-x-auto"
-        style={{
-          minWidth: `min(var(${MARKDOWN_CONTENT_WIDTH_VARIABLE}, 100%), 100%)`,
-        }}
-      >
-        <table className="border border-border">{children}</table>
-      </div>
+    <div className="my-2 w-full max-w-full overflow-x-auto">
+      <table className="min-w-full border border-border">{children}</table>
     </div>
   );
 }
@@ -1106,51 +1073,6 @@ function buildMarkdownComponents({
   return components;
 }
 
-function setMarkdownContentWidthVariable({
-  element,
-  width,
-}: SetMarkdownContentWidthVariableArgs): void {
-  if (width <= 0) {
-    return;
-  }
-  element.style.setProperty(MARKDOWN_CONTENT_WIDTH_VARIABLE, `${width}px`);
-}
-
-function useMarkdownTableContentWidthVariable() {
-  const breakoutRef = useRef<HTMLDivElement>(null);
-
-  useLayoutEffect(() => {
-    const breakout = breakoutRef.current;
-    const content = breakout?.closest<HTMLElement>("[data-markdown-preview]");
-    if (!breakout || !content) {
-      return;
-    }
-
-    setMarkdownContentWidthVariable({
-      element: breakout,
-      width: content.getBoundingClientRect().width,
-    });
-
-    if (typeof ResizeObserver === "undefined") {
-      return;
-    }
-
-    const observer = new ResizeObserver((entries) => {
-      const entry = entries[0];
-      if (!entry) {
-        return;
-      }
-      setMarkdownContentWidthVariable({
-        element: breakout,
-        width: entry.contentRect.width,
-      });
-    });
-    observer.observe(content);
-    return () => observer.disconnect();
-  }, []);
-
-  return breakoutRef;
-}
 
 const FRONTMATTER_PATTERN =
   /^---[ \t]*\r?\n([\s\S]*?)\r?\n---[ \t]*(?:\r?\n|$)/;
