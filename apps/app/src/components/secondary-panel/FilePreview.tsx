@@ -493,8 +493,7 @@ export function FilePreview({
   const usesFullHeightLayout = usesIframeLayout || usesCsvPreviewLayout;
   const usesContentHeightLayout = usesCodeLayout || usesMarkdownPreviewLayout;
 
-  // Establish a `@container/page` scope so MarkdownPreview's `100cqw`-based
-  // table breakout sizes against this panel, not the viewport.
+  // Establish a `@container/page` scope for layouts that adapt to this panel.
   return (
     <div
       className={

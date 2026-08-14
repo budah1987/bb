@@ -10,10 +10,8 @@ export default {
   title: "ui/Markdown Preview",
 };
 
-// Mirrors the chat layout: a wide outer container scoped with `@container/page`
-// (so the table breakout's `100cqw` formula resolves against it), and a
-// narrower text column inside (where paragraphs and lists actually wrap).
-// The right margin of the outer container is where wide tables extend into.
+// Mirrors the chat layout: a wide outer container and a narrower text column
+// where paragraphs and lists wrap. Tables stay within the text column.
 function PreviewStage({ children }: { children: ReactNode }) {
   return (
     <div
@@ -164,9 +162,8 @@ the text column — no breakout, nothing fancy.
 
 The paragraph after the table picks up at the same column width.`;
 
-const BREAKOUT_TABLE_MARKDOWN = `When a table is wider than the text column but still fits inside the
-container's breakout width, it extends past the column on the right —
-spilling into the gutter where the surrounding paragraph isn't reaching.
+const FITTED_TABLE_MARKDOWN = `A table that fits the text column uses the same
+inline space as the surrounding paragraphs.
 
 | Identifier | Origin | Worker host | Status | Last activity | Notes |
 | --- | --- | --- | --- | --- | --- |
@@ -174,12 +171,10 @@ spilling into the gutter where the surrounding paragraph isn't reaching.
 | \`thr_9d44ee01\` | codex | localhost:3002 | idle | 2026-05-10 22:11 | flagged for replay |
 | \`thr_a7b21c89\` | claude-code | localhost:38887 | error | 2026-05-09 13:02 | exited 137 (oom) |
 
-The paragraph below returns to the regular column width, so the contrast
-between the breakout table and the text flow is clear.`;
+The paragraph below stays at the same column width.`;
 
-const SCROLLING_TABLE_MARKDOWN = `When the intrinsic table width exceeds even the breakout cap, the wrapper
-caps at \`min(1100px, 100cqw − 2rem)\` and the table itself scrolls
-horizontally inside it.
+const SCROLLING_TABLE_MARKDOWN = `When the table is wider than the text column,
+the table region scrolls horizontally while the rest of the message stays in place.
 
 | Identifier | Origin | Worker host | Status | Branch | Last activity | Runtime | Tokens in | Tokens out | Notes |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -259,7 +254,7 @@ export function Overview() {
         hint="table extends past the text column into the container's right gutter"
       >
         <PreviewStage>
-          <MarkdownPreview content={BREAKOUT_TABLE_MARKDOWN} />
+          <MarkdownPreview content={FITTED_TABLE_MARKDOWN} />
         </PreviewStage>
       </StoryRow>
       <StoryRow
