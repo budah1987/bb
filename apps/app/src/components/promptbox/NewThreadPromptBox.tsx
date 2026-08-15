@@ -10,7 +10,7 @@ import {
   type Ref,
 } from "react";
 import type { Host, ProjectSource, PromptTextMention } from "@bb/domain";
-import type { ComposerView } from "@bb/plugin-sdk";
+import type { ComposerView } from "@get-bb/plugin-sdk";
 import { Button } from "@bb/shared-ui/button";
 import {
   Drawer,
@@ -205,6 +205,8 @@ export interface NewThreadPromptBoxUIProps {
   promptBoxRef?: Ref<PromptBoxHandle>;
   isSubmitting: boolean;
   disabled: boolean;
+  /** Whether the editor should take passive focus when it mounts. */
+  autoFocus?: boolean;
   /** Active root-composer binding for plugin composer hooks and customizations. */
   pluginComposerHost?: PluginComposerHost | null;
   textEffects?: readonly ComposerTextEffectSource[];
@@ -260,6 +262,7 @@ export const NewThreadPromptBoxUI = memo(function NewThreadPromptBoxUI({
   promptBoxRef: externalPromptBoxRef,
   isSubmitting,
   disabled,
+  autoFocus,
   pluginComposerHost,
   textEffects,
   zenModeStorageKey,
@@ -329,6 +332,9 @@ export const NewThreadPromptBoxUI = memo(function NewThreadPromptBoxUI({
         promptBoxRef.current?.insertTextAtCursor(text);
       },
       getTextBeforeCursor: () => promptBoxRef.current?.getTextBeforeCursor(),
+      playVoiceCompletionTransition: () =>
+        promptBoxRef.current?.playVoiceCompletionTransition() ??
+        Promise.resolve(),
     }),
     [],
   );
@@ -393,7 +399,7 @@ export const NewThreadPromptBoxUI = memo(function NewThreadPromptBoxUI({
       <PluginComposerViewProvider value={composerView}>
         <PluginComposerHostProvider value={pluginComposerHost ?? null}>
           {modeConfig.banner || pluginComposerHost ? (
-            <div className="mb-2 space-y-2">
+            <div className="mb-2 grid gap-2">
               {modeConfig.banner}
               {pluginComposerHost ? <PluginComposerBanners /> : null}
             </div>
@@ -418,6 +424,7 @@ export const NewThreadPromptBoxUI = memo(function NewThreadPromptBoxUI({
               disabled,
               title: submitTitle,
             }}
+            autoFocus={autoFocus}
             zenMode={{
               layout: "root-compose",
               storageKey: zenModeStorageKey,

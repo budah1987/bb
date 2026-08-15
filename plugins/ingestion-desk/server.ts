@@ -2,8 +2,8 @@ import type {
   BbPluginApi,
   PluginAgentToolResult,
   PluginCliContext,
-} from "@bb/plugin-sdk";
-import { defineRpcContract } from "@bb/plugin-sdk";
+} from "@get-bb/plugin-sdk";
+import { defineRpcContract } from "@get-bb/plugin-sdk";
 import { z } from "zod";
 import {
   addSourceInputSchema,

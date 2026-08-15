@@ -34,7 +34,7 @@ import {
   type PluginSidebarPullRequest,
   type PluginSidebarThread,
   type PluginThreadListProps,
-} from "@bb/plugin-sdk/app";
+} from "@get-bb/plugin-sdk/app";
 import { Button } from "../components/ui/button";
 import {
   ContextMenu,

@@ -1,6 +1,7 @@
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { resolveCodexHome } from "@bb/config/codex-home";
 import { resolveDataDirSkillsRootPath } from "@bb/config/skill-storage-paths";
 import type {
   HostDaemonOnlineRpcResult,
@@ -18,7 +19,6 @@ import {
 } from "../command-discovery.js";
 import {
   type CommandRootResolution,
-  resolveCodexHome,
   resolveProviderCommandScanRoots,
 } from "./list-commands.js";
 import { writeHostFile } from "./file-write.js";
@@ -88,10 +88,6 @@ function classifySkillRoot(
       rootKind: "plugin",
     };
   }
-  // All non-plugin skill base roots are directory-shaped.
-  if (root.shape !== "skill") {
-    return null;
-  }
   if (root.skillIdentitySeed !== undefined) {
     const shared = resolution.providerId === "bb-shared";
     return {
@@ -104,6 +100,10 @@ function classifySkillRoot(
           ? "provider-project"
           : "provider-user",
     };
+  }
+  // All remaining non-plugin skill base roots are directory-shaped.
+  if (root.shape !== "skill" && root.shape !== "skill-recursive") {
+    return null;
   }
   const { rootPath } = root;
   if (

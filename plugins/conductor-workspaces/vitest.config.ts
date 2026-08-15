@@ -5,13 +5,13 @@ export default defineConfig({
   resolve: {
     alias: {
       "@": fileURLToPath(new URL(".", import.meta.url)),
-      "@bb/plugin-sdk/testing/app": fileURLToPath(
+      "@get-bb/plugin-sdk/testing/app": fileURLToPath(
         new URL("./test-support/plugin-sdk-testing-app.js", import.meta.url),
       ),
-      "@bb/plugin-sdk/app": fileURLToPath(
+      "@get-bb/plugin-sdk/app": fileURLToPath(
         new URL("./test-support/plugin-sdk-app.js", import.meta.url),
       ),
-      "@bb/plugin-sdk": fileURLToPath(
+      "@get-bb/plugin-sdk": fileURLToPath(
         new URL("./test-support/plugin-sdk.js", import.meta.url),
       ),
     },

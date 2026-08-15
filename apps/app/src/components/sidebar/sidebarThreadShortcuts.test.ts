@@ -51,4 +51,36 @@ describe("sidebar thread shortcuts", () => {
       { element: button, key: "1", threadId: "thr_workspace" },
     ]);
   });
+
+  it("includes windowed-out placeholder threads in navigation order", () => {
+    const root = document.createElement("aside");
+    appendShortcutTarget(root, "thr_a");
+    const placeholder = document.createElement("div");
+    placeholder.setAttribute(
+      "data-sidebar-windowed-nav",
+      "thr_b:proj_1 thr_c:proj_2",
+    );
+    root.append(placeholder);
+    appendShortcutTarget(root, "thr_d");
+
+    const navigation = getSidebarThreadNavigationTargets(root);
+    expect(
+      navigation.map(({ threadId, projectId, element }) => ({
+        threadId,
+        projectId,
+        mounted: element !== null,
+      })),
+    ).toEqual([
+      { threadId: "thr_a", projectId: null, mounted: true },
+      { threadId: "thr_b", projectId: "proj_1", mounted: false },
+      { threadId: "thr_c", projectId: "proj_2", mounted: false },
+      { threadId: "thr_d", projectId: null, mounted: true },
+    ]);
+
+    // The numbered jump shortcuts render badges on rows, so they must skip
+    // placeholder threads and use mounted anchors only.
+    expect(
+      getSidebarThreadShortcutTargets(root).map((target) => target.threadId),
+    ).toEqual(["thr_a", "thr_d"]);
+  });
 });

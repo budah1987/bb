@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useRealtime, useRpc } from "@bb/plugin-sdk/app";
+import { useRealtime, useRpc } from "@get-bb/plugin-sdk/app";
 import type { conductorRpcContract } from "./rpc-contract";
 import type { ConductorBackfillReport, LegacyWorkspace } from "./projection";
 

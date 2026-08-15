@@ -1,0 +1,66 @@
+async checkoutBranch
+async commit
+async detachHead
+async diffFiles
+async diffPatch
+async fetch
+async getBranches
+async getDiff
+async getHeadSha
+async getLocalStateFingerprint
+async getPullRequest
+async getSharedGitRefsFingerprint
+async getStatus
+async listFiles
+async reset
+async runPullRequestAction
+async squashMergeInto
+async stash
+async stashPop
+constructor
+export class Workspace 
+export interface CommitOptions 
+export interface CommitResult 
+export interface DiffFilesArgs 
+export interface DiffFilesResult 
+export interface DiffOptions 
+export interface DiffPatchArgs 
+export interface DiffPatchEntry 
+export interface FetchOptions 
+export interface SquashMergeOptions 
+export interface SquashMergeResult 
+export interface StatusOptions 
+export type DiffResult = ThreadGitDiffResponse;
+export type PullRequestActionOptions = GitHostPullRequestAction;
+private async appendUntrackedDiffArtifacts
+private async buildDiffSummary
+private async detectSquashMerge
+private async filterExistingUntrackedPaths
+private async findWorktreePathForBranch
+private async listRequestedUntrackedPaths
+private async listUntrackedPaths
+private async listUntrackedPathsLimited
+private async listWorktrees
+private async publishSquashMergeCommit
+private async readBoundedDiffStatArtifacts
+private async readBoundedUntrackedStatusNumstat
+private async readCombinedTrackedDiff
+private async readDiffArtifacts
+private async readDiffArtifactsIncludingUntracked
+private async readDiffStatArtifacts
+private async readMergeBaseStatus
+private async readPatchUniqueCommitSummaries
+private async readTrackedPatchByPathCombined
+private async readTrackedPatchByPathPerFile
+private async readUncommittedDiffArtifacts
+private async readUntrackedDiffArtifacts
+private async readUntrackedDiffFileStats
+private async readUntrackedPatchByPathCombined
+private async readUntrackedStatusNumstatWithinBudget
+private async resolveSquashMergeTarget
+private async resolveTrackedDiffRange
+private async runDiffCommands
+private async runDiffStatCommands
+private async runTrackedDiffWithLimit
+private async runUncommittedDiffStatCommands
+private targetIncludesUntracked

@@ -1,5 +1,5 @@
 import type { CSSProperties } from "react";
-import type { PluginSidebarThread } from "@bb/plugin-sdk/app";
+import type { PluginSidebarThread } from "@get-bb/plugin-sdk/app";
 import { conversationSignal, type ConversationSignal } from "./thread-state";
 
 const CELLS = Array.from({ length: 25 }, (_, index) => index);

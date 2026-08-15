@@ -308,6 +308,27 @@ describe("claude-code provider adapter", () => {
     });
   });
 
+  it("buildCommand thread/fork forwards the provider checkpoint", () => {
+    const adapter = createClaudeCodeProviderAdapter();
+    const cmd = adapter.buildCommandPlan({
+      type: "thread/fork",
+      cwd: "/tmp/worktree",
+      threadId: "bb-thread-1",
+      sourceProviderThreadId: "claude-session-1",
+      sourceProviderCheckpointId: "assistant-message-42",
+      instructionMode: "append",
+      options: fullProviderExecutionContext,
+    });
+
+    expect(cmd).toMatchObject({
+      method: "thread/fork",
+      params: {
+        sourceProviderCheckpointId: "assistant-message-42",
+        sourceProviderThreadId: "claude-session-1",
+      },
+    });
+  });
+
   it("buildCommand passes workflowsEnabled through explicitly on thread/start and thread/resume", () => {
     const adapter = createClaudeCodeProviderAdapter();
     const start = adapter.buildCommandPlan({
@@ -926,6 +947,21 @@ describe("claude-code provider adapter", () => {
       params: {
         threadId: "bb-thread-1",
       },
+    });
+  });
+
+  it("buildCommand thread/discard closes the staged bridge session", () => {
+    const adapter = createClaudeCodeProviderAdapter();
+    expect(
+      adapter.buildCommandPlan({
+        type: "thread/discard",
+        threadId: "bb-staging",
+        providerThreadId: "claude-staging",
+      }),
+    ).toEqual({
+      kind: "request",
+      method: "thread/stop",
+      params: { threadId: "bb-staging" },
     });
   });
 
@@ -2006,6 +2042,80 @@ describe("claude-code provider adapter", () => {
     );
   });
 
+  it("records the latest Claude assistant message as the turn checkpoint", () => {
+    const adapter = createClaudeCodeProviderAdapter();
+    adapter.translateEvent({
+      type: "assistant",
+      uuid: "assistant-message-42",
+      message: {
+        id: "msg-1",
+        role: "assistant",
+        content: [{ type: "text", text: "Done" }],
+      },
+      session_id: "sess-1",
+    });
+
+    const events = adapter.translateEvent({
+      type: "result",
+      subtype: "success",
+      session_id: "sess-1",
+    });
+
+    expect(events).toContainEqual(
+      expect.objectContaining({
+        type: "turn/completed",
+        status: "completed",
+        providerCheckpointId: "assistant-message-42",
+      }),
+    );
+  });
+
+  it("does not replace the root checkpoint with a sidechain assistant UUID", () => {
+    const adapter = createClaudeCodeProviderAdapter();
+    adapter.translateEvent(
+      {
+        type: "assistant",
+        uuid: "root-assistant-message",
+        message: {
+          id: "root-message",
+          role: "assistant",
+          content: [{ type: "text", text: "Root response" }],
+        },
+        session_id: "sess-1",
+      },
+      { threadId: "bb-thread-1" },
+    );
+    adapter.translateEvent(
+      {
+        type: "assistant",
+        uuid: "sidechain-assistant-message",
+        message: {
+          id: "sidechain-message",
+          role: "assistant",
+          content: [{ type: "text", text: "Subagent response" }],
+        },
+        session_id: "sess-1",
+      },
+      { threadId: "bb-thread-1", parentToolCallId: "tool-subagent" },
+    );
+
+    const events = adapter.translateEvent(
+      {
+        type: "result",
+        subtype: "success",
+        session_id: "sess-1",
+      },
+      { threadId: "bb-thread-1" },
+    );
+
+    expect(events).toContainEqual(
+      expect.objectContaining({
+        type: "turn/completed",
+        providerCheckpointId: "root-assistant-message",
+      }),
+    );
+  });
+
   it("translateEvent completes a pending turn for Claude synthetic no-response messages", () => {
     const adapter = createClaudeCodeProviderAdapter();
 
@@ -2074,6 +2184,114 @@ describe("claude-code provider adapter", () => {
         }),
       }),
     );
+  });
+
+  it("translateEvent maps a conversation reset and settles its zero-work turn", () => {
+    const adapter = createClaudeCodeProviderAdapter();
+
+    expect(
+      adapter.translateAcceptedCommand({
+        command: {
+          type: "turn/start",
+          threadId: "bb-thread-1",
+          providerThreadId: "claude-session-1",
+          clientRequestId: "creq_23456789af",
+          input: [promptTextInput({ text: "/clear" })],
+          options: fullProviderExecutionContext,
+        },
+      }),
+    ).toEqual([]);
+
+    // The CLI resolves /clear locally: conversation_reset is the successful
+    // context-clear signal, followed by a result with no model call.
+    const resetEvents = adapter.translateEvent(
+      {
+        type: "conversation_reset",
+        session_id: "claude-session-1",
+      },
+      { threadId: "bb-thread-1" },
+    );
+
+    expect(resetEvents.map((event) => event.type)).toEqual([
+      "turn/started",
+      "turn/input/accepted",
+      "thread/context/cleared",
+    ]);
+    expect(resetEvents).toContainEqual({
+      type: "thread/context/cleared",
+      threadId: "",
+      providerThreadId: "",
+      scope: turnScope("turn-1"),
+    });
+
+    const resultEvents = adapter.translateEvent(
+      {
+        type: "result",
+        subtype: "success",
+        is_error: false,
+        num_turns: 0,
+        result: "",
+        session_id: "claude-session-1",
+      },
+      { threadId: "bb-thread-1" },
+    );
+
+    expect(resultEvents.map((event) => event.type)).toEqual(["turn/completed"]);
+    expect(resultEvents).toContainEqual(
+      expect.objectContaining({
+        type: "turn/completed",
+        scope: turnScope("turn-1"),
+        status: "completed",
+      }),
+    );
+  });
+
+  it("translateEvent ignores a trailing result once the turn has closed", () => {
+    const adapter = createClaudeCodeProviderAdapter();
+
+    adapter.translateAcceptedCommand({
+      command: {
+        type: "turn/start",
+        threadId: "bb-thread-1",
+        providerThreadId: "claude-session-1",
+        clientRequestId: "creq_23456789af",
+        input: [promptTextInput({ text: "please do this" })],
+        options: fullProviderExecutionContext,
+      },
+    });
+    adapter.translateEvent(
+      {
+        type: "assistant",
+        message: {
+          id: "msg-1",
+          role: "assistant",
+          content: [{ type: "text", text: "Hello world" }],
+        },
+        session_id: "claude-session-1",
+      },
+      { threadId: "bb-thread-1" },
+    );
+    expect(
+      adapter.buildCommandPlan({
+        type: "thread/stop",
+        threadId: "bb-thread-1",
+        providerThreadId: "claude-session-1",
+        activeTurnId: "turn-1",
+      }),
+    ).toEqual({
+      kind: "request",
+      method: "thread/stop",
+      params: { threadId: "bb-thread-1" },
+    });
+
+    // A stop finishes the open turn before the CLI's result lands, so a result
+    // with no open turn is routine. It must not open a second, empty turn.
+    expect(
+      adapter.translateEvent(
+        { type: "result", subtype: "success", session_id: "claude-session-1" },
+        { threadId: "bb-thread-1" },
+      ),
+    ).toEqual([]);
   });
 
   it("translateEvent completes a pending turn for wrapped Claude synthetic no-response messages", () => {
@@ -2995,26 +3213,47 @@ describe("claude-code provider adapter", () => {
     );
   });
 
-  it("translateEvent maps rejected Claude rate limit events to provider error info", () => {
+  it("translates a rejected Claude limit into one canonical failed turn", () => {
     const adapter = createClaudeCodeProviderAdapter();
 
-    const events = adapter.translateEvent({
-      jsonrpc: "2.0",
-      method: "sdk/message",
-      params: {
-        threadId: "claude-thread-1",
-        message: {
-          type: "rate_limit_event",
-          rate_limit_info: {
-            status: "rejected",
-            rateLimitType: "five_hour",
-            resetsAt: 12345,
+    expect(
+      adapter.translateAcceptedCommand({
+        command: {
+          type: "turn/start",
+          threadId: "claude-thread-1",
+          providerThreadId: "claude-session-1",
+          clientRequestId: "creq_23456789af",
+          input: [promptTextInput({ text: "Hello" })],
+          options: fullProviderExecutionContext,
+        },
+      }),
+    ).toEqual([]);
+
+    const rateLimitEvents = adapter.translateEvent(
+      {
+        jsonrpc: "2.0",
+        method: "sdk/message",
+        params: {
+          threadId: "claude-thread-1",
+          message: {
+            type: "rate_limit_event",
+            rate_limit_info: {
+              status: "rejected",
+              rateLimitType: "five_hour",
+              resetsAt: 12345,
+            },
           },
         },
       },
-    });
+      { threadId: "claude-thread-1" },
+    );
 
-    expect(events).toContainEqual(
+    expect(rateLimitEvents.map((event) => event.type)).toEqual([
+      "turn/started",
+      "turn/input/accepted",
+      "provider/rateLimits/updated",
+    ]);
+    expect(rateLimitEvents).toContainEqual(
       expect.objectContaining({
         type: "provider/rateLimits/updated",
         rateLimits: expect.objectContaining({
@@ -3030,18 +3269,138 @@ describe("claude-code provider adapter", () => {
         }),
       }),
     );
-    expect(events).toContainEqual(
+    expect(rateLimitEvents).not.toContainEqual(
+      expect.objectContaining({ type: "provider/error" }),
+    );
+
+    const resultEvents = adapter.translateEvent(
+      {
+        jsonrpc: "2.0",
+        method: "sdk/message",
+        params: {
+          threadId: "claude-thread-1",
+          message: {
+            type: "result",
+            subtype: "error_during_execution",
+            is_error: true,
+            api_error_status: 429,
+            result:
+              "You've hit your session limit · resets 1:50pm (America/Los_Angeles)",
+            usage: {},
+            modelUsage: {},
+          },
+        },
+      },
+      { threadId: "claude-thread-1" },
+    );
+
+    expect(
+      resultEvents.filter((event) => event.type === "provider/error"),
+    ).toEqual([
       expect.objectContaining({
         type: "provider/error",
-        scope: threadScope(),
+        scope: turnScope("turn-1"),
         message: "Provider error",
-        detail:
-          "Claude Code rate limit rejected; type five_hour; resetsAt 12345",
+        detail: expect.stringContaining("You've hit your session limit"),
         errorInfo: {
           category: "rate-limit",
-          providerCode: "rate_limit_event",
-          httpStatusCode: null,
+          providerCode: "error_during_execution",
+          httpStatusCode: 429,
         },
+      }),
+    ]);
+    expect(resultEvents).toContainEqual(
+      expect.objectContaining({
+        type: "turn/completed",
+        scope: turnScope("turn-1"),
+        status: "failed",
+      }),
+    );
+  });
+
+  it("clears a pending Claude rejection when a later limit update allows the turn", () => {
+    const adapter = createClaudeCodeProviderAdapter();
+
+    adapter.translateAcceptedCommand({
+      command: {
+        type: "turn/start",
+        threadId: "claude-thread-1",
+        providerThreadId: "claude-session-1",
+        clientRequestId: "creq_23456789af",
+        input: [promptTextInput({ text: "Hello" })],
+        options: fullProviderExecutionContext,
+      },
+    });
+    adapter.translateEvent(
+      {
+        jsonrpc: "2.0",
+        method: "sdk/message",
+        params: {
+          threadId: "claude-thread-1",
+          message: {
+            type: "rate_limit_event",
+            rate_limit_info: {
+              status: "rejected",
+              rateLimitType: "five_hour",
+              resetsAt: 12345,
+            },
+          },
+        },
+      },
+      { threadId: "claude-thread-1" },
+    );
+
+    const allowedEvents = adapter.translateEvent(
+      {
+        jsonrpc: "2.0",
+        method: "sdk/message",
+        params: {
+          threadId: "claude-thread-1",
+          message: {
+            type: "rate_limit_event",
+            rate_limit_info: {
+              status: "allowed",
+              rateLimitType: "five_hour",
+            },
+          },
+        },
+      },
+      { threadId: "claude-thread-1" },
+    );
+    expect(allowedEvents).toEqual([
+      expect.objectContaining({
+        type: "provider/rateLimits/updated",
+        rateLimits: expect.objectContaining({ status: "allowed" }),
+      }),
+    ]);
+
+    const resultEvents = adapter.translateEvent(
+      {
+        jsonrpc: "2.0",
+        method: "sdk/message",
+        params: {
+          threadId: "claude-thread-1",
+          message: {
+            type: "result",
+            subtype: "success",
+            is_error: false,
+            result: "Done",
+            usage: {},
+            modelUsage: {},
+          },
+        },
+      },
+      { threadId: "claude-thread-1" },
+    );
+
+    expect(resultEvents).not.toContainEqual(
+      expect.objectContaining({ type: "provider/error" }),
+    );
+    expect(resultEvents).toContainEqual(
+      expect.objectContaining({
+        type: "turn/completed",
+        scope: turnScope("turn-1"),
+        status: "completed",
       }),
     );
   });
@@ -5631,5 +5990,25 @@ describe("claude-code provider adapter", () => {
     const adapter = createClaudeCodeProviderAdapter();
     const events = adapter.translateEvent(loadFixture("system-init.json"));
     expect(events).toMatchObject([]);
+  });
+
+  it("ignores Claude command lifecycle events", () => {
+    const adapter = createClaudeCodeProviderAdapter();
+    const events = adapter.translateEvent({
+      jsonrpc: "2.0",
+      method: "sdk/message",
+      params: {
+        threadId: "thread-1",
+        message: {
+          type: "command_lifecycle",
+          command_uuid: "command-1",
+          state: "started",
+          uuid: "message-1",
+          session_id: "session-1",
+        },
+      },
+    });
+
+    expect(events).toEqual([]);
   });
 });

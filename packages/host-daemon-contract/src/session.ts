@@ -46,6 +46,15 @@ export type HostDaemonLoadedEnvironment = z.infer<
   typeof hostDaemonLoadedEnvironmentSchema
 >;
 
+export const hostDaemonRuntimePolicySchema = z
+  .object({
+    providerSessionReaping: z.boolean(),
+  })
+  .strict();
+export type HostDaemonRuntimePolicy = z.infer<
+  typeof hostDaemonRuntimePolicySchema
+>;
+
 export const hostDaemonWatchSetWorkspaceTargetSchema = z
   .object({
     environmentId: z.string().min(1),
@@ -492,6 +501,8 @@ const hostDaemonOnlineRpcResponseSuccessSchema = z.discriminatedUnion(
     onlineRpcResponseSuccessSchemaFor("workspace.diffFiles"),
     onlineRpcResponseSuccessSchemaFor("workspace.diffPatch"),
     onlineRpcResponseSuccessSchemaFor("workspace.pull_request"),
+    commandRpcResponseSuccessSchemaFor("thread.rewind.discard"),
+    commandRpcResponseSuccessSchemaFor("thread.rewind.prepare"),
     commandRpcResponseSuccessSchemaFor("thread.start"),
     commandRpcResponseSuccessSchemaFor("turn.submit"),
     commandRpcResponseSuccessSchemaFor("thread.stop"),
@@ -834,6 +845,10 @@ export const hostDaemonSkillTreeSchema = z
 export type HostDaemonSkillTree = z.infer<typeof hostDaemonSkillTreeSchema>;
 
 export type HostDaemonInternalSchema = {
+  "/runtime-policy": {
+    /** Returns current server-owned runtime policy before a daemon maintenance sweep. */
+    $get: Endpoint<Record<never, never>, HostDaemonRuntimePolicy, 200>;
+  };
   "/skills/tree/:hash": {
     /** Used by the daemon to pull a missing server-owned injected skill tree. */
     $get: Endpoint<Record<never, never>, HostDaemonSkillTree, 200>;

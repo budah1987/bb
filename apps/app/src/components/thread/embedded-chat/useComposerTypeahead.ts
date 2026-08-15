@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import type { TypeaheadConfig } from "@/components/promptbox/PromptBoxInternal";
 import type { PromptMentionLinkResolver } from "@/components/promptbox/editor/prompt-mention-link";
 import type { PromptBoxAction } from "@/components/promptbox/PromptBoxActionsMenu";
-import { withAutomationPromptAction } from "@/components/promptbox/PromptBoxActionsMenu";
+import { withAppPromptActions } from "@/components/promptbox/PromptBoxActionsMenu";
 import type { ProviderComposerAction } from "@bb/domain";
 import { buildProviderPromptActionProps } from "@/components/promptbox/mentions/command-trigger";
 import { useCommandSuggestions } from "@/hooks/useCommandSuggestions";
@@ -14,6 +14,8 @@ interface UseComposerTypeaheadArgs {
   mentionsProjectId?: string;
   providerId: string;
   environmentId: string | null;
+  /** Composer surface used to exclude commands that require an existing thread. */
+  commandScope: "new-thread" | "thread";
   /** The thread the composer belongs to (excluded from thread mentions). */
   currentThreadId: string;
   selectedProviderComposerActions:
@@ -29,14 +31,15 @@ export interface UseComposerTypeaheadResult {
 
 /**
  * The @-mention and command-trigger typeahead wiring shared by every
- * thread-chat composer, plus the provider prompt actions (with the automation
- * action appended) that seed the command suggestion list.
+ * thread-chat composer, plus the provider prompt actions (with the app-owned
+ * actions appended) that seed the command suggestion list.
  */
 export function useComposerTypeahead({
   projectId,
   mentionsProjectId,
   providerId,
   environmentId,
+  commandScope,
   currentThreadId,
   selectedProviderComposerActions,
   resolveMentionLink,
@@ -51,12 +54,13 @@ export function useComposerTypeahead({
     [selectedProviderComposerActions],
   );
   const promptActions = useMemo(
-    () => withAutomationPromptAction(providerPromptActions.promptActions),
+    () => withAppPromptActions(providerPromptActions.promptActions),
     [providerPromptActions.promptActions],
   );
   const commandSuggestions = useCommandSuggestions({
     projectId,
     providerId,
+    commandScope,
     skillsTrigger: providerPromptActions.skillsTrigger,
     promptActions,
     environmentId,

@@ -117,14 +117,20 @@ async function startDesktopSmokeServer(
             customCss: null,
             faviconColor: "default",
             themeId: "default",
+            resolvedCodeTheme: {
+              dark: "pierre-dark",
+              light: "pierre-light",
+              files: {},
+            },
           },
           customThemes: [],
           pluginThemes: [],
           dataDir: args.dataDir,
           experiments: {
             claudeCodeMockCliTraffic: false,
+            editMessages: false,
             newOnboarding: false,
-            toolsHub: false,
+            providerSessionReaping: false,
           },
           featureFlags: {
             placeholder: false,

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import type {
   ActiveThinking,
-  ThreadChildOrigin,
+  ThreadOriginKind,
   ThreadRuntimeDisplayStatus,
 } from "@bb/domain";
 import type { TimelineRow } from "@bb/server-contract";
@@ -20,6 +20,8 @@ import type { TimelineTitleActionResolver } from "./TimelineTitleView.js";
 import { TimelineWorkingIndicator } from "./TimelineWorkingIndicator.js";
 import type {
   ThreadTimelineForkMessageHandler,
+  ThreadTimelineEditMessageHandler,
+  ThreadTimelineInlineMessageEditor,
   ThreadTimelineAddToChatHandler,
   ThreadTimelineSendToMainMessageHandler,
   ThreadTimelineConsumerMessageAction,
@@ -37,7 +39,7 @@ export interface HostConnectionNotice {
 export interface ThreadTimelineSurfaceProps {
   activeThinking: ActiveThinking | null;
   canSpawnChild?: boolean;
-  threadChildOrigin?: ThreadChildOrigin | null;
+  threadOriginKind?: ThreadOriginKind | null;
   hasOlderTimelineRows?: boolean;
   hostConnectionNotice?: HostConnectionNotice | null;
   isLoadingOlderTimelineRows?: boolean;
@@ -46,6 +48,8 @@ export interface ThreadTimelineSurfaceProps {
   loadingContent?: ReactNode;
   leadingContent?: ReactNode;
   onForkMessage?: ThreadTimelineForkMessageHandler;
+  onEditMessage?: ThreadTimelineEditMessageHandler;
+  inlineMessageEditor?: ThreadTimelineInlineMessageEditor;
   onMessageAddToChat?: ThreadTimelineAddToChatHandler;
   onSendToMainMessage?: ThreadTimelineSendToMainMessageHandler;
   onSelectionAddToChat?: ThreadTimelineAddToChatHandler;
@@ -138,7 +142,7 @@ function useTimelineRowsWithPendingStop({
 export function ThreadTimelineSurface({
   activeThinking,
   canSpawnChild,
-  threadChildOrigin = null,
+  threadOriginKind = null,
   hasOlderTimelineRows = false,
   hostConnectionNotice,
   isLoadingOlderTimelineRows = false,
@@ -147,6 +151,8 @@ export function ThreadTimelineSurface({
   loadingContent,
   leadingContent,
   onForkMessage,
+  onEditMessage,
+  inlineMessageEditor,
   onMessageAddToChat,
   onSendToMainMessage,
   onSelectionAddToChat,
@@ -216,8 +222,10 @@ export function ThreadTimelineSurface({
       ) : timelineRowsWithPendingStop.length > 0 ? (
         <ThreadTimelineRows
           canSpawnChild={canSpawnChild}
-          threadChildOrigin={threadChildOrigin}
+          threadOriginKind={threadOriginKind}
           onForkMessage={onForkMessage}
+          onEditMessage={onEditMessage}
+          inlineMessageEditor={inlineMessageEditor}
           onMessageAddToChat={onMessageAddToChat}
           onSendToMainMessage={onSendToMainMessage}
           onSelectionAddToChat={onSelectionAddToChat}

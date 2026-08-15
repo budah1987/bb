@@ -7,8 +7,8 @@ import {
   waitFor,
   within,
 } from "@testing-library/react";
-import { loadPluginApp, renderSlot } from "@bb/plugin-sdk/testing/app";
-import type { PluginSidebarThread } from "@bb/plugin-sdk/app";
+import { loadPluginApp, renderSlot } from "@get-bb/plugin-sdk/testing/app";
+import type { PluginSidebarThread } from "@get-bb/plugin-sdk/app";
 
 const app = await loadPluginApp(() => import("../app"));
 const detailsPanel = app.navPanels.find(

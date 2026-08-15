@@ -93,7 +93,7 @@ interface AssertEmittedQueryPlanUsesIndexArgs {
 class CapturingSlowQueryLogger implements SlowDbQueryLogger {
   readonly debugLogs: LoggedDebug[] = [];
 
-  debug: SlowDbQueryLogger["debug"] = (fields, message) => {
+  info: SlowDbQueryLogger["info"] = (fields, message) => {
     this.debugLogs.push({ fields, message });
   };
 
@@ -523,6 +523,28 @@ describe("slow query index plans", () => {
     );
     expect(details).toContain("SEARCH s USING INTEGER PRIMARY KEY (rowid=?)");
     expect(details).not.toContain("SCAN s");
+
+    db.$client.close();
+  });
+
+  it("uses the thread and sequence index for search segment suffix deletes", () => {
+    const { db } = setup();
+
+    const details = queryPlanDetails({
+      db,
+      params: ["thread-query-plan", 10, 20],
+      sql: `
+        DELETE FROM thread_search_segments
+        WHERE thread_id = ?
+          AND source_seq >= ?
+          AND source_seq <= ?
+      `,
+    });
+
+    expect(details).toMatch(
+      /USING (?:COVERING )?INDEX thread_search_segments_thread_source_seq_idx/,
+    );
+    expect(details).not.toContain("SCAN thread_search_segments");
 
     db.$client.close();
   });

@@ -119,7 +119,7 @@ describe("plugin service", () => {
     const rootDir = await writePlugin(workDir, {
       name: "bb-plugin-greeter",
       serverSource: `
-        import type { BbPluginApi } from "@bb/plugin-sdk";
+        import type { BbPluginApi } from "@get-bb/plugin-sdk";
         export default function plugin(bb: any) {
           (globalThis as any).__greeterLoads = ((globalThis as any).__greeterLoads ?? 0) + 1;
           bb.log.info("hello from greeter");
@@ -588,6 +588,26 @@ describe("plugin service", () => {
     );
     const enabled = await service.setEnabled("switchable", true);
     expect(enabled?.status).toBe("running");
+  });
+
+  it("enables a disabled path plugin when it is reinstalled", async () => {
+    const rootDir = await writePlugin(workDir, {
+      name: "bb-plugin-reinstalled",
+      serverSource: `export default function plugin() {}`,
+    });
+    await service.install(rootDir, { kind: "root" });
+    expect(await service.setEnabled("reinstalled", false)).toMatchObject({
+      enabled: false,
+      status: "disabled",
+    });
+
+    const reinstalled = await service.install(rootDir, { kind: "root" });
+
+    expect(reinstalled).toMatchObject({
+      enabled: true,
+      status: "running",
+    });
+    expect(service.getApi("reinstalled")).toBeDefined();
   });
 });
 

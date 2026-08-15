@@ -4,7 +4,7 @@ import {
   useComposer,
   type PluginNewThreadEmptyStateProps,
   type PluginSidebarThread,
-} from "@bb/plugin-sdk/app";
+} from "@get-bb/plugin-sdk/app";
 import { Icon } from "../components/ui/icon";
 import {
   DropdownMenu,

@@ -318,12 +318,19 @@ type ExpectedPluginsKey =
   | "install"
   | "list"
   | "listUpdateResults"
+  | "marketplaces"
   | "reload"
   | "remove"
   | "token"
   | "updateSettings";
 
-type ExpectedPluginCatalogKey = "install" | "search" | "status";
+type ExpectedPluginCatalogKey =
+  | "install"
+  | "installPlan"
+  | "search"
+  | "status";
+
+type ExpectedPluginMarketplacesKey = "add" | "list" | "refresh" | "remove";
 
 type ExpectedProjectsKey =
   | "attachments"
@@ -383,10 +390,12 @@ type ExpectedThreadsKey =
   | "cancelPlan"
   | "childSummary"
   | "clearGoal"
+  | "compact"
   | "continueAfterRateLimit"
   | "conversationOutline"
   | "defaultExecutionOptions"
   | "delete"
+  | "editMessage"
   | "events"
   | "fork"
   | "get"
@@ -404,6 +413,7 @@ type ExpectedThreadsKey =
   | "queuedMessages"
   | "rateLimitRecovery"
   | "reorderPinned"
+  | "resolveMentions"
   | "search"
   | "send"
   | "spawn"
@@ -532,6 +542,9 @@ describe("SDK public type entrypoints", () => {
     expectTypeOf<
       keyof RootBbSdk["plugins"]["catalog"]
     >().toEqualTypeOf<ExpectedPluginCatalogKey>();
+    expectTypeOf<
+      keyof RootBbSdk["plugins"]["marketplaces"]
+    >().toEqualTypeOf<ExpectedPluginMarketplacesKey>();
     expectTypeOf<
       keyof RootBbSdk["projects"]
     >().toEqualTypeOf<ExpectedProjectsKey>();

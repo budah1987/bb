@@ -191,7 +191,7 @@ describe("ThreadActionsProvider archive behavior", () => {
     expect(mocks.navigate).not.toHaveBeenCalled();
   });
 
-  it("shows undo and close actions for six seconds", () => {
+  it("shows undo and close actions for the archive grace period", () => {
     mocks.isCompactViewport = true;
     renderArchiveHarness();
 
@@ -202,7 +202,7 @@ describe("ThreadActionsProvider archive behavior", () => {
       "Conversation archived",
       expect.objectContaining({
         className: "bb-archive-toast",
-        duration: 6000,
+        duration: 10_000,
         id: "thread-archived-thr_test",
       }),
     );

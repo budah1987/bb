@@ -15,14 +15,18 @@ import {
   isBackgroundAgentTaskType,
   isBackgroundCommandTaskType,
 } from "@bb/domain";
-import type { ThreadChildOrigin, ThreadRuntimeDisplayStatus } from "@bb/domain";
+import type {
+  PromptInput,
+  ThreadOriginKind,
+  ThreadRuntimeDisplayStatus,
+} from "@bb/domain";
 import type {
   TimelineActivityIntent,
   TimelineParentChange,
   TimelineRow,
   TimelineSystemOperationKind,
 } from "@bb/server-contract";
-import type { ThreadChatMessageReference } from "@bb/plugin-sdk";
+import type { ThreadChatMessageReference } from "@get-bb/plugin-sdk";
 import {
   assertNever,
   buildTimelineActivityIntentTitles,
@@ -48,6 +52,8 @@ import {
 import { isRunningThreadRuntimeDisplayStatus } from "./thread-runtime-status.js";
 import type {
   ThreadTimelineAddToChatHandler,
+  ThreadTimelineEditMessageHandler,
+  ThreadTimelineInlineMessageEditor,
   ThreadTimelineForkMessageHandler,
   ThreadTimelineSendToMainMessageHandler,
   ThreadTimelineLinkHandler,
@@ -126,12 +132,16 @@ export interface ThreadTimelineRowsProps {
    */
   canSpawnChild?: boolean;
   /**
-   * Origin of the rendered thread as a child (`fork` / `side-chat`), or null for
-   * root threads. Selects the fork leading icon on the seed-without-run anchor.
+   * Origin of the rendered thread (`fork`), or null for ordinary threads.
+   * Selects the fork leading icon on the seed-without-run anchor.
    */
-  threadChildOrigin?: ThreadChildOrigin | null;
+  threadOriginKind?: ThreadOriginKind | null;
   /** Fork the rendered thread from a specific agent message. */
   onForkMessage?: ThreadTimelineForkMessageHandler;
+  /** Stage an edit of an eligible user request in the host composer. */
+  onEditMessage?: ThreadTimelineEditMessageHandler;
+  /** Mount a client-local editor in place of its matching user request. */
+  inlineMessageEditor?: ThreadTimelineInlineMessageEditor;
   /** Add a complete agent message to the composer draft. */
   onMessageAddToChat?: ThreadTimelineAddToChatHandler;
   /** Open a side chat anchored on a specific agent message. */
@@ -199,6 +209,8 @@ interface TimelineRendererStaticContextValue {
   canSpawnChild: boolean;
   getViewRows: GetTimelineViewRows;
   onForkMessage: ThreadTimelineForkMessageHandler | undefined;
+  onEditMessage: ThreadTimelineEditMessageHandler | undefined;
+  inlineMessageEditor: ThreadTimelineInlineMessageEditor | undefined;
   onMessageAddToChat: ThreadTimelineAddToChatHandler | undefined;
   onSendToMainMessage: ThreadTimelineSendToMainMessageHandler | undefined;
   onSelectionAddToChat: ThreadTimelineAddToChatHandler | undefined;
@@ -225,7 +237,7 @@ interface TimelineRendererStaticContextValue {
         message: ThreadChatMessageReference,
       ) => void)
     | undefined;
-  threadChildOrigin: ThreadChildOrigin | null;
+  threadOriginKind: ThreadOriginKind | null;
   onOpenLink: ThreadTimelineLinkHandler | undefined;
   onOpenLocalFileLink: ThreadTimelineLocalFileLinkHandler | undefined;
   onOpenPluginPanel: ThreadTimelineOpenPluginPanelHandler | undefined;
@@ -657,6 +669,20 @@ function timelineRowsOwnerKey({
   return ownerThreadId;
 }
 
+function timelineHeightSnapRevision(rows: readonly TimelineRow[]): string {
+  // Active turns render their work rows directly. Completion replaces those
+  // rows with one or more turn summaries plus the terminal message. Key the
+  // height container by the newest completed summary so that authoritative
+  // topology replacement snaps instead of looking like a second stream.
+  for (let index = rows.length - 1; index >= 0; index -= 1) {
+    const row = rows[index];
+    if (row?.kind === "turn") {
+      return `${row.id}:${row.sourceSeqStart}:${row.sourceSeqEnd}`;
+    }
+  }
+  return "active";
+}
+
 function useTimelineViewRowsCache(): GetTimelineViewRows {
   // Each `rawRows` reference is consumed under exactly one scope: the
   // top-level prop ("open" — pending work may still arrive) or a lazily
@@ -745,14 +771,19 @@ function TimelineStaticRow({
   );
 }
 
+/**
+ * Vertical rhythm between timeline rows. Most rows are a single 20px line (a
+ * command, a file edit, a bundle summary), so the gap is the dominant cost of
+ * the thread view: the list stays readable at 8px and reads as dense work
+ * rather than as isolated cards. Bundle children run flush inside their group.
+ */
 function timelineRowsListGapClassName(
   spacing: TimelineRowsListSpacing,
 ): string {
   switch (spacing) {
     case "top-level":
-      return "gap-4";
     case "nested":
-      return "gap-3";
+      return "gap-2";
     case "bundle":
       return "gap-0";
   }
@@ -765,7 +796,7 @@ function timelineRowsListGapClassName(
  * first executed turn), which distinguishes it from a *later* cross-thread agent
  * message in the same thread (those belong to a turn, so `turnId` is non-null).
  * Only this row should take the fork leading icon; later cross-thread agent rows
- * keep their per-sourceKind icon even though the thread's `childOrigin` is fork.
+ * keep their per-sourceKind icon even though the thread's `originKind` is fork.
  */
 function isForkSeedAnchorRow(row: TimelineConversationViewRow): boolean {
   return (
@@ -934,6 +965,8 @@ function ConversationRow({
   );
   const {
     canSpawnChild,
+    inlineMessageEditor,
+    onEditMessage,
     onForkMessage,
     onMessageAddToChat,
     onSendToMainMessage,
@@ -941,7 +974,7 @@ function ConversationRow({
     pluginMessageActions,
     consumerMessageActions,
     reportProseSelection,
-    threadChildOrigin,
+    threadOriginKind,
     onOpenLink,
     onOpenLocalFileLink,
     onOpenPluginPanel,
@@ -954,6 +987,20 @@ function ConversationRow({
     workspaceRootPath,
   } = useTimelineRendererStaticContext();
   const senderThreadMetadataById = useSenderThreadMetadataContext();
+  if (
+    row.role === "user" &&
+    inlineMessageEditor !== undefined &&
+    inlineMessageEditor.messageId === row.id
+  ) {
+    return (
+      <div className="ml-auto w-full max-w-[70%] max-md:max-w-full">
+        <div
+          ref={inlineMessageEditor.onHostElementChange}
+          data-sent-message-inline-editor-host=""
+        />
+      </div>
+    );
+  }
   // The narrow, stable message reference plugin actions receive — sourced
   // from row fields, never the row object itself.
   const messageReference: ThreadChatMessageReference = {
@@ -985,20 +1032,51 @@ function ConversationRow({
       row.senderThreadId === null
         ? null
         : (senderThreadMetadataById.get(row.senderThreadId) ?? null);
-    // The fork leading icon is the thread's `childOrigin`, but only on the seed
+    // The fork leading icon is the thread's `originKind`, but only on the seed
     // anchor (thread-start) row — pass null for every other generated row so a
     // later cross-thread agent message in a forked thread keeps its own icon.
-    const childOrigin = isForkSeedAnchorRow(row) ? threadChildOrigin : null;
+    const originKind = isForkSeedAnchorRow(row) ? threadOriginKind : null;
+    const canEditMessage =
+      onEditMessage !== undefined &&
+      row.initiator === "user" &&
+      !row.turnRequest.isGrouped &&
+      row.turnRequest.kind === "message" &&
+      row.turnRequest.status === "accepted" &&
+      (row.attachments?.imageUrls.length ?? 0) === 0;
+    const onEdit = canEditMessage
+      ? () => {
+          const input: PromptInput[] = [];
+          if (row.text.trim().length > 0) {
+            input.push({
+              type: "text",
+              text: row.text,
+              mentions: [...row.mentions],
+            });
+          }
+          for (const path of row.attachments?.localImagePaths ?? []) {
+            input.push({ type: "localImage", path });
+          }
+          for (const path of row.attachments?.localFilePaths ?? []) {
+            input.push({ type: "localFile", path });
+          }
+          onEditMessage({
+            messageId: row.id,
+            expectedRequestSequence: row.sourceSeqStart,
+            input,
+          });
+        }
+      : undefined;
     return (
       <ConversationMessageContent
         attachments={row.attachments}
-        childOrigin={childOrigin}
+        originKind={originKind}
         initiator={row.initiator}
         mentions={row.mentions}
         mobileActionDisplay={
           row.id === latestActionableUserMessageId ? "inline" : "overflow"
         }
         onAddToChat={onSelectionAddToChat}
+        onEdit={onEdit}
         onOpenLink={onOpenLink}
         onOpenLocalFileLink={onOpenLocalFileLink}
         projectId={projectId}
@@ -1543,6 +1621,8 @@ export function systemOperationLeadingIcon(
       return "AlertCircle";
     case "compaction":
       return "CircleArrowShrink";
+    case "context-clear":
+      return "Clean";
     case "generic":
     case "warning":
     case "deprecation":
@@ -1933,6 +2013,7 @@ function ThreadTimelineRowsForTimelineView(props: ThreadTimelineRowsProps) {
     () => getViewRows(props.timelineRows),
     [getViewRows, props.timelineRows],
   );
+  const heightSnapRevision = timelineHeightSnapRevision(props.timelineRows);
   const latestActionableAssistantMessageId = useMemo(
     () => findLastActionableAssistantMessageId(rows),
     [rows],
@@ -1941,9 +2022,10 @@ function ThreadTimelineRowsForTimelineView(props: ThreadTimelineRowsProps) {
     () =>
       findLastActionableUserMessageId(
         rows,
-        props.onSelectionAddToChat !== undefined,
+        props.onSelectionAddToChat !== undefined ||
+          props.onEditMessage !== undefined,
       ),
-    [props.onSelectionAddToChat, rows],
+    [props.onEditMessage, props.onSelectionAddToChat, rows],
   );
   const scopeActive = isRunningThreadRuntimeDisplayStatus(
     props.threadRuntimeDisplayStatus,
@@ -2086,6 +2168,8 @@ function ThreadTimelineRowsForTimelineView(props: ThreadTimelineRowsProps) {
       canSpawnChild: props.canSpawnChild ?? false,
       getViewRows,
       onForkMessage: props.onForkMessage,
+      onEditMessage: props.onEditMessage,
+      inlineMessageEditor: props.inlineMessageEditor,
       onMessageAddToChat: props.onMessageAddToChat,
       onSendToMainMessage: props.onSendToMainMessage,
       onSelectionAddToChat: selectionAddToChatHandler,
@@ -2097,7 +2181,7 @@ function ThreadTimelineRowsForTimelineView(props: ThreadTimelineRowsProps) {
       consumerMessageActions:
         props.consumerMessageActions ?? EMPTY_CONSUMER_MESSAGE_ACTIONS,
       reportProseSelection,
-      threadChildOrigin: props.threadChildOrigin ?? null,
+      threadOriginKind: props.threadOriginKind ?? null,
       onOpenLink: props.onOpenLink,
       onOpenLocalFileLink: props.onOpenLocalFileLink,
       onOpenPluginPanel: props.onOpenPluginPanel,
@@ -2115,6 +2199,8 @@ function ThreadTimelineRowsForTimelineView(props: ThreadTimelineRowsProps) {
       props.canSpawnChild,
       getViewRows,
       props.onForkMessage,
+      props.onEditMessage,
+      props.inlineMessageEditor,
       props.onMessageAddToChat,
       props.onSendToMainMessage,
       selectionAddToChatHandler,
@@ -2122,7 +2208,7 @@ function ThreadTimelineRowsForTimelineView(props: ThreadTimelineRowsProps) {
       props.includePluginMessageActions,
       props.consumerMessageActions,
       reportProseSelection,
-      props.threadChildOrigin,
+      props.threadOriginKind,
       timelineThreadId,
       props.onOpenLink,
       props.onOpenLocalFileLink,
@@ -2162,7 +2248,7 @@ function ThreadTimelineRowsForTimelineView(props: ThreadTimelineRowsProps) {
               value={latestActionableUserMessageId}
             >
               <TimelineTurnStateContext.Provider value={turnStateContextValue}>
-                <AutoHeightContainer>
+                <AutoHeightContainer snapRevision={heightSnapRevision}>
                   <TimelineRowsList
                     hasOlderTimelineRows={props.hasOlderTimelineRows}
                     isLoadingOlderTimelineRows={

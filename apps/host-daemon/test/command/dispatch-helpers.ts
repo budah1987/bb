@@ -204,6 +204,7 @@ export function createFakeWorkspace(pathname: string) {
         files: [],
         shortstat: "",
         mergeBaseRef: null,
+        truncated: false,
       };
     },
     async diffPatch() {
@@ -371,6 +372,12 @@ export function createFakeRuntime() {
       }
       return { providerThreadId: `provider-${args.threadId}` };
     },
+    async prepareThreadRewind(args) {
+      return {
+        providerThreadId: `provider-rewind-${args.threadId}-${args.leaseId}`,
+      };
+    },
+    async discardThreadRewind() {},
     async resumeThread(args) {
       state.resumedAcpLaunchSpec = args.acpLaunchSpec;
       state.resumedEnvironmentId = args.environmentId;
@@ -411,6 +418,7 @@ export function createFakeRuntime() {
       state.stoppedThreadId = args.threadId;
       activeTurnsByThreadId.delete(args.threadId);
       providerSessionsByThreadId.delete(args.threadId);
+      return { providerCheckpointId: null };
     },
     async clearThreadGoal() {
       return { cleared: true };

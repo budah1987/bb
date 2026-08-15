@@ -482,7 +482,7 @@ export function getEnvironmentActionInvalidationQueryKeys({
 export function getCachedThreadListPlaceholder(
   queryClient: QueryClient,
   threadId: string,
-): ThreadWithRuntime | undefined {
+): ThreadListEntry | undefined {
   if (!threadId) {
     return undefined;
   }
@@ -553,13 +553,7 @@ function threadMatchesListFilters(
   }
   if (
     filters?.originKind !== undefined &&
-    (thread.originKind ?? thread.childOrigin) !== filters.originKind
-  ) {
-    return false;
-  }
-  if (
-    filters?.childOrigin !== undefined &&
-    (thread.originKind ?? thread.childOrigin) !== filters.childOrigin
+    thread.originKind !== filters.originKind
   ) {
     return false;
   }

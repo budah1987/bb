@@ -27,8 +27,11 @@ import type {
 } from "@bb/server-contract";
 import type {
   CreateQueuedMessageRequest,
+  ContinueAfterProviderRateLimitRequest,
   ContinueAfterProviderRateLimitResponse,
   CreateThreadRequest,
+  EditMessageRequest,
+  EditMessageResponse,
   ForkThreadRequest,
   DeleteThreadRequest,
   PromptHistoryResponse,
@@ -56,6 +59,8 @@ import type {
   PromptHistoryQuery,
   ReorderPinnedThreadRequest,
   ReorderQueuedMessageRequest,
+  ResolveThreadMentionsRequest,
+  ResolveThreadMentionsResponse,
   SendMessageRequest,
   SendQueuedMessageRequest,
   SetQueuedMessageGroupBoundaryRequest,
@@ -97,6 +102,10 @@ export interface ThreadSearchArgs extends ThreadSearchQuery {
   signal?: AbortSignal;
 }
 
+export interface ThreadResolveMentionsArgs extends ResolveThreadMentionsRequest {
+  signal?: AbortSignal;
+}
+
 export interface ThreadGetArgs {
   include?: ThreadGetQuery["include"];
   signal?: AbortSignal;
@@ -106,6 +115,7 @@ export interface ThreadGetArgs {
 export type ThreadGetResult = ThreadResponse | ThreadWithIncludesResponse;
 export type ThreadListResult = ThreadListResponse;
 export type ThreadSearchResult = ThreadSearchResponse;
+export type ThreadResolveMentionsResult = ResolveThreadMentionsResponse;
 export interface ThreadOutputResponse {
   output: string | null;
 }
@@ -128,7 +138,9 @@ export type ThreadSendResult = { ok: true };
 export type ThreadRateLimitRecoveryResult = ProviderRateLimitRecoveryStatus;
 export type ThreadContinueAfterRateLimitResult =
   ContinueAfterProviderRateLimitResponse;
+export type ThreadEditMessageResult = EditMessageResponse;
 export type ThreadStopResult = { ok: true };
+export type ThreadCompactResult = { ok: true };
 export type ThreadBannerActionResult = { ok: true };
 export type ThreadUnarchiveResult = { ok: true };
 export type ThreadArchiveAllResult = ThreadArchiveAllResponse;
@@ -163,9 +175,8 @@ export type ThreadTimelineTurnSummaryDetailsResult =
 
 export interface ThreadSpawnBaseArgs extends Omit<
   CreateThreadRequest,
-  "childOrigin" | "input" | "origin" | "originKind" | "startedOnBehalfOf"
+  "input" | "origin" | "originKind" | "startedOnBehalfOf"
 > {
-  childOrigin?: CreateThreadRequest["childOrigin"];
   origin?: CreateThreadRequest["origin"];
   originKind?: CreateThreadRequest["originKind"];
   startedOnBehalfOf?: CreateThreadRequest["startedOnBehalfOf"];
@@ -204,12 +215,17 @@ export interface ThreadSendArgs extends SendMessageRequest {
   threadId: string;
 }
 
+export interface ThreadEditMessageArgs extends EditMessageRequest {
+  threadId: string;
+}
+
 export interface ThreadActionArgs {
   threadId: string;
 }
 
 export interface ThreadContinueAfterRateLimitArgs extends ThreadActionArgs {
   failedRequestId: string;
+  mode: NonNullable<ContinueAfterProviderRateLimitRequest["mode"]>;
 }
 
 export interface ThreadStatusArgs extends ThreadActionArgs {
@@ -505,6 +521,7 @@ export interface ThreadsArea {
   continueAfterRateLimit(
     args: ThreadContinueAfterRateLimitArgs,
   ): Promise<ThreadContinueAfterRateLimitResult>;
+  compact(args: ThreadActionArgs): Promise<ThreadCompactResult>;
   cancelPlan(args: ThreadActionArgs): Promise<ThreadBannerActionResult>;
   clearGoal(args: ThreadActionArgs): Promise<ThreadBannerActionResult>;
   conversationOutline(
@@ -514,6 +531,7 @@ export interface ThreadsArea {
     args: ThreadStatusArgs,
   ): Promise<ThreadDefaultExecutionOptionsResult>;
   delete(args: ThreadDeleteArgs): Promise<ThreadDeleteResult>;
+  editMessage(args: ThreadEditMessageArgs): Promise<ThreadEditMessageResult>;
   events: ThreadEventsArea;
   fork(args: ThreadForkArgs): Promise<ThreadForkResult>;
   get(args: ThreadGetArgs): Promise<ThreadGetResult>;
@@ -534,9 +552,16 @@ export interface ThreadsArea {
     args: ThreadStatusArgs,
   ): Promise<ThreadRateLimitRecoveryResult>;
   reorderPinned(args: ThreadPinOrderArgs): Promise<ThreadPinOrderResult>;
+  resolveMentions(
+    args: ThreadResolveMentionsArgs,
+  ): Promise<ThreadResolveMentionsResult>;
   search(args: ThreadSearchArgs): Promise<ThreadSearchResult>;
   send(args: ThreadSendArgs): Promise<ThreadSendResult>;
   spawn(args: ThreadSpawnArgs): Promise<ThreadSpawnResult>;
+  /**
+   * Stop active work and release the loaded agent runtime. This operation is
+   * idempotent and preserves thread history for a later resume.
+   */
   stop(args: ThreadActionArgs): Promise<ThreadStopResult>;
   tabs: ThreadTabsArea;
   notes: ThreadNotesArea;
@@ -613,7 +638,6 @@ function spawnInput(input: ThreadSpawnArgs): PromptInput[] {
 
 function spawnJson(args: ThreadSpawnArgs): CreateThreadRequest {
   const {
-    childOrigin,
     input: _input,
     origin,
     originKind,
@@ -627,7 +651,6 @@ function spawnJson(args: ThreadSpawnArgs): CreateThreadRequest {
     origin: origin ?? "sdk",
     startedOnBehalfOf: startedOnBehalfOf ?? null,
     originKind: originKind ?? null,
-    childOrigin: childOrigin ?? null,
   };
 }
 
@@ -1099,6 +1122,15 @@ export function createThreadsArea(args: CreateSdkAreaArgs): ThreadsArea {
       );
       return { ok: true };
     },
+    async editMessage(input) {
+      const { threadId, ...json } = input;
+      return transport.readJson(
+        transport.api.v1.threads[":id"]["edit-message"].$post({
+          param: { id: threadId },
+          json,
+        }),
+      );
+    },
     events,
     async fork(input) {
       return transport.readJson(
@@ -1150,7 +1182,10 @@ export function createThreadsArea(args: CreateSdkAreaArgs): ThreadsArea {
       return transport.readJson(
         transport.api.v1.threads[":id"]["rate-limit-recovery"].continue.$post({
           param: { id: input.threadId },
-          json: { failedRequestId: input.failedRequestId },
+          json: {
+            failedRequestId: input.failedRequestId,
+            mode: input.mode,
+          },
         }),
       );
     },
@@ -1211,6 +1246,14 @@ export function createThreadsArea(args: CreateSdkAreaArgs): ThreadsArea {
         }),
       );
     },
+    async resolveMentions(input) {
+      return transport.readJson(
+        transport.api.v1.threads["resolve-mentions"].$post(
+          { json: { threadIds: input.threadIds } },
+          ...signalRequestArgs(input.signal),
+        ),
+      );
+    },
     async search(input) {
       return transport.readJson(
         transport.api.v1.threads.search.$get(
@@ -1238,6 +1281,14 @@ export function createThreadsArea(args: CreateSdkAreaArgs): ThreadsArea {
     async stop(input) {
       await transport.readVoid(
         transport.api.v1.threads[":id"].stop.$post({
+          param: { id: input.threadId },
+        }),
+      );
+      return { ok: true };
+    },
+    async compact(input) {
+      await transport.readVoid(
+        transport.api.v1.threads[":id"].compact.$post({
           param: { id: input.threadId },
         }),
       );

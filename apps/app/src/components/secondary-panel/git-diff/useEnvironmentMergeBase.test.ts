@@ -51,6 +51,7 @@ function makeWorkspaceStatus(
       files: [],
       hasUncommittedChanges: false,
       insertions: 0,
+      lineStatsComplete: true,
       state: "clean",
     },
     ...overrides,

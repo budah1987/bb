@@ -4,7 +4,7 @@ import {
   useBbNavigate,
   useRealtime,
   useRpc,
-} from "@bb/plugin-sdk/app";
+} from "@get-bb/plugin-sdk/app";
 import type { AttentionItem, AttentionState, rpcContract } from "./server";
 import { Button } from "@bb/shared-ui/button";
 import {

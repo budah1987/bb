@@ -402,7 +402,12 @@ const Sidebar = React.forwardRef<
           className={cn(
             // Fixed: a percentage height would resolve against the short
             // initial containing block, so it reads the shell unit directly.
-            "fixed inset-y-0 z-10 flex h-(--bb-shell-height) w-(--sidebar-width) flex-col bg-sidebar text-sidebar-foreground transition-[left,right,width] duration-[220ms] ease-[cubic-bezier(0.32,0.72,0,1)]",
+            // The visibility leg hides the fully collapsed offcanvas panel
+            // after the slide-out so its mounted rows stop painting (#1261);
+            // the zero delay on expand shows it again immediately. The slide
+            // itself keeps BBamir's 220ms drawer easing.
+            "fixed inset-y-0 z-10 flex h-(--bb-shell-height) w-(--sidebar-width) flex-col bg-sidebar text-sidebar-foreground [transition:left_220ms_cubic-bezier(0.32,0.72,0,1),right_220ms_cubic-bezier(0.32,0.72,0,1),width_220ms_cubic-bezier(0.32,0.72,0,1),visibility_0s_linear_0s]",
+            "group-data-[collapsible=offcanvas]:invisible group-data-[collapsible=offcanvas]:[transition:left_220ms_cubic-bezier(0.32,0.72,0,1),right_220ms_cubic-bezier(0.32,0.72,0,1),width_220ms_cubic-bezier(0.32,0.72,0,1),visibility_0s_linear_220ms]",
             side === "left"
               ? "left-0 group-data-[collapsible=offcanvas]:left-[calc(var(--sidebar-width)*-1)]"
               : "right-0 group-data-[collapsible=offcanvas]:right-[calc(var(--sidebar-width)*-1)]",
@@ -495,20 +500,51 @@ const SidebarFooter = React.forwardRef<
 });
 SidebarFooter.displayName = "SidebarFooter";
 
+const SidebarContentElementContext =
+  React.createContext<React.RefObject<HTMLDivElement | null> | null>(null);
+
+/**
+ * Ref object holding the sidebar's scrolling content element
+ * (`SidebarContent`). The windowed thread list reads `.current` inside
+ * effects to decide which rows sit near the scrollport. The ref object is
+ * stable, so consuming it never re-renders; returns null outside a
+ * `SidebarContent`.
+ */
+function useSidebarContentElementRef() {
+  return React.useContext(SidebarContentElementContext);
+}
+
 const SidebarContent = React.forwardRef<
   HTMLDivElement,
   React.ComponentProps<"div">
->(({ className, ...props }, ref) => {
+>(({ className, children, ...props }, ref) => {
+  const contentRef = React.useRef<HTMLDivElement | null>(null);
+  const setContentRef = React.useCallback(
+    (node: HTMLDivElement | null) => {
+      contentRef.current = node;
+      if (typeof ref === "function") {
+        ref(node);
+      } else if (ref) {
+        ref.current = node;
+      }
+    },
+    [ref],
+  );
+
   return (
     <div
-      ref={ref}
+      ref={setContentRef}
       data-sidebar="content"
       className={cn(
         "flex min-h-0 flex-1 flex-col gap-2 overflow-x-hidden overflow-y-auto overscroll-contain group-data-[collapsible=icon]:overflow-hidden",
         className,
       )}
       {...props}
-    />
+    >
+      <SidebarContentElementContext.Provider value={contentRef}>
+        {children}
+      </SidebarContentElementContext.Provider>
+    </div>
   );
 });
 SidebarContent.displayName = "SidebarContent";
@@ -756,4 +792,5 @@ export {
   useIsSidebarShowing,
   useOptionalIsSidebarShowing,
   useSidebar,
+  useSidebarContentElementRef,
 };

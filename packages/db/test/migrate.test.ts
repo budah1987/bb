@@ -82,7 +82,6 @@ interface MigratedManagerCleanupThreadRow {
 }
 
 interface MigratedThreadProvenanceRow {
-  childOrigin: string | null;
   id: string;
   originKind: string | null;
   parentThreadId: string | null;
@@ -185,6 +184,11 @@ interface MigratedPluginCatalogProvenanceRow {
   id: string;
   provenance: string;
   catalogEntryId: string | null;
+}
+
+interface MigratedNamedCatalogProvenanceRow {
+  id: string;
+  catalogMarketplaceName: string | null;
 }
 
 interface MigratedPluginCatalogRow {
@@ -341,6 +345,7 @@ function dropRewindAddedTables(db: DbConnection): void {
   db.$client.prepare("DROP TABLE IF EXISTS plugin_artifacts").run();
   db.$client.prepare("DROP TABLE IF EXISTS plugin_catalog").run();
   db.$client.prepare("DROP TABLE IF EXISTS marketplaces").run();
+  dropMarketplaceCatalogSchema(db);
   db.$client.prepare("DROP TABLE IF EXISTS plugins").run();
   db.$client.prepare("DROP TABLE IF EXISTS plugin_kv").run();
   db.$client.prepare("DROP TABLE IF EXISTS plugin_settings").run();
@@ -349,6 +354,8 @@ function dropRewindAddedTables(db: DbConnection): void {
     .prepare("ALTER TABLE hosts DROP COLUMN last_rejected_protocol_version")
     .run();
   dropHostMaxPermissionModeColumn(db);
+  dropEnvironmentRetireRequestedAtColumn(db);
+  dropPluginArtifactGitCheckoutRootColumn(db);
   dropThreadSectionSchema(db);
   restoreWideExperimentsTable(db);
   // system_experiments predates thread search, so the table itself isn't
@@ -474,6 +481,24 @@ const experimentKeyValueMigrationPath = resolve(
   "drizzle",
   "0095_equal_reaper.sql",
 );
+const retireRequestedAtMigrationPath = resolve(
+  __dirname,
+  "..",
+  "drizzle",
+  "0091_daffy_dark_phoenix.sql",
+);
+const pluginArtifactCheckoutRootMigrationPath = resolve(
+  __dirname,
+  "..",
+  "drizzle",
+  "0094_mighty_polaris.sql",
+);
+const namedMarketplaceCatalogMigrationPath = resolve(
+  __dirname,
+  "..",
+  "drizzle",
+  "0095_normal_elektra.sql",
+);
 const sidebarOrderingMigrationPath = resolve(
   __dirname,
   "..",
@@ -527,6 +552,20 @@ function dropSideChatPluginExperimentColumn(db: DbConnection): void {
   if (columns.some((column) => column.name === "side_chat_plugin")) {
     db.$client
       .prepare("ALTER TABLE system_experiments DROP COLUMN side_chat_plugin")
+      .run();
+  }
+}
+
+// Current schemas no longer have the legacy provenance column. Replay tests
+// that clear later migration rows must reconstruct the historical schema so
+// older migrations can run before 0093 removes the column again.
+function restoreLegacyThreadOriginColumn(db: DbConnection): void {
+  const columns = db.$client
+    .prepare<[], TableInfoRow>("PRAGMA table_info(threads)")
+    .all();
+  if (!columns.some((column) => column.name === "child_origin")) {
+    db.$client
+      .prepare("ALTER TABLE threads ADD COLUMN child_origin text")
       .run();
   }
 }
@@ -629,10 +668,38 @@ function dropOnboardingCompletedAtColumn(db: DbConnection): void {
 // real upgrade, where thread-search is repaired before later migrations apply.
 // NOTE: when adding a migration after thread-search, drop its schema here too.
 function resetMigrationsAfterThreadSearch(db: DbConnection): void {
+  restoreLegacyThreadOriginColumn(db);
   dropRewindAddedTables(db);
   db.$client
     .prepare<[number]>("DELETE FROM __drizzle_migrations WHERE created_at > ?")
     .run(threadSearchRowidFtsMigrationWhen);
+}
+
+/**
+ * Migration 0094 adds the marketplace catalog tables and the plugins
+ * marketplace-name column, and 0095 adds the git tag-range columns. Rewind
+ * scenarios that clear those journal rows must remove all of them, or
+ * migrate() replays the CREATE/ADD against a DB that has them.
+ */
+function dropMarketplaceCatalogSchema(db: DbConnection): void {
+  db.$client.prepare("DROP TABLE IF EXISTS plugin_marketplace_icons").run();
+  db.$client.prepare("DROP TABLE IF EXISTS plugin_marketplaces").run();
+  const columns = new Set(
+    db.$client
+      .prepare<[], TableInfoRow>("PRAGMA table_info(plugins)")
+      .all()
+      .map((column) => column.name),
+  );
+  for (const column of [
+    "catalog_marketplace_name",
+    "source_git_range",
+    "source_git_tag_prefix",
+    "source_git_resolved_tag",
+  ]) {
+    if (columns.has(column)) {
+      db.$client.prepare(`ALTER TABLE plugins DROP COLUMN ${column}`).run();
+    }
+  }
 }
 
 function dropEnvironmentNameColumn(db: DbConnection): void {
@@ -643,6 +710,33 @@ function dropEnvironmentDestroyAttemptIdColumn(db: DbConnection): void {
   db.$client
     .prepare("ALTER TABLE environments DROP COLUMN destroy_attempt_id")
     .run();
+}
+
+// Migration 0091 adds the dedicated archive-grace clock. Rewind scenarios
+// that clear its journal row must remove the column before replaying the ADD.
+// Migration 0094 records the git checkout root on each artifact. Rewind
+// scenarios that clear its journal row must remove the column before replaying
+// the ADD.
+function dropPluginArtifactGitCheckoutRootColumn(db: DbConnection): void {
+  const columns = db.$client
+    .prepare<[], TableInfoRow>("PRAGMA table_info(plugin_artifacts)")
+    .all();
+  if (columns.some((column) => column.name === "git_checkout_root")) {
+    db.$client
+      .prepare("ALTER TABLE plugin_artifacts DROP COLUMN git_checkout_root")
+      .run();
+  }
+}
+
+function dropEnvironmentRetireRequestedAtColumn(db: DbConnection): void {
+  const columns = db.$client
+    .prepare<[], TableInfoRow>("PRAGMA table_info(environments)")
+    .all();
+  if (columns.some((column) => column.name === "retire_requested_at")) {
+    db.$client
+      .prepare("ALTER TABLE environments DROP COLUMN retire_requested_at")
+      .run();
+  }
 }
 
 /**
@@ -700,6 +794,8 @@ function dropQueuedMessageSenderThreadIdColumn(db: DbConnection): void {
 
 /** Tables created by migrations after 0023, dropped so migrate() re-applies. */
 function dropPost0023Tables(db: DbConnection): void {
+  dropEnvironmentRetireRequestedAtColumn(db);
+  dropPluginArtifactGitCheckoutRootColumn(db);
   dropProjectGitRemoteUrlColumn(db);
   db.$client.prepare("DROP TABLE IF EXISTS thread_tabs").run();
   db.$client.exec(`
@@ -784,8 +880,13 @@ function restorePre0022ThreadTypeSchema(db: DbConnection): void {
     DROP INDEX IF EXISTS threads_source_origin_idx;
     ALTER TABLE threads DROP COLUMN source_thread_id;
     ALTER TABLE threads DROP COLUMN origin_kind;
-    ALTER TABLE threads DROP COLUMN child_origin;
   `);
+  const threadColumns = db.$client
+    .prepare<[], TableInfoRow>("PRAGMA table_info(threads)")
+    .all();
+  if (threadColumns.some((row) => row.name === "child_origin")) {
+    db.$client.prepare("ALTER TABLE threads DROP COLUMN child_origin").run();
+  }
 }
 
 function readIndexNames(args: ReadIndexNamesArgs): string[] {
@@ -901,7 +1002,12 @@ function markEventLargeValuesMigrationUnapplied(db: DbConnection): void {
     .prepare("ALTER TABLE `threads` DROP COLUMN `source_thread_id`")
     .run();
   db.$client.prepare("ALTER TABLE `threads` DROP COLUMN `origin_kind`").run();
-  db.$client.prepare("ALTER TABLE `threads` DROP COLUMN `child_origin`").run();
+  const threadColumns = db.$client
+    .prepare<[], TableInfoRow>("PRAGMA table_info(threads)")
+    .all();
+  if (threadColumns.some((row) => row.name === "child_origin")) {
+    db.$client.prepare("ALTER TABLE threads DROP COLUMN child_origin").run();
+  }
   db.$client.exec(`
     DROP TRIGGER IF EXISTS thread_search_segments_after_text_update;
     DROP TRIGGER IF EXISTS thread_search_segments_after_delete;
@@ -1325,6 +1431,105 @@ function deleteDeferredCleanupMigrationRows(db: DbConnection): void {
 }
 
 describe("migrate", () => {
+  it("backfills the first checkout commit component for every artifact shape", () => {
+    const db = createConnection(":memory:");
+    const commit = "d".repeat(40);
+    try {
+      db.$client.exec(`
+        CREATE TABLE plugin_artifacts (
+          id text PRIMARY KEY NOT NULL,
+          source_kind text NOT NULL,
+          git_resolved_commit text,
+          path text NOT NULL
+        );
+      `);
+      const insert = db.$client.prepare<
+        [string, string, string | null, string]
+      >(
+        "INSERT INTO plugin_artifacts (id, source_kind, git_resolved_commit, path) VALUES (?, ?, ?, ?)",
+      );
+      insert.run("root", "git", commit, `/cache/repo/${commit}`);
+      insert.run("nested", "git", commit, `/cache/repo/${commit}/plugins/a`);
+      insert.run(
+        "collision",
+        "git",
+        commit,
+        `/cache/repo/${commit}/vendor/${commit}`,
+      );
+      insert.run(
+        "windows",
+        "git",
+        commit,
+        `C:\\cache\\repo\\${commit}\\plugins\\a`,
+      );
+      insert.run("npm", "npm", null, "/cache/npm/package/1.0.0");
+      insert.run("unresolved-git", "git", null, "/cache/git/legacy");
+
+      runMigrationFile({
+        db,
+        migrationPath: pluginArtifactCheckoutRootMigrationPath,
+      });
+
+      expect(
+        db.$client
+          .prepare<
+            [],
+            { id: string; root: string | null }
+          >("SELECT id, git_checkout_root AS root FROM plugin_artifacts ORDER BY id")
+          .all(),
+      ).toEqual([
+        { id: "collision", root: `/cache/repo/${commit}` },
+        { id: "nested", root: `/cache/repo/${commit}` },
+        { id: "npm", root: null },
+        { id: "root", root: `/cache/repo/${commit}` },
+        { id: "unresolved-git", root: null },
+        { id: "windows", root: `C:\\cache\\repo\\${commit}` },
+      ]);
+    } finally {
+      closeConnection(db);
+    }
+  });
+
+  it("backfills the retirement clock only for environments already retiring", () => {
+    const db = createConnection(":memory:");
+    try {
+      db.$client.exec(`
+        CREATE TABLE environments (
+          id text PRIMARY KEY NOT NULL,
+          status text NOT NULL,
+          updated_at integer NOT NULL
+        );
+        INSERT INTO environments (id, status, updated_at) VALUES
+          ('env_retiring', 'retiring', 1234),
+          ('env_ready', 'ready', 2345);
+      `);
+
+      runMigrationFile({
+        db,
+        migrationPath: retireRequestedAtMigrationPath,
+      });
+
+      expect(
+        db.$client
+          .prepare<[], { id: string; retireRequestedAt: number | null }>(
+            `
+              SELECT
+                id,
+                retire_requested_at AS retireRequestedAt
+              FROM environments
+              ORDER BY id
+            `,
+          )
+          .all(),
+      ).toEqual([
+        { id: "env_ready", retireRequestedAt: null },
+        { id: "env_retiring", retireRequestedAt: 1234 },
+      ]);
+    } finally {
+      closeConnection(db);
+    }
+  });
+
   it("moves experiment columns into key/value rows without losing values", () => {
     const db = createConnection(":memory:");
 
@@ -1374,6 +1579,9 @@ describe("migrate", () => {
     restoreWideExperimentsTable(db);
     dropOnboardingCompletedAtColumn(db);
     dropNewOnboardingExperimentColumn(db);
+    dropEnvironmentRetireRequestedAtColumn(db);
+    dropPluginArtifactGitCheckoutRootColumn(db);
+    dropMarketplaceCatalogSchema(db);
     // Delete by the journal timestamp, not a hash substring: migration hashes
     // are hex and can contain "0085" by coincidence.
     db.$client
@@ -1391,6 +1599,7 @@ describe("migrate", () => {
     // existing user can have projects without one.
     db.$client.prepare("DELETE FROM app_settings").run();
 
+    restoreLegacyThreadOriginColumn(db);
     migrate(db);
 
     const row = db.$client
@@ -1479,6 +1688,7 @@ describe("migrate", () => {
         "DROP INDEX IF EXISTS `threads_origin_plugin_archived_idx`",
       );
       restoreSideChatPluginExperimentColumn(db);
+      restoreLegacyThreadOriginColumn(db);
       runMigrationFile({ db, migrationPath: sideChatPluginOnlyMigrationPath });
 
       const rows = db.$client
@@ -1664,7 +1874,11 @@ describe("migrate", () => {
       dropOnboardingCompletedAtColumn(db);
       dropNewOnboardingExperimentColumn(db);
       dropHostMaxPermissionModeColumn(db);
+      dropEnvironmentRetireRequestedAtColumn(db);
+      dropPluginArtifactGitCheckoutRootColumn(db);
+      dropMarketplaceCatalogSchema(db);
 
+      restoreLegacyThreadOriginColumn(db);
       migrate(db);
 
       expect(
@@ -2063,7 +2277,11 @@ describe("migrate", () => {
       dropOnboardingCompletedAtColumn(db);
       dropNewOnboardingExperimentColumn(db);
       dropHostMaxPermissionModeColumn(db);
+      dropEnvironmentRetireRequestedAtColumn(db);
+      dropPluginArtifactGitCheckoutRootColumn(db);
+      dropMarketplaceCatalogSchema(db);
 
+      restoreLegacyThreadOriginColumn(db);
       expect(
         db.$client
           .prepare<[number], MigrationCountRow>(
@@ -2159,7 +2377,11 @@ describe("migrate", () => {
       dropOnboardingCompletedAtColumn(db);
       dropNewOnboardingExperimentColumn(db);
       dropHostMaxPermissionModeColumn(db);
+      dropEnvironmentRetireRequestedAtColumn(db);
+      dropPluginArtifactGitCheckoutRootColumn(db);
+      dropMarketplaceCatalogSchema(db);
 
+      restoreLegacyThreadOriginColumn(db);
       expect(() => migrate(db)).not.toThrow();
 
       expect(readTableNames(db)).toContain("thread_sections");
@@ -2371,6 +2593,7 @@ describe("migrate", () => {
       db.$client
         .prepare("ALTER TABLE `threads` DROP COLUMN `origin_kind`")
         .run();
+      restoreLegacyThreadOriginColumn(db);
       db.$client
         .prepare<DeleteMigrationParameters>(
           `
@@ -2474,8 +2697,7 @@ describe("migrate", () => {
                 id,
                 parent_thread_id AS parentThreadId,
                 source_thread_id AS sourceThreadId,
-                origin_kind AS originKind,
-                child_origin AS childOrigin
+                origin_kind AS originKind
               FROM threads
               WHERE id IN ('thr_delegated_child', 'thr_fork', 'thr_side_chat')
               ORDER BY id
@@ -2488,14 +2710,12 @@ describe("migrate", () => {
           parentThreadId: "thr_source",
           sourceThreadId: null,
           originKind: null,
-          childOrigin: null,
         },
         {
           id: "thr_fork",
           parentThreadId: null,
           sourceThreadId: "thr_source",
           originKind: "fork",
-          childOrigin: null,
         },
         {
           // 0038 moves the provenance, then 0084 hands the side chat to the
@@ -2504,9 +2724,14 @@ describe("migrate", () => {
           parentThreadId: null,
           sourceThreadId: "thr_source",
           originKind: "fork",
-          childOrigin: null,
         },
       ]);
+      expect(
+        db.$client
+          .prepare<[], TableInfoRow>("PRAGMA table_info(threads)")
+          .all()
+          .some((column) => column.name === "child_origin"),
+      ).toBe(false);
     } finally {
       closeConnection(db);
     }
@@ -4520,6 +4745,47 @@ describe("migrate", () => {
     }
   });
 
+  it("names only catalog provenance during the marketplace upgrade", () => {
+    const db = createConnection(":memory:");
+    try {
+      db.$client.exec(`
+        CREATE TABLE plugins (
+          id text PRIMARY KEY NOT NULL,
+          provenance text NOT NULL,
+          catalog_entry_id text
+        );
+        INSERT INTO plugins VALUES
+          ('catalog-plugin', 'catalog', 'catalog-entry'),
+          ('direct-plugin', 'direct', NULL),
+          ('builtin-plugin', 'builtin', NULL);
+      `);
+
+      runMigrationFile({
+        db,
+        migrationPath: namedMarketplaceCatalogMigrationPath,
+      });
+
+      expect(
+        db.$client
+          .prepare<[], MigratedNamedCatalogProvenanceRow>(
+            `
+              SELECT id,
+                catalog_marketplace_name AS catalogMarketplaceName
+              FROM plugins
+              ORDER BY id
+            `,
+          )
+          .all(),
+      ).toEqual([
+        { id: "builtin-plugin", catalogMarketplaceName: null },
+        { id: "catalog-plugin", catalogMarketplaceName: "bb-official" },
+        { id: "direct-plugin", catalogMarketplaceName: null },
+      ]);
+    } finally {
+      closeConnection(db);
+    }
+  });
+
   it("backfills legacy side-chat rows to hidden visibility", () => {
     const db = createConnection(":memory:");
     try {
@@ -4542,7 +4808,8 @@ describe("migrate", () => {
         providerId: "codex",
         originKind: "fork",
       });
-      const childOriginSideChat = createThread(db, noopNotifier, {
+      restoreLegacyThreadOriginColumn(db);
+      const legacyOriginSideChat = createThread(db, noopNotifier, {
         projectId: project.id,
         providerId: "codex",
       });
@@ -4556,7 +4823,7 @@ describe("migrate", () => {
         .run(originKindSideChat.id);
       db.$client
         .prepare("UPDATE threads SET child_origin = 'side-chat' WHERE id = ?")
-        .run(childOriginSideChat.id);
+        .run(legacyOriginSideChat.id);
 
       // The merged 0079 also ADDs the experiment column; drop it first so the
       // ALTER re-applies cleanly and the backfill UPDATE runs on seeded rows.
@@ -4573,7 +4840,7 @@ describe("migrate", () => {
           )
           .all()
           .filter((row) =>
-            [originKindSideChat.id, childOriginSideChat.id, fork.id].includes(
+            [originKindSideChat.id, legacyOriginSideChat.id, fork.id].includes(
               row.id,
             ),
           )
@@ -4581,7 +4848,7 @@ describe("migrate", () => {
       ).toEqual(
         [
           { id: originKindSideChat.id, visibility: "hidden" },
-          { id: childOriginSideChat.id, visibility: "hidden" },
+          { id: legacyOriginSideChat.id, visibility: "hidden" },
           { id: fork.id, visibility: "visible" },
         ].sort((left, right) => left.id.localeCompare(right.id)),
       );

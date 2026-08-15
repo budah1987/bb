@@ -153,7 +153,6 @@ function toPublicThread(thread: Thread): Thread {
     parentThreadId: thread.parentThreadId,
     sourceThreadId: thread.sourceThreadId,
     originKind: thread.originKind,
-    childOrigin: thread.originKind ?? thread.childOrigin,
     originPluginId: thread.originPluginId,
     visibility: thread.visibility,
     archivedAt: thread.archivedAt,
@@ -256,6 +255,10 @@ export function toThreadResponseFromThread(
   });
   return {
     ...threadWithRuntime,
+    activeBackgroundAgentCount:
+      listActiveBackgroundTaskCountsByThreadIds(deps.db, {
+        threadIds: [args.thread.id],
+      })[0]?.activeBackgroundAgentCount ?? 0,
     canSpawnChild: canThreadSpawnChild(deps, { thread: args.thread }),
   };
 }

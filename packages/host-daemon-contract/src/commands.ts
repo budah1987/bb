@@ -42,7 +42,9 @@ import {
   providerCliStatusResponseSchema,
 } from "./local.js";
 
-export const HOST_DAEMON_PROTOCOL_VERSION = 103 as const;
+// Merged BBamir (103) and upstream (123) command sets, so the version must
+// exceed both: every enrolled daemon is rejected once and then auto-updates.
+export const HOST_DAEMON_PROTOCOL_VERSION = 124 as const;
 export const githubAccountLoginSchema = z.string().trim().min(1).max(255);
 
 export {
@@ -332,6 +334,24 @@ export const threadStartCommandSchema = hostDaemonThreadTargetSchema
     refineGroupedInputMatchesFlatInput(value, ctx);
   });
 
+export const threadRewindPrepareCommandSchema = hostDaemonThreadTargetSchema
+  .merge(hostDaemonThreadRuntimeContextSchema)
+  .extend({
+    type: z.literal("thread.rewind.prepare"),
+    /** Server-minted per-attempt staging id; each lease owns one staged fork. */
+    leaseId: z.string().min(1),
+    sourceProviderThreadId: z.string().min(1),
+    retainThroughProviderCheckpoint: z.string().min(1),
+  })
+  .strict();
+
+export const threadRewindDiscardCommandSchema = hostDaemonThreadTargetSchema
+  .extend({
+    type: z.literal("thread.rewind.discard"),
+    leaseId: z.string().min(1),
+  })
+  .strict();
+
 export const turnSubmitTargetSchema = z.discriminatedUnion("mode", [
   z.object({
     mode: z.literal("start"),
@@ -365,9 +385,20 @@ const turnSubmitCommandSchema = hostDaemonThreadTargetSchema
   .strict()
   .superRefine(refineGroupedInputMatchesFlatInput);
 
+/**
+ * `interrupt` stops a live turn: the daemon waits for the runtime to learn the
+ * active turn so the provider stop carries the right turn id. `release` only
+ * unloads a runtime the server already knows is idle, so the daemon skips that
+ * wait and the server leaves thread lifecycle state alone.
+ */
+export const threadStopIntentSchema = z.enum(["interrupt", "release"]);
+
+export type ThreadStopIntent = z.infer<typeof threadStopIntentSchema>;
+
 export const threadStopCommandSchema = hostDaemonThreadTargetSchema
   .extend({
     type: z.literal("thread.stop"),
+    intent: threadStopIntentSchema,
   })
   .strict();
 
@@ -1220,6 +1251,8 @@ const environmentDestroyCommandSchema = hostDaemonWorkspaceTargetSchema
 const workspaceStatusCommandSchema = hostDaemonWorkspaceTargetSchema.extend({
   type: z.literal("workspace.status"),
   mergeBaseBranch: gitBranchNameSchema.optional(),
+  maxUntrackedLineStatFiles: z.number().int().positive(),
+  maxUntrackedLineStatBytes: z.number().int().positive(),
 });
 
 const workspaceDockerMountsCommandSchema = hostDaemonWorkspaceTargetSchema
@@ -1270,6 +1303,7 @@ const workspaceDiffCommandSchema = hostDaemonWorkspaceTargetSchema.extend({
   paths: workspaceCommitPathsSchema.optional(),
   maxDiffBytes: z.number().int().positive(),
   maxFileListBytes: z.number().int().positive(),
+  maxUntrackedFiles: z.number().int().positive(),
 });
 
 const workspaceDiffFilesCommandSchema = hostDaemonWorkspaceTargetSchema.extend({
@@ -1621,6 +1655,7 @@ const workspaceDiffFilesResultSchema = z.discriminatedUnion("outcome", [
       files: z.array(rawDiffFileStatSchema),
       shortstat: z.string(),
       mergeBaseRef: z.string().nullable(),
+      truncated: z.boolean(),
     })
     .strict(),
   z
@@ -1788,6 +1823,11 @@ const threadStartResultSchema = z.object({
 const turnSubmitResultSchema = z.object({
   appliedAs: z.enum(["new-turn", "steer"]),
 });
+const threadStopResultSchema = z
+  .object({
+    providerCheckpointId: z.string().min(1).nullable(),
+  })
+  .strict();
 const emptyCommandResultSchema = z.object({});
 const projectPathResultSchema = z.object({ path: z.string().min(1) }).strict();
 const projectInspectResultSchema = projectPathResultSchema
@@ -2169,6 +2209,24 @@ function defineHostDaemonCommandDescriptor<
 }
 
 export const hostDaemonCommandRegistry = {
+  "thread.rewind.discard": defineHostDaemonCommandDescriptor({
+    type: "thread.rewind.discard",
+    schema: threadRewindDiscardCommandSchema,
+    resultSchema: emptyCommandResultSchema,
+    transport: "settled",
+    retryable: false,
+    flushEventsBeforeResult: true,
+    envLane: "read",
+  }),
+  "thread.rewind.prepare": defineHostDaemonCommandDescriptor({
+    type: "thread.rewind.prepare",
+    schema: threadRewindPrepareCommandSchema,
+    resultSchema: threadStartResultSchema,
+    transport: "settled",
+    retryable: false,
+    flushEventsBeforeResult: true,
+    envLane: "read",
+  }),
   "thread.start": defineHostDaemonCommandDescriptor({
     type: "thread.start",
     schema: threadStartCommandSchema,
@@ -2190,7 +2248,7 @@ export const hostDaemonCommandRegistry = {
   "thread.stop": defineHostDaemonCommandDescriptor({
     type: "thread.stop",
     schema: threadStopCommandSchema,
-    resultSchema: emptyCommandResultSchema,
+    resultSchema: threadStopResultSchema,
     transport: "settled",
     retryable: false,
     flushEventsBeforeResult: true,
@@ -2925,13 +2983,6 @@ function hostDaemonCommandDescriptorsForTransport<
   );
 }
 
-function hostDaemonCommandDescriptorsForRetryableOnlineRpc(): HostDaemonRetryableOnlineRpcCommandDescriptor[] {
-  return hostDaemonCommandDescriptorsForTransport("onlineRpc").filter(
-    (descriptor): descriptor is HostDaemonRetryableOnlineRpcCommandDescriptor =>
-      descriptor.retryable,
-  );
-}
-
 function hostDaemonCommandTypesForTransport<
   const Transport extends HostDaemonCommandTransport,
 >(transport: Transport): HostDaemonCommandTypeForTransport<Transport>[] {
@@ -2953,19 +3004,6 @@ function hostDaemonCommandSchemaForTransport<
       HostDaemonSchemaForTransport<Transport>,
       HostDaemonSchemaForTransport<Transport>,
       ...HostDaemonSchemaForTransport<Transport>[],
-    ],
-  );
-}
-
-function hostDaemonRetryableOnlineRpcCommandUnionSchema(): z.ZodType<HostDaemonRetryableOnlineRpcCommand> {
-  const schemas = hostDaemonCommandDescriptorsForRetryableOnlineRpc().map(
-    (descriptor) => descriptor.schema,
-  );
-  return z.union(
-    schemas as [
-      HostDaemonRetryableOnlineRpcCommandSchema,
-      HostDaemonRetryableOnlineRpcCommandSchema,
-      ...HostDaemonRetryableOnlineRpcCommandSchema[],
     ],
   );
 }
@@ -3028,8 +3066,6 @@ export const hostDaemonCommandSchema =
   hostDaemonCommandSchemaForTransport("settled");
 export const hostDaemonOnlineRpcCommandSchema =
   hostDaemonCommandSchemaForTransport("onlineRpc");
-export const hostDaemonRetryableOnlineRpcCommandSchema =
-  hostDaemonRetryableOnlineRpcCommandUnionSchema();
 export const hostDaemonRpcCommandSchema = z.union([
   hostDaemonOnlineRpcCommandSchema,
   hostDaemonCommandSchema,

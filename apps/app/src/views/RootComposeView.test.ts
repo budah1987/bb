@@ -37,7 +37,7 @@ import {
 } from "./RootComposeView";
 import {
   buildReuseThreadOptions,
-  isProjectSourceWorktreeUnavailable,
+  resolveProjectSourceWorktreeDisabledReason,
   resolveComposeHostId,
   resolveRootComposeEffectiveEnvironmentValue,
   resolveRootComposeProjectRouting,
@@ -223,7 +223,6 @@ function makeThread(args: MakeThreadArgs): ThreadListEntry {
     originKind: null,
     originPluginId: null,
     visibility: args.visibility ?? "visible",
-    childOrigin: null,
     archivedAt: null,
     pinnedAt: null,
     pinSortKey: null,
@@ -784,14 +783,16 @@ describe("shouldNavigateAfterThreadCreate", () => {
   });
 });
 
-describe("isProjectSourceWorktreeUnavailable", () => {
-  it("treats unknown checkout metadata as unavailable for worktree creation", () => {
-    expect(isProjectSourceWorktreeUnavailable(undefined)).toBe(false);
+describe("resolveProjectSourceWorktreeDisabledReason", () => {
+  it("explains why non-git and commitless sources cannot create worktrees", () => {
+    expect(resolveProjectSourceWorktreeDisabledReason(undefined)).toBeNull();
     expect(
-      isProjectSourceWorktreeUnavailable(makeProjectBranchesResponse({})),
-    ).toBe(false);
+      resolveProjectSourceWorktreeDisabledReason(
+        makeProjectBranchesResponse({}),
+      ),
+    ).toBeNull();
     expect(
-      isProjectSourceWorktreeUnavailable(
+      resolveProjectSourceWorktreeDisabledReason(
         makeProjectBranchesResponse({
           checkout: {
             kind: "unknown",
@@ -803,7 +804,20 @@ describe("isProjectSourceWorktreeUnavailable", () => {
           originDefaultBranch: null,
         }),
       ),
-    ).toBe(true);
+    ).toBe("New worktrees require a Git repository with at least one commit");
+    expect(
+      resolveProjectSourceWorktreeDisabledReason(
+        makeProjectBranchesResponse({
+          checkout: { kind: "unborn", branchName: "main" },
+          defaultBranch: null,
+          defaultBranchRelation: null,
+          defaultWorktreeBaseBranch: null,
+          originDefaultBranch: null,
+        }),
+      ),
+    ).toBe(
+      "Project source has no commits. Create an initial commit before creating a worktree",
+    );
   });
 });
 

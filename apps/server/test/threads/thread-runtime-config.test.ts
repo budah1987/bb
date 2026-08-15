@@ -663,37 +663,40 @@ describe("thread runtime config", () => {
     });
   });
 
-  it("accepts max reasoning for Pi sessions", async () => {
-    await withTestHarness(async (harness) => {
-      const { host } = seedHostSession(harness.deps, {
-        id: "host-runtime-pi-max-reasoning",
-      });
-      const { project } = seedProjectWithSource(harness.deps, {
-        hostId: host.id,
-      });
-      const environment = seedEnvironment(harness.deps, {
-        hostId: host.id,
-        projectId: project.id,
-      });
-      const thread = seedThread(harness.deps, {
-        projectId: project.id,
-        environmentId: environment.id,
-        providerId: "pi",
-      });
+  it.each(["none", "max"] as const)(
+    "accepts %s reasoning for Pi sessions",
+    async (reasoningLevel) => {
+      await withTestHarness(async (harness) => {
+        const { host } = seedHostSession(harness.deps, {
+          id: `host-runtime-pi-${reasoningLevel}-reasoning`,
+        });
+        const { project } = seedProjectWithSource(harness.deps, {
+          hostId: host.id,
+        });
+        const environment = seedEnvironment(harness.deps, {
+          hostId: host.id,
+          projectId: project.id,
+        });
+        const thread = seedThread(harness.deps, {
+          projectId: project.id,
+          environmentId: environment.id,
+          providerId: "pi",
+        });
 
-      const execution = await resolveExecutionOptions(harness.deps, {
-        threadId: thread.id,
-        requestedExecution: {
-          model: "openai-codex/gpt-5.6-luna",
-          permissionMode: "full",
-          reasoningLevel: "max",
-          source: "client/turn/requested",
-        },
-      });
+        const execution = await resolveExecutionOptions(harness.deps, {
+          threadId: thread.id,
+          requestedExecution: {
+            model: "openai-codex/gpt-5.6-luna",
+            permissionMode: "full",
+            reasoningLevel,
+            source: "client/turn/requested",
+          },
+        });
 
-      expect(execution.reasoningLevel).toBe("max");
-    });
-  });
+        expect(execution.reasoningLevel).toBe(reasoningLevel);
+      });
+    },
+  );
 
   it("rejects reasoning levels unsupported by the provider", async () => {
     await withTestHarness(async (harness) => {
@@ -857,8 +860,9 @@ describe("thread runtime config", () => {
 
       setExperiments(harness.db, {
         claudeCodeMockCliTraffic: true,
+        editMessages: false,
         newOnboarding: false,
-        toolsHub: false,
+        providerSessionReaping: false,
       });
 
       expect((await buildCommand(2)).options.claudeCodeMockCliTraffic).toEqual({
@@ -918,7 +922,7 @@ describe("thread runtime config", () => {
     });
   });
 
-  it("disables provider-native subagent tools independently", async () => {
+  it("carries provider-native feature settings independently", async () => {
     await withTestHarness(async (harness) => {
       setAppSettings(harness.db, {
         ...defaultAppSettings,
@@ -971,7 +975,7 @@ describe("thread runtime config", () => {
       const claudeCode = await build("claude-code");
       expect(claudeCode.options.providerSubagentsEnabled).toBe(false);
       expect(claudeCode.options.workflowsEnabled).toBe(false);
-      expect(claudeCode.disallowedTools).toEqual(["Task", "Workflow"]);
+      expect(claudeCode.disallowedTools).toBeUndefined();
     });
   });
 
@@ -1084,7 +1088,7 @@ describe("thread runtime config", () => {
     });
   });
 
-  it("derives ask escalation only for direct user root-thread work", async () => {
+  it("derives ask escalation for user-initiated work on root and child threads", async () => {
     await withTestHarness(async (harness) => {
       const { host } = seedHostSession(harness.deps, {
         id: "host-runtime-permission-escalation",
@@ -1134,6 +1138,12 @@ describe("thread runtime config", () => {
         resolvePermissionEscalation({
           thread: childThread,
           initiator: "user",
+        }),
+      ).toBe("ask");
+      expect(
+        resolvePermissionEscalation({
+          thread: childThread,
+          initiator: "system",
         }),
       ).toBe("deny");
       expect(

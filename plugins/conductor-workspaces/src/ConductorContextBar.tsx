@@ -16,7 +16,7 @@ import {
   type PluginSidebarThread,
   type PluginNewThreadContextBarProps,
   type PluginThreadContextBarProps,
-} from "@bb/plugin-sdk/app";
+} from "@get-bb/plugin-sdk/app";
 import { Icon } from "../components/ui/icon";
 import {
   DropdownMenu,

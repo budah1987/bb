@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from "node:crypto";
 import { dirname, extname, isAbsolute, relative, resolve } from "node:path";
-import { defineRpcContract, type BbPluginApi } from "@bb/plugin-sdk";
+import { defineRpcContract, type BbPluginApi } from "@get-bb/plugin-sdk";
 import { z } from "zod";
 
 const MAX_PREVIEW_BYTES = 10 * 1024 * 1024;

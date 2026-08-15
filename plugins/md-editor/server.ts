@@ -3,7 +3,7 @@ import { createHash } from "node:crypto";
 import { isUtf8 } from "node:buffer";
 import path from "node:path";
 import { promisify } from "node:util";
-import { defineRpcContract, type BbPluginApi } from "@bb/plugin-sdk";
+import { defineRpcContract, type BbPluginApi } from "@get-bb/plugin-sdk";
 import { z } from "zod";
 
 const execFileAsync = promisify(execFile);

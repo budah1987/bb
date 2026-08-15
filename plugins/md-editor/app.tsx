@@ -4,7 +4,7 @@ import {
   definePluginApp,
   type PluginFileOpenerProps,
   useRpc,
-} from "@bb/plugin-sdk/app";
+} from "@get-bb/plugin-sdk/app";
 import type { rpcContract } from "./server";
 
 function MarkdownEditorHome() {

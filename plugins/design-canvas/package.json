@@ -22,7 +22,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@bb/plugin-sdk": "workspace:*",
+    "@get-bb/plugin-sdk": "workspace:*",
     "@bb/shared-ui": "workspace:*",
     "react": "^19.0.0",
     "zod": "4.3.6"

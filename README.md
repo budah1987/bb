@@ -11,9 +11,8 @@
 [![npm version](https://img.shields.io/npm/v/bb-app.svg)](https://www.npmjs.com/package/bb-app)
 [![Join Discord](https://img.shields.io/badge/Discord-Join%20server-5865F2?logo=discord&logoColor=white)](https://discord.gg/kvBU6tJhcJ)
 
-bb is an agentic IDE that can control itself. You can seamlessly
-orchestrate all of your favorite coding agents together and have them
-programmatically use bb too.
+bb is an agentic IDE that builds itself. It can control, customize, and automate
+itself, laying the groundwork for your own software factory.
 
 Every surface — the desktop app, web app, CLI, and HTTP API — is a first-class
 way to drive bb. Work runs in threads you can follow live, steer at any point,
@@ -35,7 +34,7 @@ The recommended way to start using bb is the desktop app:
 
 **[Download the latest desktop app](https://github.com/get-bb/bb/releases/tag/desktop-latest)**
 
-The desktop build is currently macOS Apple Silicon (arm64) only. Intel Mac and
+The desktop build supports macOS on Apple Silicon (arm64) and Intel (x64).
 Linux users should run bb with `npx` instead. On Windows, run bb inside
 [WSL2 (Windows Subsystem for Linux)](https://learn.microsoft.com/windows/wsl/install):
 install WSL2 first, then run the same `npx` command below from your WSL2 (Linux)

@@ -7,13 +7,14 @@ import type {
   PluginMessageActionRegistration,
   PluginMessageDirectiveRegistration,
   PluginNavPanelRegistration,
+  PluginNewThreadPanelActionRegistration,
   PluginSettingsSectionRegistration,
   PluginSidebarFooterActionRegistration,
   PluginThreadHeaderActionRegistration,
   PluginThreadRailSectionRegistration,
   PluginThreadListRegistration,
   PluginThreadPanelActionRegistration,
-} from "@bb/plugin-sdk";
+} from "@get-bb/plugin-sdk";
 import {
   CONDUCTOR_REPOSITORY_DETAILS_PANEL_KEY,
   conductorRepositoryDetailsPanel,
@@ -32,6 +33,8 @@ export interface PluginRegistrationSet {
   settingsSections: readonly PluginSettingsSectionRegistration[];
   navPanels: readonly PluginNavPanelRegistration[];
   threadPanelActions: readonly PluginThreadPanelActionRegistration[];
+  /** Optional for bundles built before this experimental slot existed. */
+  newThreadPanelActions?: readonly PluginNewThreadPanelActionRegistration[];
   composerCustomizations?: readonly ComposerCustomization[];
   pendingInteractions?: readonly PluginPendingInteractionRegistration[];
   sidebarFooterActions: readonly PluginSidebarFooterActionRegistration[];
@@ -68,6 +71,8 @@ export interface PluginNavPanelSlot
   extends PluginNavPanelRegistration, PluginSlotBase {}
 export interface PluginThreadPanelActionSlot
   extends PluginThreadPanelActionRegistration, PluginSlotBase {}
+export interface PluginNewThreadPanelActionSlot
+  extends PluginNewThreadPanelActionRegistration, PluginSlotBase {}
 export interface PluginComposerCustomizationSlot
   extends ComposerCustomization, PluginSlotBase {}
 export interface PluginPendingInteractionSlot
@@ -93,6 +98,7 @@ export interface PluginSlotSnapshot {
   settingsSections: readonly PluginSettingsSectionSlot[];
   navPanels: readonly PluginNavPanelSlot[];
   threadPanelActions: readonly PluginThreadPanelActionSlot[];
+  newThreadPanelActions: readonly PluginNewThreadPanelActionSlot[];
   composerCustomizations: readonly PluginComposerCustomizationSlot[];
   pendingInteractions: readonly PluginPendingInteractionSlot[];
   sidebarFooterActions: readonly PluginSidebarFooterActionSlot[];
@@ -109,6 +115,7 @@ export const EMPTY_PLUGIN_SLOT_SNAPSHOT: PluginSlotSnapshot = {
   settingsSections: [],
   navPanels: [],
   threadPanelActions: [],
+  newThreadPanelActions: [],
   composerCustomizations: [],
   pendingInteractions: [],
   sidebarFooterActions: [],
@@ -135,6 +142,7 @@ function buildSnapshot(): PluginSlotSnapshot {
     settingsSections: PluginSettingsSectionSlot[];
     navPanels: PluginNavPanelSlot[];
     threadPanelActions: PluginThreadPanelActionSlot[];
+    newThreadPanelActions: PluginNewThreadPanelActionSlot[];
     composerCustomizations: PluginComposerCustomizationSlot[];
     pendingInteractions: PluginPendingInteractionSlot[];
     sidebarFooterActions: PluginSidebarFooterActionSlot[];
@@ -149,6 +157,7 @@ function buildSnapshot(): PluginSlotSnapshot {
     settingsSections: [],
     navPanels: [conductorRepositoryDetailsPanel],
     threadPanelActions: [],
+    newThreadPanelActions: [],
     composerCustomizations: [],
     pendingInteractions: [],
     sidebarFooterActions: [],
@@ -179,6 +188,13 @@ function buildSnapshot(): PluginSlotSnapshot {
     }
     for (const registration of set.threadPanelActions) {
       next.threadPanelActions.push({ ...registration, pluginId, generation });
+    }
+    for (const registration of set.newThreadPanelActions ?? []) {
+      next.newThreadPanelActions.push({
+        ...registration,
+        pluginId,
+        generation,
+      });
     }
     for (const registration of set.composerCustomizations ?? []) {
       next.composerCustomizations.push({

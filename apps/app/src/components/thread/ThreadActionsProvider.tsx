@@ -54,6 +54,7 @@ const ARCHIVE_ROW_TRANSITION_MS = 250;
 
 export interface ThreadActionsContextValue {
   archiveThreadAndChildren: (thread: Thread) => void;
+  renameThread: (threadId: string, title: string) => void;
   requestRename: (thread: Thread) => void;
   requestDelete: (thread: Thread, options?: { fallbackThread: Thread }) => void;
   unarchiveThread: (thread: Thread) => void;
@@ -97,6 +98,13 @@ interface DeleteThreadActionRequest {
 interface ThreadActionContext {
   childThreadCount: number;
 }
+
+/**
+ * Keeps immediate archive feedback actionable without pinning a toast for the
+ * full server-side recovery window. The archived thread's normal Unarchive
+ * action remains available while its environment is still retiring.
+ */
+const ARCHIVE_UNDO_TOAST_DURATION_MS = 10_000;
 
 export function ThreadActionsProvider({
   children,
@@ -211,6 +219,13 @@ export function ThreadActionsProvider({
       });
     },
     [openRenameDialog],
+  );
+
+  const renameThread = useCallback(
+    (threadId: string, title: string) => {
+      updateMutate({ id: threadId, title });
+    },
+    [updateMutate],
   );
 
   const submitRename = useCallback(
@@ -399,7 +414,10 @@ export function ThreadActionsProvider({
                   onClick: () => undefined,
                 },
                 className: "bb-archive-toast",
-                duration: 6000,
+                // Upstream #1016 pins this to the server-side archive grace
+                // period, so the Undo affordance and the lossless recovery
+                // window expire together.
+                duration: ARCHIVE_UNDO_TOAST_DURATION_MS,
                 id: toastId,
               });
             },
@@ -484,6 +502,7 @@ export function ThreadActionsProvider({
 
   const value = useMemo<ThreadActionsContextValue>(
     () => ({
+      renameThread,
       requestRename,
       requestDelete,
       archiveThreadAndChildren: archiveThreadAndChildrenAction,
@@ -493,6 +512,7 @@ export function ThreadActionsProvider({
     }),
     [
       archiveThreadAndChildrenAction,
+      renameThread,
       requestRename,
       requestDelete,
       togglePin,

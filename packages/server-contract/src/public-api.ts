@@ -64,6 +64,8 @@ import type {
   CreateQueuedMessageRequest,
   CreateThreadSectionRequest,
   CreateThreadRequest,
+  EditMessageRequest,
+  EditMessageResponse,
   ForkThreadRequest,
   RestartTerminalRequest,
   DeleteThreadSectionRequest,
@@ -167,6 +169,8 @@ import type {
   ReorderProjectRequest,
   ReorderQueuedMessageRequest,
   ResolvePendingInteractionRequest,
+  ResolveThreadMentionsRequest,
+  ResolveThreadMentionsResponse,
   RespondPluginInteractionRequest,
   SendMessageRequest,
   SetQueuedMessageGroupBoundaryRequest,
@@ -205,7 +209,6 @@ import type {
   TerminalResizeRequest,
   ThreadArchiveAllResponse,
   ThreadChildSummaryResponse,
-  ThreadComposerBootstrapResponse,
   ThreadEventWaitQuery,
   ThreadEventsQuery,
   ThreadSectionMutationResponse,
@@ -352,8 +355,10 @@ import {
   reorderProjectRequestSchema,
   reorderQueuedMessageRequestSchema,
   resolvePendingInteractionRequestSchema,
+  resolveThreadMentionsRequestSchema,
   respondPluginInteractionRequestSchema,
   sendMessageRequestSchema,
+  editMessageRequestSchema,
   setQueuedMessageGroupBoundaryRequestSchema,
   sendQueuedMessageRequestSchema,
   systemExecutionOptionsQuerySchema,
@@ -1212,6 +1217,14 @@ export const publicApiRoutes = {
       ),
       response: jsonResponse<ThreadSearchResponse>(),
     }),
+    resolveMentions: defineRoute({
+      path: "/threads/resolve-mentions",
+      method: "post",
+      request: jsonRequest<EmptyInput, ResolveThreadMentionsRequest>(
+        resolveThreadMentionsRequestSchema,
+      ),
+      response: jsonResponse<ResolveThreadMentionsResponse>(),
+    }),
     create: defineRoute({
       path: "/threads",
       method: "post",
@@ -1296,12 +1309,17 @@ export const publicApiRoutes = {
       ),
       response: jsonResponse<ContinueAfterProviderRateLimitResponse>(),
     }),
-    /** @deprecated App code uses dedicated composer queries. */
-    composerBootstrap: defineRoute({
-      path: "/threads/:id/composer-bootstrap",
-      method: "get",
-      request: noRequest<PathId>(),
-      response: jsonResponse<ThreadComposerBootstrapResponse>(),
+    /**
+     * Replace an accepted root user turn and every later turn. A running
+     * thread is stopped and allowed to settle before history is rewritten.
+     */
+    editMessage: defineRoute({
+      path: "/threads/:id/edit-message",
+      method: "post",
+      request: jsonRequest<PathId, EditMessageRequest>(
+        editMessageRequestSchema,
+      ),
+      response: jsonResponse<EditMessageResponse>(),
     }),
     queuedMessages: defineRoute({
       path: "/threads/:id/queued-messages",
@@ -1376,6 +1394,12 @@ export const publicApiRoutes = {
     }),
     stop: defineRoute({
       path: "/threads/:id/stop",
+      method: "post",
+      request: noRequest<PathId>(),
+      response: jsonResponse<{ ok: true }>(),
+    }),
+    compact: defineRoute({
+      path: "/threads/:id/compact",
       method: "post",
       request: noRequest<PathId>(),
       response: jsonResponse<{ ok: true }>(),

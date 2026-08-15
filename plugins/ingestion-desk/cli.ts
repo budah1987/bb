@@ -2,7 +2,7 @@ import type {
   BbPluginApi,
   PluginCliContext,
   PluginCliResult,
-} from "@bb/plugin-sdk";
+} from "@get-bb/plugin-sdk";
 import type { IngestionStore } from "./store.js";
 import type { IngestionSourceInput } from "./contract.js";
 

@@ -1,4 +1,4 @@
-import type { BbPluginApi, PluginCliResult } from "@bb/plugin-sdk";
+import type { BbPluginApi, PluginCliResult } from "@get-bb/plugin-sdk";
 import {
   claudeAutoCompactRpcContract,
   compactSettingsSchema,

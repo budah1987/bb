@@ -3,7 +3,7 @@ import {
   definePluginApp,
   useRpc,
   type PluginMessageDirectiveProps,
-} from "@bb/plugin-sdk/app";
+} from "@get-bb/plugin-sdk/app";
 import type { PreviewMetadata, rpcContract } from "./server";
 import { Button } from "@bb/shared-ui/button";
 import { Icon } from "@bb/shared-ui/icon";

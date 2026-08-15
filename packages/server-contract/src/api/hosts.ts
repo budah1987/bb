@@ -2,11 +2,8 @@ import { z } from "zod";
 import { permissionModeSchema } from "@bb/domain";
 import {
   pathsExistRequestSchema,
-  pathsExistResponseSchema,
-  pickFolderResponseSchema,
   providerCliInstallEventSchema,
   providerCliInstallRequestSchema,
-  providerCliStatusResponseSchema,
   providerAuthSnapshotSchema,
   providerAuthStartRequestSchema,
   providerAuthSubmitCodeRequestSchema,
@@ -111,7 +108,6 @@ export type HostRetryUpdateResponse = z.infer<
 export const hostPathsExistRequestSchema = pathsExistRequestSchema;
 export type HostPathsExistRequest = PathsExistRequest;
 
-export const hostPathsExistResponseSchema = pathsExistResponseSchema;
 export type HostPathsExistResponse = PathsExistResponse;
 
 export const hostPickFolderRequestSchema = z
@@ -121,11 +117,8 @@ export const hostPickFolderRequestSchema = z
   .strict();
 export type HostPickFolderRequest = z.infer<typeof hostPickFolderRequestSchema>;
 
-export const hostPickFolderResponseSchema = pickFolderResponseSchema;
 export type HostPickFolderResponse = PickFolderResponse;
 
-export const hostProviderCliStatusResponseSchema =
-  providerCliStatusResponseSchema;
 export type HostProviderCliStatusResponse = ProviderCliStatusResponse;
 
 export const hostProviderCliInstallRequestSchema =

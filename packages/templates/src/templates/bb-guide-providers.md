@@ -100,9 +100,38 @@ host. For example, opencode, omp, Grok Build's grok CLI, or Hermes' hermes CLI
 on PATH appears as provider acp-opencode, acp-omp, acp-grok, or
 acp-hermes-agent.
 
-Cursor ACP threads discover project skills from .cursor/skills. This root can
-be a symlink to another skill root such as .agents/skills. bb shows a skill
-through a symlinked root as read-only under the Cursor project scope.
+bb indexes the native user and project skill roots for Codex, Claude Code, Pi,
+Cursor, OpenCode, omp, Grok Build, and Hermes Agent. This includes compatibility
+roots such as .agents/skills and .claude/skills when the provider supports them.
+It also includes project ancestor roots for providers that search to the Git
+repository root. Configured Pi, omp, Grok, and Hermes directories are included.
+Enabled provider plugins also contribute skills to the selected provider's `/`
+command menu. `bb skill list` shows native skills for Claude Code, Codex, and
+Cursor.
+
+ACP providers discover models from the agent itself. For acp-opencode, the
+list mirrors the OpenCode catalog, so a custom model from the OpenCode config
+appears automatically. Discover and select one with:
+
+  bb provider models acp-opencode --environment "$BB_ENVIRONMENT_ID"
+  bb thread spawn --provider acp-opencode --model <provider/model>
+
+bb applies the selected model to the ACP session before the first prompt.
+
+An OpenCode model and an OpenCode agent are different selections. An OpenCode
+agent (build, plan, or a custom primary agent such as an orchestrator) is a
+session mode, not a model. bb does not select OpenCode agents; configure the
+default agent in the OpenCode config and the ACP session uses it.
+
+Top-level customModels in the app data-dir config.json adds extra picker
+entries. Each entry has a providerId (a built-in provider id or any acp-*
+provider id), a model id, and an optional displayName. bb skips an invalid
+entry with a warning. The entry then appears in bb provider models output and
+in the model picker, but the provider must still accept the id: claude-code
+and codex accept unlisted ids, while an ACP agent can reject an id it does
+not know at session start. OpenCode rejects unlisted ids, so add an OpenCode
+model to the OpenCode config instead. Like customAcpAgents, edit the JSON and
+run bb-app config refresh; there is no set/unset CLI surface.
 
 Custom ACP agents are configured in the app data-dir config.json under
 customAcpAgents. bb derives provider id acp-<id> from each slug id. Edit the JSON
@@ -120,3 +149,6 @@ Use top-level sharedSkillRoots for one provider-neutral skill collection. The
 user and project paths use the same relative-path rules. bb indexes these roots
 as read-only sources. It then injects the selected skills into all providers.
 The bb user and project roots keep higher precedence than matching shared roots.
+
+OpenCode ACP supports the built-in /compact command. Cursor ACP does not expose
+compatible manual compaction through ACP.
