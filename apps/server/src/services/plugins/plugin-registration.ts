@@ -1,5 +1,6 @@
 import { existsSync } from "node:fs";
 import { resolve } from "node:path";
+import { isBbManagedWorkspacePath } from "../threads/worktree-paths.js";
 import {
   getInstalledPlugin,
   getInstalledPluginRegistration,
@@ -19,10 +20,7 @@ import {
   builtinPluginSource,
   type BundledPluginRegistration,
 } from "./builtin-registry.js";
-import {
-  marketplacePolicyWideningProblem,
-  OFFICIAL_MARKETPLACE_NAME,
-} from "../plugin-catalog/marketplace-manifest.js";
+import { CURATED_MARKETPLACE_NAME } from "../plugin-catalog/marketplace-manifest.js";
 import type { PluginSourceSelection } from "@bb/server-contract";
 import { resolveSelectedSubdirectory } from "./collection-manifest.js";
 import {
@@ -44,7 +42,6 @@ import type {
   PluginServiceDeps,
 } from "./plugin-service-internal.js";
 import {
-  evaluateCompatibility,
   gitResolvedVersion,
   resolveGitRef,
   type GitRefKind,
@@ -59,6 +56,8 @@ export interface PluginRegistrationContext {
   disposeOne: (id: string) => Promise<void>;
   loadOne: (row: InstalledPluginRow) => Promise<void>;
   validateInstallDir: (args: RegisterInstalledArgs) => Promise<PluginManifest>;
+  checkEngineRange: (manifest: PluginManifest) => string | undefined;
+  checkPluginSdkRange: (manifest: PluginManifest) => string | undefined;
   syncCliSkill: () => Promise<void>;
   notifyPluginsChanged: () => void;
   list: () => PluginListEntry[];
@@ -72,6 +71,8 @@ export function createPluginRegistration(context: PluginRegistrationContext) {
     disposeOne,
     loadOne,
     validateInstallDir,
+    checkEngineRange,
+    checkPluginSdkRange,
     syncCliSkill,
     notifyPluginsChanged,
     list,
@@ -248,35 +249,27 @@ export function createPluginRegistration(context: PluginRegistrationContext) {
       args,
       initialManifest.id,
     );
-    // A marketplace listing may narrow the plugin's own engine ranges; it may
-    // never widen them, and it may not promise this bb build a plugin the
-    // listing itself declares incompatible.
-    const wideningProblem = marketplacePolicyWideningProblem(
-      args.marketplaceEngines,
-      initialManifest,
-    );
-    if (wideningProblem !== null) {
-      throw new Error(`install refused: ${wideningProblem}`);
-    }
-    if (args.marketplaceEngines !== undefined) {
-      const listed = evaluateCompatibility({
-        bbRange: args.marketplaceEngines.bb,
-        sdkRange: args.marketplaceEngines.bbPluginSdk,
-        appVersion: deps.appVersion,
-      });
-      if (listed.effective.length > 0) {
-        throw new Error(
-          `install refused by marketplace compatibility policy: ${listed.effective
-            .map((problem) => problem.message)
-            .join("; ")}`,
-        );
-      }
-    }
     if (
       args.provenance.kind !== "builtin" &&
       args.sourceIntent.kind !== "builtin"
     ) {
       refuseBuiltinShadow(initialManifest.id);
+    }
+    // Compatibility is decided here, at the one chokepoint every managed
+    // registration passes through. `validateInstallDir` runs the same checks,
+    // but a cache hit registers with `validated: true` and skips it — and a
+    // cached artifact this bb accepted before can fail its own range after a
+    // bb or SDK version change. The plugin's package.json is the only source
+    // of truth for compatibility, so read it on every path.
+    if (args.refuseEngineMismatch) {
+      const engineProblem =
+        checkEngineRange(initialManifest) ??
+        checkPluginSdkRange(initialManifest);
+      if (engineProblem !== undefined) {
+        throw new Error(
+          `install refused: plugin "${initialManifest.id}" ${engineProblem}`,
+        );
+      }
     }
     const manifest = args.validated
       ? initialManifest
@@ -343,6 +336,13 @@ export function createPluginRegistration(context: PluginRegistrationContext) {
             pluginRootDir(checkoutDir, subdirectory),
             "plugin subdirectory",
           );
+    if (isBbManagedWorkspacePath({ dataDir: deps.dataDir, path: rootDir })) {
+      logger.warn(
+        `plugin "${rootDir}" is installed from inside a bb-managed workspace; ` +
+          "its source will be deleted when that environment is destroyed (e.g. when the owning thread is archived). " +
+          "Reinstall from a stable path outside the managed workspace to avoid losing it.",
+      );
+    }
     return registerInstalled({
       rootDir,
       source: `path:${rootDir}`,
@@ -425,10 +425,10 @@ export function createPluginRegistration(context: PluginRegistrationContext) {
 
   /**
    * Rows written before marketplaces were named all came from the official
-   * catalog, so a missing name reads as `bb-official` rather than as corrupt.
+   * catalog, so a missing name reads as `bb-community` rather than as corrupt.
    */
   function catalogMarketplaceOf(row: InstalledPluginRow): string {
-    return row.catalogMarketplaceName ?? OFFICIAL_MARKETPLACE_NAME;
+    return row.catalogMarketplaceName ?? CURATED_MARKETPLACE_NAME;
   }
 
   function provenanceForRow(row: InstalledPluginRow): PluginProvenance {
@@ -524,7 +524,7 @@ export function createPluginRegistration(context: PluginRegistrationContext) {
       ? { kind: "builtin" }
       : {
           kind: "catalog",
-          marketplace: OFFICIAL_MARKETPLACE_NAME,
+          marketplace: CURATED_MARKETPLACE_NAME,
           entryId: plugin.name,
         };
   }

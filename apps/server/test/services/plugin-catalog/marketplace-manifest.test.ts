@@ -3,13 +3,12 @@ import { describe, expect, it } from "vitest";
 import { z } from "zod";
 import {
   entrySourceDisplay,
-  marketplacePolicyWideningProblem,
   parseMarketplaceManifest,
   resolveEntryIcon,
   resolvedEntrySource,
   type MarketplaceEntry,
 } from "../../../src/services/plugin-catalog/marketplace-manifest.js";
-import { BUNDLED_OFFICIAL_MARKETPLACE } from "../../../src/services/plugin-catalog/official-marketplace.js";
+import { BUNDLED_CURATED_MARKETPLACE } from "../../../src/services/plugin-catalog/curated-marketplace.js";
 
 const MANIFEST_URL = "https://getbb.app/marketplace/v1/marketplace.json";
 
@@ -59,8 +58,8 @@ function entry(overrides: Record<string, unknown> = {}): unknown {
 function manifest(plugins: unknown[]): unknown {
   return {
     schemaVersion: 1,
-    name: "bb-official",
-    displayName: "BB Official",
+    name: "bb-community",
+    displayName: "BB Community",
     plugins,
   };
 }
@@ -86,7 +85,6 @@ describe("marketplace manifest schema", () => {
           github: "acme-co",
           url: "https://acme.example",
         },
-        engines: { bb: ">=0.0.34", bbPluginSdk: "^0.5.0" },
       }),
     ]);
     expect(parsed.plugins).toHaveLength(1);
@@ -378,44 +376,25 @@ describe("marketplace manifest schema", () => {
   });
 
   describe("engines policy", () => {
-    it("allows a listing to narrow the manifest ranges", () => {
-      expect(
-        marketplacePolicyWideningProblem(
-          { bb: ">=1.2.0", bbPluginSdk: "^0.5.0" },
-          { bbEngineRange: ">=1.0.0", bbPluginSdkRange: "^0.5.0" },
-        ),
-      ).toBe(null);
-    });
-
-    it("refuses a listing that widens a manifest range", () => {
-      expect(
-        marketplacePolicyWideningProblem(
-          { bb: ">=0.1.0" },
-          { bbEngineRange: ">=1.0.0", bbPluginSdkRange: undefined },
-        ),
-      ).toMatch(/widens plugin manifest range/);
-      expect(
-        marketplacePolicyWideningProblem(
-          { bbPluginSdk: ">=0.4.0" },
-          { bbEngineRange: undefined, bbPluginSdkRange: "^0.5.0" },
-        ),
-      ).toMatch(/engines\.bbPluginSdk/);
-    });
-
-    it("ignores ranges the plugin manifest does not declare", () => {
-      expect(
-        marketplacePolicyWideningProblem(
-          { bb: ">=0.1.0" },
-          { bbEngineRange: undefined, bbPluginSdkRange: undefined },
-        ),
-      ).toBe(null);
+    // A listing no longer declares compatibility: the ranges live in the
+    // plugin's own package.json and the install pipeline enforces them there.
+    // The entry schema is strict, so a stale listing fails loudly rather than
+    // carrying a range bb would silently ignore.
+    it("refuses an entry that declares engine ranges", () => {
+      for (const engines of [
+        { bb: ">=1.0.0" },
+        { bbPluginSdk: "^0.5.0" },
+        { bb: ">=1.0.0", bbPluginSdk: "^0.5.0" },
+      ]) {
+        expect(() => parse([entry({ engines })])).toThrow(/engines/u);
+      }
     });
   });
 
   it("validates the bundled seed snapshot", () => {
     expect(() =>
       parseMarketplaceManifest(
-        BUNDLED_OFFICIAL_MARKETPLACE,
+        BUNDLED_CURATED_MARKETPLACE,
         "bundled snapshot",
       ),
     ).not.toThrow();

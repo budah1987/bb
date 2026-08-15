@@ -31,6 +31,10 @@ import {
 // imported inside buildPluginApp — importing this loads nothing heavy.
 import { buildPluginApp, createPluginDevLoop } from "@bb/plugin-build";
 import { getPluginBuildToolchain } from "./build-toolchain.js";
+import {
+  marketplacePublisherLabels,
+  pluginPublisherLabel,
+} from "../plugin-catalog/marketplace-publishers.js";
 import { deleteSecretFile, readOrCreateSecretFile } from "@bb/secret-storage";
 import {
   ROOT_PLUGIN_SOURCE_SELECTION,
@@ -100,7 +104,6 @@ import {
   type InstallContext,
   type RegisterInstalledArgs,
 } from "./managed-plugin-artifacts.js";
-import type { MarketplaceEngines } from "../plugin-catalog/marketplace-manifest.js";
 import { createPluginRegistration } from "./plugin-registration.js";
 import { createPluginRuntime, forgetMutableRoot } from "./plugin-runtime.js";
 import { createPluginUpdates } from "./plugin-updates.js";
@@ -200,7 +203,7 @@ export interface PluginService {
    * provenance, so the plugin traces back to the marketplace that listed it.
    */
   installCatalogPlugin(args: {
-    /** Marketplace that listed the entry, e.g. `bb-official`. */
+    /** Marketplace that listed the entry, e.g. `bb-community`. */
     marketplace: string;
     entryId: string;
     /** Manifest id the catalog entry promises; the install aborts on mismatch. */
@@ -208,8 +211,6 @@ export interface PluginService {
     source: string;
     /** Which plugin of a multi-plugin repository the entry lists. */
     selection: PluginSourceSelection;
-    /** Listed engine ranges; they may narrow the manifest's, never widen it. */
-    engines?: MarketplaceEngines;
     /** npm registry the listing pins. */
     npmRegistry?: string;
     /** Git commit the user confirmed before a third-party install. */
@@ -1049,6 +1050,8 @@ export function createPluginService(deps: PluginServiceDeps): PluginService {
     disposeOne,
     loadOne,
     validateInstallDir: (args) => managedValidateInstallDir(args),
+    checkEngineRange,
+    checkPluginSdkRange,
     syncCliSkill,
     notifyPluginsChanged,
     list,
@@ -1297,7 +1300,14 @@ export function createPluginService(deps: PluginServiceDeps): PluginService {
 
   function list(): PluginListEntry[] {
     const scheduleRows = listPluginSchedules(deps.db);
-    return listInstalledPlugins(deps.db)
+    const rows = listInstalledPlugins(deps.db);
+    // Resolving labels parses every marketplace's stored manifest, so it only
+    // runs when a plugin actually traces back to one. The common case — every
+    // plugin bundled or added from a source — reads no manifest at all.
+    const publisherLabels = rows.some((row) => row.provenance === "catalog")
+      ? marketplacePublisherLabels(deps.db)
+      : new Map<string, string>();
+    return rows
       .sort((a, b) => a.id.localeCompare(b.id))
       .map((row) => {
         const runtime = statuses.get(row.id);
@@ -1321,6 +1331,12 @@ export function createPluginService(deps: PluginServiceDeps): PluginService {
           ...(row.catalogMarketplaceName === null
             ? {}
             : { catalogMarketplaceName: row.catalogMarketplaceName }),
+          publisherLabel: pluginPublisherLabel({
+            sourceKind: row.sourceKind,
+            provenance: row.provenance,
+            catalogMarketplaceName: row.catalogMarketplaceName,
+            labels: publisherLabels,
+          }),
           isOrphanedBuiltin:
             row.sourceKind === "builtin" &&
             !bundledPlugins.some(
@@ -1602,9 +1618,6 @@ export function createPluginService(deps: PluginServiceDeps): PluginService {
             entryId: entry.entryId,
           },
           expectedPluginId: entry.pluginId,
-          ...(entry.engines === undefined
-            ? {}
-            : { marketplaceEngines: entry.engines }),
           ...(entry.npmRegistry === undefined
             ? {}
             : { npmRegistry: entry.npmRegistry }),

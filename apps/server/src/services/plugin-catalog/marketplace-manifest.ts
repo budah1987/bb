@@ -1,6 +1,6 @@
 import { join } from "node:path";
 import {
-  OFFICIAL_PLUGIN_MARKETPLACE_NAME,
+  CURATED_PLUGIN_MARKETPLACE_NAME,
   pluginMarketplaceNameSchema,
   ROOT_PLUGIN_SOURCE_SELECTION,
   type PluginSourceSelection,
@@ -20,7 +20,20 @@ const MARKETPLACE_SCHEMA_URL =
   "https://getbb.app/schemas/marketplace.schema.json";
 
 /** Reserved name of the marketplace BB itself curates. */
-export const OFFICIAL_MARKETPLACE_NAME = OFFICIAL_PLUGIN_MARKETPLACE_NAME;
+export const CURATED_MARKETPLACE_NAME = CURATED_PLUGIN_MARKETPLACE_NAME;
+
+/**
+ * Publisher shown for plugins that ship inside the app. They come from the
+ * build, not from a marketplace refresh, so they keep their own label even
+ * though the store groups them under the official marketplace.
+ */
+export const BUILTIN_PUBLISHER_LABEL = "BB Official";
+
+/**
+ * Grouping identity of those plugins. It is not a marketplace name, and a
+ * marketplace cannot be called this: names are lowercase kebab-case.
+ */
+export const BUILTIN_PUBLISHER_KEY = "builtin";
 
 /**
  * Entries one manifest may list. The 1 MiB document limit alone still allows
@@ -108,13 +121,6 @@ const authorSchema = z
     name: z.string().min(1),
     github: z.string().regex(GITHUB_LOGIN_PATTERN).optional(),
     url: httpsUrl.optional(),
-  })
-  .strict();
-
-const enginesSchema = z
-  .object({
-    bb: semverRange.optional(),
-    bbPluginSdk: semverRange.optional(),
   })
   .strict();
 
@@ -241,6 +247,14 @@ const gitSourceSchema = z.union([
     .strict(),
 ]);
 
+/**
+ * A listing describes a plugin and where to get it; it does not declare
+ * compatibility. A listing's copy of an `engines` range is a second source of
+ * truth that goes stale the moment the plugin publishes a new version, and it
+ * hid a compatible plugin behind an out-of-date manifest. BB reads
+ * `engines.bb` and `engines.bbPluginSdk` from the fetched plugin's own
+ * package.json and refuses the install there instead.
+ */
 const entrySchema = z
   .object({
     id: z.string().regex(NAME_PATTERN),
@@ -249,7 +263,6 @@ const entrySchema = z
     icon: iconSchema,
     tags: z.array(z.string().max(32).regex(TAG_PATTERN)).max(10).optional(),
     author: authorSchema,
-    engines: enginesSchema.optional(),
     source: z.union([npmSourceSchema, gitSourceSchema]),
   })
   .strict();
@@ -285,7 +298,6 @@ const marketplaceManifestSchema = z
 
 export type MarketplaceManifest = z.infer<typeof marketplaceManifestSchema>;
 export type MarketplaceEntry = MarketplaceManifest["plugins"][number];
-export type MarketplaceEngines = z.infer<typeof enginesSchema>;
 
 function formatIssues(error: z.ZodError): string {
   return error.issues
@@ -391,32 +403,6 @@ export function resolveEntryIcon(
     path: join(base.root, ...relativePath.split("/")),
     relativePath,
   };
-}
-
-/**
- * A marketplace may narrow the plugin manifest's engine ranges, never widen
- * them: a listing must not promise compatibility the plugin itself denies.
- */
-export function marketplacePolicyWideningProblem(
-  engines: MarketplaceEngines | undefined,
-  manifest: {
-    bbEngineRange: string | undefined;
-    bbPluginSdkRange: string | undefined;
-  },
-): string | null {
-  for (const [name, entryRange, manifestRange] of [
-    ["bb", engines?.bb, manifest.bbEngineRange],
-    ["bbPluginSdk", engines?.bbPluginSdk, manifest.bbPluginSdkRange],
-  ] as const) {
-    if (
-      entryRange !== undefined &&
-      manifestRange !== undefined &&
-      !semver.subset(entryRange, manifestRange)
-    ) {
-      return `marketplace engines.${name} range ${JSON.stringify(entryRange)} widens plugin manifest range ${JSON.stringify(manifestRange)}`;
-    }
-  }
-  return null;
 }
 
 /** Human-readable source of an entry, shown before anything is installed. */

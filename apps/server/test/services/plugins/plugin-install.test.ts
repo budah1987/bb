@@ -404,7 +404,7 @@ describe("plugin install flows", () => {
 
       const source = `git:${repoDir}@plugin/catalog-git`;
       const entry = await service.installCatalogPlugin({
-        marketplace: "bb-official",
+        marketplace: "bb-community",
         entryId: "catalog-git-entry",
         pluginId: "catalog-git",
         source,
@@ -416,13 +416,13 @@ describe("plugin install flows", () => {
         source,
         provenance: "catalog",
         catalogEntryId: "catalog-git-entry",
-        catalogMarketplaceName: "bb-official",
+        catalogMarketplaceName: "bb-community",
         status: "running",
       });
       expect(getInstalledPluginRegistration(db, "catalog-git")).toMatchObject({
         provenance: "catalog",
         catalogEntryId: "catalog-git-entry",
-        catalogMarketplaceName: "bb-official",
+        catalogMarketplaceName: "bb-community",
         sourceKind: "git",
         sourceGitUrl: repoDir,
         sourceGitRequestedRef: "plugin/catalog-git",
@@ -450,27 +450,34 @@ describe("plugin install flows", () => {
       expect(getInstalledPlugin(db, "confirmed")).toBeUndefined();
     });
 
-    it("refuses a catalog entry that widens the plugin's engine range", async () => {
-      const repoDir = join(workDir, "repo-catalog-widening");
+    // A listing declares no ranges, so nothing rejects this entry before the
+    // clone. The plugin's own package.json is the only source of truth, and
+    // the install pipeline must read it and refuse.
+    it("refuses a catalog entry whose plugin requires another plugin SDK", async () => {
+      const repoDir = join(workDir, "repo-catalog-sdk-too-new");
       await writePluginFixture(repoDir, {
-        name: "bb-plugin-narrow",
-        engines: ">=0.5.0",
+        name: "bb-plugin-sdk-listed",
+        pluginSdkRange: ">=99.0.0",
       });
       await initGitRepo(repoDir);
       await commitAll(repoDir, "init");
-      await git(repoDir, ["branch", "plugin/narrow"]);
+      await git(repoDir, ["branch", "plugin/listed"]);
 
       await expect(
         service.installCatalogPlugin({
-          marketplace: "bb-official",
-          entryId: "narrow",
-          pluginId: "narrow",
-          source: `git:${repoDir}@plugin/narrow`,
+          marketplace: "bb-community",
+          entryId: "sdk-listed",
+          pluginId: "sdk-listed",
+          source: `git:${repoDir}@plugin/listed`,
           selection: ROOT_PLUGIN_SOURCE_SELECTION,
-          engines: { bb: ">=0.1.0" },
         }),
-      ).rejects.toThrow(/widens plugin manifest range/);
-      expect(getInstalledPluginRegistration(db, "narrow")).toBeUndefined();
+      ).rejects.toThrow(
+        new RegExp(
+          `install refused.*requires bb plugin SDK >=99\\.0\\.0, running SDK is ${PLUGIN_SDK_VERSION.replaceAll(".", "\\.")}`,
+          "u",
+        ),
+      );
+      expect(getInstalledPluginRegistration(db, "sdk-listed")).toBeUndefined();
     });
 
     it("refuses a listed npm registry that is not a public https host", async () => {
@@ -482,7 +489,7 @@ describe("plugin install flows", () => {
       ]) {
         await expect(
           service.installCatalogPlugin({
-            marketplace: "bb-official",
+            marketplace: "bb-community",
             entryId: "catalog-npm-entry",
             pluginId: "registry",
             source: "npm:bb-plugin-registry@^1.0.0",
@@ -516,7 +523,7 @@ describe("plugin install flows", () => {
 
       await expect(
         service.installCatalogPlugin({
-          marketplace: "bb-official",
+          marketplace: "bb-community",
           entryId: "catalog-git-entry",
           pluginId: "expected-id",
           source: `git:${repoDir}@plugin/imposter`,
@@ -663,7 +670,7 @@ describe("plugin install flows", () => {
       await git(repoDir, ["tag", "v1.3.0"]);
 
       const entry = await service.installCatalogPlugin({
-        marketplace: "bb-official",
+        marketplace: "bb-community",
         entryId: "catalog-range",
         pluginId: "catalog-range",
         source: `git:${repoDir}@semver:^1.0.0`,
@@ -955,6 +962,52 @@ describe("plugin install flows", () => {
 
       expect(await service.remove("localdir")).toBe(true);
       await stat(join(pathDir, "package.json"));
+    });
+
+    // A cache hit registers with `validated: true`, which skips
+    // `validateInstallDir` and the engine checks inside it. The cached bytes
+    // were compatible when bb first accepted them, so nothing re-reads the
+    // range — and after a bb version change the same artifact can register
+    // while this build cannot run it.
+    it("refuses a cached artifact whose engine range no longer matches", async () => {
+      const repoDir = join(workDir, "repo-cached-engine");
+      await writePluginFixture(repoDir, {
+        name: "bb-plugin-cached-engine",
+        engines: ">=0.9.0",
+      });
+      await initGitRepo(repoDir);
+      await commitAll(repoDir, "init");
+      const source = `git:${repoDir}@main`;
+
+      await service.install(source, { kind: "root" });
+      expect(await service.remove("cached-engine")).toBe(true);
+      const clonesBefore = materializationCount;
+      await service.stop();
+
+      // The same db and dataDir, so the checkout and its artifact row survive.
+      service = createPluginService({
+        db,
+        hub: {
+          getDaemonSessionIdForHost: () => null,
+          notifyPluginSignal: () => 0,
+          notifySystem: () => {},
+        },
+        logger,
+        dataDir,
+        appVersion: "0.5.0",
+        loadTimeoutMs: 2000,
+        onArtifactMaterialize: () => {
+          materializationCount += 1;
+        },
+      });
+
+      await expect(
+        service.install(source, { kind: "root" }),
+      ).rejects.toThrowError(/install refused.*requires bb >=0\.9\.0/u);
+      // No re-clone: the refusal came from the cache-hit path, not a fresh
+      // materialization that would have run the checks anyway.
+      expect(materializationCount).toBe(clonesBefore);
+      expect(getInstalledPluginRegistration(db, "cached-engine")).toBeUndefined();
     });
 
     it("refuses a git url without the git binary being asked to run arbitrary flags", async () => {

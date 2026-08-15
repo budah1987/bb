@@ -701,6 +701,13 @@
       "when": 1786741008742,
       "tag": "0099_upstream_merge_2026_08_14",
       "breakpoints": true
+    },
+    {
+      "idx": 100,
+      "version": "6",
+      "when": 1786745604262,
+      "tag": "0100_rename_curated_marketplace",
+      "breakpoints": true
     }
   ]
 }

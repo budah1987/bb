@@ -247,9 +247,9 @@ declare const environmentSchema: z$1.ZodObject<{
     isGitRepo: z$1.ZodBoolean;
     isWorktree: z$1.ZodBoolean;
     workspaceProvisionType: z$1.ZodEnum<{
-        personal: "personal";
         unmanaged: "unmanaged";
         "managed-worktree": "managed-worktree";
+        personal: "personal";
     }>;
     branchName: z$1.ZodNullable<z$1.ZodString>;
     baseBranch: z$1.ZodNullable<z$1.ZodString>;
@@ -2312,21 +2312,21 @@ declare const spaceResponseSchema: z$1.ZodObject<{
     icon: z$1.ZodEnum<{
         target: "target";
         workflow: "workflow";
+        folder: "folder";
         layers: "layers";
         grid: "grid";
         star: "star";
         circle: "circle";
         zap: "zap";
-        folder: "folder";
     }>;
     color: z$1.ZodEnum<{
+        neutral: "neutral";
         sage: "sage";
         amber: "amber";
         mulberry: "mulberry";
         blue: "blue";
         coral: "coral";
         teal: "teal";
-        neutral: "neutral";
     }>;
     projectIds: z$1.ZodArray<z$1.ZodString>;
     createdAt: z$1.ZodNumber;
@@ -2338,21 +2338,21 @@ declare const createSpaceRequestSchema: z$1.ZodObject<{
     icon: z$1.ZodEnum<{
         target: "target";
         workflow: "workflow";
+        folder: "folder";
         layers: "layers";
         grid: "grid";
         star: "star";
         circle: "circle";
         zap: "zap";
-        folder: "folder";
     }>;
     color: z$1.ZodEnum<{
+        neutral: "neutral";
         sage: "sage";
         amber: "amber";
         mulberry: "mulberry";
         blue: "blue";
         coral: "coral";
         teal: "teal";
-        neutral: "neutral";
     }>;
 }, z$1.core.$strict>;
 type CreateSpaceRequest = z$1.infer<typeof createSpaceRequestSchema>;
@@ -2361,21 +2361,21 @@ declare const updateSpaceRequestSchema: z$1.ZodObject<{
     icon: z$1.ZodEnum<{
         target: "target";
         workflow: "workflow";
+        folder: "folder";
         layers: "layers";
         grid: "grid";
         star: "star";
         circle: "circle";
         zap: "zap";
-        folder: "folder";
     }>;
     color: z$1.ZodEnum<{
+        neutral: "neutral";
         sage: "sage";
         amber: "amber";
         mulberry: "mulberry";
         blue: "blue";
         coral: "coral";
         teal: "teal";
-        neutral: "neutral";
     }>;
 }, z$1.core.$strict>;
 type UpdateSpaceRequest = z$1.infer<typeof updateSpaceRequestSchema>;
@@ -3424,8 +3424,8 @@ declare const environmentDiffFileResponseSchema: z$1.ZodObject<{
     path: z$1.ZodString;
     content: z$1.ZodString;
     contentEncoding: z$1.ZodEnum<{
-        utf8: "utf8";
         base64: "base64";
+        utf8: "utf8";
     }>;
     mimeType: z$1.ZodOptional<z$1.ZodString>;
     sizeBytes: z$1.ZodNumber;
@@ -3438,8 +3438,8 @@ declare const environmentArchiveThreadsResponseSchema: z$1.ZodObject<{
 type EnvironmentArchiveThreadsResponse = z$1.infer<typeof environmentArchiveThreadsResponseSchema>;
 declare const pullRequestMergeMethodSchema: z$1.ZodEnum<{
     merge: "merge";
-    rebase: "rebase";
     squash: "squash";
+    rebase: "rebase";
 }>;
 type PullRequestMergeMethod = z$1.infer<typeof pullRequestMergeMethodSchema>;
 declare const pullRequestChecksRerunOptionsSchema: z$1.ZodDiscriminatedUnion<[z$1.ZodObject<{
@@ -3546,9 +3546,9 @@ declare const pullRequestCreateActionResponseSchema: z$1.ZodObject<{
                     success: "success";
                     skipped: "skipped";
                     cancelled: "cancelled";
-                    neutral: "neutral";
                     stale: "stale";
                     failure: "failure";
+                    neutral: "neutral";
                     timed_out: "timed_out";
                     action_required: "action_required";
                     startup_failure: "startup_failure";
@@ -3618,8 +3618,8 @@ declare const pullRequestMergeActionResponseSchema: z$1.ZodObject<{
     action: z$1.ZodLiteral<"pull_request_merge">;
     method: z$1.ZodEnum<{
         merge: "merge";
-        rebase: "rebase";
         squash: "squash";
+        rebase: "rebase";
     }>;
     message: z$1.ZodString;
 }, z$1.core.$strip>;
@@ -3788,9 +3788,9 @@ declare const environmentPullRequestResponseSchema: z$1.ZodDiscriminatedUnion<[z
                     success: "success";
                     skipped: "skipped";
                     cancelled: "cancelled";
-                    neutral: "neutral";
                     stale: "stale";
                     failure: "failure";
+                    neutral: "neutral";
                     timed_out: "timed_out";
                     action_required: "action_required";
                     startup_failure: "startup_failure";
@@ -7857,6 +7857,7 @@ declare const installedPluginSchema: z$1.ZodObject<{
     isOrphanedBuiltin: z$1.ZodBoolean;
     catalogEntryId: z$1.ZodOptional<z$1.ZodString>;
     catalogMarketplaceName: z$1.ZodOptional<z$1.ZodString>;
+    publisherLabel: z$1.ZodNullable<z$1.ZodString>;
     sourceDisplay: z$1.ZodString;
     updateState: z$1.ZodObject<{
         outcome: z$1.ZodOptional<z$1.ZodEnum<{
@@ -7963,6 +7964,7 @@ declare const pluginListResponseSchema: z$1.ZodObject<{
         isOrphanedBuiltin: z$1.ZodBoolean;
         catalogEntryId: z$1.ZodOptional<z$1.ZodString>;
         catalogMarketplaceName: z$1.ZodOptional<z$1.ZodString>;
+        publisherLabel: z$1.ZodNullable<z$1.ZodString>;
         sourceDisplay: z$1.ZodString;
         updateState: z$1.ZodObject<{
             outcome: z$1.ZodOptional<z$1.ZodEnum<{
@@ -8071,6 +8073,7 @@ declare const pluginReloadResponseSchema: z$1.ZodObject<{
         isOrphanedBuiltin: z$1.ZodBoolean;
         catalogEntryId: z$1.ZodOptional<z$1.ZodString>;
         catalogMarketplaceName: z$1.ZodOptional<z$1.ZodString>;
+        publisherLabel: z$1.ZodNullable<z$1.ZodString>;
         sourceDisplay: z$1.ZodString;
         updateState: z$1.ZodObject<{
             outcome: z$1.ZodOptional<z$1.ZodEnum<{
@@ -8218,6 +8221,8 @@ declare const pluginCatalogSearchResultSchema: z$1.ZodObject<{
     source: z$1.ZodString;
     marketplace: z$1.ZodString;
     marketplaceDisplayName: z$1.ZodString;
+    publisherKey: z$1.ZodString;
+    publisherLabel: z$1.ZodString;
     official: z$1.ZodBoolean;
     author: z$1.ZodNullable<z$1.ZodObject<{
         name: z$1.ZodString;
