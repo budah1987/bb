@@ -89,9 +89,9 @@ describe("decideWorkspaceSwipe", () => {
   });
 
   it("opens the Command Center on long rightward distance only", () => {
-    expect(
-      decide(WIDTH * WORKSPACE_SWIPE_COMMAND_CENTER_RATIO, 0),
-    ).toEqual({ kind: "command-center" });
+    expect(decide(WIDTH * WORKSPACE_SWIPE_COMMAND_CENTER_RATIO, 0)).toEqual({
+      kind: "command-center",
+    });
     // The headline rule: a fast short flick stays a pane change forever.
     expect(decide(WIDTH * 0.3, 4_000)).toEqual({
       kind: "pane",
@@ -110,9 +110,9 @@ describe("decideWorkspaceSwipe", () => {
   });
 
   it("opens the right panel on long leftward distance only", () => {
-    expect(
-      decide(-WIDTH * WORKSPACE_SWIPE_RIGHT_PANEL_RATIO, 0),
-    ).toEqual({ kind: "right-panel" });
+    expect(decide(-WIDTH * WORKSPACE_SWIPE_RIGHT_PANEL_RATIO, 0)).toEqual({
+      kind: "right-panel",
+    });
     expect(decide(-WIDTH * 0.3, -4_000)).toEqual({
       kind: "pane",
       direction: "left",
@@ -161,15 +161,15 @@ describe("readReleaseVelocity", () => {
 });
 
 describe("resolveWorkspaceSwipePaneId", () => {
-  it("reads the workspace order, wrapping like the pane-focus commands", () => {
+  it("moves toward the physical swipe direction and wraps", () => {
     expect(resolveWorkspaceSwipePaneId(panes, "pane-2", "right")).toBe(
-      "pane-1",
-    );
-    expect(resolveWorkspaceSwipePaneId(panes, "pane-2", "left")).toBe("pane-3");
-    expect(resolveWorkspaceSwipePaneId(panes, "pane-1", "right")).toBe(
       "pane-3",
     );
-    expect(resolveWorkspaceSwipePaneId(panes, "pane-3", "left")).toBe("pane-1");
+    expect(resolveWorkspaceSwipePaneId(panes, "pane-2", "left")).toBe("pane-1");
+    expect(resolveWorkspaceSwipePaneId(panes, "pane-1", "right")).toBe(
+      "pane-2",
+    );
+    expect(resolveWorkspaceSwipePaneId(panes, "pane-3", "left")).toBe("pane-2");
   });
 
   it("has nowhere to go in a single-pane workspace", () => {
