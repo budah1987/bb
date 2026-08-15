@@ -429,7 +429,11 @@ describe("event sink", () => {
 
     expect(postEvents).toHaveBeenCalledTimes(2);
     expect(postEvents).toHaveBeenLastCalledWith([
-      { threadId: "thr_1", event: systemErrorEvent("thr_1") },
+      {
+        eventId: expect.any(String),
+        threadId: "thr_1",
+        event: systemErrorEvent("thr_1"),
+      },
     ]);
   });
 
@@ -474,8 +478,16 @@ describe("event sink", () => {
 
     await sink.flush();
     expect(postEvents).toHaveBeenLastCalledWith([
-      { threadId: "thr_1", event: systemErrorEvent("thr_1") },
-      { threadId: "thr_2", event: systemErrorEvent("thr_2") },
+      {
+        eventId: expect.any(String),
+        threadId: "thr_1",
+        event: systemErrorEvent("thr_1"),
+      },
+      {
+        eventId: expect.any(String),
+        threadId: "thr_2",
+        event: systemErrorEvent("thr_2"),
+      },
     ]);
   });
 

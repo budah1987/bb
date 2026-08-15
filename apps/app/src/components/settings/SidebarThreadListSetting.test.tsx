@@ -82,7 +82,7 @@ describe("SidebarThreadListSetting", () => {
     expect(
       await screen.findByRole("dialog", { name: "Sidebar layout" }),
     ).toBeDefined();
-    fireEvent.click(screen.getByRole("menuitem", { name: /T3/ }));
+    fireEvent.click(await screen.findByRole("menuitem", { name: /T3/ }));
 
     expect(trigger.textContent).toContain("T3");
     expect(

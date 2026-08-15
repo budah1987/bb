@@ -2081,54 +2081,6 @@ export function resolveCommandScanRoots(
     });
   }
 
-  if (resolution.providerId === "codex") {
-    if (resolution.cwd !== null) {
-      roots.push({
-        rootPath: path.join(resolution.cwd, ".codex", "skills"),
-        shape: "skill",
-        namePrefix: "",
-        source: "skill",
-        origin: "project",
-      });
-    }
-    roots.push({
-      rootPath: path.join(resolution.codexHome, "skills"),
-      shape: "skill",
-      namePrefix: "",
-      source: "skill",
-      origin: "user",
-    });
-    roots.push({
-      rootPath: path.join(resolution.homeDir, AGENTS_DIR_NAME, "skills"),
-      shape: "skill",
-      namePrefix: "",
-      source: "skill",
-      origin: "user",
-    });
-    roots.push({
-      rootPath: path.join(resolution.codexHome, "skills", ".system"),
-      shape: "skill",
-      namePrefix: "",
-      source: "skill",
-      origin: "user",
-    });
-    return roots;
-  }
-
-  if (resolution.providerId === "acp-cursor") {
-    if (resolution.cwd !== null) {
-      roots.push({
-        rootPath: path.join(resolution.cwd, CURSOR_DIR_NAME, "skills"),
-        shape: "skill",
-        namePrefix: "",
-        source: "skill",
-        origin: "project",
-        skillIdentitySeed: "acp-cursor:provider-project:.cursor",
-      });
-    }
-    return roots;
-  }
-
   return roots;
 }
 

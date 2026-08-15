@@ -11,6 +11,7 @@ import { useEffect, type ComponentType } from "react";
 import { createStore, Provider } from "jotai";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { CompactViewportOverrideProvider } from "@bb/shared-ui/hooks/use-compact-viewport";
 import { SidebarProvider } from "@/components/ui/sidebar.js";
 import {
   resetPluginSlotStoreForTest,
@@ -85,17 +86,23 @@ function renderSidebarItems(
   if (options.hiddenKeys) {
     store.set(hiddenPluginNavPanelsAtom, options.hiddenKeys);
   }
+  // Two independent compact gates share this tree: the prop hides the
+  // hidden-panels affordance, the context gates plugin sidebar accessories.
   return render(
-    <Provider store={store}>
-      <MemoryRouter initialEntries={["/"]}>
-        <SidebarProvider>
-          <PluginNavSidebarItems
-            isCompactViewport={options.isCompactViewport}
-            toolsRoutePath={options.toolsRoutePath}
-          />
-        </SidebarProvider>
-      </MemoryRouter>
-    </Provider>,
+    <CompactViewportOverrideProvider
+      isCompactViewport={options.isCompactViewport ?? false}
+    >
+      <Provider store={store}>
+        <MemoryRouter initialEntries={["/"]}>
+          <SidebarProvider>
+            <PluginNavSidebarItems
+              isCompactViewport={options.isCompactViewport}
+              toolsRoutePath={options.toolsRoutePath}
+            />
+          </SidebarProvider>
+        </MemoryRouter>
+      </Provider>
+    </CompactViewportOverrideProvider>,
   );
 }
 

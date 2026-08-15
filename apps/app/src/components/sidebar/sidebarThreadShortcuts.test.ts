@@ -48,7 +48,7 @@ describe("sidebar thread shortcuts", () => {
     const button = appendShortcutTarget(root, "thr_workspace", "button");
 
     expect(getSidebarThreadShortcutTargets(root)).toEqual([
-      { element: button, key: "1", threadId: "thr_workspace" },
+      { element: button, key: "1", projectId: null, threadId: "thr_workspace" },
     ]);
   });
 

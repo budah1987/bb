@@ -115,6 +115,13 @@ vi.mock("@/hooks/queries/host-queries", () => ({
 }));
 
 vi.mock("@/hooks/queries/system-queries", () => ({
+  useCliSkillsStatus: () => ({ data: undefined, isPending: false }),
+  useGithubAccounts: () => ({ data: undefined, isPending: false }),
+  useGithubPullRequests: () => ({ data: undefined, isPending: false }),
+  useGithubRepositories: () => ({ data: undefined, isPending: false }),
+  useOnboardingRepos: () => ({ data: undefined, isPending: false }),
+  useSystemUsageLimits: () => ({ data: undefined, isPending: false }),
+  useSystemVersion: () => ({ data: undefined, isPending: false }),
   useOnboardingAgents: () => ({ data: undefined, isPending: false }),
   useHostProviderCliStatus: () => ({ data: undefined }),
   useSystemConfig: () => ({ data: { primaryHostId: "host_1" } }),

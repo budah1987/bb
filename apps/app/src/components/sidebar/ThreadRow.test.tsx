@@ -24,6 +24,9 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("@/components/thread/ThreadActionsProvider", () => ({
+  // The real hook falls back to an empty set outside a provider; the mock has
+  // to keep that default or every row render throws.
+  useArchivingThreadIds: () => new Set<string>(),
   useThreadActions: () => ({
     renameThread: mocks.renameThread,
   }),

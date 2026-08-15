@@ -84,7 +84,9 @@ describe("public environment action regressions", () => {
           command.type === "thread.stop" &&
           command.threadId === activeThread.id,
       );
-      await reportQueuedCommandSuccess(harness, stopCommand, {});
+      await reportQueuedCommandSuccess(harness, stopCommand, {
+        providerCheckpointId: null,
+      });
 
       expect(getEnvironment(harness.db, environment.id)).toMatchObject({
         status: "ready",

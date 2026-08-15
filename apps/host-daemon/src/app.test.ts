@@ -891,6 +891,7 @@ describe("createHostDaemonApp", () => {
         eventGroups: [
           {
             threadId: "thr_pending_turn_exit",
+            eventIds: [expect.any(String)],
             events: [
               {
                 type: "system/error",
