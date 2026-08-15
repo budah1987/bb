@@ -43,6 +43,7 @@ const failedCheck: GitHostPullRequestCheck = {
   status: "completed",
   conclusion: "failure",
   url: "https://github.com/acme/bb/actions/runs/123/job/456",
+  startedAt: null,
 };
 
 const pullRequest: ThreadPullRequest = {
@@ -67,6 +68,7 @@ const pullRequest: ThreadPullRequest = {
         status: "completed",
         conclusion: "success",
         url: null,
+        startedAt: null,
       },
     ],
   },

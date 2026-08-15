@@ -73,11 +73,13 @@ export type EventProjectionTurnRequestKind =
 export const eventProjectionTurnRequestStatusValues = [
   "pending",
   "accepted",
+  "rejected",
 ] as const;
 export type EventProjectionTurnRequestStatus =
   (typeof eventProjectionTurnRequestStatusValues)[number];
 
 export interface EventProjectionTurnRequest {
+  isGrouped: boolean;
   kind: EventProjectionTurnRequestKind;
   status: EventProjectionTurnRequestStatus;
 }
@@ -235,6 +237,7 @@ export const eventProjectionOperationTypeValues = [
   "thread-provisioning",
   "operation",
   "compaction",
+  "context-clear",
 ] as const;
 export type EventProjectionOperationType =
   (typeof eventProjectionOperationTypeValues)[number];

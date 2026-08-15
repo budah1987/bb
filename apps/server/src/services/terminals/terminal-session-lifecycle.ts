@@ -110,6 +110,7 @@ interface PendingTerminalOpen {
 }
 
 interface PendingTerminalClose {
+  closeReason: TerminalSessionCloseReason;
   daemonSessionId: string;
   promise: Promise<TerminalSessionRow>;
   reject: (error: Error) => void;
@@ -1039,6 +1040,7 @@ export class TerminalSessionLifecycle {
     }
 
     const pending = this.waitForTerminalClose({
+      closeReason: args.payload.reason,
       daemonSessionId: current.daemonSessionId,
       terminalId: current.id,
     });
@@ -1052,16 +1054,32 @@ export class TerminalSessionLifecycle {
         },
       );
       if (!sent) {
+        this.disconnectDaemonSessionTerminals({
+          daemonSessionId: current.daemonSessionId,
+        });
         this.rejectPendingClose(
           current.id,
           new ApiError(502, "host_disconnected", "Host is not connected"),
         );
-        this.disconnectDaemonSessionTerminals({
-          daemonSessionId: current.daemonSessionId,
-        });
       }
     }
-    return toTerminalSession(await pending.promise);
+    try {
+      return toTerminalSession(await pending.promise);
+    } catch (error) {
+      // Upstream #1353/#1357: the close timeout may already have finalized the
+      // daemon-owned row. Return that converged state so clients drop the tab
+      // instead of rediscovering a terminal the server has closed for good.
+      const finalized = getTerminalSession(this.options.db, {
+        terminalId: current.id,
+      });
+      if (
+        finalized?.status === "exited" &&
+        finalized.closeReason === args.payload.reason
+      ) {
+        return toTerminalSession(finalized);
+      }
+      throw error;
+    }
   }
 
   private finishTerminalCloseWithoutDaemon(args: {
@@ -1934,7 +1952,36 @@ export class TerminalSessionLifecycle {
     }
   }
 
+  // Upstream #1353: a daemon close force-kills after two seconds and the
+  // server waits five for terminal.exited. If that acknowledgement never
+  // arrives, leaving the row daemon-owned makes every client rediscover an
+  // unclosable terminal forever, so converge server state instead.
+  private finalizeTimedOutTerminalClose(args: {
+    closeReason: TerminalSessionCloseReason;
+    terminalId: string;
+  }): void {
+    const current = getTerminalSession(this.options.db, {
+      terminalId: args.terminalId,
+    });
+    if (!current || current.status === "exited") {
+      return;
+    }
+    const exited = markTerminalSessionExited(this.options.db, {
+      terminalId: args.terminalId,
+      exitCode: current.exitCode,
+      closeReason: args.closeReason,
+    });
+    if (!exited) {
+      return;
+    }
+    this.options.hub.sendTerminalClientMessage(exited.id, {
+      type: "session-updated",
+      session: toTerminalSession(exited),
+    });
+  }
+
   private waitForTerminalClose(args: {
+    closeReason: TerminalSessionCloseReason;
     daemonSessionId: string;
     terminalId: string;
   }): { created: boolean; promise: Promise<TerminalSessionRow> } {
@@ -1955,6 +2002,10 @@ export class TerminalSessionLifecycle {
     });
     const timeout = setTimeout(() => {
       this.pendingCloses.delete(args.terminalId);
+      this.finalizeTimedOutTerminalClose({
+        closeReason: args.closeReason,
+        terminalId: args.terminalId,
+      });
       rejectClose(
         new ApiError(
           504,
@@ -1964,6 +2015,7 @@ export class TerminalSessionLifecycle {
       );
     }, this.closeTimeoutMs);
     this.pendingCloses.set(args.terminalId, {
+      closeReason: args.closeReason,
       daemonSessionId: args.daemonSessionId,
       promise,
       reject: rejectClose,

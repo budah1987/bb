@@ -49,6 +49,7 @@ import {
   type ClientConfig,
 } from "@bb/config/client-config";
 import {
+  validateInferenceFallbackModel,
   validateInferenceModel,
   validateTranscriptionModel,
 } from "@bb/config/inference-model";
@@ -63,6 +64,7 @@ import {
   resolveDataDirDatabasePath,
   resolvePortFromEnv,
   resolveProdDataDir,
+  stripThreadContextEnv,
 } from "@bb/config/runtime";
 import { z } from "zod";
 
@@ -107,6 +109,7 @@ const STARTUP_ONLY_MANAGED_ENV_KEYS = new Set<string>([
   "BB_EXTERNAL_URL",
   "BB_HOST_DAEMON_PORT",
   "BB_INFERENCE",
+  "BB_INFERENCE_FALLBACK",
   "BB_INHERITED_SKILLS_ROOTS",
   "BB_LOG_LEVEL",
   "BB_MANAGED_DEV_BUILTIN_PLUGIN_HOT_RELOAD",
@@ -166,8 +169,15 @@ export type ManagedConfigValues = BbAppManagedConfigValues;
 export type ManagedEnvConfig = BbAppManagedEnvConfig;
 export type ManagedEnvFile = BbAppManagedEnvFile;
 export type ManagedConfig = BbAppManagedConfig;
-type ManagedConfigForWrite = Omit<ManagedConfig, "customAcpAgents"> & {
+// Write flows carry customAcpAgents and customModels as raw JSON: the parser
+// skips invalid entries with a warning, and a rewrite from the parsed view
+// would silently delete them from the user's file.
+type ManagedConfigForWrite = Omit<
+  ManagedConfig,
+  "customAcpAgents" | "customModels"
+> & {
   customAcpAgents?: unknown[];
+  customModels?: unknown[];
 };
 
 export interface HostEnrollKeyRequestBody {
@@ -537,6 +547,11 @@ interface ResolveServerUrlArgs {
   optionServerUrl?: string;
 }
 
+interface ResolveServerListenerUrlArgs {
+  bindHost: string | undefined;
+  port: number;
+}
+
 interface ApplyManagedConfigEnvArgs {
   config: ManagedConfig;
   env: NodeJS.ProcessEnv;
@@ -838,6 +853,13 @@ function resolveServerUrl(args: ResolveServerUrlArgs): string {
   );
 }
 
+export function resolveServerListenerUrl(
+  args: ResolveServerListenerUrlArgs,
+): string {
+  const bindHost = parseServerBindHost(args.bindHost ?? BB_LOOPBACK_HOST);
+  return `http://${bindHost}:${String(args.port)}`;
+}
+
 function applyManagedConfigEnv(
   args: ApplyManagedConfigEnvArgs,
 ): NodeJS.ProcessEnv {
@@ -918,13 +940,17 @@ async function readManagedConfigForWrite(
     const parsedConfig = parseBbAppManagedConfig(parsedJson, {
       logger: launcherConfigWarningLogger,
     });
-    if (isJsonObject(parsedJson) && Array.isArray(parsedJson.customAcpAgents)) {
-      return {
-        ...parsedConfig,
-        customAcpAgents: parsedJson.customAcpAgents,
-      };
+    if (!isJsonObject(parsedJson)) {
+      return parsedConfig;
     }
-    return parsedConfig;
+    const configForWrite: ManagedConfigForWrite = { ...parsedConfig };
+    if (Array.isArray(parsedJson.customAcpAgents)) {
+      configForWrite.customAcpAgents = parsedJson.customAcpAgents;
+    }
+    if (Array.isArray(parsedJson.customModels)) {
+      configForWrite.customModels = parsedJson.customModels;
+    }
+    return configForWrite;
   } catch (error) {
     if (error instanceof SyntaxError) {
       throw new Error(
@@ -1133,6 +1159,9 @@ function validateManagedConfigForWrite(config: ManagedConfigForWrite): void {
   if (configValues.BB_INFERENCE !== undefined) {
     validateInferenceModel(configValues.BB_INFERENCE);
   }
+  if (configValues.BB_INFERENCE_FALLBACK !== undefined) {
+    validateInferenceFallbackModel(configValues.BB_INFERENCE_FALLBACK);
+  }
   if (configValues.BB_TRANSCRIPTION !== undefined) {
     validateTranscriptionModel(configValues.BB_TRANSCRIPTION);
   }
@@ -1288,12 +1317,14 @@ export async function resolveBbAppRuntimeState(
 
   if (args.serverUrlMode === "local") {
     const localEnv = { ...managedEnv };
-    const localServerEnv = createServerBaseEnv({
-      config,
-      envFile,
-      env: initialEnv,
-      serverBindHostOverride: args.options.serverBindHost,
-    });
+    const localServerEnv = stripThreadContextEnv(
+      createServerBaseEnv({
+        config,
+        envFile,
+        env: initialEnv,
+        serverBindHostOverride: args.options.serverBindHost,
+      }),
+    );
     delete localEnv.BB_SERVER_URL;
     delete localServerEnv.BB_SERVER_URL;
     return {
@@ -1325,12 +1356,14 @@ export async function resolveBbAppRuntimeState(
       homeDir: args.homeDir,
     }),
     env: finalEnv,
-    serverEnv: createServerBaseEnv({
-      config,
-      envFile,
-      env: initialEnv,
-      serverBindHostOverride: args.options.serverBindHost,
-    }),
+    serverEnv: stripThreadContextEnv(
+      createServerBaseEnv({
+        config,
+        envFile,
+        env: initialEnv,
+        serverBindHostOverride: args.options.serverBindHost,
+      }),
+    ),
   };
 }
 
@@ -1446,13 +1479,14 @@ Usage:
 Startup-only server and launcher keys:
   BB_APP_SURFACE, BB_APP_URL, BB_DATA_DIR, BB_DEV_APP_PORT,
   BB_EXTERNAL_URL, BB_HOST_DAEMON_PORT, BB_INFERENCE,
-  BB_INHERITED_SKILLS_ROOTS, BB_LOG_LEVEL,
+  BB_INFERENCE_FALLBACK, BB_INHERITED_SKILLS_ROOTS, BB_LOG_LEVEL,
   BB_MANAGED_DEV_BUILTIN_PLUGIN_HOT_RELOAD, BB_POSTHOG_API_KEY,
   BB_SERVER_BIND_HOST, BB_SERVER_PORT, BB_TELEMETRY, BB_TRANSCRIPTION,
   and BB_FF_* feature flags.
   Changes require a full bb-app restart with bb-app stop && bb-app start,
-  or a desktop app restart. BB_APP_URL, BB_INFERENCE, and BB_TRANSCRIPTION
-  can instead be changed live with bb-app config.
+  or a desktop app restart. BB_APP_URL, BB_INFERENCE,
+  BB_INFERENCE_FALLBACK, and BB_TRANSCRIPTION can instead be changed live
+  with bb-app config.
 
 Env file:
   ${formatBbAppEnvPath(dataDir)}
@@ -2405,6 +2439,18 @@ function createServerEnv(args: CreateServerEnvArgs): NodeJS.ProcessEnv {
     ...args.env,
     BB_APP_VERSION: args.context.appVersion,
     [APP_SURFACE_ENV_NAME]: APP_SURFACE_WEB,
+    // The daemon bundle holds the bb CLI. Server-side features that shell out
+    // — script automations put it on the script's PATH — otherwise have no way
+    // to find it: bb lives in the bundle directory, which is on no shell PATH.
+    // BB_CLI_DIR matches createDaemonEnv, which has always passed it through.
+    //
+    // BB_CLI is set rather than inherited on purpose. Launching bb-app from an
+    // agent shell brings that shell's BB_CLI along, pointing at whichever
+    // install spawned it. That binary can be older than this bundle and still
+    // answer `--version`, so an inherited value would quietly win over the
+    // bundle actually being run.
+    BB_CLI: join(args.context.daemonBundleDir, "bb"),
+    BB_CLI_DIR: args.context.daemonBundleDir,
     BB_DATA_DIR: args.context.dataDir,
     BB_HOST_DAEMON_PORT: String(args.context.daemonPort),
     BB_SERVER_PORT: String(args.context.serverPort),
@@ -2412,12 +2458,12 @@ function createServerEnv(args: CreateServerEnvArgs): NodeJS.ProcessEnv {
   };
 }
 
-function createDaemonEnv(
+export function createDaemonEnv(
   context: BbAppStartContext,
   autoJoinEnv: NodeJS.ProcessEnv,
 ): NodeJS.ProcessEnv {
   return {
-    ...autoJoinEnv,
+    ...stripThreadContextEnv(autoJoinEnv),
     BB_APP_VERSION: context.appVersion,
     BB_BRIDGE_DIR: context.daemonBundleDir,
     BB_CLI_DIR: context.daemonBundleDir,
@@ -2453,7 +2499,7 @@ function createHostDaemonOnlyEnv(
   args: CreateHostDaemonOnlyEnvArgs,
 ): NodeJS.ProcessEnv {
   return {
-    ...args.env,
+    ...stripThreadContextEnv(args.env),
     BB_APP_VERSION: args.context.appVersion,
     BB_BRIDGE_DIR: args.context.daemonBundleDir,
     BB_CLI_DIR: args.context.daemonBundleDir,
@@ -2547,7 +2593,7 @@ export async function createHostDaemonJoinEnv(
   };
 }
 
-async function runBundledCliCommand(
+export async function runBundledCliCommand(
   args: RunBundledCliCommandArgs,
 ): Promise<number> {
   // Prefer the daemon-injected absolute CLI when present so packaged `bb`
@@ -3214,6 +3260,12 @@ export async function runBbApp(
   }
 
   const context = runtime.context;
+  // context.serverUrl is deliberately loopback-reachable for health checks and
+  // the colocated daemon. Report the distinct socket address users exposed.
+  const serverListenerUrl = resolveServerListenerUrl({
+    bindHost: runtime.serverEnv.BB_SERVER_BIND_HOST,
+    port: context.serverPort,
+  });
   const outputBuffer = createOutputBuffer();
   const serverEnv = createServerEnv({
     context,
@@ -3221,7 +3273,7 @@ export async function runBbApp(
   });
   const sharedEnv = createSharedEnv({
     context,
-    env: runtime.env,
+    env: stripThreadContextEnv(runtime.env),
   });
 
   process.stdout.write(`\n  ${bold("bb")}\n\n`);
@@ -3298,7 +3350,7 @@ export async function runBbApp(
       return;
     }
 
-    endStep(green("✓"), `Server listening on ${cyan(context.serverUrl)}`);
+    endStep(green("✓"), `Server listening on ${cyan(serverListenerUrl)}`);
 
     beginStep("Starting host daemon");
     const autoJoinEnv = await maybeAddAutoJoinEnv({
@@ -3333,7 +3385,7 @@ export async function runBbApp(
     process.stdout.write("\n");
     log(green("●"), bold("bb is ready"));
     process.stdout.write("\n");
-    log(" ", formatReadyOutputRow("app", cyan(context.serverUrl)));
+    log(" ", formatReadyOutputRow("app", cyan(serverListenerUrl)));
     log(" ", formatReadyOutputRow("daemon", String(context.daemonPort)));
     log(" ", formatReadyOutputRow("data", context.dataDir));
     log(" ", formatReadyOutputRow("db", context.dbPath));

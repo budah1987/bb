@@ -1,11 +1,31 @@
 // @vitest-environment jsdom
 
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
-import { createStore, Provider } from "jotai";
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
+import { createStore, Provider as JotaiProvider } from "jotai";
 import type { ReactNode, Ref } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ThreadDetailHeader } from "./ThreadDetailHeader";
 import { PaneContext, type PaneContextValue } from "./PaneContext";
+import { dimInactiveSplitsAtom } from "@/lib/split-layout/atoms";
+import { ThreadTitleMentionResourcesProvider } from "@/components/thread/ThreadTitleMentions";
+import { makeThreadListEntry } from "@/test/fixtures/thread-list-entries";
+import { sdk } from "@/lib/sdk";
+
+const mocks = vi.hoisted(() => ({
+  renameThread: vi.fn(),
+}));
+
+vi.mock("@/components/thread/ThreadActionsProvider", () => ({
+  useThreadActions: () => ({
+    renameThread: mocks.renameThread,
+  }),
+}));
 
 vi.mock("@/components/layout/AppPageHeader", () => ({
   HEADER_ICON_BUTTON_CLASS: "header-icon-button",
@@ -33,6 +53,8 @@ vi.mock("@bb/shared-ui/hooks/use-compact-viewport", () => ({
   useIsCompactViewport: () => isCompactViewport,
 }));
 
+const THREAD_ID = "thr_header";
+
 const PANE_CONTEXT: PaneContextValue = {
   paneId: "main",
   isFocused: true,
@@ -50,6 +72,7 @@ const PANE_CONTEXT: PaneContextValue = {
 
 afterEach(() => {
   cleanup();
+  mocks.renameThread.mockReset();
   vi.restoreAllMocks();
   isCompactViewport = false;
   window.localStorage.clear();
@@ -72,6 +95,7 @@ describe("ThreadDetailHeader", () => {
             branchName: "feature/conductor-tabs",
           }}
           threadHeaderWorkflowActions={[]}
+          threadId={THREAD_ID}
           threadTitle="Conversation title"
         />
       </PaneContext.Provider>,
@@ -94,6 +118,7 @@ describe("ThreadDetailHeader", () => {
           isSecondaryPanelOpen
           onToggleSecondaryPanel={vi.fn()}
           threadHeaderWorkflowActions={[]}
+          threadId={THREAD_ID}
           threadTitle="Panel state"
         />
       </PaneContext.Provider>,
@@ -120,6 +145,7 @@ describe("ThreadDetailHeader", () => {
           isSecondaryPanelOpen
           onToggleSecondaryPanel={vi.fn()}
           threadHeaderWorkflowActions={[]}
+          threadId={THREAD_ID}
           threadTitle="Split panel state"
         />
       </PaneContext.Provider>,
@@ -166,6 +192,7 @@ describe("ThreadDetailHeader", () => {
           onClosePane={vi.fn()}
           onToggleSecondaryPanel={vi.fn()}
           threadHeaderWorkflowActions={[{ label: "Commit", onSelect: vi.fn() }]}
+          threadId={THREAD_ID}
           threadTitle="Narrow split"
           workspaceOpenButton={<button>Open workspace</button>}
         />
@@ -221,6 +248,7 @@ describe("ThreadDetailHeader", () => {
           onClosePane={vi.fn()}
           onToggleSecondaryPanel={vi.fn()}
           threadHeaderWorkflowActions={[{ label: "Commit", onSelect: vi.fn() }]}
+          threadId={THREAD_ID}
           threadTitle="Wide split"
           workspaceOpenButton={<button>Open workspace</button>}
         />
@@ -251,6 +279,7 @@ describe("ThreadDetailHeader", () => {
           isSecondaryPanelOpen={false}
           onToggleSecondaryPanel={vi.fn()}
           threadHeaderWorkflowActions={[{ label: "Commit", onSelect: vi.fn() }]}
+          threadId={THREAD_ID}
           threadTitle="Compact thread"
           workspaceOpenButton={<button>Open workspace</button>}
         />
@@ -272,6 +301,7 @@ describe("ThreadDetailHeader", () => {
           isSecondaryPanelOpen={false}
           onToggleSecondaryPanel={vi.fn()}
           threadHeaderWorkflowActions={[{ label: "Create PR", onSelect }]}
+          threadId={THREAD_ID}
           threadTitle="GitHub workflow"
         />
       </PaneContext.Provider>,
@@ -297,6 +327,7 @@ describe("ThreadDetailHeader", () => {
               tooltip: "Checks pending",
             },
           ]}
+          threadId={THREAD_ID}
           threadTitle="GitHub workflow"
         />
       </PaneContext.Provider>,
@@ -316,7 +347,7 @@ describe("ThreadDetailHeader", () => {
     // Own store: the visibility atom is module-level, so the default store
     // would carry this test's toggle into every later render.
     render(
-      <Provider store={createStore()}>
+      <JotaiProvider store={createStore()}>
         <PaneContext.Provider value={PANE_CONTEXT}>
           <ThreadDetailHeader
             actionsMenu={null}
@@ -324,10 +355,11 @@ describe("ThreadDetailHeader", () => {
             isSecondaryPanelOpen={false}
             onToggleSecondaryPanel={vi.fn()}
             threadHeaderWorkflowActions={[]}
+            threadId={THREAD_ID}
             threadTitle="Rail toggle"
           />
         </PaneContext.Provider>
-      </Provider>,
+      </JotaiProvider>,
     );
 
     const railToggle = screen.getByRole("button", { name: /^Show rail/ });
@@ -357,7 +389,7 @@ describe("ThreadDetailHeader", () => {
     isCompactViewport = true;
 
     render(
-      <Provider store={createStore()}>
+      <JotaiProvider store={createStore()}>
         <PaneContext.Provider value={PANE_CONTEXT}>
           <ThreadDetailHeader
             actionsMenu={null}
@@ -365,10 +397,11 @@ describe("ThreadDetailHeader", () => {
             isSecondaryPanelOpen={false}
             onToggleSecondaryPanel={vi.fn()}
             threadHeaderWorkflowActions={[]}
+            threadId={THREAD_ID}
             threadTitle="Compact rail toggle"
           />
         </PaneContext.Provider>
-      </Provider>,
+      </JotaiProvider>,
     );
 
     expect(screen.queryByRole("button", { name: /rail/i })).toBeNull();
@@ -383,6 +416,7 @@ describe("ThreadDetailHeader", () => {
           isSecondaryPanelOpen={false}
           onToggleSecondaryPanel={vi.fn()}
           threadHeaderWorkflowActions={[]}
+          threadId={THREAD_ID}
           threadTitle="Review @docs/foo.test.ts with @thread:thr_worker"
         />
       </PaneContext.Provider>,
@@ -394,6 +428,155 @@ describe("ThreadDetailHeader", () => {
       container.querySelectorAll('[data-prompt-mention="true"]'),
     ).toHaveLength(2);
     expect(screen.queryByText("@thread:thr_worker")).toBeNull();
+  });
+
+  it("renders a raw thread id in the title as an unlinked mention pill", () => {
+    const mentionedThread = makeThreadListEntry({
+      id: "thr_dcwivn5n8w",
+      projectId: "proj_target",
+      title: "Raw title target",
+      titleFallback: "Raw title target",
+    });
+
+    render(
+      <ThreadTitleMentionResourcesProvider
+        sectionNamesById={new Map()}
+        projectNamesById={new Map()}
+        threadById={new Map([[mentionedThread.id, mentionedThread]])}
+      >
+        <PaneContext.Provider value={PANE_CONTEXT}>
+          <ThreadDetailHeader
+            actionsMenu={null}
+            childPillLabel={null}
+            isSecondaryPanelOpen={false}
+            onToggleSecondaryPanel={vi.fn()}
+            threadHeaderWorkflowActions={[]}
+            threadId={THREAD_ID}
+            threadTitle="Continue from thr_dcwivn5n8w docs/foo.ts"
+          />
+        </PaneContext.Provider>
+      </ThreadTitleMentionResourcesProvider>,
+    );
+
+    const pill = screen.getByText("Raw title target");
+    expect(pill.closest('[data-prompt-mention="true"]')).not.toBeNull();
+    expect(pill.closest("a")).toBeNull();
+    expect(screen.queryByText("thr_dcwivn5n8w")).toBeNull();
+    expect(screen.getByText(/docs\/foo\.ts/u)).not.toBeNull();
+  });
+
+  it.each([
+    ["straight closing quote", 'Review "thr_dcwivn5n8w."'],
+    ["curly closing quote", "Review “thr_dcwivn5n8w.”"],
+  ])(
+    "renders a sentence-final raw id before a %s in a title",
+    (_label, title) => {
+      const mentionedThread = makeThreadListEntry({
+        id: "thr_dcwivn5n8w",
+        projectId: "proj_target",
+        title: "Quoted title target",
+        titleFallback: "Quoted title target",
+      });
+
+      render(
+        <ThreadTitleMentionResourcesProvider
+          sectionNamesById={new Map()}
+          projectNamesById={new Map()}
+          threadById={new Map([[mentionedThread.id, mentionedThread]])}
+        >
+          <PaneContext.Provider value={PANE_CONTEXT}>
+            <ThreadDetailHeader
+              actionsMenu={null}
+              childPillLabel={null}
+              isSecondaryPanelOpen={false}
+              onToggleSecondaryPanel={vi.fn()}
+              threadHeaderWorkflowActions={[]}
+              threadId={THREAD_ID}
+              threadTitle={title}
+            />
+          </PaneContext.Provider>
+        </ThreadTitleMentionResourcesProvider>,
+      );
+
+      const pill = screen.getByText("Quoted title target");
+      expect(pill.closest('[data-prompt-mention="true"]')).not.toBeNull();
+      expect(pill.closest("a")).toBeNull();
+      expect(screen.queryByText("thr_dcwivn5n8w")).toBeNull();
+    },
+  );
+
+  it("leaves raw-id path, extension, and overlong continuations literal in titles", () => {
+    const resolveMentions = vi
+      .spyOn(sdk.threads, "resolveMentions")
+      .mockResolvedValue([]);
+    const title = [
+      "thr_dcwivn5n8w.md",
+      "thr_dcwivn5n8w/path",
+      "thr_dcwivn5n8w2",
+      "/tmp/thr_dcwivn5n8w",
+      "docs/thr_dcwivn5n8w",
+      "C:\\tmp\\thr_dcwivn5n8w",
+      "docs\\thr_dcwivn5n8w",
+      "thr_dcwivn5n8w\\logs",
+    ].join(" ");
+    const mentionedThread = makeThreadListEntry({
+      id: "thr_dcwivn5n8w",
+      title: "Should not render",
+      titleFallback: "Should not render",
+    });
+
+    const { container } = render(
+      <ThreadTitleMentionResourcesProvider
+        sectionNamesById={new Map()}
+        projectNamesById={new Map()}
+        threadById={new Map([[mentionedThread.id, mentionedThread]])}
+      >
+        <PaneContext.Provider value={PANE_CONTEXT}>
+          <ThreadDetailHeader
+            actionsMenu={null}
+            childPillLabel={null}
+            isSecondaryPanelOpen={false}
+            onToggleSecondaryPanel={vi.fn()}
+            threadHeaderWorkflowActions={[]}
+            threadId={THREAD_ID}
+            threadTitle={title}
+          />
+        </PaneContext.Provider>
+      </ThreadTitleMentionResourcesProvider>,
+    );
+
+    expect(container.textContent).toContain(title);
+    expect(container.querySelector('[data-prompt-mention="true"]')).toBeNull();
+    expect(resolveMentions).not.toHaveBeenCalled();
+  });
+
+  it("leaves an unresolvable raw thread id literal in a title", async () => {
+    const resolveMentions = vi
+      .spyOn(sdk.threads, "resolveMentions")
+      .mockResolvedValue([]);
+    const { container } = render(
+      <ThreadTitleMentionResourcesProvider
+        sectionNamesById={new Map()}
+        projectNamesById={new Map()}
+        threadById={new Map()}
+      >
+        <PaneContext.Provider value={PANE_CONTEXT}>
+          <ThreadDetailHeader
+            actionsMenu={null}
+            childPillLabel={null}
+            isSecondaryPanelOpen={false}
+            onToggleSecondaryPanel={vi.fn()}
+            threadHeaderWorkflowActions={[]}
+            threadId={THREAD_ID}
+            threadTitle="Unknown thr_2222222222"
+          />
+        </PaneContext.Provider>
+      </ThreadTitleMentionResourcesProvider>,
+    );
+
+    await waitFor(() => expect(resolveMentions).toHaveBeenCalledTimes(1));
+    expect(container.textContent).toContain("thr_2222222222");
+    expect(container.querySelector('[data-prompt-mention="true"]')).toBeNull();
   });
 
   it("uses a title tab for the focused split and no pane-wide dimming", () => {
@@ -411,6 +594,7 @@ describe("ThreadDetailHeader", () => {
           isSecondaryPanelOpen={false}
           onToggleSecondaryPanel={vi.fn()}
           threadHeaderWorkflowActions={[]}
+          threadId={THREAD_ID}
           threadTitle="Focused thread"
         />
       </PaneContext.Provider>,
@@ -436,6 +620,7 @@ describe("ThreadDetailHeader", () => {
           isSecondaryPanelOpen={false}
           onToggleSecondaryPanel={vi.fn()}
           threadHeaderWorkflowActions={[]}
+          threadId={THREAD_ID}
           threadTitle="Focused thread"
         />
       </PaneContext.Provider>,
@@ -446,5 +631,118 @@ describe("ThreadDetailHeader", () => {
     expect(inactiveTitle.classList).toContain("text-muted-foreground/60");
     expect(inactiveTitle.classList).toContain("font-normal");
     expect(inactiveTitle.classList).not.toContain("font-medium");
+  });
+
+  it("keeps inactive split titles undimmed when split dimming is off", () => {
+    const store = createStore();
+    store.set(dimInactiveSplitsAtom, false);
+    const splitContext: PaneContextValue = {
+      ...PANE_CONTEXT,
+      isFocused: false,
+      isSplitPane: true,
+      beginPaneDrag: vi.fn(),
+    };
+    render(
+      <JotaiProvider store={store}>
+        <PaneContext.Provider value={splitContext}>
+          <ThreadDetailHeader
+            actionsMenu={null}
+            childPillLabel={null}
+            isSecondaryPanelOpen={false}
+            onToggleSecondaryPanel={vi.fn()}
+            threadHeaderWorkflowActions={[]}
+            threadId={THREAD_ID}
+            threadTitle="Inactive thread"
+          />
+        </PaneContext.Provider>
+      </JotaiProvider>,
+    );
+    expect(screen.getByText("Inactive thread").classList).not.toContain(
+      "text-muted-foreground/60",
+    );
+  });
+
+  it("edits the title inline after a double click and commits on Enter", () => {
+    render(
+      <PaneContext.Provider value={PANE_CONTEXT}>
+        <ThreadDetailHeader
+          actionsMenu={null}
+          childPillLabel={null}
+          isSecondaryPanelOpen={false}
+          onToggleSecondaryPanel={vi.fn()}
+          threadHeaderWorkflowActions={[]}
+          threadId={THREAD_ID}
+          threadTitle="Focused thread"
+        />
+      </PaneContext.Provider>,
+    );
+
+    fireEvent.doubleClick(screen.getByText("Focused thread"));
+    const input = screen.getByRole("textbox", { name: "Thread name" });
+    expect(input).toHaveProperty("value", "Focused thread");
+
+    fireEvent.change(input, { target: { value: "Renamed thread" } });
+    fireEvent.keyDown(input, { key: "Enter" });
+
+    expect(mocks.renameThread).toHaveBeenCalledWith(
+      THREAD_ID,
+      "Renamed thread",
+    );
+    expect(screen.queryByRole("textbox", { name: "Thread name" })).toBeNull();
+    expect(screen.getByText("Focused thread")).not.toBeNull();
+  });
+
+  it("cancels an inline header rename on Escape without saving", () => {
+    render(
+      <PaneContext.Provider value={PANE_CONTEXT}>
+        <ThreadDetailHeader
+          actionsMenu={null}
+          childPillLabel={null}
+          isSecondaryPanelOpen={false}
+          onToggleSecondaryPanel={vi.fn()}
+          threadHeaderWorkflowActions={[]}
+          threadId={THREAD_ID}
+          threadTitle="Focused thread"
+        />
+      </PaneContext.Provider>,
+    );
+
+    fireEvent.doubleClick(screen.getByText("Focused thread"));
+    const input = screen.getByRole("textbox", { name: "Thread name" });
+    fireEvent.change(input, { target: { value: "Scratch name" } });
+    fireEvent.keyDown(input, { key: "Escape" });
+
+    expect(mocks.renameThread).not.toHaveBeenCalled();
+    expect(screen.queryByRole("textbox", { name: "Thread name" })).toBeNull();
+    expect(screen.getByText("Focused thread")).not.toBeNull();
+  });
+
+  it("does not start a pane drag while the header title is being edited", () => {
+    const beginPaneDrag = vi.fn();
+    render(
+      <PaneContext.Provider
+        value={{
+          ...PANE_CONTEXT,
+          isSplitPane: true,
+          beginPaneDrag,
+        }}
+      >
+        <ThreadDetailHeader
+          actionsMenu={null}
+          childPillLabel={null}
+          isSecondaryPanelOpen={false}
+          onToggleSecondaryPanel={vi.fn()}
+          threadHeaderWorkflowActions={[]}
+          threadId={THREAD_ID}
+          threadTitle="Focused thread"
+        />
+      </PaneContext.Provider>,
+    );
+
+    fireEvent.doubleClick(screen.getByText("Focused thread"));
+    const input = screen.getByRole("textbox", { name: "Thread name" });
+    fireEvent.pointerDown(input, { button: 0 });
+
+    expect(beginPaneDrag).not.toHaveBeenCalled();
   });
 });

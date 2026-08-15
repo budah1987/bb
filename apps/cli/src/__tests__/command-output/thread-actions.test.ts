@@ -99,6 +99,128 @@ describe("bb thread action command output", () => {
     );
   });
 
+  it("bb thread edit-message targets the latest editable message by default", async () => {
+    const submitEdit = vi.fn(async () => ({
+      ok: true,
+      operationId: "edit-op-server",
+      requestSequence: 43,
+    }));
+    stubServerApi({
+      "v1.threads.:id.edit-message.$post": submitEdit,
+    });
+
+    await runCommand(
+      ["thread", "edit-message", "thread-edit-1", "--message", "Replacement"],
+      register,
+    );
+
+    expect(submitEdit).toHaveBeenCalledWith({
+      param: { id: "thread-edit-1" },
+      json: {
+        operationId: expect.any(String),
+        input: [{ type: "text", text: "Replacement", mentions: [] }],
+      },
+    });
+    expect(collectLogLines(vi.mocked(console.log))).toContain(
+      "Thread thread-edit-1 message replaced; workspace changes were kept",
+    );
+  });
+
+  it("bb thread edit-message preserves an agent caller when targeting another thread", async () => {
+    vi.stubEnv("BB_THREAD_ID", "thread-agent-caller");
+    const submitEdit = vi.fn(async () => ({
+      ok: true,
+      operationId: "edit-op-server",
+      requestSequence: 43,
+    }));
+    stubServerApi({
+      "v1.threads.:id.edit-message.$post": submitEdit,
+    });
+
+    await runCommand(
+      [
+        "thread",
+        "edit-message",
+        "thread-edit-target",
+        "--message",
+        "Replacement",
+        "--expected-request-sequence",
+        "41",
+      ],
+      register,
+    );
+
+    expect(submitEdit).toHaveBeenCalledWith({
+      param: { id: "thread-edit-target" },
+      json: expect.objectContaining({
+        senderThreadId: "thread-agent-caller",
+      }),
+    });
+  });
+
+  it("bb thread edit-message accepts an explicit stale-edit guard", async () => {
+    vi.stubEnv("BB_THREAD_ID", "thread-edit-self");
+    const submitEdit = vi.fn(async () => ({
+      ok: true,
+      operationId: "edit-op-server",
+      requestSequence: 43,
+    }));
+    stubServerApi({
+      "v1.threads.:id.edit-message.$post": submitEdit,
+    });
+
+    await runCommand(
+      [
+        "thread",
+        "edit-message",
+        "--self",
+        "--message",
+        "Replacement",
+        "--expected-request-sequence",
+        "41",
+        "--json",
+      ],
+      register,
+    );
+
+    expect(submitEdit).toHaveBeenCalledWith({
+      param: { id: "thread-edit-self" },
+      json: expect.objectContaining({ expectedRequestSequence: 41 }),
+    });
+    expect(
+      JSON.parse(collectLogLines(vi.mocked(console.log)).join("\n")),
+    ).toMatchObject({
+      threadId: "thread-edit-self",
+      ok: true,
+      requestSequence: 43,
+    });
+  });
+
+  it("bb thread edit-message rejects a partially numeric request sequence", async () => {
+    const submitEdit = vi.fn();
+    stubServerApi({ "v1.threads.:id.edit-message.$post": submitEdit });
+
+    await expect(
+      runCommand(
+        [
+          "thread",
+          "edit-message",
+          "thread-edit-1",
+          "--message",
+          "Replacement",
+          "--expected-request-sequence",
+          "41abc",
+        ],
+        register,
+      ),
+    ).rejects.toThrow("process.exit:1");
+
+    expect(submitEdit).not.toHaveBeenCalled();
+    expect(collectLogLines(vi.mocked(console.error))).toContain(
+      "Error: --expected-request-sequence must be a non-negative integer.",
+    );
+  });
+
   it("bb thread pin sends the thread id from args", async () => {
     const pinnedThread = fixtures.makeThread({
       id: "thread-pin-1",
@@ -323,10 +445,10 @@ describe("bb thread action command output", () => {
     });
     expect(continuePost).toHaveBeenCalledWith({
       param: { id: "thread-retry-1" },
-      json: { failedRequestId: "request-failed-1" },
+      json: { failedRequestId: "request-failed-1", mode: "manual" },
     });
     expect(collectLogLines(vi.mocked(console.log))).toContain(
-      "Thread thread-retry-1 continued after provider rate limit",
+      "Thread thread-retry-1 provider rate limit retry requested manually",
     );
   });
 
@@ -398,6 +520,18 @@ describe("bb thread action command output", () => {
       "Thread thread-stop-active stopped",
     );
     expect(stopPost).toHaveBeenCalledTimes(1);
+  });
+
+  it("bb thread compact calls the manual compaction endpoint", async () => {
+    const post = vi.fn(async () => ({ ok: true }));
+    stubServerApi({ "v1.threads.:id.compact.$post": post });
+
+    await runCommand(["thread", "compact", "thread-compact"], register);
+
+    expect(post).toHaveBeenCalledWith({ param: { id: "thread-compact" } });
+    expect(collectLogLines(vi.mocked(console.log))).toContain(
+      "Thread thread-compact context compaction requested",
+    );
   });
 
   it.each([

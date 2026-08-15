@@ -8,9 +8,9 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, expectTypeOf, it } from "vitest";
-import { defineRpcContract } from "@bb/plugin-sdk";
-import type { PluginRpcClient, PluginRpcHandlers } from "@bb/plugin-sdk";
-import { createFakePluginHost } from "@bb/plugin-sdk/testing";
+import { defineRpcContract } from "@get-bb/plugin-sdk";
+import type { PluginRpcClient, PluginRpcHandlers } from "@get-bb/plugin-sdk";
+import { createFakePluginHost } from "@get-bb/plugin-sdk/testing";
 import {
   default as githubPlugin,
   fetchRepoItems,

@@ -181,6 +181,8 @@ export class PiSdkSession {
   private session: AgentSession | undefined;
   private unsubscribe: (() => void) | undefined;
   private isProcessing = false;
+  private isCompacting = false;
+  private manualCompactionCompletionCount = 0;
   private readonly pendingSteerConsumptions: PendingSteerConsumption[] = [];
   private lastObservedSteeringQueue: string[] = [];
   private autoRetryInProgress = false;
@@ -195,7 +197,11 @@ export class PiSdkSession {
   ) {}
 
   getIsProcessing(): boolean {
-    return this.isProcessing;
+    return this.isProcessing || this.session?.isStreaming === true;
+  }
+
+  getIsCompacting(): boolean {
+    return this.isCompacting;
   }
 
   getSessionStats(): SessionStats | undefined {
@@ -204,6 +210,10 @@ export class PiSdkSession {
 
   getContextUsage(): ContextUsage | undefined {
     return this.session?.getContextUsage();
+  }
+
+  getProviderCheckpointId(): string | undefined {
+    return this.session?.sessionManager.getLeafId() ?? undefined;
   }
 
   async start(): Promise<void> {
@@ -265,6 +275,23 @@ export class PiSdkSession {
     });
     this.session = session;
 
+    await session.bindExtensions({
+      mode: "rpc",
+      abortHandler: () => {
+        void session.abort();
+      },
+      shutdownHandler: () => {
+        this.onDone();
+      },
+      onError: (error) => {
+        this.onDone(
+          new Error(
+            `Pi extension error (${error.extensionPath}, ${error.event}): ${error.error}`,
+          ),
+        );
+      },
+    });
+
     this.ensureCustomToolsActive();
 
     // Subscribe to session events
@@ -313,6 +340,31 @@ export class PiSdkSession {
     }
   }
 
+  async compact(): Promise<void> {
+    if (!this.session) {
+      throw new Error("No active Pi SDK session");
+    }
+    if (this.isProcessing || this.session.isStreaming) {
+      throw new Error("Cannot compact context while Pi is processing a turn");
+    }
+    const completionCount = this.manualCompactionCompletionCount;
+    this.isProcessing = true;
+    this.isCompacting = true;
+    try {
+      await this.session.compact();
+    } catch (error) {
+      // Pi emits compaction_end before rejecting for failures that occur after
+      // compaction starts. That event is the authoritative terminal outcome;
+      // only propagate errors for which the SDK emitted no terminal event.
+      if (this.manualCompactionCompletionCount === completionCount) {
+        throw error;
+      }
+    } finally {
+      this.isProcessing = false;
+      this.isCompacting = false;
+    }
+  }
+
   detach(): void {
     this.rejectPendingSteerConsumptions(
       "Pi SDK session detached before steer consumed",
@@ -322,6 +374,7 @@ export class PiSdkSession {
       this.unsubscribe = undefined;
     }
     this.isProcessing = false;
+    this.isCompacting = false;
   }
 
   stop(): void {
@@ -329,23 +382,23 @@ export class PiSdkSession {
       "Pi SDK session stopped before steer consumed",
     );
     this.detach();
-    if (this.session) {
-      this.session.dispose();
-      this.session = undefined;
-    }
+    const session = this.session;
+    this.session = undefined;
+    if (session) void this.disposeSession(session);
   }
 
-  async closeGracefully(timeoutMs: number): Promise<void> {
+  async closeGracefully(timeoutMs: number): Promise<string | undefined> {
     const session = this.session;
     this.rejectPendingSteerConsumptions(
       "Pi SDK session closed before steer consumed",
     );
     this.detach();
     if (!session) {
-      return;
+      return undefined;
     }
 
     let timeout: ReturnType<typeof setTimeout> | undefined;
+    let providerCheckpointId: string | undefined;
     const abortCompleted = session.abort().catch(() => undefined);
     const timeoutReached = new Promise<void>((resolve) => {
       timeout = setTimeout(resolve, timeoutMs);
@@ -356,16 +409,35 @@ export class PiSdkSession {
       if (timeout) {
         clearTimeout(timeout);
       }
-      session.dispose();
+      providerCheckpointId = session.sessionManager.getLeafId() ?? undefined;
+      await this.disposeSession(session);
       if (this.session === session) {
         this.session = undefined;
       }
       this.isProcessing = false;
+      this.isCompacting = false;
+    }
+    return providerCheckpointId;
+  }
+
+  private async disposeSession(session: AgentSession): Promise<void> {
+    try {
+      if (session.hasExtensionHandlers("session_shutdown")) {
+        await session.extensionRunner.emit({
+          type: "session_shutdown",
+          reason: "quit",
+        });
+      }
+    } finally {
+      session.dispose();
     }
   }
 
   private trackProcessingState(event: AgentSessionEvent): void {
-    if (event.type === "agent_start") {
+    if (
+      event.type === "agent_start" ||
+      (event.type === "compaction_start" && event.reason === "manual")
+    ) {
       this.isProcessing = true;
     }
     if (event.type === "agent_end" && !event.willRetry) {
@@ -374,6 +446,10 @@ export class PiSdkSession {
       // ready for next input" — NOT session termination. The session stays
       // alive across multiple turns. onDone() is only called on fatal errors
       // (prompt() catch) or explicit stop().
+    }
+    if (event.type === "compaction_end" && event.reason === "manual") {
+      this.manualCompactionCompletionCount += 1;
+      this.isProcessing = false;
     }
   }
 

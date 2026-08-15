@@ -87,6 +87,37 @@ describe("appendCustomModels", () => {
       piModels[0].supportedReasoningEfforts.map(
         (effort) => effort.reasoningEffort,
       ),
+    ).toEqual(["none", "low", "medium", "high", "xhigh", "max"]);
+    expect(piModels[0].defaultReasoningEffort).toBe("medium");
+  });
+
+  it("appends dynamic ACP custom models with the agent-managed effort", () => {
+    const { models } = appendCustomModels({
+      customModels: [
+        {
+          providerId: "acp-opencode",
+          model: "my-proxy/custom-model",
+          displayName: "My Proxy Custom Model",
+        },
+      ],
+      models: [],
+      providerId: "acp-opencode",
+      selectedOnlyModels: [],
+    });
+
+    expect(models).toHaveLength(1);
+    expect(models[0]).toMatchObject({
+      id: "my-proxy/custom-model",
+      displayName: "My Proxy Custom Model",
+      defaultReasoningEffort: "medium",
+      isDefault: false,
+    });
+    // Dynamic ACP ids resolve to the shared ACP policy ladder, the same one
+    // that validates reasoning overrides for these providers.
+    expect(
+      models[0].supportedReasoningEfforts.map(
+        (effort) => effort.reasoningEffort,
+      ),
     ).toEqual(["low", "medium", "high", "xhigh", "max"]);
   });
 
@@ -922,7 +953,7 @@ describe("resolveSystemExecutionOptions", () => {
               available: true,
               composerActions: [{ kind: "skills", trigger: "/" }],
               capabilities: expect.objectContaining({
-                supportsFork: false,
+                supportsFork: true,
                 supportsServiceTier: true,
                 supportedPermissionModes: ["accept-edits", "full"],
               }),

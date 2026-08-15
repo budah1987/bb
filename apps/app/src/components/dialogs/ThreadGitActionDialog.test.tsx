@@ -33,7 +33,12 @@ function section(
     label: "Uncommitted",
     files: sectionFiles,
     mergeBaseRef: null,
-    stats: { files: sectionFiles, insertions: 13, deletions: 1 },
+    stats: {
+      files: sectionFiles,
+      insertions: 13,
+      deletions: 1,
+      lineStatsComplete: true,
+    },
   };
 }
 
@@ -197,7 +202,7 @@ describe("ThreadGitActionDialog commit target", () => {
     ).not.toBeNull();
   });
 
-  it("keeps the same capabilities in the compact drawer", () => {
+  it("keeps the same capabilities in the compact drawer", async () => {
     renderDialog({
       wrapper: (children) => (
         <CompactViewportOverrideProvider isCompactViewport>
@@ -207,7 +212,7 @@ describe("ThreadGitActionDialog commit target", () => {
     });
 
     expect(
-      screen.getByRole("checkbox", { name: "Select all files" }),
+      await screen.findByRole("checkbox", { name: "Select all files" }),
     ).not.toBeNull();
     expect(screen.getAllByRole("checkbox")).toHaveLength(files.length + 1);
     expect(

@@ -171,7 +171,7 @@ describe("PostMergeArchiveDialog", () => {
     );
   });
 
-  it("offers both choices in the compact drawer", () => {
+  it("offers both choices in the compact drawer", async () => {
     renderDialog({
       wrapper: (children) => (
         <CompactViewportOverrideProvider isCompactViewport>
@@ -180,7 +180,11 @@ describe("PostMergeArchiveDialog", () => {
       ),
     });
 
-    expect(keepButton()).not.toBeNull();
+    // The shared drawer starts its transform first and realizes content two
+    // animation frames later, so the choices arrive after the initial render.
+    expect(
+      await screen.findByRole("button", { name: "Keep conversation" }),
+    ).not.toBeNull();
     expect(archiveButton()).not.toBeNull();
   });
 });

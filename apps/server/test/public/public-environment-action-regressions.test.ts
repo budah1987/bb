@@ -84,7 +84,9 @@ describe("public environment action regressions", () => {
           command.type === "thread.stop" &&
           command.threadId === activeThread.id,
       );
-      await reportQueuedCommandSuccess(harness, stopCommand, {});
+      await reportQueuedCommandSuccess(harness, stopCommand, {
+        providerCheckpointId: null,
+      });
 
       expect(getEnvironment(harness.db, environment.id)).toMatchObject({
         status: "ready",
@@ -640,6 +642,7 @@ describe("public environment action regressions", () => {
           workingTree: {
             insertions: 0,
             deletions: 0,
+            lineStatsComplete: true,
             files: [],
             hasUncommittedChanges: false,
             state: "clean",
@@ -728,6 +731,7 @@ describe("public environment action regressions", () => {
           workingTree: {
             insertions: 1,
             deletions: 0,
+            lineStatsComplete: true,
             files: [
               {
                 path: "README.md",
@@ -803,6 +807,7 @@ describe("public environment action regressions", () => {
           workingTree: {
             insertions: 0,
             deletions: 0,
+            lineStatsComplete: true,
             files: [],
             hasUncommittedChanges: false,
             state: "clean",
@@ -1101,6 +1106,7 @@ describe("public environment action regressions", () => {
               status: "completed",
               conclusion: "failure",
               url: "https://github.com/acme/bb/actions/runs/123/job/456",
+              startedAt: null,
             },
           ],
         }),

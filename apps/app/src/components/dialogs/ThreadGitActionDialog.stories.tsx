@@ -54,6 +54,7 @@ const changedFilesSection: WorkspaceChangedFilesSection = {
     files: changedFiles,
     insertions: 106,
     deletions: 17,
+    lineStatsComplete: true,
   },
 };
 

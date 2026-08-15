@@ -10,9 +10,8 @@
 
 [![npm version](https://img.shields.io/npm/v/bb-app.svg)](https://www.npmjs.com/package/bb-app)
 
-bb is an agentic IDE that can control itself. You can seamlessly
-orchestrate all of your favorite coding agents together and have them
-programmatically use bb too.
+bb is an agentic IDE that builds itself. It can control, customize, and automate
+itself, laying the groundwork for your own software factory.
 
 This package provides the `npx bb-app` launcher, bundled `bb` CLI entry, and
 Node SDK export. Every surface — the web app, CLI, and HTTP API — is a
@@ -138,9 +137,13 @@ bb uses whichever providers you have configured. Common providers:
 | `grok`         | Install [Grok Build](https://docs.x.ai/build/overview) and authenticate with `grok login` or `XAI_API_KEY`.                                                                               |
 | `hermes-agent` | Install [Hermes Agent](https://hermes-agent.nousresearch.com/docs/getting-started/installation), configure credentials with `hermes model`, then verify ACP with `hermes acp --check`.    |
 
-Cursor ACP threads discover project skills from `.cursor/skills`. The root can
-link to a shared location such as `.agents/skills`. BB lists skills through a
-linked root under `cursor-project` and keeps them read-only.
+BB indexes the documented native skill roots for Codex, Claude Code, Pi,
+Cursor, OpenCode, omp, Grok Build, and Hermes Agent. It includes user roots,
+project roots, and compatibility roots such as `.agents/skills`. These skills
+appear in the selected provider's `/` command menu. The Skills page and
+`bb skill list` show native skills for Claude Code, Codex, and Cursor. BB also
+reads configured Pi, omp, Grok, and Hermes skill directories, plus enabled
+provider plugin skills.
 
 BB reads Pi's global `~/.pi/agent` files and each workspace's `.pi` files.
 This includes settings, credentials, models, packages, extensions, skills,
@@ -170,6 +173,7 @@ Use `bb-app config` for persistent non-secret package settings under
 ```bash
 npx bb-app config set BB_APP_URL https://<machine>.<tailnet>.ts.net
 npx bb-app config set BB_INFERENCE codex/gpt-5.6-luna
+npx bb-app config set BB_INFERENCE_FALLBACK codex/gpt-5.4-mini
 npx bb-app config set BB_TRANSCRIPTION codex/gpt-transcribe
 npx bb-app config list
 npx bb-app config refresh

@@ -72,6 +72,7 @@ export interface TranslateClaudeTaskMessageArgs {
   ensureTurnStarted: () => string;
   event: unknown;
   now: number;
+  opaqueTaskIds: Set<string>;
   tasks: ClaudeTaskMap;
   threadId: string;
   toolItemsByCallId: ReadonlyMap<string, ThreadEventItem>;
@@ -340,8 +341,10 @@ export function translateClaudeTaskMessage(
     const message = started.data;
     const taskType = message.task_type ?? "unknown";
     if (!isMaterializedTaskType(taskType)) {
+      args.opaqueTaskIds.add(message.task_id);
       return [];
     }
+    args.opaqueTaskIds.delete(message.task_id);
     const existing = args.tasks.get(message.task_id);
     if (existing && !existing.terminal) {
       // Duplicate started for an open task — nothing new to materialize.
@@ -411,6 +414,12 @@ export function translateClaudeTaskMessage(
   const updated = claudeTaskUpdatedMessageSchema.safeParse(args.event);
   if (updated.success) {
     const message = updated.data;
+    if (
+      message.patch.status !== undefined &&
+      isSettledBackgroundTaskStatus(message.patch.status)
+    ) {
+      args.opaqueTaskIds.delete(message.task_id);
+    }
     const task = args.tasks.get(message.task_id);
     if (!task || task.terminal) {
       return [];
@@ -445,6 +454,7 @@ export function translateClaudeTaskMessage(
   );
   if (notification.success) {
     const message = notification.data;
+    args.opaqueTaskIds.delete(message.task_id);
     const task = args.tasks.get(message.task_id);
     if (!task || task.terminal) {
       return [];

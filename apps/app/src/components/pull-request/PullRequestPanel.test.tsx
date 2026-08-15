@@ -41,6 +41,7 @@ const dirtyWorkspaceStatus: WorkspaceStatus = {
   workingTree: {
     state: "dirty_uncommitted",
     hasUncommittedChanges: true,
+    lineStatsComplete: true,
     files: [
       {
         path: "apps/app/src/components/pull-request/PullRequestPanel.tsx",
@@ -134,6 +135,7 @@ function pullRequest(
           status: "completed",
           conclusion: "failure",
           url: "https://github.com/acme/bb/actions/runs/1",
+          startedAt: null,
         },
       ],
     },

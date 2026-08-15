@@ -7,6 +7,8 @@ import {
   getBuiltInAgentProviderServerCapabilities,
   isAcpAgentProviderId,
   isAcpProviderId,
+  supportsManualCompaction,
+  supportsNativeFork,
 } from "../src/index.js";
 
 describe("agent provider catalog", () => {
@@ -19,6 +21,21 @@ describe("agent provider catalog", () => {
     expect(isAcpProviderId("acp-cursor")).toBe(true);
     expect(isAcpProviderId("acp-my-agent")).toBe(true);
     expect(isAcpProviderId("codex")).toBe(false);
+  });
+
+  it("advertises manual compaction only for providers with a concrete control", () => {
+    expect(supportsManualCompaction("codex")).toBe(true);
+    expect(supportsManualCompaction("claude-code")).toBe(true);
+    expect(supportsManualCompaction("pi")).toBe(true);
+    expect(supportsManualCompaction("acp-cursor")).toBe(false);
+    expect(supportsManualCompaction("acp-custom")).toBe(false);
+    expect(supportsManualCompaction("acp-opencode")).toBe(true);
+  });
+
+  it("allows Pi thinking-off selections through server-side validation", () => {
+    expect(
+      getBuiltInAgentProviderServerCapabilities("pi").reasoningLevels,
+    ).toEqual(["none", "low", "medium", "high", "xhigh", "max"]);
   });
 
   it("synthesizes dynamic ACP provider metadata with shared ACP policy", () => {
@@ -37,7 +54,7 @@ describe("agent provider catalog", () => {
         supportsRename: false,
         supportsServiceTier: true,
         supportsUserQuestion: false,
-        supportsFork: false,
+        supportsFork: true,
         supportedPermissionModes: ["accept-edits", "full"],
       },
       composerActions: [{ kind: "skills", trigger: "/" }],
@@ -45,8 +62,8 @@ describe("agent provider catalog", () => {
     });
 
     expect(getAcpProviderServerCapabilities("acp-my-agent")).toEqual({
+      supportsSessionRestore: false,
       supportsWorkflows: false,
-      supportsExecutionOverride: false,
       backsHostDaemonAiServices: false,
       reasoningLevels: ["low", "medium", "high", "xhigh", "max"],
     });
@@ -54,6 +71,8 @@ describe("agent provider catalog", () => {
       getAcpProviderServerCapabilities("acp-my-agent"),
     );
     expect(getAgentProviderServerCapabilities("not-a-provider")).toBeNull();
+    expect(supportsNativeFork("acp-my-agent")).toBe(true);
+    expect(supportsNativeFork("not-a-provider")).toBe(false);
   });
 
   it("returns cloned catalog entries", () => {

@@ -215,6 +215,8 @@ function createWorkspaceStatusCommand(
       workspacePath: `/tmp/${environmentId}`,
       workspaceProvisionType: "unmanaged",
     },
+    maxUntrackedLineStatFiles: 50,
+    maxUntrackedLineStatBytes: 8 * 1024 * 1024,
   };
 }
 
@@ -534,6 +536,7 @@ describe("CommandRouter", () => {
     const stopTask = runRouterCommand({
       command: {
         type: "thread.stop",
+        intent: "interrupt",
         environmentId: "env-router",
         threadId: "thread-router-start",
       },
@@ -692,6 +695,7 @@ describe("CommandRouter", () => {
     const stopTask = runRouterCommand({
       command: {
         type: "thread.stop",
+        intent: "interrupt",
         environmentId: "env-router",
         threadId: "thread-codex-stop",
       },

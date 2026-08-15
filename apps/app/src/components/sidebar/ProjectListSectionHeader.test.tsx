@@ -1,12 +1,16 @@
 // @vitest-environment jsdom
 
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { TooltipProvider } from "@bb/shared-ui/tooltip";
 import { createStore, Provider } from "jotai";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { NO_COLLAPSED_CHILD_ACTIVITY } from "@/lib/thread-activity";
 import { splitLayoutAtom } from "@/lib/split-layout/atoms";
 import { SPLIT_LAYOUT_STORAGE_KEY } from "@/lib/split-layout/persistence";
-import { TopLevelSidebarSection } from "./ProjectList";
+import {
+  ProjectListSectionIconButton,
+  TopLevelSidebarSection,
+} from "./ProjectList";
 
 afterEach(() => {
   cleanup();
@@ -15,7 +19,83 @@ afterEach(() => {
   window.sessionStorage.removeItem(SPLIT_LAYOUT_STORAGE_KEY);
 });
 
+describe("ProjectListSectionIconButton", () => {
+  it("drops pointer focus before a section action opens a picker", () => {
+    let triggerWasFocused = true;
+    render(
+      <TooltipProvider>
+        <ProjectListSectionIconButton
+          ariaLabel="New project"
+          icon={<span aria-hidden>+</span>}
+          title="New project"
+          onClick={() => {
+            triggerWasFocused =
+              document.activeElement ===
+              screen.getByRole("button", { name: "New project" });
+          }}
+        />
+      </TooltipProvider>,
+    );
+    const trigger = screen.getByRole("button", { name: "New project" });
+    trigger.focus();
+
+    fireEvent.click(trigger, { detail: 1 });
+
+    expect(triggerWasFocused).toBe(false);
+    expect(document.activeElement).not.toBe(trigger);
+  });
+
+  it("retains section-action focus for keyboard activation", () => {
+    render(
+      <TooltipProvider>
+        <ProjectListSectionIconButton
+          ariaLabel="New project"
+          icon={<span aria-hidden>+</span>}
+          title="New project"
+          onClick={vi.fn()}
+        />
+      </TooltipProvider>,
+    );
+    const trigger = screen.getByRole("button", { name: "New project" });
+    trigger.focus();
+
+    fireEvent.click(trigger, { detail: 0 });
+
+    expect(document.activeElement).toBe(trigger);
+  });
+});
+
 describe("TopLevelSidebarSection", () => {
+  it("exposes stable identity only for persisted sections", () => {
+    const result = render(
+      <>
+        <TopLevelSidebarSection
+          label="Design"
+          sectionId="sec_design"
+          collapseControl={{ isCollapsed: false, onToggleCollapsed: vi.fn() }}
+        >
+          <div>Design thread</div>
+        </TopLevelSidebarSection>
+        <TopLevelSidebarSection
+          label="Pinned"
+          collapseControl={{ isCollapsed: false, onToggleCollapsed: vi.fn() }}
+        >
+          <div>Pinned thread</div>
+        </TopLevelSidebarSection>
+      </>,
+    );
+
+    expect(
+      result.container.querySelector('[data-sidebar-section-id="sec_design"]'),
+    ).not.toBeNull();
+    expect(
+      screen
+        .getByTitle("Pinned")
+        .closest("[data-sidebar-sticky-group]")
+        ?.hasAttribute("data-sidebar-section-id"),
+    ).toBe(false);
+  });
+
   it("hides the section body and exposes an expand action when collapsed", () => {
     render(
       <TopLevelSidebarSection

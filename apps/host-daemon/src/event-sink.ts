@@ -10,8 +10,10 @@ import {
   MemoryEventSinkStorage,
   type EventSinkStorage,
   type EventSinkStorageStats,
+  type StoredEventSinkEntry,
 } from "./event-sink-storage.js";
 import type { HostDaemonLogger } from "./logger.js";
+import { ServerResponseError } from "./server-client.js";
 
 const DEFAULT_DEBOUNCE_MS = 100;
 
@@ -97,6 +99,23 @@ export function shouldFlushThreadEventImmediately(event: ThreadEvent): boolean {
   return isWaitingForApprovalItemEvent(event);
 }
 
+// True when the server refused these events for what they *are*, so reposting
+// them unchanged can only produce the same refusal: a malformed batch (400) or
+// one carrying an event the store will never accept (409). Both answer with
+// `invalid_request`.
+//
+// The code check is what keeps this narrow. `/session/events` also fails
+// non-retryably with `unauthorized` and `inactive_session` (401), and those say
+// nothing about the events themselves — the daemon must keep them queued for
+// the session it is about to reopen, not discard them.
+function isPermanentPostRejection(error: Error): boolean {
+  return (
+    error instanceof ServerResponseError &&
+    !error.retryable &&
+    error.code === "invalid_request"
+  );
+}
+
 function summarizeRejectedEvents(
   events: readonly HostDaemonRejectedEvent[],
 ): RejectedEventSummary[] {
@@ -131,7 +150,9 @@ export function createEventSink(options: CreateEventSinkOptions): EventSink {
       return;
     }
     backpressureLogged = true;
-    options.logger.debug(
+    // A stalled queue means every thread on this host is silently falling
+    // behind in the UI, so this needs to be visible at the default log level.
+    options.logger.warn(
       { queueAgeMs, queueBytes: stats.sizeBytes, queueDepth: stats.count },
       "Daemon event queue is backing up; delivery may be stalled",
     );
@@ -166,34 +187,84 @@ export function createEventSink(options: CreateEventSinkOptions): EventSink {
     }, delayMs);
   }
 
+  // Delivers `batch` and reports how many of its leading entries no longer
+  // need sending — either the server took them or they were undeliverable by
+  // construction and were dropped. A count below `batch.length` means delivery
+  // stopped early and the remainder is retried by a later flush.
+  //
+  // The server marks a rejection non-retryable when reposting the identical
+  // payload can only produce the identical rejection (a turn-scoped event whose
+  // turn/started it never saw, for instance, which it answers with 409). Such a
+  // batch must never be retried as-is: the queue is host-wide and durable, so
+  // one undeliverable event at its head would stall every thread on the machine
+  // and survive a daemon restart. Bisect instead — the server appends a batch
+  // in a single transaction and rolls the whole thing back when it refuses one
+  // event, so nothing was committed and re-posting the halves cannot duplicate.
+  // That isolates the offending events in O(log n) posts and lets the healthy
+  // ones through.
+  async function deliverBatch(
+    batch: readonly StoredEventSinkEntry[],
+  ): Promise<number> {
+    let response: EventPostResult;
+    try {
+      response = await options.postEvents(batch.map((entry) => entry.envelope));
+    } catch (error) {
+      const normalized = normalizeCaughtError(error);
+      if (!isPermanentPostRejection(normalized)) {
+        options.logger.error(
+          runtimeErrorLogFields(normalized),
+          "Failed to post daemon events; will retry on the next flush",
+        );
+        return 0;
+      }
+
+      const [offending] = batch;
+      if (batch.length === 1 && offending !== undefined) {
+        options.logger.error(
+          {
+            ...runtimeErrorLogFields(normalized),
+            eventType: offending.envelope.event.type,
+            threadId: offending.envelope.threadId,
+          },
+          "Dropped a daemon event the server will never accept",
+        );
+        return 1;
+      }
+
+      const midpoint = Math.floor(batch.length / 2);
+      const deliveredFromFirstHalf = await deliverBatch(
+        batch.slice(0, midpoint),
+      );
+      if (deliveredFromFirstHalf < midpoint) {
+        return deliveredFromFirstHalf;
+      }
+      return midpoint + (await deliverBatch(batch.slice(midpoint)));
+    }
+
+    if (response.rejectedEvents.length > 0) {
+      options.logger.warn(
+        {
+          rejectedEvents: summarizeRejectedEvents(response.rejectedEvents),
+        },
+        "Server rejected daemon events",
+      );
+    }
+    return batch.length;
+  }
+
   async function drainQueue(): Promise<void> {
     while (storage.stats().count > 0 && !disposed && options.isSessionOpen()) {
       const batch = storage.peekBatch(MAX_BATCH_EVENTS, MAX_BATCH_BYTES);
       if (batch.length === 0) return;
-      let response: EventPostResult;
-      try {
-        response = await options.postEvents(
-          batch.map((entry) => entry.envelope),
-        );
-      } catch (error) {
-        options.logger.error(
-          runtimeErrorLogFields(normalizeCaughtError(error)),
-          "Failed to post daemon events; will retry on the next flush",
-        );
-        return;
+      const delivered = await deliverBatch(batch);
+      if (delivered > 0) {
+        storage.remove(batch.slice(0, delivered));
       }
-
-      if (response.rejectedEvents.length > 0) {
-        options.logger.warn(
-          {
-            rejectedEvents: summarizeRejectedEvents(response.rejectedEvents),
-          },
-          "Server rejected daemon events",
-        );
-      }
-      storage.remove(batch);
       if (storage.stats().count === 0) {
         backpressureLogged = false;
+      }
+      if (delivered < batch.length) {
+        return;
       }
     }
   }

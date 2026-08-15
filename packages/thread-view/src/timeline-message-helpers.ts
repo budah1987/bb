@@ -34,6 +34,17 @@ export function isTimelineSummaryCountedMessage(
   return !isTimelineUngroupableMessage(message);
 }
 
+export function isSingletonContextManagementOperation(
+  messages: readonly EventProjectionMessage[],
+): boolean {
+  const onlyMessage = messages.length === 1 ? messages[0] : undefined;
+  return (
+    onlyMessage?.kind === "operation" &&
+    (onlyMessage.opType === "compaction" ||
+      onlyMessage.opType === "context-clear")
+  );
+}
+
 export function findLastTerminalTimelineMessage(
   messages: readonly EventProjectionMessage[],
 ): EventProjectionMessage | undefined {

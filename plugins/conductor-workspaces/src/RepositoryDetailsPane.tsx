@@ -13,7 +13,7 @@ import {
   useRpc,
   type PluginNavPanelProps,
   type PluginSidebarThread,
-} from "@bb/plugin-sdk/app";
+} from "@get-bb/plugin-sdk/app";
 import { Button } from "../components/ui/button";
 import { Icon } from "../components/ui/icon";
 import {

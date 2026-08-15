@@ -24,6 +24,7 @@ import type {
 import {
   isApprovalPendingInteractionPayload,
   isApprovalPendingInteractionResolution,
+  isStandaloneBuiltinCompactCommand,
   threadScope,
   turnScope,
 } from "@bb/domain";
@@ -31,25 +32,19 @@ import { z } from "zod";
 import type {
   AdapterCommand,
   DecodedInteractiveRequest,
-  DecodedToolCallRequest,
   ProviderAdapter,
-  ProviderCommandPlan,
   ProviderExecutionContext,
   ProviderTranslationContext,
 } from "../provider-adapter.js";
-import {
-  flattenPromptInputGroups,
-  noPreparedProviderCommandDispatch,
-} from "../provider-adapter.js";
+import { flattenPromptInputGroups } from "../provider-adapter.js";
+import { classifySessionExecutionSettingsChange } from "../execution-options.js";
 import { ProviderResponseEncodeError } from "../runtime-json-rpc.js";
 import type {
   ProviderInboundRequest,
   ProviderRuntimeEvent,
 } from "../runtime-json-rpc.js";
 import {
-  buildAcceptedUserMessageEvent,
   drainAcceptedUserMessages,
-  queueAcceptedUserMessage,
   type AcceptedUserMessageState,
 } from "../shared/accepted-user-messages.js";
 import {
@@ -58,24 +53,20 @@ import {
   toOptionalString,
   withParentToolCallId,
 } from "../shared/adapter-utils.js";
-import { parseAvailableModelList } from "../shared/available-models.js";
 import { resolveBridgeProcessArgs } from "../shared/bridge-path.js";
 import {
   errorEnvelopeSchema,
   jsonRpcEnvelopeSchema,
   threadIdentityEnvelopeSchema,
 } from "../shared/json-rpc-envelope.js";
-import { buildScopedProviderErrorEvents } from "../shared/provider-error-events.js";
-import { decodeNormalizedProviderToolCallRequest } from "../shared/provider-tool-call-contract.js";
+import { createStandardAdapterMembers } from "../shared/standard-adapter-members.js";
+import { completeStartedToolItem } from "../shared/tool-item-translation.js";
 import { buildUnhandledProviderEvents } from "../shared/provider-unhandled-event.js";
-import {
-  getOrCreateScopedItemId,
-  resolveCompletedScopedItemId,
-} from "../shared/scoped-item-ids.js";
+import { createScopedItemIdFactory } from "../shared/scoped-item-ids.js";
+import { resolveProviderTerminalTurn } from "../shared/provider-terminal-turn.js";
 import {
   createProviderTurnStateRegistry,
   finishOpenProviderTurn,
-  type EnsureProviderTurnStartedArgs,
 } from "../shared/turn-state.js";
 import { UNSTAMPED_THREAD_ID } from "../shared/unstamped-thread-id.js";
 import type {
@@ -83,12 +74,15 @@ import type {
   AgentRuntimeSkillRoot,
 } from "../types.js";
 import {
+  ACP_COMPACTION_COMPLETED_METHOD,
+  ACP_COMPACTION_STARTED_METHOD,
   ACP_FS_WRITE_METHOD,
   ACP_PERMISSION_REQUEST_METHOD,
   ACP_TURN_COMPLETED_METHOD,
   ACP_TURN_STARTED_METHOD,
   ACP_UPDATE_METHOD,
   ACP_WARNING_METHOD,
+  acpCompactionCompletedNotificationParamsSchema,
   acpFsWriteNotificationParamsSchema,
   acpPermissionRequestParamsSchema,
   acpTurnCompletedNotificationParamsSchema,
@@ -152,17 +146,18 @@ interface AcpTurnState extends AcceptedUserMessageState {
   toolItemsByCallId: Map<string, ThreadEventItem>;
 }
 
-interface EnsureAcpTurnStartedArgs {
-  events: ThreadEvent[];
-  state: AcpTurnState;
-  threadId: string;
-}
-
 const ACP_PLAN_STEP_STATUS_BY_ENTRY_STATUS = {
   pending: "pending",
   in_progress: "active",
   completed: "completed",
 } as const;
+
+const acpCompactionItemIds = createScopedItemIdFactory({
+  prefix: "acp-compaction",
+});
+const acpReasoningItemIds = createScopedItemIdFactory({
+  prefix: "acp-reasoning",
+});
 
 function mapAcpToolCallStatus(
   status: AcpToolCallUpdateEvent["status"],
@@ -335,60 +330,21 @@ function completeAcpStartedToolItem(
   status: ThreadEventItemStatus,
   parentToolCallId: string | undefined,
 ): ThreadEventItem {
-  const resolvedParentToolCallId = parentToolCallId ?? item.parentToolCallId;
-  switch (item.type) {
-    case "commandExecution": {
-      const outputText = event
-        ? extractAcpToolCallOutputText(event)
-        : undefined;
-      return withParentToolCallId(
-        {
-          type: "commandExecution",
-          id: item.id,
-          command: item.command,
-          cwd: item.cwd,
-          status,
-          approvalStatus: item.approvalStatus,
-          ...(outputText === undefined ? {} : { aggregatedOutput: outputText }),
-          ...(status === "completed" || status === "failed"
-            ? { exitCode: status === "failed" ? 1 : 0 }
-            : {}),
-        },
-        resolvedParentToolCallId,
-      );
-    }
-    case "fileChange":
-      return withParentToolCallId(
-        {
-          type: "fileChange",
-          id: item.id,
-          changes: item.changes,
-          status,
-          approvalStatus: item.approvalStatus,
-        },
-        resolvedParentToolCallId,
-      );
-    case "toolCall": {
-      const outputText = event
-        ? extractAcpToolCallOutputText(event)
-        : undefined;
-      return withParentToolCallId(
-        {
-          type: "toolCall",
-          id: item.id,
-          tool: item.tool,
-          ...(item.arguments === undefined
-            ? {}
-            : { arguments: item.arguments }),
-          status,
-          ...(outputText === undefined ? {} : { result: outputText }),
-        },
-        resolvedParentToolCallId,
-      );
-    }
-    default:
-      return item;
-  }
+  const outputText = event ? extractAcpToolCallOutputText(event) : undefined;
+  return (
+    completeStartedToolItem({
+      callId: item.id,
+      commandOutputText: outputText,
+      ...(status === "completed" || status === "failed"
+        ? { exitCode: status === "failed" ? 1 : 0 }
+        : {}),
+      outputText,
+      parentToolCallId,
+      startedItem: item,
+      status,
+      toolCallResult: outputText,
+    }) ?? item
+  );
 }
 
 function buildAcpTerminalToolCallItems(args: {
@@ -627,44 +583,23 @@ export function createAcpProviderAdapter(
       toolCallEventsByCallId: new Map(),
       toolItemsByCallId: new Map(),
     }),
+    onTurnStart: ({ events, state, threadId, turnId }) => {
+      state.agentMessageTextsByItemId.clear();
+      state.thoughtTextsByItemId.clear();
+      state.toolCallEventsByCallId.clear();
+      drainAcceptedUserMessages({
+        events,
+        providerThreadId: "",
+        state,
+        threadId,
+        turnId,
+      });
+    },
     turnIdPrefix: opts.turnIdPrefix,
   });
 
-  function ensureAcpTurnStarted(args: EnsureAcpTurnStartedArgs): string {
-    const hadOpenTurn = args.state.currentTurnId !== undefined;
-    const turnId = turnState.ensureTurnStarted({
-      events: args.events,
-      state: args.state,
-      threadId: args.threadId,
-    });
-    if (!hadOpenTurn) {
-      args.state.agentMessageTextsByItemId.clear();
-      args.state.thoughtTextsByItemId.clear();
-      args.state.toolCallEventsByCallId.clear();
-      drainAcceptedUserMessages({
-        events: args.events,
-        providerThreadId: "",
-        state: args.state,
-        threadId: args.threadId,
-        turnId,
-      });
-    }
-    return turnId;
-  }
-
-  function ensureTurnStartedForUpdate(
-    args: EnsureProviderTurnStartedArgs<AcpTurnState>,
-  ): string {
-    return ensureAcpTurnStarted(args);
-  }
-
   function resolveState(context?: ProviderTranslationContext): AcpTurnState {
     return turnState.getOrCreate({ threadId: context?.threadId ?? "" });
-  }
-
-  function createReasoningItemId(state: AcpTurnState): string {
-    state.reasoningItemCounter += 1;
-    return `acp-reasoning-${state.reasoningItemCounter}`;
   }
 
   /** Close the open thought item (if any) with its accumulated content. */
@@ -681,9 +616,8 @@ export function createAcpProviderAdapter(
     if (!openItemId) {
       return;
     }
-    const itemId = resolveCompletedScopedItemId({
-      createItemId: () => createReasoningItemId(state),
-      openItemIdsByScope: state.openReasoningItemIdsByScope,
+    const itemId = acpReasoningItemIds.resolveCompleted({
+      state,
       parentToolCallId,
       scopeId: "thought",
     });
@@ -790,6 +724,18 @@ export function createAcpProviderAdapter(
     args.state.toolCallEventsByCallId.clear();
   }
 
+  function flushOpenTurnItems(args: {
+    events: ThreadEvent[];
+    parentToolCallId: string | undefined;
+    state: AcpTurnState;
+    status: ThreadEventItemStatus;
+    turnId: string;
+  }): void {
+    flushOpenThoughtItem(args.events, args.state, args.parentToolCallId);
+    flushOpenAgentMessageItem(args.events, args.state, args.parentToolCallId);
+    completeOpenToolCallItems(args);
+  }
+
   function translateAcpUpdate(
     update: AcpSessionUpdate,
     state: AcpTurnState,
@@ -797,6 +743,26 @@ export function createAcpProviderAdapter(
   ): ThreadEvent[] {
     const events: ThreadEvent[] = [];
     const parentToolCallId = context?.parentToolCallId;
+    if (!state.currentTurnId) {
+      switch (update.sessionUpdate) {
+        case "agent_message_chunk":
+        case "agent_thought_chunk":
+        case "tool_call":
+        case "tool_call_update":
+        case "plan":
+          return buildUnhandledProviderEvents({
+            includeKnown: true,
+            providerId: profile.providerId,
+            rawEvent: {
+              jsonrpc: "2.0",
+              method: ACP_UPDATE_METHOD,
+              params: { update },
+            },
+            visibilityMetadata: acpVisibilityMetadata,
+            ...(parentToolCallId ? { parentToolCallId } : {}),
+          });
+      }
+    }
 
     switch (update.sessionUpdate) {
       case "agent_message_chunk": {
@@ -807,11 +773,8 @@ export function createAcpProviderAdapter(
         if (text === undefined) {
           return [];
         }
-        const turnId = ensureAcpTurnStarted({
-          events,
-          state,
-          threadId: UNSTAMPED_THREAD_ID,
-        });
+        const turnId = state.currentTurnId;
+        if (!turnId) return [];
         flushOpenThoughtItem(events, state, parentToolCallId);
         const itemId = turnState.getOrCreateAssistantMessageId({
           assistantIdPrefix: "acp-assistant",
@@ -842,14 +805,10 @@ export function createAcpProviderAdapter(
         if (text === undefined) {
           return [];
         }
-        const turnId = ensureAcpTurnStarted({
-          events,
+        const turnId = state.currentTurnId;
+        if (!turnId) return [];
+        const itemId = acpReasoningItemIds.getOrCreate({
           state,
-          threadId: UNSTAMPED_THREAD_ID,
-        });
-        const itemId = getOrCreateScopedItemId({
-          createItemId: () => createReasoningItemId(state),
-          openItemIdsByScope: state.openReasoningItemIdsByScope,
           parentToolCallId,
           scopeId: "thought",
         });
@@ -874,11 +833,8 @@ export function createAcpProviderAdapter(
         if (!parsed.success) {
           return [];
         }
-        const turnId = ensureAcpTurnStarted({
-          events,
-          state,
-          threadId: UNSTAMPED_THREAD_ID,
-        });
+        const turnId = state.currentTurnId;
+        if (!turnId) return [];
         flushOpenThoughtItem(events, state, parentToolCallId);
         flushOpenAgentMessageItem(events, state, parentToolCallId);
         const item = translateAcpToolCallItem(parsed.data, parentToolCallId);
@@ -970,11 +926,8 @@ export function createAcpProviderAdapter(
         if (!parsed.success) {
           return [];
         }
-        const turnId = ensureAcpTurnStarted({
-          events,
-          state,
-          threadId: UNSTAMPED_THREAD_ID,
-        });
+        const turnId = state.currentTurnId;
+        if (!turnId) return [];
         const plan: ThreadEventPlanStep[] = parsed.data.entries.map(
           (entry) => ({
             step: entry.content,
@@ -1035,20 +988,23 @@ export function createAcpProviderAdapter(
     state: AcpTurnState,
     context?: ProviderTranslationContext,
   ): ThreadEvent[] {
-    const currentTurnId = state.currentTurnId;
-    if (!currentTurnId) {
+    const events: ThreadEvent[] = [];
+    const currentTurnId = resolveProviderTerminalTurn({
+      events,
+      registry: turnState,
+      state,
+      threadId: UNSTAMPED_THREAD_ID,
+    });
+    if (currentTurnId === undefined) {
       return [];
     }
-    const events: ThreadEvent[] = [];
-    flushOpenThoughtItem(events, state, context?.parentToolCallId);
-    flushOpenAgentMessageItem(events, state, context?.parentToolCallId);
     const openToolCallStatus: ThreadEventItemStatus =
       stopReason === "end_turn"
         ? "completed"
         : stopReason === "cancelled"
           ? "interrupted"
           : "failed";
-    completeOpenToolCallItems({
+    flushOpenTurnItems({
       events,
       parentToolCallId: context?.parentToolCallId,
       state,
@@ -1111,11 +1067,9 @@ export function createAcpProviderAdapter(
 
     const errorEnvelope = errorEnvelopeSchema.safeParse(event);
     if (errorEnvelope.success) {
-      return buildScopedProviderErrorEvents({
+      return turnState.buildErrorEvents({
         contextThreadId: context?.threadId,
         detail: errorEnvelope.data.params?.message ?? "unknown error",
-        ensureTurnStarted: ensureTurnStartedForUpdate,
-        registry: turnState,
       });
     }
 
@@ -1133,7 +1087,7 @@ export function createAcpProviderAdapter(
           return [];
         }
         const events: ThreadEvent[] = [];
-        ensureAcpTurnStarted({
+        turnState.ensureTurnStarted({
           events,
           state: resolveState(context),
           threadId: UNSTAMPED_THREAD_ID,
@@ -1153,6 +1107,77 @@ export function createAcpProviderAdapter(
           resolveState(context),
           context,
         );
+      }
+
+      case ACP_COMPACTION_STARTED_METHOD: {
+        const params = acpTurnStartedNotificationParamsSchema.safeParse(
+          envelope.data.params,
+        );
+        if (!params.success) {
+          return [];
+        }
+        const events: ThreadEvent[] = [];
+        const turnId = turnState.ensureTurnStarted({
+          events,
+          state: resolveState(context),
+          threadId: UNSTAMPED_THREAD_ID,
+        });
+        events.push({
+          type: "item/started",
+          threadId: UNSTAMPED_THREAD_ID,
+          providerThreadId: "",
+          scope: turnScope(turnId),
+          item: {
+            type: "contextCompaction",
+            id: acpCompactionItemIds.createId(turnId),
+          },
+        });
+        return events;
+      }
+
+      case ACP_COMPACTION_COMPLETED_METHOD: {
+        const params = acpCompactionCompletedNotificationParamsSchema.safeParse(
+          envelope.data.params,
+        );
+        if (!params.success) {
+          return [];
+        }
+        const state = resolveState(context);
+        const turnId = state.currentTurnId;
+        if (!turnId) {
+          return [];
+        }
+        const events: ThreadEvent[] = [];
+        flushOpenTurnItems({
+          events,
+          parentToolCallId: context?.parentToolCallId,
+          state,
+          status: params.data.status,
+          turnId,
+        });
+        if (params.data.status === "completed") {
+          events.push({
+            type: "thread/compacted",
+            threadId: UNSTAMPED_THREAD_ID,
+            providerThreadId: "",
+            scope: turnScope(turnId),
+          });
+        }
+        events.push({
+          type: "turn/completed",
+          threadId: UNSTAMPED_THREAD_ID,
+          providerThreadId: "",
+          scope: turnScope(turnId),
+          status: params.data.status,
+          ...(params.data.status === "failed"
+            ? { error: { message: params.data.error } }
+            : {}),
+        });
+        turnState.finishTurn({
+          state,
+          threadId: context?.threadId ?? "",
+        });
+        return events;
       }
 
       case ACP_UPDATE_METHOD: {
@@ -1177,12 +1202,20 @@ export function createAcpProviderAdapter(
           return [];
         }
         const state = resolveState(context);
+        if (!state.currentTurnId) {
+          return buildUnhandledProviderEvents({
+            includeKnown: true,
+            providerId: profile.providerId,
+            rawEvent: {
+              jsonrpc: "2.0",
+              method: ACP_FS_WRITE_METHOD,
+              params: params.data,
+            },
+            visibilityMetadata: acpVisibilityMetadata,
+          });
+        }
         const events: ThreadEvent[] = [];
-        const turnId = ensureAcpTurnStarted({
-          events,
-          state,
-          threadId: UNSTAMPED_THREAD_ID,
-        });
+        const turnId = state.currentTurnId;
         state.fsWriteCounter += 1;
         events.push({
           type: "item/completed",
@@ -1253,7 +1286,7 @@ export function createAcpProviderAdapter(
   function buildSessionParams(
     command: Extract<
       AdapterCommand,
-      { type: "thread/start" | "thread/resume" }
+      { type: "thread/start" | "thread/resume" | "thread/fork" }
     >,
   ): Record<string, unknown> {
     const instructions = buildAcpSessionInstructions(command.options);
@@ -1336,195 +1369,150 @@ export function createAcpProviderAdapter(
   }
 
   return {
-    // -- Identity & launch -------------------------------------------------
-
-    id: providerInfo.id,
-    displayName: providerInfo.displayName,
-    capabilities: providerInfo.capabilities,
-    process: {
-      command: opts.bridgeNodeExecutablePath ?? "node",
-      args: resolveBridgeProcessArgs({
-        bridgeBundleDir: opts.bridgeBundleDir,
-        bundleFileName: "bb-acp-bridge.mjs",
-        importMetaUrl: import.meta.url,
-        bridgeRelativePath: "bridge/bridge.js",
-      }),
-      ...(opts.bridgeNodeEnv !== undefined ? { env: opts.bridgeNodeEnv } : {}),
-    },
-
-    // -- Unified command builder -------------------------------------------
-
-    buildCommandPlan(command: AdapterCommand): ProviderCommandPlan {
-      switch (command.type) {
-        case "initialize":
-          return {
-            kind: "request",
-            method: "initialize",
-            params: { clientInfo: { name: "bb", version: "1.0.0" } },
-          };
-        case "model/list":
-          const listCommand = buildModelListCommand();
-          const agent = buildModelDiscoveryAgentCommand();
-          return {
-            kind: "request",
-            method: "model/list",
-            params: {
-              ...(listCommand !== undefined ? { listCommand } : {}),
-              ...(agent !== undefined ? { agent } : {}),
-              primaryModels: [...(profile.modelCli?.primaryModels ?? [])],
-              ...buildReasoningCliParam(),
-              ...buildNativeReasoningParam(),
-            },
-          };
-        case "skills/configure":
-          return {
-            kind: "noop",
-            reason: "ACP skills are delivered through session instructions",
-          };
-        case "thread/start": {
-          finishOpenProviderTurn({
-            registry: turnState,
-            threadId: command.threadId,
-          });
-          return {
-            kind: "request",
-            method: "thread/start",
-            params: buildSessionParams(command),
-          };
+    ...createStandardAdapterMembers({
+      id: providerInfo.id,
+      displayName: providerInfo.displayName,
+      capabilities: providerInfo.capabilities,
+      approvalRequestPolicy: "runtime",
+      classifyExecutionSettingsChange: classifySessionExecutionSettingsChange,
+      process: {
+        command: opts.bridgeNodeExecutablePath ?? "node",
+        args: resolveBridgeProcessArgs({
+          bridgeBundleDir: opts.bridgeBundleDir,
+          bundleFileName: "bb-acp-bridge.mjs",
+          importMetaUrl: import.meta.url,
+          bridgeRelativePath: "bridge/bridge.js",
+        }),
+        ...(opts.bridgeNodeEnv !== undefined
+          ? { env: opts.bridgeNodeEnv }
+          : {}),
+      },
+      initializeParams: { clientInfo: { name: "bb", version: "1.0.0" } },
+      codec: "normalized",
+      turnState,
+      translateEvent: translateAcpEvent,
+      buildProviderCommandPlan(command) {
+        switch (command.type) {
+          case "model/list":
+            const listCommand = buildModelListCommand();
+            const agent = buildModelDiscoveryAgentCommand();
+            return {
+              kind: "request",
+              method: "model/list",
+              params: {
+                ...(listCommand !== undefined ? { listCommand } : {}),
+                ...(agent !== undefined ? { agent } : {}),
+                primaryModels: [...(profile.modelCli?.primaryModels ?? [])],
+                ...buildReasoningCliParam(),
+                ...buildNativeReasoningParam(),
+              },
+            };
+          case "skills/configure":
+            return {
+              kind: "noop",
+              reason: "ACP skills are delivered through session instructions",
+            };
+          case "thread/start": {
+            finishOpenProviderTurn({
+              registry: turnState,
+              threadId: command.threadId,
+            });
+            return {
+              kind: "request",
+              method: "thread/start",
+              params: buildSessionParams(command),
+            };
+          }
+          case "thread/resume": {
+            finishOpenProviderTurn({
+              registry: turnState,
+              threadId: command.threadId,
+            });
+            return {
+              kind: "request",
+              method: "thread/resume",
+              params: {
+                ...buildSessionParams(command),
+                providerThreadId: command.providerThreadId,
+              },
+            };
+          }
+          case "thread/fork": {
+            finishOpenProviderTurn({
+              registry: turnState,
+              threadId: command.threadId,
+            });
+            return {
+              kind: "request",
+              method: "thread/fork",
+              params: {
+                ...buildSessionParams(command),
+                sourceProviderThreadId: command.sourceProviderThreadId,
+                ...(command.sourceProviderCheckpointId !== undefined
+                  ? {
+                      sourceProviderCheckpointId:
+                        command.sourceProviderCheckpointId,
+                    }
+                  : {}),
+              },
+            };
+          }
+          case "turn/start": {
+            const input = flattenPromptInputGroups(
+              command.input,
+              command.inputGroups,
+            );
+            if (
+              profile.providerId === "acp-opencode" &&
+              isStandaloneBuiltinCompactCommand(input)
+            ) {
+              return {
+                kind: "request",
+                method: "thread/compact",
+                params: { threadId: command.providerThreadId },
+              };
+            }
+            return {
+              kind: "request",
+              method: "turn/start",
+              params: {
+                threadId: command.providerThreadId,
+                input,
+              },
+            };
+          }
+          case "turn/steer":
+            return {
+              kind: "request",
+              method: "turn/steer",
+              params: {
+                threadId: command.providerThreadId,
+                expectedTurnId: command.expectedTurnId,
+                input: flattenPromptInputGroups(
+                  command.input,
+                  command.inputGroups,
+                ),
+              },
+            };
+          case "thread/stop":
+            finishOpenProviderTurn({
+              registry: turnState,
+              threadId: command.threadId,
+            });
+            return {
+              kind: "request",
+              method: "thread/stop",
+              params: { threadId: command.providerThreadId },
+            };
+          case "thread/discard":
+            return { kind: "noop", reason: "discard unsupported" };
+          default:
+            return null;
         }
-        case "thread/resume": {
-          finishOpenProviderTurn({
-            registry: turnState,
-            threadId: command.threadId,
-          });
-          return {
-            kind: "request",
-            method: "thread/resume",
-            params: {
-              ...buildSessionParams(command),
-              providerThreadId: command.providerThreadId,
-            },
-          };
-        }
-        case "turn/start":
-          return {
-            kind: "request",
-            method: "turn/start",
-            params: {
-              threadId: command.providerThreadId,
-              input: flattenPromptInputGroups(
-                command.input,
-                command.inputGroups,
-              ),
-            },
-          };
-        case "turn/steer":
-          return {
-            kind: "request",
-            method: "turn/steer",
-            params: {
-              threadId: command.providerThreadId,
-              expectedTurnId: command.expectedTurnId,
-              input: flattenPromptInputGroups(
-                command.input,
-                command.inputGroups,
-              ),
-            },
-          };
-        case "thread/stop":
-          finishOpenProviderTurn({
-            registry: turnState,
-            threadId: command.threadId,
-          });
-          return {
-            kind: "request",
-            method: "thread/stop",
-            params: { threadId: command.providerThreadId },
-          };
-        case "thread/goal/clear":
-          return { kind: "noop", reason: "goals unsupported" };
-        case "thread/name/set":
-          return { kind: "noop", reason: "rename unsupported" };
-        case "thread/archive":
-        case "thread/unarchive":
-          return { kind: "noop", reason: "archive unsupported" };
-        case "thread/fork":
-          // Unreachable: ACP declares supportsFork=false, so the server blocks
-          // forks before they reach the adapter. ACP has no session-fork
-          // primitive, so fail loudly if that guard is ever bypassed.
-          throw new Error(
-            `Provider "${profile.providerId}" does not support forking threads.`,
-          );
-      }
-    },
-
-    // -- Unified event translator ------------------------------------------
-
-    translateEvent(
-      event: ProviderRuntimeEvent,
-      context?: ProviderTranslationContext,
-    ): ThreadEvent[] {
-      return translateAcpEvent(event, context);
-    },
-
-    prepareTurnStart: noPreparedProviderCommandDispatch,
-
-    translateAcceptedCommand({ command }) {
-      if (
-        command.type === "thread/start" ||
-        command.type === "thread/resume" ||
-        command.type === "thread/stop"
-      ) {
-        const state = turnState.getOrCreate({ threadId: command.threadId });
-        state.pendingAcceptedUserMessages = [];
-        return [];
-      }
-
-      if (command.type === "turn/start") {
-        const state = turnState.getOrCreate({ threadId: command.threadId });
-        if (state.currentTurnId !== undefined) {
-          return buildAcceptedUserMessageEvent({
-            clientRequestId: command.clientRequestId,
-            providerThreadId: command.providerThreadId,
-            threadId: command.threadId,
-            turnId: state.currentTurnId,
-          });
-        }
-        queueAcceptedUserMessage({
-          clientRequestId: command.clientRequestId,
-          state,
-        });
-      }
-
-      if (command.type === "turn/steer") {
-        return buildAcceptedUserMessageEvent({
-          clientRequestId: command.clientRequestId,
-          providerThreadId: command.providerThreadId,
-          threadId: command.threadId,
-          turnId: command.expectedTurnId,
-        });
-      }
-
-      return [];
-    },
-
-    parseModelListResult(result: unknown) {
-      return parseAvailableModelList(result);
-    },
-
-    // -- Tool call & interactive codecs -------------------------------------
-
-    decodeToolCallRequest(
-      request: ProviderInboundRequest,
-    ): DecodedToolCallRequest | null {
-      if (typeof request.id !== "string" && typeof request.id !== "number") {
-        return null;
-      }
-      return decodeNormalizedProviderToolCallRequest(
-        request.id,
-        request.method,
-        request.params,
-      );
+      },
+    }),
+    clearActiveTurnState(threadId) {
+      finishOpenProviderTurn({ registry: turnState, threadId });
     },
 
     decodeInteractiveRequest(

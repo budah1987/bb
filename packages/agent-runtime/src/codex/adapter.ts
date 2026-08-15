@@ -13,6 +13,7 @@ import path from "node:path";
 import { getBuiltInAgentProviderInfo } from "@bb/agent-providers";
 import {
   getThreadEventScopeTurnId,
+  isStandaloneBuiltinCompactCommand,
   jsonValueSchema,
   requireThreadEventScopeTurnId,
   turnScope,
@@ -21,7 +22,6 @@ import type {
   ClientTurnRequestId,
   PermissionEscalation,
   PromptInput,
-  PromptTextMention,
   ReasoningLevel,
   ServiceTier,
   ThreadEvent,
@@ -43,19 +43,16 @@ import {
   buildShellEnvironmentPolicyConfig,
   extractResultText,
 } from "../shared/adapter-utils.js";
-import { buildAcceptedUserMessageEvent } from "../shared/accepted-user-messages.js";
-import { decodeNativeProviderToolCallRequest } from "../shared/provider-tool-call-contract.js";
-import { resolveAdapterPermissionPolicy } from "../shared/permission-policy.js";
+import { createStandardAdapterMembers } from "../shared/standard-adapter-members.js";
 import type {
   AdapterCommand,
-  DecodedToolCallRequest,
   PreparedProviderCommandDispatch,
   ProviderAdapter,
   ProviderAdapterFactoryOptions,
-  ProviderCommandPlan,
   ProviderExecutionContext,
 } from "../provider-adapter.js";
 import { flattenPromptInputGroups } from "../provider-adapter.js";
+import { classifySessionExecutionSettingsChange } from "../execution-options.js";
 import type {
   JsonRpcMessage,
   ProviderInboundRequest,
@@ -103,6 +100,7 @@ type BbThreadStartParams = ThreadStartParams & {
 
 type BbThreadForkParams = {
   threadId: string;
+  lastTurnId?: string | null;
   model?: string | null;
   serviceTier?: string | null;
   cwd?: string | null;
@@ -612,7 +610,7 @@ function toCodexApprovalsReviewer(
 function toCodexThreadPermissionSettings(
   options: ProviderExecutionContext,
 ): CodexThreadPermissionSettings {
-  const permissionPolicy = resolveAdapterPermissionPolicy(options);
+  const permissionPolicy = options;
   switch (permissionPolicy.permissionScope) {
     case "workspace":
       return {
@@ -632,7 +630,7 @@ function toCodexThreadPermissionSettings(
 function toCodexPermissionSettings(
   args: ToCodexPermissionSettingsArgs,
 ): CodexPermissionSettings {
-  const permissionPolicy = resolveAdapterPermissionPolicy(args.options);
+  const permissionPolicy = args.options;
   switch (permissionPolicy.permissionScope) {
     case "workspace":
       return {
@@ -667,9 +665,10 @@ function toCodexReasoningEffort(
 ): CodexReasoningEffort {
   const codexEffort = mapBbReasoningLevelToCodex(reasoningLevel);
   if (codexEffort == null) {
-    // "none" is Cursor-only; "ultracode" is Claude-specific. Codex models
-    // never expose either, so model-switch reconciliation maps them away
-    // before here — but fail closed if something slips through.
+    // "none" is exposed by Cursor and some Pi models; "ultracode" is
+    // Claude-specific. Codex models never expose either, so model-switch
+    // reconciliation maps them away before here — but fail closed if
+    // something slips through.
     throw new Error(
       `Codex does not support the ${reasoningLevel} reasoning level.`,
     );
@@ -694,64 +693,6 @@ function toCodexUserInput(input: PromptInput[]): CodexUserInput[] {
         };
     }
   });
-}
-
-type TextPromptInput = Extract<PromptInput, { type: "text" }>;
-
-function isBuiltinCompactCommandMention(mention: PromptTextMention): boolean {
-  const resource = mention.resource;
-  return (
-    resource.kind === "command" &&
-    resource.trigger === "/" &&
-    resource.name === "compact" &&
-    resource.source === "command" &&
-    resource.origin === "builtin"
-  );
-}
-
-function stripBuiltinCompactCommandMentions(input: TextPromptInput): {
-  mentionCount: number;
-  text: string;
-} {
-  const ranges = input.mentions
-    .filter(isBuiltinCompactCommandMention)
-    .map((mention) => ({
-      start: mention.start,
-      end:
-        mention.end < input.text.length && input.text[mention.end] === " "
-          ? mention.end + 1
-          : mention.end,
-    }))
-    .sort((left, right) => left.start - right.start || left.end - right.end);
-
-  if (ranges.length === 0) {
-    return { mentionCount: 0, text: input.text };
-  }
-
-  let text = "";
-  let cursor = 0;
-  for (const range of ranges) {
-    text += input.text.slice(cursor, range.start);
-    cursor = range.end;
-  }
-  text += input.text.slice(cursor);
-
-  return { mentionCount: ranges.length, text };
-}
-
-function isStandaloneBuiltinCompactCommandInput(input: PromptInput[]): boolean {
-  let mentionCount = 0;
-  for (const chunk of input) {
-    if (chunk.type !== "text") {
-      return false;
-    }
-    const stripped = stripBuiltinCompactCommandMentions(chunk);
-    mentionCount += stripped.mentionCount;
-    if (stripped.text.trim() !== "") {
-      return false;
-    }
-  }
-  return mentionCount === 1;
 }
 
 function buildCodexConfig(
@@ -848,6 +789,7 @@ type CodexParsedCommandOutput =
 
 interface CodexRawCommandOutputState {
   capturedCommandOutputByCallId: Map<string, CodexCapturedCommandOutput>;
+  pendingCompletedEventByCallId: Map<string, ThreadEvent>;
   shellToolCallIds: Set<string>;
 }
 
@@ -1117,6 +1059,8 @@ export function createCodexProviderAdapter(
     CodexPendingDelegationTurnLink[]
   >();
   const pendingDelegationCallIds = new Set<string>();
+  const pendingDelegationProviderThreadIdByCallId = new Map<string, string>();
+  const processedSubAgentInteractionIds = new Set<string>();
   const trackedSubAgentsByCallId = new Map<string, CodexTrackedSubAgent>();
   const trackedSubAgentCallIdsByAgentThreadId = new Map<string, string>();
 
@@ -1210,6 +1154,7 @@ export function createCodexProviderAdapter(
         string,
         CodexCapturedCommandOutput
       >(),
+      pendingCompletedEventByCallId: new Map<string, ThreadEvent>(),
       shellToolCallIds: new Set<string>(),
     };
     rawCommandOutputStateByProviderThreadId.set(providerThreadId, nextState);
@@ -1223,6 +1168,7 @@ export function createCodexProviderAdapter(
     }
     if (
       state.capturedCommandOutputByCallId.size === 0 &&
+      state.pendingCompletedEventByCallId.size === 0 &&
       state.shellToolCallIds.size === 0
     ) {
       rawCommandOutputStateByProviderThreadId.delete(providerThreadId);
@@ -1258,6 +1204,12 @@ export function createCodexProviderAdapter(
         continue;
       }
       clearTrackedSubAgentLinks(tracked);
+      if (
+        trackedSubAgentCallIdsByAgentThreadId.get(tracked.agentThreadId) ===
+        tracked.callId
+      ) {
+        trackedSubAgentCallIdsByAgentThreadId.delete(tracked.agentThreadId);
+      }
       trackedSubAgentsByCallId.delete(callId);
     }
   }
@@ -1410,36 +1362,47 @@ export function createCodexProviderAdapter(
       pendingLinks,
     );
     pendingDelegationCallIds.add(args.callId);
+    pendingDelegationProviderThreadIdByCallId.set(
+      args.callId,
+      args.providerThreadId,
+    );
   }
 
   function removePendingDelegationCall(callId: string): void {
     pendingDelegationCallIds.delete(callId);
-    for (const [
-      providerThreadId,
-      pendingLinks,
-    ] of pendingDelegationTurnLinksByProviderThreadId) {
-      const remainingLinks = pendingLinks.filter(
-        (pendingLink) => pendingLink.callId !== callId,
-      );
-      if (remainingLinks.length === 0) {
-        pendingDelegationTurnLinksByProviderThreadId.delete(providerThreadId);
-      } else if (remainingLinks.length !== pendingLinks.length) {
-        pendingDelegationTurnLinksByProviderThreadId.set(
-          providerThreadId,
-          remainingLinks,
-        );
-      }
+    const providerThreadId =
+      pendingDelegationProviderThreadIdByCallId.get(callId);
+    pendingDelegationProviderThreadIdByCallId.delete(callId);
+    if (!providerThreadId) {
+      return;
     }
+    const pendingLinks =
+      pendingDelegationTurnLinksByProviderThreadId.get(providerThreadId);
+    if (!pendingLinks) {
+      return;
+    }
+    const remainingLinks = pendingLinks.filter(
+      (pendingLink) => pendingLink.callId !== callId,
+    );
+    if (remainingLinks.length === 0) {
+      pendingDelegationTurnLinksByProviderThreadId.delete(providerThreadId);
+    } else if (remainingLinks.length !== pendingLinks.length) {
+      pendingDelegationTurnLinksByProviderThreadId.set(
+        providerThreadId,
+        remainingLinks,
+      );
+    }
+  }
+
+  function hasPendingNativeTurnStart(providerThreadId: string): boolean {
+    return (
+      (nativeTurnStartClientRequestIdsByProviderThreadId.get(providerThreadId)
+        ?.length ?? 0) > 0
+    );
   }
 
   function clearTrackedSubAgentLinks(tracked: CodexTrackedSubAgent): void {
     removePendingDelegationCall(tracked.callId);
-    if (
-      trackedSubAgentCallIdsByAgentThreadId.get(tracked.agentThreadId) ===
-      tracked.callId
-    ) {
-      trackedSubAgentCallIdsByAgentThreadId.delete(tracked.agentThreadId);
-    }
     if (
       delegationParentToolCallIdsByProviderThreadId.get(
         tracked.agentThreadId,
@@ -1507,14 +1470,23 @@ export function createCodexProviderAdapter(
         type: event.type,
         scope: event.scope,
       });
-      parentToolCallId =
-        (providerThreadId
-          ? delegationParentToolCallIdsByProviderThreadId.get(providerThreadId)
-          : undefined) ??
-        consumePendingDelegationTurnLink({
+      const mappedFromProviderThread = providerThreadId
+        ? delegationParentToolCallIdsByProviderThreadId.get(providerThreadId)
+        : undefined;
+      if (mappedFromProviderThread) {
+        parentToolCallId = mappedFromProviderThread;
+        // A turn that matches an explicit agent-thread mapping must not also
+        // consume a different agent's FIFO slot on the multiplexed root.
+        removePendingDelegationCall(mappedFromProviderThread);
+      } else if (
+        !providerThreadId ||
+        !hasPendingNativeTurnStart(providerThreadId)
+      ) {
+        parentToolCallId = consumePendingDelegationTurnLink({
           providerThreadId,
           turnId: startedTurnId,
         });
+      }
     }
 
     if (!parentToolCallId && providerThreadId) {
@@ -1581,15 +1553,52 @@ export function createCodexProviderAdapter(
     });
   }
 
+  function findTrackedSubAgentByAgentThreadId(
+    agentThreadId: string,
+  ): CodexTrackedSubAgent | undefined {
+    // Keep this map after a child settles so resume does not scan every
+    // historical agent. Thread close is the only cleanup.
+    const callId = trackedSubAgentCallIdsByAgentThreadId.get(agentThreadId);
+    if (!callId) {
+      return undefined;
+    }
+    return trackedSubAgentsByCallId.get(callId);
+  }
+
+  function rearmTrackedSubAgent(tracked: CodexTrackedSubAgent): void {
+    trackedSubAgentCallIdsByAgentThreadId.set(
+      tracked.agentThreadId,
+      tracked.callId,
+    );
+    if (tracked.agentThreadId !== tracked.parentProviderThreadId) {
+      delegationParentToolCallIdsByProviderThreadId.set(
+        tracked.agentThreadId,
+        tracked.callId,
+      );
+    }
+    enqueuePendingDelegationTurnLink({
+      callId: tracked.callId,
+      parentTurnId: tracked.parentTurnId,
+      providerThreadId: tracked.parentProviderThreadId,
+    });
+  }
+
   function completeCodexTrackedSubAgent(args: {
     status: "completed" | "failed" | "interrupted";
     tracked: CodexTrackedSubAgent;
   }): ThreadEvent | null {
-    if (args.tracked.terminal) {
-      return null;
-    }
+    const alreadyTerminal = args.tracked.terminal;
     args.tracked.terminal = true;
     clearTrackedSubAgentLinks(args.tracked);
+    if (alreadyTerminal && args.tracked.pendingFollowups > 0) {
+      args.tracked.pendingFollowups -= 1;
+    }
+    if (args.tracked.pendingFollowups > 0) {
+      rearmTrackedSubAgent(args.tracked);
+    }
+    if (alreadyTerminal) {
+      return null;
+    }
     return buildCodexSubAgentCompletedEvent(args);
   }
 
@@ -1612,6 +1621,7 @@ export function createCodexProviderAdapter(
           callId: activity.item.id,
           parentProviderThreadId: activity.providerThreadId,
           parentTurnId: activity.turnId,
+          pendingFollowups: 0,
           terminal: false,
         };
         trackedSubAgentsByCallId.set(tracked.callId, tracked);
@@ -1639,10 +1649,24 @@ export function createCodexProviderAdapter(
         });
         return startedEvent ? [startedEvent] : [];
       }
-      case "interacted":
+      case "interacted": {
         // Messaging an existing agent is activity within the original
-        // delegation, not a new timeline row.
+        // delegation, not a new timeline row. A completed agent can receive
+        // followup_task; re-arm the original parent so the next child turn
+        // is not projected as a root turn.
+        if (processedSubAgentInteractionIds.has(activity.item.id)) {
+          return [];
+        }
+        processedSubAgentInteractionIds.add(activity.item.id);
+        const tracked = findTrackedSubAgentByAgentThreadId(
+          activity.item.agentThreadId,
+        );
+        if (tracked?.terminal) {
+          tracked.pendingFollowups += 1;
+          rearmTrackedSubAgent(tracked);
+        }
         return [];
+      }
       case "interrupted": {
         const callId = trackedSubAgentCallIdsByAgentThreadId.get(
           activity.item.agentThreadId,
@@ -1691,40 +1715,42 @@ export function createCodexProviderAdapter(
     return completedEvents;
   }
 
-  function consumeCodexRawResponseItem(event: ProviderRuntimeEvent): boolean {
+  function consumeCodexRawResponseItem(
+    event: ProviderRuntimeEvent,
+  ): ThreadEvent[] | null {
     const rawEvent = toCodexRawNotification(event, "rawResponseItem/completed");
     if (!rawEvent) {
-      return false;
+      return null;
     }
 
     const paramsResult = codexRawResponseItemCompletedParamsSchema.safeParse(
       rawEvent.params,
     );
     if (!paramsResult.success) {
-      return true;
+      return [];
     }
 
     const { threadId: providerThreadId, item } = paramsResult.data;
 
     if (item.type === "function_call") {
       if (!CODEX_SHELL_TOOL_NAMES.has(item.name)) {
-        return true;
+        return [];
       }
       getRawCommandOutputState(providerThreadId).shellToolCallIds.add(
         item.call_id,
       );
-      return true;
+      return [];
     }
 
     if (item.type === "function_call_output") {
       const rawCommandOutputState =
         rawCommandOutputStateByProviderThreadId.get(providerThreadId);
       if (!rawCommandOutputState) {
-        return true;
+        return [];
       }
       if (!rawCommandOutputState.shellToolCallIds.has(item.call_id)) {
         pruneRawCommandOutputState(providerThreadId);
-        return true;
+        return [];
       }
 
       const recoveredOutput = extractRecoveredCommandOutput(item.output);
@@ -1733,9 +1759,25 @@ export function createCodexProviderAdapter(
           item.call_id,
           recoveredOutput,
         );
+      } else {
+        rawCommandOutputState.shellToolCallIds.delete(item.call_id);
+      }
+      const pendingCompletedEvent =
+        rawCommandOutputState.pendingCompletedEventByCallId.get(item.call_id);
+      if (pendingCompletedEvent) {
+        rawCommandOutputState.pendingCompletedEventByCallId.delete(
+          item.call_id,
+        );
+        const capturedOutput = consumeCapturedCommandOutput({
+          commandExecutionId: item.call_id,
+          providerThreadId,
+        });
+        return [
+          repairCompletedCommandOutput(pendingCompletedEvent, capturedOutput),
+        ];
       }
       pruneRawCommandOutputState(providerThreadId);
-      return true;
+      return [];
     }
 
     if (item.type === "local_shell_call") {
@@ -1743,7 +1785,7 @@ export function createCodexProviderAdapter(
       // execution as function_call(exec_command) + function_call_output. If
       // app-server starts emitting local_shell_call with recoverable output,
       // extend this repair path with a real captured fixture first.
-      return true;
+      return [];
     }
 
     if (
@@ -1752,22 +1794,35 @@ export function createCodexProviderAdapter(
     ) {
       // TODO(codex): Keep this explicit so shell recovery does not silently
       // assume custom_tool_call traffic is equivalent to exec_command.
-      return true;
+      return [];
     }
 
-    return true;
+    return [];
   }
 
-  function reconcileRawCommandOutputLifecycle(events: ThreadEvent[]): void {
+  function reconcileRawCommandOutputLifecycle(
+    events: ThreadEvent[],
+  ): ThreadEvent[] {
+    const reconciledEvents: ThreadEvent[] = [];
     for (const event of events) {
       if (event.type === "turn/completed") {
         if (event.providerThreadId !== null) {
+          const state = rawCommandOutputStateByProviderThreadId.get(
+            event.providerThreadId,
+          );
+          if (state) {
+            reconciledEvents.push(
+              ...state.pendingCompletedEventByCallId.values(),
+            );
+          }
           rawCommandOutputStateByProviderThreadId.delete(
             event.providerThreadId,
           );
         }
       }
+      reconciledEvents.push(event);
     }
+    return reconciledEvents;
   }
 
   function consumeCapturedCommandOutput(args: {
@@ -1793,6 +1848,46 @@ export function createCodexProviderAdapter(
     return capturedOutput;
   }
 
+  function repairCompletedCommandOutput(
+    event: ThreadEvent,
+    capturedOutput: CodexCapturedCommandOutput | undefined,
+  ): ThreadEvent {
+    if (
+      capturedOutput === undefined ||
+      event.type !== "item/completed" ||
+      event.item.type !== "commandExecution"
+    ) {
+      return event;
+    }
+
+    if (
+      capturedOutput.kind === "recovered" &&
+      event.item.aggregatedOutput === capturedOutput.output
+    ) {
+      return event;
+    }
+
+    if (capturedOutput.kind === "empty") {
+      if (event.item.aggregatedOutput === undefined) {
+        return event;
+      }
+      const { aggregatedOutput: _aggregatedOutput, ...itemWithoutOutput } =
+        event.item;
+      return {
+        ...event,
+        item: itemWithoutOutput,
+      };
+    }
+
+    return {
+      ...event,
+      item: {
+        ...event.item,
+        aggregatedOutput: capturedOutput.output,
+      },
+    };
+  }
+
   function applyRecoveredCommandOutput(events: ThreadEvent[]): ThreadEvent[] {
     const repairedEvents: ThreadEvent[] = [];
     for (const event of events) {
@@ -1804,52 +1899,53 @@ export function createCodexProviderAdapter(
         continue;
       }
 
+      const rawCommandOutputState = rawCommandOutputStateByProviderThreadId.get(
+        event.providerThreadId,
+      );
+      if (
+        !rawCommandOutputState?.capturedCommandOutputByCallId.has(event.item.id)
+      ) {
+        if (rawCommandOutputState?.shellToolCallIds.has(event.item.id)) {
+          rawCommandOutputState.pendingCompletedEventByCallId.set(
+            event.item.id,
+            event,
+          );
+          continue;
+        }
+        repairedEvents.push(event);
+        continue;
+      }
       const capturedOutput = consumeCapturedCommandOutput({
         commandExecutionId: event.item.id,
         providerThreadId: event.providerThreadId,
       });
-      if (capturedOutput === undefined) {
-        repairedEvents.push(event);
-        continue;
-      }
-
-      if (
-        capturedOutput.kind === "recovered" &&
-        event.item.aggregatedOutput === capturedOutput.output
-      ) {
-        repairedEvents.push(event);
-        continue;
-      }
-
-      if (capturedOutput.kind === "empty") {
-        if (event.item.aggregatedOutput === undefined) {
-          repairedEvents.push(event);
-          continue;
-        }
-        const { aggregatedOutput: _aggregatedOutput, ...itemWithoutOutput } =
-          event.item;
-        repairedEvents.push({
-          ...event,
-          item: itemWithoutOutput,
-        });
-        continue;
-      }
-
-      repairedEvents.push({
-        ...event,
-        item: {
-          ...event.item,
-          aggregatedOutput: capturedOutput.output,
-        },
-      });
+      repairedEvents.push(repairCompletedCommandOutput(event, capturedOutput));
     }
     return repairedEvents;
   }
 
-  return {
+  function buildPostInitializeRequests() {
+    return [
+      {
+        plan: {
+          kind: "request" as const,
+          method: "account/rateLimits/read",
+        },
+        required: false,
+        onResult(result: unknown) {
+          const response = codexRateLimitReadResponseSchema.parse(result);
+          applyCodexRateLimitUpdate(eventTranslationState, response.rateLimits);
+        },
+      },
+    ];
+  }
+
+  const standardAdapterMembers = createStandardAdapterMembers({
     id: providerInfo.id,
     displayName: providerInfo.displayName,
     capabilities,
+    approvalRequestPolicy: "runtime",
+    classifyExecutionSettingsChange: classifySessionExecutionSettingsChange,
     // Codex app-server connections are owned by the runtime process manager.
     // BB runs live Codex threads on thread-scoped app-server processes, while
     // provider-only probes can still use a provider-scoped maintenance process.
@@ -1857,37 +1953,13 @@ export function createCodexProviderAdapter(
       command: opts?.processCommand ?? "codex",
       args: opts?.processArgs ?? ["app-server"],
     },
-
-    buildPostInitializeRequests() {
-      return [
-        {
-          plan: {
-            kind: "request",
-            method: "account/rateLimits/read",
-          },
-          required: false,
-          onResult(result: unknown) {
-            const response = codexRateLimitReadResponseSchema.parse(result);
-            applyCodexRateLimitUpdate(
-              eventTranslationState,
-              response.rateLimits,
-            );
-          },
-        },
-      ];
+    initializeParams: {
+      clientInfo: { name: "bb", version: "1.0.0", title: null },
+      capabilities: { experimentalApi: true },
     },
-
-    buildCommandPlan(command: AdapterCommand): ProviderCommandPlan {
+    codec: "native",
+    buildProviderCommandPlan(command) {
       switch (command.type) {
-        case "initialize":
-          return {
-            kind: "request",
-            method: "initialize",
-            params: {
-              clientInfo: { name: "bb", version: "1.0.0", title: null },
-              capabilities: { experimentalApi: true },
-            },
-          };
         case "model/list":
           return {
             kind: "request",
@@ -1965,6 +2037,9 @@ export function createCodexProviderAdapter(
           const preparedGitRoots = prepareWorkspaceWriteGitRoots({ command });
           const params: BbThreadForkParams = {
             threadId: command.sourceProviderThreadId,
+            ...(command.sourceProviderCheckpointId !== undefined
+              ? { lastTurnId: command.sourceProviderCheckpointId }
+              : {}),
             approvalPolicy: preparedGitRoots.permissionSettings.approvalPolicy,
             approvalsReviewer:
               preparedGitRoots.permissionSettings.approvalsReviewer,
@@ -1989,7 +2064,7 @@ export function createCodexProviderAdapter(
             command.input,
             command.inputGroups,
           );
-          if (isStandaloneBuiltinCompactCommandInput(input)) {
+          if (isStandaloneBuiltinCompactCommand(input)) {
             const params: ThreadCompactStartParams = {
               threadId: command.providerThreadId,
             };
@@ -2079,6 +2154,15 @@ export function createCodexProviderAdapter(
               turnId: command.activeTurnId,
             },
           };
+        case "thread/discard":
+          if (!capabilities.supportsArchive) {
+            return { kind: "noop", reason: "archive unsupported" };
+          }
+          return {
+            kind: "request",
+            method: "thread/archive",
+            params: { threadId: command.providerThreadId },
+          };
         case "thread/goal/clear":
           return {
             kind: "request",
@@ -2097,70 +2181,39 @@ export function createCodexProviderAdapter(
 
     translateEvent(event: ProviderRuntimeEvent) {
       clearClosedThreadState(event);
-      if (consumeCodexRawResponseItem(event)) {
-        return [];
+      const rawResponseEvents = consumeCodexRawResponseItem(event);
+      if (rawResponseEvents !== null) {
+        return rawResponseEvents;
       }
 
       const subAgentActivityEvents = translateCodexSubAgentActivity(event);
       if (subAgentActivityEvents !== null) {
-        reconcileRawCommandOutputLifecycle(subAgentActivityEvents);
-        return applyRecoveredCommandOutput(subAgentActivityEvents);
+        return reconcileRawCommandOutputLifecycle(
+          applyRecoveredCommandOutput(subAgentActivityEvents),
+        );
       }
 
-      const translatedEvents = translateCodexEvent(
-        event,
-        eventTranslationState,
-      ).flatMap(attachAcceptedUserMessageCorrelation);
-      const parentLinkedEvents =
-        attachCodexDelegationParentLinks(translatedEvents);
+      const parentLinkedEvents = attachCodexDelegationParentLinks(
+        translateCodexEvent(event, eventTranslationState),
+      );
+      const translatedEvents = parentLinkedEvents.flatMap(
+        attachAcceptedUserMessageCorrelation,
+      );
       const completedSubAgentEvents =
-        completeFinishedCodexSubAgentTurns(parentLinkedEvents);
-      reconcileRawCommandOutputLifecycle(completedSubAgentEvents);
-      return applyRecoveredCommandOutput(completedSubAgentEvents);
+        completeFinishedCodexSubAgentTurns(translatedEvents);
+      return reconcileRawCommandOutputLifecycle(
+        applyRecoveredCommandOutput(completedSubAgentEvents),
+      );
     },
 
-    translateAcceptedCommand({ command, providerThreadId }) {
-      if (
-        (command.type === "thread/start" ||
-          command.type === "thread/resume" ||
-          command.type === "thread/fork") &&
-        providerThreadId
-      ) {
+    onSessionReplace({ command, providerThreadId }) {
+      if (providerThreadId) {
         activateThreadGitWritableRoots({
           providerThreadId,
           threadId: command.threadId,
         });
       }
-      if (command.type !== "turn/steer") {
-        return [];
-      }
-      return buildAcceptedUserMessageEvent({
-        clientRequestId: command.clientRequestId,
-        providerThreadId: command.providerThreadId,
-        threadId: command.threadId,
-        turnId: command.expectedTurnId,
-      });
-    },
-
-    decodeToolCallRequest(
-      request: ProviderInboundRequest,
-    ): DecodedToolCallRequest | null {
-      if (typeof request.id !== "string" && typeof request.id !== "number") {
-        return null;
-      }
-      return decodeNativeProviderToolCallRequest(
-        request.id,
-        request.method,
-        request.params,
-      );
-    },
-
-    decodeInteractiveRequest(request: ProviderInboundRequest) {
-      return decodeCodexInteractiveRequest(request);
-    },
-
-    buildInteractiveResponse(args) {
-      return buildCodexInteractiveResponse(args);
+      return [];
     },
 
     parseModelListResult(result: unknown) {
@@ -2170,6 +2223,32 @@ export function createCodexProviderAdapter(
         models: parseModelsResponse(result),
         selectedOnlyModels: [],
       };
+    },
+  });
+
+  return {
+    ...standardAdapterMembers,
+    // Codex reports native subagents as toolCall items rather than as BB
+    // background tasks, so the shared background-work state cannot see them.
+    // Report them here; a session release must not stop the parent process
+    // while a child agent still runs or still owes a followup turn.
+    hasOpenThreadWork({ providerThreadId }: { providerThreadId: string }) {
+      for (const tracked of trackedSubAgentsByCallId.values()) {
+        if (tracked.parentProviderThreadId !== providerThreadId) {
+          continue;
+        }
+        if (!tracked.terminal || tracked.pendingFollowups > 0) {
+          return true;
+        }
+      }
+      return false;
+    },
+    buildPostInitializeRequests,
+    decodeInteractiveRequest(request: ProviderInboundRequest) {
+      return decodeCodexInteractiveRequest(request);
+    },
+    buildInteractiveResponse(args) {
+      return buildCodexInteractiveResponse(args);
     },
   };
 }

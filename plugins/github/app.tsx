@@ -24,7 +24,7 @@ import {
   useRpc,
   type PluginNavPanelProps,
   type PluginThreadPanelProps,
-} from "@bb/plugin-sdk/app";
+} from "@get-bb/plugin-sdk/app";
 import type { githubRpcContract } from "./server.js";
 // Shimmed to the host's copy at build time (shared worker-pool context +
 // shiki stays out of the plugin bundle) — diffs render with the same syntax
@@ -2207,6 +2207,55 @@ function ChecksSection({ checks }: { checks: PullCheck[] }) {
   );
 }
 
+function readHostCodeTheme(): { dark: string; light: string } {
+  const root = document.documentElement.dataset;
+  return {
+    dark: root.bbCodeThemeDark ?? "pierre-dark",
+    light: root.bbCodeThemeLight ?? "pierre-light",
+  };
+}
+
+/** Read lazily: this module also loads outside a DOM, such as in the plugin
+    bundle tests, where a module-eval `document` access throws. */
+let hostCodeTheme: { dark: string; light: string } | null = null;
+const hostCodeThemeListeners = new Set<() => void>();
+let hostCodeThemeObserver: MutationObserver | null = null;
+
+function getHostCodeTheme(): { dark: string; light: string } {
+  hostCodeTheme ??= readHostCodeTheme();
+  return hostCodeTheme;
+}
+
+function subscribeHostCodeTheme(onStoreChange: () => void): () => void {
+  hostCodeThemeListeners.add(onStoreChange);
+  if (hostCodeThemeObserver === null) {
+    hostCodeThemeObserver = new MutationObserver(() => {
+      const next = readHostCodeTheme();
+      const current = getHostCodeTheme();
+      if (next.dark === current.dark && next.light === current.light) {
+        return;
+      }
+      hostCodeTheme = next;
+      for (const listener of hostCodeThemeListeners) listener();
+    });
+    hostCodeThemeObserver.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ["data-bb-code-theme-dark", "data-bb-code-theme-light"],
+    });
+  }
+  return () => {
+    hostCodeThemeListeners.delete(onStoreChange);
+  };
+}
+
+function useHostCodeTheme(): { dark: string; light: string } {
+  return useSyncExternalStore(
+    subscribeHostCodeTheme,
+    getHostCodeTheme,
+    getHostCodeTheme,
+  );
+}
+
 /** The host toggles dark mode via a `dark` class on <html>; pierre's diff
     themes are picked per render, so track it live. */
 function useIsDarkTheme(): boolean {
@@ -2234,6 +2283,7 @@ function useIsDarkTheme(): boolean {
  */
 function DiffPatch({ path, patch }: { path: string; patch: string }) {
   const dark = useIsDarkTheme();
+  const codeTheme = useHostCodeTheme();
   const fileDiff = useMemo<FileDiffMetadata | null>(() => {
     const normalized = patch.replace(/\r\n/g, "\n").trimEnd();
     if (normalized.length === 0) return null;
@@ -2253,8 +2303,9 @@ function DiffPatch({ path, patch }: { path: string; patch: string }) {
         overflow: "scroll",
         disableFileHeader: true,
         themeType: dark ? "dark" : "light",
+        theme: codeTheme,
       }) as const,
-    [dark],
+    [codeTheme, dark],
   );
   if (fileDiff === null) {
     return (

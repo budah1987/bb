@@ -1,7 +1,7 @@
 import type {
   PluginSidebarProject,
   PluginSidebarThread,
-} from "@bb/plugin-sdk/app";
+} from "@get-bb/plugin-sdk/app";
 
 export const CONDUCTOR_PROJECTION_VERSION = 2;
 

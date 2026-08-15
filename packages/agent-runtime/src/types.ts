@@ -56,11 +56,13 @@ export type AgentRuntimeSkillRoot =
 
 /**
  * Final per-thread state snapshot taken when a provider process exits,
- * captured before the runtime clears the thread's state. This is the only
- * way consumers can see which turn a crashed thread was running.
+ * captured before the runtime clears the thread's state. This is the only way
+ * consumers can distinguish an idle session from a crashed active turn or a
+ * turn request awaiting its first provider lifecycle event.
  */
 export interface AgentRuntimeProcessExitThreadState {
   activeTurnId: string | null;
+  pendingTurnStart: boolean;
   providerThreadId: string | null;
   threadId: string;
 }
@@ -172,6 +174,30 @@ export interface StartThreadResult {
   providerThreadId: string;
 }
 
+export interface PrepareThreadRewindArgs {
+  acpLaunchSpec?: HostDaemonAcpLaunchSpec;
+  environmentId: string;
+  threadId: string;
+  leaseId: string;
+  projectId: string;
+  providerId: string;
+  sourceProviderThreadId: string;
+  retainThroughProviderCheckpoint: string;
+  options: AgentRuntimeExecutionOptions;
+  instructions?: string;
+  dynamicTools?: DynamicTool[];
+  disallowedTools?: readonly string[];
+  instructionMode?: InstructionMode;
+}
+
+export interface PrepareThreadRewindResult {
+  providerThreadId: string;
+}
+
+export interface DiscardThreadRewindArgs {
+  leaseId: string;
+}
+
 export interface ResumeThreadArgs {
   acpLaunchSpec?: HostDaemonAcpLaunchSpec;
   environmentId: string;
@@ -224,6 +250,10 @@ export interface StopThreadArgs {
   threadId: string;
 }
 
+export interface StopThreadResult {
+  providerCheckpointId: string | null;
+}
+
 export interface AgentRuntimeProviderSession {
   providerId: string;
   providerThreadId: string;
@@ -236,6 +266,11 @@ export interface WaitForActiveTurnArgs {
 export interface ReapIdleProviderSessionsArgs {
   idleForMs: number;
   nowMs: number;
+  providerSessionReapingEnabled: boolean;
+  runThreadExclusive?: (
+    threadId: string,
+    work: () => Promise<ReapedIdleProviderSession | null>,
+  ) => Promise<ReapedIdleProviderSession | null>;
 }
 
 export interface ReapedIdleProviderSession {
@@ -281,6 +316,12 @@ export interface AgentRuntime {
 
   startThread(args: StartThreadArgs): Promise<StartThreadResult>;
 
+  prepareThreadRewind(
+    args: PrepareThreadRewindArgs,
+  ): Promise<PrepareThreadRewindResult>;
+
+  discardThreadRewind(args: DiscardThreadRewindArgs): Promise<void>;
+
   resumeThread(args: ResumeThreadArgs): Promise<ResumeThreadResult>;
 
   runTurn(args: RunTurnArgs): Promise<void>;
@@ -293,7 +334,7 @@ export interface AgentRuntime {
    * reports `false` afterwards and the next turn must go through
    * `resumeThread`. The provider process keeps running for other threads.
    */
-  stopThread(args: StopThreadArgs): Promise<void>;
+  stopThread(args: StopThreadArgs): Promise<StopThreadResult>;
 
   clearThreadGoal(args: ClearThreadGoalArgs): Promise<{ cleared: boolean }>;
 

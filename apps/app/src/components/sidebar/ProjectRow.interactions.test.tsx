@@ -80,6 +80,19 @@ vi.mock("@/components/project/ProjectActionsProvider", () => ({
   }),
 }));
 
+vi.mock("@/components/thread/ThreadActionsProvider", () => ({
+  useArchivingThreadIds: () => new Set<string>(),
+  useThreadActions: () => ({
+    renameThread: vi.fn(),
+    requestRename: vi.fn(),
+    requestDelete: vi.fn(),
+    archiveThreadAndChildren: vi.fn(),
+    unarchiveThread: vi.fn(),
+    togglePin: vi.fn(),
+    toggleRead: vi.fn(),
+  }),
+}));
+
 function makeProject(): ProjectResponse {
   return {
     id: "proj_test",
@@ -108,7 +121,6 @@ function makeThread(overrides: Partial<ThreadListEntry> = {}): ThreadListEntry {
     originKind: null,
     originPluginId: null,
     visibility: "visible",
-    childOrigin: null,
     archivedAt: null,
     pinnedAt: null,
     pinSortKey: null,
@@ -224,6 +236,9 @@ describe("ProjectRow interactions", () => {
     const threadLink = result.container.querySelector(
       '[data-sidebar-thread-id="thr_test"]',
     );
+    const projectGroup = result.container.querySelector(
+      "[data-sidebar-sticky-project-item]",
+    );
 
     expect(
       disclosure.compareDocumentPosition(icon as Node) &
@@ -236,35 +251,13 @@ describe("ProjectRow interactions", () => {
     expect(
       (threadLink?.parentElement as HTMLElement | null)?.style.paddingLeft,
     ).toBe("8px");
-  });
-
-  it("renders large project trees in pages of 20 root threads", () => {
-    const threads = Array.from({ length: 45 }, (_, index) =>
-      makeThread({
-        id: `thr_${index}`,
-        title: `Thread ${index}`,
-        titleFallback: `Thread ${index}`,
-      }),
+    expect(projectGroup?.getAttribute("data-sidebar-project-id")).toBe(
+      "proj_test",
     );
-    const result = renderProjectRow(vi.fn(), {
-      status: "ready",
-      threads,
-    });
-
-    expect(
-      result.container.querySelectorAll("[data-sidebar-thread-id]"),
-    ).toHaveLength(20);
-    expect(screen.getByRole("button", { name: "Show 20 more" })).not.toBeNull();
-
-    fireEvent.click(screen.getByRole("button", { name: "Show 20 more" }));
-
-    expect(
-      result.container.querySelectorAll("[data-sidebar-thread-id]"),
-    ).toHaveLength(40);
-    expect(screen.getByRole("button", { name: "Show 5 more" })).not.toBeNull();
+    expect(projectGroup?.hasAttribute("data-sidebar-section-id")).toBe(false);
   });
 
-  it("renders a selected child beyond the first page immediately", () => {
+  it("keeps a selected deep child mounted inside a large tree", () => {
     const rootThreads = Array.from({ length: 45 }, (_, index) =>
       makeThread({
         id: `thr_${index}`,
@@ -287,15 +280,14 @@ describe("ProjectRow interactions", () => {
       selectedChild.id,
     );
 
+    // Windowing mounts a viewport-sized slice, so the only guarantee that
+    // matters here is that the active row stays mounted as the anchor for
+    // DOM-driven keyboard navigation.
     expect(
       result.container.querySelector(
         '[data-sidebar-thread-id="thr_selected_child"]',
       ),
     ).not.toBeNull();
-    expect(
-      result.container.querySelectorAll("[data-sidebar-thread-id]"),
-    ).toHaveLength(36);
-    expect(screen.getByRole("button", { name: "Show 10 more" })).not.toBeNull();
   });
 
   it("requests an older server page only after loaded roots are visible", () => {
@@ -453,6 +445,13 @@ describe("ProjectRow interactions", () => {
     fireEvent.click(
       screen.getByRole("button", { name: "Collapse Active work section" }),
     );
+
+    expect(
+      screen
+        .getByTitle("Active work")
+        .closest("[data-sidebar-sticky-group]")
+        ?.getAttribute("data-sidebar-section-id"),
+    ).toBe(sectionId);
 
     expect(screen.queryByText("Test thread")).toBeNull();
     expect(screen.getAllByLabelText("Plan mode active")).not.toHaveLength(0);

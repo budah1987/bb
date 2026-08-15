@@ -99,16 +99,21 @@ import {
   buildSectionThreadList,
   buildProjectThreadGroups,
   CHRONOLOGICAL_CONTAINER_ID,
+  collectProjectThreadItemNavigationEntries,
+  countProjectThreadItemRows,
   getProjectThreadItemDescendants,
   getSidebarDndItemId,
   isSidebarProjectThread,
+  projectThreadItemContainsThread,
   type EnvironmentThreadGroup,
   type ProjectThreadItem,
+  type ProjectThreadItemRowCountContext,
   type ProjectThreadNode,
   type SidebarSectionDefinition,
   type SidebarSectionGroup,
   type ThreadComparator,
 } from "./projectThreadGroups";
+import { SidebarWindowedItems } from "./SidebarWindowedItems";
 import { SidebarSectionRow } from "./SidebarSectionRow";
 import { TopLevelSidebarSection } from "./TopLevelSidebarSection";
 import {
@@ -152,8 +157,6 @@ import { SectionThreadDndProvider } from "./SectionThreadDndContext";
 // worktree group headers); rows deeper than the cap render non-sticky so a deep
 // chain can't pin more ancestors than a short viewport can hold.
 const SIDEBAR_STICKY_PARENT_DEPTH_CAP = 4;
-const SIDEBAR_THREAD_ROOT_PAGE_SIZE = 20;
-
 export type ProjectThreadListState =
   | {
       status: "loading";
@@ -378,33 +381,6 @@ function getItemProjectId(item: ProjectThreadItem): string {
         return PERSONAL_PROJECT_ID;
       }
       return getItemProjectId(item.group.items[0]);
-  }
-}
-
-function projectThreadItemContainsThread(
-  item: ProjectThreadItem,
-  threadId: string,
-): boolean {
-  switch (item.kind) {
-    case "thread":
-      return (
-        item.node.thread.id === threadId ||
-        item.node.children.some((child) =>
-          projectThreadItemContainsThread(child, threadId),
-        )
-      );
-    case "environment":
-      return item.group.nodes.some(
-        (node) =>
-          node.thread.id === threadId ||
-          node.children.some((child) =>
-            projectThreadItemContainsThread(child, threadId),
-          ),
-      );
-    case "section":
-      return item.group.items.some((child) =>
-        projectThreadItemContainsThread(child, threadId),
-      );
   }
 }
 
@@ -1225,6 +1201,19 @@ const EnvironmentThreadGroupRow = memo(function EnvironmentThreadGroupRow({
     environmentId,
     representativeThread,
   });
+  // One environment group can hold hundreds of threads, so its node list
+  // windows like every other sibling list (#1261 review follow-up).
+  const nodeItems = useMemo<ProjectThreadItem[]>(
+    () => nodes.map((node) => ({ kind: "thread", node })),
+    [nodes],
+  );
+  const { itemKeys, estimateRows, getNavigationEntries, alwaysMountedKeys } =
+    useWindowedThreadItems({
+      items: nodeItems,
+      collapsedThreadIds,
+      collapsedEnvironmentIds,
+      selectedThreadId,
+    });
 
   return (
     <>
@@ -1251,22 +1240,34 @@ const EnvironmentThreadGroupRow = memo(function EnvironmentThreadGroupRow({
           {!isCollapsed ? (
             <div className="relative space-y-px">
               <ThreadTreeGroupLine parentRowDepth={rowDepth} />
-              {nodes.map((node) => (
-                <ThreadTreeNodeRow
-                  key={node.thread.id}
-                  projectId={projectId}
-                  node={node}
-                  depthOffset={depthOffset + 1}
-                  isEnvGrouped
-                  selectedThreadId={selectedThreadId}
-                  collapsedThreadIds={collapsedThreadIds}
-                  collapsedEnvironmentIds={collapsedEnvironmentIds}
-                  variant={variant}
-                  onProjectSelect={onProjectSelect}
-                  onToggleThreadCollapsed={onToggleThreadCollapsed}
-                  onToggleEnvironmentCollapsed={onToggleEnvironmentCollapsed}
-                />
-              ))}
+              <SidebarWindowedItems
+                itemKeys={itemKeys}
+                estimateRows={estimateRows}
+                getNavigationEntries={getNavigationEntries}
+                alwaysMountedKeys={alwaysMountedKeys}
+                renderItem={(index) => {
+                  const node = nodes[index];
+                  if (!node) {
+                    return null;
+                  }
+                  return (
+                    <ThreadTreeNodeRow
+                      key={node.thread.id}
+                      projectId={projectId}
+                      node={node}
+                      depthOffset={depthOffset + 1}
+                      isEnvGrouped
+                      selectedThreadId={selectedThreadId}
+                      collapsedThreadIds={collapsedThreadIds}
+                      collapsedEnvironmentIds={collapsedEnvironmentIds}
+                      variant={variant}
+                      onProjectSelect={onProjectSelect}
+                      onToggleThreadCollapsed={onToggleThreadCollapsed}
+                      onToggleEnvironmentCollapsed={onToggleEnvironmentCollapsed}
+                    />
+                  );
+                }}
+              />
             </div>
           ) : null}
         </SidebarStickyGroup>
@@ -1510,6 +1511,13 @@ const SectionTreeItemRow = memo(function SectionTreeItemRow({
     () => getProjectThreadItemDescendants(section.items),
     [section.items],
   );
+  const { itemKeys, estimateRows, getNavigationEntries, alwaysMountedKeys } =
+    useWindowedThreadItems({
+      items: section.items,
+      collapsedThreadIds,
+      collapsedEnvironmentIds,
+      selectedThreadId,
+    });
 
   const childrenArea = showChildrenArea ? (
     <div className="relative space-y-px">
@@ -1518,27 +1526,41 @@ const SectionTreeItemRow = memo(function SectionTreeItemRow({
       ) : null}
       {showChildren ? (
         <SectionDndSortableList sectionDnd={sectionDnd} parentKey={section.key}>
-          {section.items.map((item) => (
-            <SectionDndItemRow
-              key={getItemKey(item)}
-              projectId={getItemProjectId(item)}
-              item={item}
-              depthOffset={
-                variant === "section" && depthOffset === 0 ? 0 : depthOffset + 1
+          <SidebarWindowedItems
+            itemKeys={itemKeys}
+            estimateRows={estimateRows}
+            getNavigationEntries={getNavigationEntries}
+            alwaysMountedKeys={alwaysMountedKeys}
+            renderItem={(index) => {
+              const item = section.items[index];
+              if (!item) {
+                return null;
               }
-              selectedThreadId={selectedThreadId}
-              collapsedThreadIds={collapsedThreadIds}
-              collapsedEnvironmentIds={collapsedEnvironmentIds}
-              variant={variant}
-              onProjectSelect={onProjectSelect}
-              onCreateThreadInSection={onCreateThreadInSection}
-              onRenameSection={onRenameSection}
-              onRemoveSection={onRemoveSection}
-              onToggleThreadCollapsed={onToggleThreadCollapsed}
-              onToggleEnvironmentCollapsed={onToggleEnvironmentCollapsed}
-              sectionDnd={sectionDnd}
-            />
-          ))}
+              return (
+                <SectionDndItemRow
+                  key={getItemKey(item)}
+                  projectId={getItemProjectId(item)}
+                  item={item}
+                  depthOffset={
+                    variant === "section" && depthOffset === 0
+                      ? 0
+                      : depthOffset + 1
+                  }
+                  selectedThreadId={selectedThreadId}
+                  collapsedThreadIds={collapsedThreadIds}
+                  collapsedEnvironmentIds={collapsedEnvironmentIds}
+                  variant={variant}
+                  onProjectSelect={onProjectSelect}
+                  onCreateThreadInSection={onCreateThreadInSection}
+                  onRenameSection={onRenameSection}
+                  onRemoveSection={onRemoveSection}
+                  onToggleThreadCollapsed={onToggleThreadCollapsed}
+                  onToggleEnvironmentCollapsed={onToggleEnvironmentCollapsed}
+                  sectionDnd={sectionDnd}
+                />
+              );
+            }}
+          />
         </SectionDndSortableList>
       ) : null}
       {sectionDnd ? (
@@ -1647,6 +1669,7 @@ const SectionTreeItemRow = memo(function SectionTreeItemRow({
     return (
       <TopLevelSidebarSection
         label={section.name}
+        sectionId={section.id}
         actions={topLevelActions}
         actionsAlwaysVisible
         actionsOpen={topLevelActionsOpen}
@@ -1672,6 +1695,7 @@ const SectionTreeItemRow = memo(function SectionTreeItemRow({
     <SidebarStickyGroup
       ref={sortableRef}
       style={sortableStyle}
+      data-sidebar-section-id={section.id}
       className={cn(
         "space-y-0.5 rounded-md transition-colors",
         isDropTargetActive &&
@@ -1767,6 +1791,15 @@ export const ThreadTreeNodeRow = memo(function ThreadTreeNodeRow({
     projectId: rowProjectId,
     threadId: node.thread.id,
   });
+  // A parent thread can hold a long child list, so it windows like every
+  // other sibling list (#1261 review follow-up).
+  const { itemKeys, estimateRows, getNavigationEntries, alwaysMountedKeys } =
+    useWindowedThreadItems({
+      items: node.children,
+      collapsedThreadIds,
+      collapsedEnvironmentIds,
+      selectedThreadId,
+    });
   const row = (
     <ThreadRow
       projectId={rowProjectId}
@@ -1792,21 +1825,33 @@ export const ThreadTreeNodeRow = memo(function ThreadTreeNodeRow({
       {showChildren ? (
         <div className="relative space-y-px">
           <ThreadTreeGroupLine parentRowDepth={parentRowDepth} />
-          {node.children.map((item) => (
-            <ThreadTreeItemRow
-              key={getItemKey(item)}
-              projectId={projectId}
-              item={item}
-              depthOffset={depthOffset}
-              selectedThreadId={selectedThreadId}
-              collapsedThreadIds={collapsedThreadIds}
-              collapsedEnvironmentIds={collapsedEnvironmentIds}
-              variant={variant}
-              onProjectSelect={onProjectSelect}
-              onToggleThreadCollapsed={onToggleThreadCollapsed}
-              onToggleEnvironmentCollapsed={onToggleEnvironmentCollapsed}
-            />
-          ))}
+          <SidebarWindowedItems
+            itemKeys={itemKeys}
+            estimateRows={estimateRows}
+            getNavigationEntries={getNavigationEntries}
+            alwaysMountedKeys={alwaysMountedKeys}
+            renderItem={(index) => {
+              const item = node.children[index];
+              if (!item) {
+                return null;
+              }
+              return (
+                <ThreadTreeItemRow
+                  key={getItemKey(item)}
+                  projectId={projectId}
+                  item={item}
+                  depthOffset={depthOffset}
+                  selectedThreadId={selectedThreadId}
+                  collapsedThreadIds={collapsedThreadIds}
+                  collapsedEnvironmentIds={collapsedEnvironmentIds}
+                  variant={variant}
+                  onProjectSelect={onProjectSelect}
+                  onToggleThreadCollapsed={onToggleThreadCollapsed}
+                  onToggleEnvironmentCollapsed={onToggleEnvironmentCollapsed}
+                />
+              );
+            }}
+          />
         </div>
       ) : null}
     </SidebarStickyGroup>
@@ -1846,6 +1891,60 @@ interface SectionThreadTreeItemsProps {
   onLoadMoreThreads?: () => void;
 }
 
+// Windowing inputs shared by every list of ProjectThreadItems: stable keys,
+// a placeholder row-count estimate, and the item holding the active thread
+// (kept mounted so DOM-driven keyboard navigation keeps its anchor).
+function useWindowedThreadItems({
+  items,
+  collapsedThreadIds,
+  collapsedEnvironmentIds,
+  selectedThreadId,
+}: {
+  items: readonly ProjectThreadItem[];
+  collapsedThreadIds: Set<string>;
+  collapsedEnvironmentIds: Set<string>;
+  selectedThreadId?: string;
+}) {
+  const collapsedSectionKeyList = useAtomValue(
+    sidebarCollapsedThreadSectionsAtom,
+  );
+  const itemKeys = useMemo(() => items.map(getItemKey), [items]);
+  const rowCountContext = useMemo<ProjectThreadItemRowCountContext>(
+    () => ({
+      collapsedThreadIds,
+      collapsedEnvironmentIds,
+      collapsedSectionKeys: new Set(collapsedSectionKeyList),
+    }),
+    [collapsedThreadIds, collapsedEnvironmentIds, collapsedSectionKeyList],
+  );
+  const estimateRows = useCallback(
+    (index: number) => {
+      const item = items[index];
+      return item ? countProjectThreadItemRows(item, rowCountContext) : 1;
+    },
+    [items, rowCountContext],
+  );
+  const getNavigationEntries = useCallback(
+    (index: number) => {
+      const item = items[index];
+      return item
+        ? collectProjectThreadItemNavigationEntries(item, rowCountContext)
+        : [];
+    },
+    [items, rowCountContext],
+  );
+  const alwaysMountedKeys = useMemo(() => {
+    if (!selectedThreadId) {
+      return undefined;
+    }
+    const activeItem = items.find((item) =>
+      projectThreadItemContainsThread(item, selectedThreadId),
+    );
+    return activeItem ? new Set([getItemKey(activeItem)]) : undefined;
+  }, [items, selectedThreadId]);
+  return { itemKeys, estimateRows, getNavigationEntries, alwaysMountedKeys };
+}
+
 // The one place that maps thread-tree items to rows. Every sidebar view
 // (project, chronological, sections) renders through this, so a row-prop
 // change lands once instead of being copied across each view's renderer.
@@ -1869,34 +1968,12 @@ function SectionThreadTreeItems({
   hasMoreThreads = false,
   onLoadMoreThreads,
 }: SectionThreadTreeItemsProps) {
-  const [requestedItemCount, setRequestedItemCount] = useState(
-    SIDEBAR_THREAD_ROOT_PAGE_SIZE,
-  );
   const loadMoreRef = useRef<HTMLButtonElement>(null);
-  const selectedItemIndex = useMemo(
-    () =>
-      selectedThreadId === undefined
-        ? -1
-        : items.findIndex((item) =>
-            projectThreadItemContainsThread(item, selectedThreadId),
-          ),
-    [items, selectedThreadId],
-  );
-  const visibleItemCount = Math.min(
-    items.length,
-    Math.max(requestedItemCount, selectedItemIndex + 1),
-  );
-  const visibleItems = items.slice(0, visibleItemCount);
-  const remainingItemCount = items.length - visibleItemCount;
+  // BBamir keeps the server-side page fetch; upstream's windowing only bounds
+  // what is mounted, so the sentinel still has to ask for the next page.
   const loadMore = useCallback(() => {
-    if (requestedItemCount < items.length) {
-      setRequestedItemCount((current) =>
-        Math.min(items.length, current + SIDEBAR_THREAD_ROOT_PAGE_SIZE),
-      );
-      return;
-    }
     onLoadMoreThreads?.();
-  }, [items.length, onLoadMoreThreads, requestedItemCount]);
+  }, [onLoadMoreThreads]);
   useEffect(() => {
     const target = loadMoreRef.current;
     if (target === null || typeof IntersectionObserver === "undefined") {
@@ -1910,28 +1987,50 @@ function SectionThreadTreeItems({
     );
     observer.observe(target);
     return () => observer.disconnect();
-  }, [loadMore, remainingItemCount]);
-
-  const rows = visibleItems.map((item) => (
-    <SectionDndItemRow
-      key={getItemKey(item)}
-      projectId={projectId ?? getItemProjectId(item)}
-      item={item}
-      depthOffset={depthOffset}
-      selectedThreadId={selectedThreadId}
-      collapsedThreadIds={collapsedThreadIds}
-      collapsedEnvironmentIds={collapsedEnvironmentIds}
-      variant={variant}
-      onProjectSelect={onProjectSelect}
-      onToggleThreadCollapsed={onToggleThreadCollapsed}
-      onToggleEnvironmentCollapsed={onToggleEnvironmentCollapsed}
-      onCreateThreadInSection={onCreateThreadInSection}
-      onRenameSection={onRenameSection}
-      onRemoveSection={onRemoveSection}
-      renderTopLevelSectionHeaderActions={renderTopLevelSectionHeaderActions}
-      sectionDnd={sectionDnd ?? undefined}
+  }, [loadMore, hasMoreThreads]);
+  const { itemKeys, estimateRows, getNavigationEntries, alwaysMountedKeys } =
+    useWindowedThreadItems({
+      items,
+      collapsedThreadIds,
+      collapsedEnvironmentIds,
+      selectedThreadId,
+    });
+  const rows = (
+    <SidebarWindowedItems
+      itemKeys={itemKeys}
+      estimateRows={estimateRows}
+      getNavigationEntries={getNavigationEntries}
+      alwaysMountedKeys={alwaysMountedKeys}
+      renderItem={(index) => {
+        const item = items[index];
+        if (!item) {
+          return null;
+        }
+        return (
+          <SectionDndItemRow
+            key={getItemKey(item)}
+            projectId={projectId ?? getItemProjectId(item)}
+            item={item}
+            depthOffset={depthOffset}
+            selectedThreadId={selectedThreadId}
+            collapsedThreadIds={collapsedThreadIds}
+            collapsedEnvironmentIds={collapsedEnvironmentIds}
+            variant={variant}
+            onProjectSelect={onProjectSelect}
+            onToggleThreadCollapsed={onToggleThreadCollapsed}
+            onToggleEnvironmentCollapsed={onToggleEnvironmentCollapsed}
+            onCreateThreadInSection={onCreateThreadInSection}
+            onRenameSection={onRenameSection}
+            onRemoveSection={onRemoveSection}
+            renderTopLevelSectionHeaderActions={
+              renderTopLevelSectionHeaderActions
+            }
+            sectionDnd={sectionDnd ?? undefined}
+          />
+        );
+      }}
     />
-  ));
+  );
 
   return (
     <ProjectThreadTreeGroup
@@ -1948,7 +2047,7 @@ function SectionThreadTreeItems({
       ) : (
         rows
       )}
-      {remainingItemCount > 0 || hasMoreThreads ? (
+      {hasMoreThreads ? (
         <button
           ref={loadMoreRef}
           type="button"
@@ -1956,9 +2055,7 @@ function SectionThreadTreeItems({
           data-sidebar-thread-load-more=""
           onClick={loadMore}
         >
-          {remainingItemCount > 0
-            ? `Show ${Math.min(SIDEBAR_THREAD_ROOT_PAGE_SIZE, remainingItemCount)} more`
-            : "Show older tasks"}
+          Show older tasks
         </button>
       ) : null}
     </ProjectThreadTreeGroup>
@@ -2503,7 +2600,10 @@ function ProjectRowComponent({
       project={project}
       onOpenChange={setIsContextActionsOpen}
     >
-      <div data-sidebar-sticky-project-item="">
+      <div
+        data-sidebar-sticky-project-item=""
+        data-sidebar-project-id={project.id}
+      >
         <TopLevelSidebarSection
           label={projectLabel}
           leadingIcon="FolderGit"

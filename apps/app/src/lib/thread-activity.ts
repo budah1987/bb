@@ -49,19 +49,6 @@ export function hasActiveGoalActivity(
   return thread.activity.activeGoalCount > 0;
 }
 
-export function isBusyThread(
-  thread: ThreadRuntimeShape & ThreadActivityStateShape,
-): boolean {
-  return (
-    isRuntimeBusyThread(thread) ||
-    hasActiveWorkflowActivity(thread) ||
-    hasActiveBackgroundAgentActivity(thread) ||
-    hasActiveBackgroundCommandActivity(thread) ||
-    hasActivePlanModeActivity(thread) ||
-    hasActiveGoalActivity(thread)
-  );
-}
-
 export interface ThreadListIndicatorState {
   hasPendingInteraction: boolean;
   hasUnsubmittedDraft: boolean;
@@ -293,6 +280,20 @@ export function getCollapsedChildActivity(
     unread,
     unreadError,
   };
+}
+
+/** Any work that should keep a thread pinned to the mobile busy list. */
+export function isBusyThread(
+  thread: ThreadRuntimeShape & ThreadActivityStateShape,
+): boolean {
+  return (
+    isRuntimeBusyThread(thread) ||
+    hasActiveWorkflowActivity(thread) ||
+    hasActiveBackgroundAgentActivity(thread) ||
+    hasActiveBackgroundCommandActivity(thread) ||
+    hasActivePlanModeActivity(thread) ||
+    hasActiveGoalActivity(thread)
+  );
 }
 
 export function isUnreadDoneThread(thread: ThreadStatusShape): boolean {

@@ -20,7 +20,6 @@ import {
 import {
   activityIconClass,
   activityRowClass,
-  activityTextClass,
 } from "@/components/ui/activity-row-styles";
 import { WorkspaceChangesList } from "@/components/thread/WorkspaceChangesList";
 import {
@@ -83,6 +82,8 @@ export interface ThreadPromptChildThreadItem {
   id: string;
   title: string;
   href: string;
+  /** True when this child is blocked on a permission or user question. */
+  hasPendingInteraction: boolean;
 }
 
 export interface ThreadPromptChildThreadsSection {
@@ -194,9 +195,19 @@ const KIND_PREFIX: Record<WorkspaceChangedFilesSection["kind"], string> = {
 };
 
 const ARCHIVED_THREAD_STATUS_LABEL = "Thread is archived";
-const ENVIRONMENT_GONE_STATUS_LABEL = "Environment is unavailable";
-const ENVIRONMENT_GONE_ARIA_LABEL =
-  "Environment is unavailable. This thread can't run any more work.";
+const ENVIRONMENT_GONE_STATUS_COPY: Record<
+  ThreadPromptEnvironmentGoneSection["status"],
+  { ariaLabel: string; label: string }
+> = {
+  destroying: {
+    ariaLabel: "This environment is being archived.",
+    label: "Archiving environment...",
+  },
+  destroyed: {
+    ariaLabel: "This environment has been archived.",
+    label: "Environment archived",
+  },
+};
 const PROMPT_BANNER_ACTION_FILL_CLASS = "bg-background shadow-xs";
 const PROMPT_BANNER_ACTION_INTERACTIVE_CLASS =
   "cursor-pointer text-muted-foreground transition-colors hover:bg-state-hover hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-60";
@@ -241,6 +252,7 @@ function ChildThreadIcon({ className }: { className?: string }) {
 }
 
 interface SectionToggleButtonProps {
+  /** Tints the chevron and suppresses the expanded/collapsed text swap. */
   active?: boolean;
   id: string;
   controlsId: string;
@@ -274,12 +286,9 @@ function SectionToggleButton({
       aria-label={ariaLabel}
       onClick={onToggle}
       className={cn(
-        active && activityRowClass("active"),
         "flex cursor-pointer items-center text-xs transition-colors",
         PROMPT_STACK_INLAY_SEGMENT_CLASS,
-        active
-          ? "text-foreground hover:bg-background/80"
-          : "hover:bg-state-hover",
+        "hover:bg-state-hover",
         SEGMENT_SHRINK_CLASS,
         // When a label sits between the icon and the chevron we space the row
         // for legibility (6px). With no label the chevron sits right after the
@@ -292,10 +301,7 @@ function SectionToggleButton({
       {icon}
       {label !== null && label !== undefined ? (
         <span
-          className={cn(
-            "min-w-0 truncate",
-            active && activityTextClass("active"),
-          )}
+          className="min-w-0 truncate"
           data-promptbox-hide-compact={hideLabelInCompact ? "" : undefined}
         >
           {label}
@@ -304,13 +310,7 @@ function SectionToggleButton({
       {hideLabelInCompact &&
       compactLabel !== null &&
       compactLabel !== undefined ? (
-        <span
-          className={cn(
-            "min-w-0 truncate",
-            active && activityTextClass("active"),
-          )}
-          data-promptbox-compact-label=""
-        >
+        <span className="min-w-0 truncate" data-promptbox-compact-label="">
           {compactLabel}
         </span>
       ) : null}
@@ -414,8 +414,21 @@ function ChildThreadsBody({
             title={item.title}
             className="flex min-w-0 items-center gap-2 py-0.5 text-foreground/90 underline-offset-2 hover:underline"
           >
-            <ChildThreadIcon className="text-subtle-foreground no-underline" />
+            {item.hasPendingInteraction ? (
+              <Icon
+                name="CircleQuestion"
+                className="size-3.5 shrink-0 text-muted-foreground/75 no-underline"
+                aria-hidden="true"
+              />
+            ) : (
+              <ChildThreadIcon className="text-subtle-foreground no-underline" />
+            )}
             <span className="min-w-0 flex-1 truncate">{item.title}</span>
+            {item.hasPendingInteraction ? (
+              <span className="shrink-0 text-muted-foreground">
+                Needs input
+              </span>
+            ) : null}
           </NavLink>
         </li>
       ))}
@@ -680,13 +693,17 @@ function AnimatedBody({
   );
 }
 
-const CHILD_THREADS_HEADER_BUTTON_CLASS = activityRowClass(
-  "active",
-  "flex min-h-8 w-full min-w-0 cursor-pointer items-center gap-1.5 rounded-none px-3 py-1.5 text-xs text-foreground transition-colors hover:bg-background/80",
-);
+const CHILD_THREADS_HEADER_BUTTON_CLASS =
+  "flex min-h-8 w-full min-w-0 cursor-pointer items-center gap-1.5 rounded-none px-3 py-1.5 text-xs text-foreground transition-colors hover:bg-background/80";
 
-function childThreadsLabel(count: number): string {
-  return `${count} active child ${count === 1 ? "thread" : "threads"}`;
+function childThreadsLabel(args: {
+  count: number;
+  pendingCount: number;
+}): string {
+  if (args.pendingCount > 0) {
+    return `${args.pendingCount} child ${args.pendingCount === 1 ? "thread needs" : "threads need"} input`;
+  }
+  return `${args.count} active child ${args.count === 1 ? "thread" : "threads"}`;
 }
 
 function ActiveChildThreadsCard({
@@ -698,10 +715,29 @@ function ActiveChildThreadsCard({
   isExpanded: boolean;
   onToggle: () => void;
 }) {
-  const label = childThreadsLabel(childThreadsSection.items.length);
+  const items = [...childThreadsSection.items].sort((left, right) =>
+    left.hasPendingInteraction === right.hasPendingInteraction
+      ? 0
+      : left.hasPendingInteraction
+        ? -1
+        : 1,
+  );
+  const primary = items[0];
+  if (!primary) {
+    return null;
+  }
+  const pendingCount = items.filter(
+    (item) => item.hasPendingInteraction,
+  ).length;
+  const otherCount = items.length - 1;
+  const groupLabel = childThreadsLabel({
+    count: items.length,
+    pendingCount,
+  });
+  const needsApproval = pendingCount > 0;
   return (
     <PromptStackCard
-      ariaLabel="Active child threads"
+      ariaLabel="Child threads"
       className="overflow-hidden"
       style={{ minHeight: THREAD_PROMPT_CONTEXT_BANNER_ROW_HEIGHT }}
     >
@@ -711,28 +747,42 @@ function ActiveChildThreadsCard({
           id={SECTION_IDS.childThreads.toggle}
           aria-expanded={isExpanded}
           aria-controls={SECTION_IDS.childThreads.body}
-          aria-label={label}
+          aria-label={`${groupLabel}: ${primary.title}`}
           onClick={onToggle}
-          className={CHILD_THREADS_HEADER_BUTTON_CLASS}
+          className={
+            needsApproval
+              ? CHILD_THREADS_HEADER_BUTTON_CLASS
+              : activityRowClass("active", CHILD_THREADS_HEADER_BUTTON_CLASS)
+          }
         >
           <Icon
-            name="CircleDashed"
-            className={activityIconClass("active", "size-3.5 shrink-0")}
+            name={needsApproval ? "CircleQuestion" : "UserRound"}
+            className={
+              needsApproval
+                ? "size-3.5 shrink-0 text-muted-foreground/75"
+                : activityIconClass("active", "size-3.5 shrink-0")
+            }
             aria-hidden="true"
           />
-          <span
-            className={activityTextClass(
-              "active",
-              "min-w-0 flex-1 truncate text-left",
-            )}
-          >
-            {label}
+          <span className="min-w-0 flex-1 truncate text-left">
+            <span className="text-muted-foreground">
+              {needsApproval
+                ? "Needs your input: "
+                : "Active child thread: "}
+            </span>
+            <span className="font-medium text-foreground/80">
+              {primary.title}
+            </span>
           </span>
+          {otherCount > 0 ? (
+            <span className="shrink-0 text-muted-foreground">
+              +{otherCount} more
+            </span>
+          ) : null}
           <Icon
             name="ChevronDown"
             className={cn(
-              activityIconClass("active"),
-              "size-3.5 shrink-0 transition-transform duration-200",
+              "size-3.5 shrink-0 text-muted-foreground transition-transform duration-200",
               isExpanded && "rotate-180",
             )}
             aria-hidden="true"
@@ -744,7 +794,7 @@ function ActiveChildThreadsCard({
         labelledBy={SECTION_IDS.childThreads.toggle}
         isExpanded={isExpanded}
       >
-        <ChildThreadsBody items={childThreadsSection.items} />
+        <ChildThreadsBody items={items} />
       </AnimatedBody>
     </PromptStackCard>
   );
@@ -860,21 +910,21 @@ export function ThreadPromptContextBanner({
   onToggleSection,
 }: ThreadPromptContextBannerProps) {
   if (archivedSection || environmentGoneSection) {
+    const environmentGone = environmentGoneSection !== null;
+    const environmentGoneCopy = environmentGoneSection
+      ? ENVIRONMENT_GONE_STATUS_COPY[environmentGoneSection.status]
+      : null;
     return (
       <ReadOnlyContextBanner
-        iconName={archivedSection ? "Archive" : "CircleX"}
+        iconName={environmentGone ? "CircleX" : "Archive"}
         statusAriaLabel={
-          archivedSection
-            ? ARCHIVED_THREAD_STATUS_LABEL
-            : ENVIRONMENT_GONE_ARIA_LABEL
+          environmentGoneCopy?.ariaLabel ?? ARCHIVED_THREAD_STATUS_LABEL
         }
         statusLabel={
-          archivedSection
-            ? ARCHIVED_THREAD_STATUS_LABEL
-            : ENVIRONMENT_GONE_STATUS_LABEL
+          environmentGoneCopy?.label ?? ARCHIVED_THREAD_STATUS_LABEL
         }
         statusAction={
-          archivedSection?.onUnarchive ? (
+          archivedSection?.onUnarchive && !environmentGone ? (
             <ThreadUnarchiveTextAction
               isPending={archivedSection.unarchivePending}
               onUnarchive={archivedSection.onUnarchive}

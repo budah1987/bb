@@ -4,7 +4,7 @@ import type {
   TimelineRowBase,
   TimelineUserConversationRow,
 } from "@bb/server-contract";
-import type { PromptTextMention, ThreadChildOrigin } from "@bb/domain";
+import type { PromptTextMention, ThreadOriginKind } from "@bb/domain";
 import { fileNameFromPath } from "@bb/thread-view";
 import { cn } from "@bb/shared-ui/lib/utils";
 import {
@@ -46,7 +46,11 @@ import {
   useMessageDirectiveRegistry,
   type MarkdownMessageDirectives,
 } from "@/components/ui/markdown-message-directives.js";
-import { USER_MESSAGE_CHAR_CAP } from "./conversation-message-limits.js";
+import {
+  boundedMarkdownPreview,
+  closeUnterminatedMarkdownCodeSpan,
+  USER_MESSAGE_CHAR_CAP,
+} from "./conversation-message-limits.js";
 import { turnRequestLabel } from "./conversation-turn-request-label.js";
 import { TurnRequestLabel } from "./TurnRequestLabel.js";
 import { MessageActionBar } from "./MessageActionBar.js";
@@ -82,14 +86,15 @@ export interface ConversationMessageContentUserProps extends ConversationMessage
   /** Mobile presentation for the regular user message's action footer. */
   mobileActionDisplay?: "inline" | "overflow";
   /**
-   * `childOrigin` of the thread this row belongs to. Selects the fork leading
+   * `originKind` of the thread this row belongs to. Selects the fork leading
    * icon when an agent-initiated thread-start anchor (a fork's seed-without-run
    * row) renders as "Message from {source}". Null for non-fork threads.
    */
-  childOrigin: ThreadChildOrigin | null;
+  originKind: ThreadOriginKind | null;
   initiator: TimelineUserConversationRow["initiator"];
   mentions: readonly PromptTextMention[];
   onAddToChat?: ThreadTimelineAddToChatHandler;
+  onEdit?: () => void;
   resolveMentionLink?: PromptMentionLinkResolver;
   resolveSegmentLinkHref?: TimelineTitleLinkResolver;
   onOpenLink?: ThreadTimelineLinkHandler;
@@ -185,12 +190,13 @@ export type ConversationMessageContentProps =
 interface UserConversationMessageProps {
   addToChatAttachments: readonly PromptDraftAttachment[];
   attachmentItems: ConversationAttachmentItems;
-  childOrigin: ThreadChildOrigin | null;
+  originKind: ThreadOriginKind | null;
   pluginActions?: readonly ThreadTimelinePluginMessageAction[];
   initiator: TimelineUserConversationRow["initiator"];
   mentions: readonly PromptTextMention[];
   mobileActionDisplay: "inline" | "overflow";
   onAddToChat?: ThreadTimelineAddToChatHandler;
+  onEdit?: () => void;
   onOpenLink?: ThreadTimelineLinkHandler;
   onOpenLocalFileLink?: ThreadTimelineLocalFileLinkHandler;
   projectId?: string;
@@ -260,25 +266,26 @@ function CollapsibleMessageText({
 
   const [isExpanded, setIsExpanded] = useState(false);
   const bodyRef = useRef<HTMLDivElement>(null);
-  // Cap before rendering so a megabyte paste can't dominate window-resize
-  // reflow. Unlike the prior plain-text path we hand the whole capped body to
-  // the markdown renderer and clamp it visually (markdown block content doesn't
-  // line-clamp cleanly), rather than slicing it by line per collapse state.
-  const isTruncated = bodyText.length > USER_MESSAGE_CHAR_CAP;
-  const cappedBody = isTruncated
-    ? bodyText.slice(0, USER_MESSAGE_CHAR_CAP)
-    : bodyText;
-  // Rebase mentions onto the prefix-stripped, char-capped body so their offsets
-  // index into the exact string handed to the markdown renderer (a mention
-  // straddling the cap is dropped, clipping the body to just before it).
+  // Keep collapsed previews bounded so a megabyte paste cannot dominate the
+  // initial timeline render. Expanding is an explicit request for the complete
+  // message, so only then hand the full body to the markdown renderer.
+  const exceedsCollapsedRenderCap = bodyText.length > USER_MESSAGE_CHAR_CAP;
+  const collapsedPreview =
+    !isExpanded && exceedsCollapsedRenderCap
+      ? boundedMarkdownPreview(bodyText, USER_MESSAGE_CHAR_CAP)
+      : null;
+  const renderedBodyText = collapsedPreview?.text ?? bodyText;
+  // Rebase mentions onto the prefix-stripped body currently being rendered. A
+  // mention straddling the collapsed cap is omitted from the preview and
+  // restored when the complete body is rendered after expansion.
   const body = useMemo(
     () =>
       clipMentionTextToVisibleRange({
         mentions,
         rangeStart: bodyOffset,
-        text: cappedBody,
+        text: renderedBodyText,
       }),
-    [mentions, bodyOffset, cappedBody],
+    [mentions, bodyOffset, renderedBodyText],
   );
   const promptMentions = useMemo<MarkdownPromptMentions>(
     () => ({
@@ -308,7 +315,7 @@ function CollapsibleMessageText({
     enabled: !isExpanded,
     measurementKey: body.text,
   });
-  const showToggle = isExpanded || isOverflowing;
+  const showToggle = isExpanded || exceedsCollapsedRenderCap || isOverflowing;
 
   return (
     <>
@@ -330,16 +337,21 @@ function CollapsibleMessageText({
           !isExpanded && showToggle ? COLLAPSED_MESSAGE_FADE_STYLE : undefined
         }
       >
-        <MarkdownPreview
-          content={body.text}
-          className={CONVERSATION_PROSE_CLASS}
-          promptMentions={promptMentions}
-          threadMentions={rawThreadMentions}
-          linkRouting={linkRouting}
-        />
-        {isExpanded && isTruncated ? (
-          <span className="text-muted-foreground">[truncated]</span>
-        ) : null}
+        {collapsedPreview?.parseAsMarkdown === false ? (
+          <span className={CONVERSATION_PROSE_CLASS}>{body.text}</span>
+        ) : (
+          <MarkdownPreview
+            content={
+              collapsedPreview?.wasCapped === true
+                ? closeUnterminatedMarkdownCodeSpan(body.text)
+                : body.text
+            }
+            className={CONVERSATION_PROSE_CLASS}
+            promptMentions={promptMentions}
+            threadMentions={rawThreadMentions}
+            linkRouting={linkRouting}
+          />
+        )}
       </div>
       {showToggle ? (
         <ConversationMessageOverflowToggle
@@ -378,11 +390,12 @@ function buildAddToChatAttachments(
 function UserConversationMessage({
   addToChatAttachments,
   attachmentItems,
-  childOrigin,
+  originKind,
   initiator,
   mentions,
   mobileActionDisplay,
   onAddToChat,
+  onEdit,
   onOpenLink,
   onOpenLocalFileLink,
   pluginActions = [],
@@ -408,7 +421,7 @@ function UserConversationMessage({
     return (
       <GeneratedConversationMessage
         attachmentItems={attachmentItems}
-        childOrigin={childOrigin}
+        originKind={originKind}
         mentions={bodyMentions}
         onOpenLink={onOpenLink}
         onOpenLocalFileLink={onOpenLocalFileLink}
@@ -440,7 +453,7 @@ function UserConversationMessage({
     return (
       <GeneratedConversationMessage
         attachmentItems={attachmentItems}
-        childOrigin={null}
+        originKind={null}
         mentions={bodyMentions}
         onOpenLink={onOpenLink}
         onOpenLocalFileLink={onOpenLocalFileLink}
@@ -496,20 +509,21 @@ function UserConversationMessage({
             projectId={projectId}
           />
         </div>
-        {messageText ||
-        addToChatAttachments.length > 0 ||
-        pluginActions.length > 0 ? (
-          <div className="mt-1 flex justify-end">
-            <MessageActionBar
-              messageText={messageText}
-              alignment="end"
-              mobileActionDisplay={mobileActionDisplay}
-              addToChatAttachments={addToChatAttachments}
-              onAddToChat={onAddToChat}
-              pluginActions={pluginActions}
-            />
-          </div>
-        ) : null}
+        {/*
+          The bar sits in normal flow: it is hidden by opacity, so it occupies
+          its own height whether or not it is revealed, and it renders nothing
+          at all when the message has no action. `MessageActionBar` is the one
+          place that decides which of those two cases holds.
+        */}
+        <MessageActionBar
+          messageText={messageText}
+          alignment="end"
+          mobileActionDisplay={mobileActionDisplay}
+          addToChatAttachments={addToChatAttachments}
+          onAddToChat={onAddToChat}
+          onEdit={onEdit}
+          pluginActions={pluginActions}
+        />
       </div>
     </div>
   );
@@ -659,26 +673,17 @@ function AssistantConversationMessage({
           `disabled` greys both fork and side chat together when the thread is at
           the spawn-depth cap (both spawn a child thread, one guard).
         */
-        <div className="relative h-5 max-md:pointer-coarse:h-7">
-          <div
-            className={cn(
-              "absolute left-0 top-1",
-              "max-md:pointer-coarse:top-0",
-            )}
-          >
-            <MessageActionBar
-              messageText={text}
-              alignment="start"
-              mobileActionDisplay={mobileActionDisplay}
-              addToChatAttachments={addToChatAttachments}
-              onAddToChat={onAddToChat}
-              onFork={onFork}
-              onSendToMain={onSendToMain}
-              disabled={forkDisabled}
-              pluginActions={pluginActions}
-            />
-          </div>
-        </div>
+        <MessageActionBar
+          messageText={text}
+          alignment="start"
+          mobileActionDisplay={mobileActionDisplay}
+          addToChatAttachments={addToChatAttachments}
+          onAddToChat={onAddToChat}
+          onFork={onFork}
+          onSendToMain={onSendToMain}
+          disabled={forkDisabled}
+          pluginActions={pluginActions}
+        />
       ) : null}
     </div>
   );
@@ -714,12 +719,13 @@ export function ConversationMessageContent(
       <UserConversationMessage
         addToChatAttachments={addToChatAttachments}
         attachmentItems={attachmentItems}
-        childOrigin={props.childOrigin}
+        originKind={props.originKind}
         pluginActions={props.pluginActions}
         initiator={props.initiator}
         mentions={props.mentions}
         mobileActionDisplay={props.mobileActionDisplay ?? "overflow"}
         onAddToChat={props.onAddToChat}
+        onEdit={props.onEdit}
         onOpenLink={props.onOpenLink}
         onOpenLocalFileLink={onOpenLocalFileLink}
         projectId={projectId}

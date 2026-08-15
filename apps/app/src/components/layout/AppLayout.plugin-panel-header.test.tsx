@@ -28,8 +28,9 @@ vi.mock("@/hooks/queries/system-queries", () => ({
     data: {
       experiments: {
         claudeCodeMockCliTraffic: false,
+        editMessages: false,
         newOnboarding: false,
-        toolsHub: true,
+        providerSessionReaping: false,
       },
     },
   }),

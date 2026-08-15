@@ -23,6 +23,7 @@ import { createTelemetryService } from "./services/system/telemetry.js";
 import { TerminalSessionLifecycle } from "./services/terminals/terminal-session-lifecycle.js";
 import { resolveThreadStorageRootPath } from "./services/threads/thread-storage.js";
 import { createLifecycleDedupers } from "./lifecycle-dedupers.js";
+import { MANAGED_ENVIRONMENT_RETIRE_GRACE_MS } from "./constants.js";
 import type { ServerRuntimeConfig } from "./types.js";
 import { NotificationHub } from "./ws/hub.js";
 import { WatchInterestCoordinator } from "./ws/watch-interests.js";
@@ -69,14 +70,17 @@ export async function runServer(serverConfig: ServerConfig): Promise<void> {
     appSurface: serverConfig.BB_APP_SURFACE,
     appVersion: serverConfig.BB_APP_VERSION,
     builtinSkillsRootPath: resolveBuiltinSkillsRootPath(),
+    marketplaceUrl: serverConfig.BB_MARKETPLACE_URL,
     customAcpAgents: [],
     customModels: [],
     dataDir: serverConfig.BB_DATA_DIR,
     featureFlags: serverConfig.featureFlags,
     hostDaemonPort: serverConfig.BB_HOST_DAEMON_PORT,
     inheritedSkillsRootPaths: serverConfig.BB_INHERITED_SKILLS_ROOTS,
+    inferenceFallbackModel: serverConfig.BB_INFERENCE_FALLBACK,
     inferenceModel: serverConfig.BB_INFERENCE,
     isDevelopment: !isProduction,
+    managedEnvironmentRetireGraceMs: MANAGED_ENVIRONMENT_RETIRE_GRACE_MS,
     openAiApiKey: serverConfig.OPENAI_API_KEY,
     serverPort: serverConfig.BB_SERVER_PORT,
     sharedSkillRoots: { user: [], project: [] },
@@ -137,7 +141,13 @@ export async function runServer(serverConfig: ServerConfig): Promise<void> {
     config: runtimeConfig,
     logger,
   });
-  const { app, closeWebSockets, injectWebSocket, pluginService } = createApp(
+  const {
+    app,
+    closeWebSockets,
+    injectWebSocket,
+    pluginCatalogService,
+    pluginService,
+  } = createApp(
     {
       appVersion,
       bbAppManagedConfig,
@@ -208,6 +218,9 @@ export async function runServer(serverConfig: ServerConfig): Promise<void> {
   void pluginService.start().catch((error: unknown) => {
     logger.error({ err: error }, "Plugin startup failed");
   });
+  // Discovery metadata only: a refresh never installs, updates, or runs
+  // plugin code, and a failure keeps the last-known-good catalog.
+  pluginCatalogService.startPeriodicRefresh();
 
   const sweepInterval = setInterval(() => {
     void runPeriodicSweeps(sweepDeps);
@@ -223,6 +236,7 @@ export async function runServer(serverConfig: ServerConfig): Promise<void> {
       eventLoopStallMonitor.stop();
       clearInterval(sweepInterval);
       terminalSessions.dispose();
+      pluginCatalogService.stopPeriodicRefresh();
       await pluginService.stop().catch((error: unknown) => {
         logger.warn({ err: error }, "Plugin shutdown failed");
       });

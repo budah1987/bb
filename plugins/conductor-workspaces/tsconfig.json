@@ -8,9 +8,9 @@
     "lib": ["ES2022", "DOM"],
     "paths": {
       "@/*": ["./*"],
-      "@bb/plugin-sdk": ["./types/bb-plugin-sdk.d.ts"],
-      "@bb/plugin-sdk/app": ["./types/bb-plugin-sdk-app.d.ts"],
-      "@bb/plugin-sdk/testing/app": ["./types/bb-plugin-sdk-testing-app.d.ts"]
+      "@get-bb/plugin-sdk": ["./types/bb-plugin-sdk.d.ts"],
+      "@get-bb/plugin-sdk/app": ["./types/bb-plugin-sdk-app.d.ts"],
+      "@get-bb/plugin-sdk/testing/app": ["./types/bb-plugin-sdk-testing-app.d.ts"]
     },
     "noEmit": true,
     "skipLibCheck": true,

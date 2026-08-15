@@ -45,6 +45,8 @@ export interface TopLevelSidebarSectionCollapseControl {
 export interface TopLevelSidebarSectionProps {
   label: string;
   children: ReactNode;
+  /** Stable identity for a persisted thread section. Built-in groups omit it. */
+  sectionId?: string;
   actions?: ReactNode;
   actionsAlwaysVisible?: boolean;
   actionsMobileAlways?: boolean;
@@ -68,6 +70,7 @@ export interface TopLevelSidebarSectionProps {
 export function TopLevelSidebarSection({
   label,
   children,
+  sectionId,
   actions,
   actionsAlwaysVisible = false,
   actionsMobileAlways = false,
@@ -129,6 +132,7 @@ export function TopLevelSidebarSection({
     <SidebarStickyGroup
       ref={sectionRef}
       style={sectionStyle}
+      data-sidebar-section-id={sectionId}
       data-sidebar-section-surface={surface}
       data-sidebar-section-expanded={
         collapseControl?.isCollapsed === false ? "true" : "false"

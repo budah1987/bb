@@ -19,7 +19,7 @@ function userRequest(status: "pending" | "accepted"): TimelineRow {
     senderThreadId: null,
     systemMessageKind: "unlabeled",
     systemMessageSubject: null,
-    turnRequest: { kind: "message", status },
+    turnRequest: { kind: "message", status, isGrouped: false },
     mentions: [],
   };
 }

@@ -14,7 +14,7 @@ import {
   useRealtime,
   useRpc,
   type PluginNavPanelProps,
-} from "@bb/plugin-sdk/app";
+} from "@get-bb/plugin-sdk/app";
 import {
   bootstrapOutputSchema,
   type IngestionCase,
