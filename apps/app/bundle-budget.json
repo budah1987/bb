@@ -13,8 +13,8 @@
     "noise, tight enough that a barrel regression cannot hide inside it. Lower",
     "them when a change wins headroom. Raising one is a deliberate decision",
     "that needs a reason in the pull request, not a routine edit.",
-    "The August 2026 cursor paging baseline is 1749.4 KB raw and 469.7 KB",
-    "Brotli. These limits keep the documented 3% headroom.",
+    "The August 2026 GitHub integration baseline is 1807.6 KB raw and 486.3",
+    "KB Brotli. These limits keep the documented 3% headroom.",
     "",
     "maxMultiModuleChunkBytes limits large feature bundles without rejecting",
     "generated language or parser modules that Rolldown cannot divide.",
@@ -26,9 +26,9 @@
     "re-export rather than a direct import, which type checking cannot catch,",
     "so the check names them explicitly."
   ],
-  "maxBootBytes": 1845110,
-  "maxBootBrotliBytes": 495381,
-  "maxMultiModuleChunkBytes": 650000,
+  "maxBootBytes": 1907000,
+  "maxBootBrotliBytes": 513000,
+  "maxMultiModuleChunkBytes": 660000,
   "forbiddenBootPackages": [
     "@pierre/diffs",
     "@pierre/theming",
