@@ -197,9 +197,8 @@ export function decideWorkspaceSwipe(
 
 /**
  * The pane a swipe moves to, in the workspace's persisted reading order.
- * Dragging rightward reveals the previous pane (the content follows the
- * finger), dragging leftward the next one; both wrap, exactly like the
- * keyboard pane-focus commands.
+ * Dragging rightward selects the pane to the right, while dragging leftward
+ * selects the pane to the left. Both wrap, matching the compact tab gesture.
  */
 export function resolveWorkspaceSwipePaneId(
   panes: readonly PaneNode[],
@@ -209,7 +208,7 @@ export function resolveWorkspaceSwipePaneId(
   return getAdjacentPaneId(
     panes,
     focusedPaneId,
-    direction === "right" ? -1 : 1,
+    direction === "right" ? 1 : -1,
   );
 }
 

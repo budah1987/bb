@@ -105,7 +105,7 @@ afterEach(() => {
 });
 
 describe("ConductorContextBar compact layout", () => {
-  it("keeps three compact tabs and moves the rest into a working overflow", async () => {
+  it("keeps compact tabs sturdy and moves the rest into a working overflow", async () => {
     const threads = [1, 2, 3, 4, 5, 6].map(thread);
     const rendered = renderSlot(
       contextBar,
@@ -135,16 +135,23 @@ describe("ConductorContextBar compact layout", () => {
         screen.getByRole("button", { name: "Conversation 1" }),
       ).toBeDefined();
     });
+    expect(
+      screen
+        .getByRole("navigation", { name: "Workspace conversations" })
+        .hasAttribute("data-no-workspace-swipe"),
+    ).toBe(false);
     expect(screen.queryByText("Mobile workspace")).toBeNull();
     expect(screen.queryByText("qa/mobile")).toBeNull();
     expect(
       screen.getByRole("button", { name: "Conversation 6" }),
     ).toBeDefined();
     expect(
-      screen.getByRole("button", { name: "Conversation 2" }),
+      screen.getByRole("button", { name: "4 more conversations" }),
     ).toBeDefined();
 
-    fireEvent.click(screen.getByRole("button", { name: "3 more" }));
+    fireEvent.click(
+      screen.getByRole("button", { name: "4 more conversations" }),
+    );
     fireEvent.click(
       await screen.findByRole("menuitem", { name: "Conversation 3" }),
     );
@@ -172,7 +179,7 @@ describe("ConductorContextBar compact layout", () => {
     });
   });
 
-  it("uses a short swipe to move between workspace conversations", async () => {
+  it("maps a leftward swipe to the conversation on the left", async () => {
     const rendered = renderSlot(
       contextBar,
       {
@@ -196,7 +203,7 @@ describe("ConductorContextBar compact layout", () => {
       },
     );
 
-    const rail = await screen.findByRole("navigation", {
+    await screen.findByRole("navigation", {
       name: "Workspace conversations",
     });
     act(() => {
@@ -208,33 +215,47 @@ describe("ConductorContextBar compact layout", () => {
     });
     expect(rendered.sidebarActionCalls.at(-1)).toEqual({
       method: "open",
-      threadId: "thread-3",
+      threadId: "thread-1",
     });
+  });
 
-    fireEvent.pointerDown(rail, {
-      button: 0,
-      clientX: 120,
-      clientY: 20,
-      pointerId: 1,
-      pointerType: "touch",
-    });
-    fireEvent.pointerMove(rail, {
-      clientX: 72,
-      clientY: 22,
-      pointerId: 1,
-      pointerType: "touch",
-    });
-    fireEvent.pointerUp(rail, {
-      clientX: 72,
-      clientY: 22,
-      pointerId: 1,
-      pointerType: "touch",
-    });
+  it("maps a rightward swipe to the conversation on the right", async () => {
+    const rendered = renderSlot(
+      contextBar,
+      {
+        threadId: "thread-2",
+        projectId: "project-1",
+        environmentId: "environment-1",
+        isCompactViewport: true,
+      },
+      {
+        sidebarThreads: {
+          status: "ready",
+          threads: [thread(1), thread(2), thread(3)],
+          projects: [{ id: "project-1", name: "BB", isPersonal: false }],
+        },
+        rpc: {
+          readReconciliation: () => ({
+            legacyWorkspaces: [],
+            recordedSignature: null,
+          }),
+        },
+      },
+    );
 
+    await screen.findByRole("navigation", {
+      name: "Workspace conversations",
+    });
+    act(() => {
+      window.dispatchEvent(
+        new CustomEvent("bb:conductor-compact-conversation-cycle", {
+          detail: { threadId: "thread-2", direction: "right" },
+        }),
+      );
+    });
     expect(rendered.sidebarActionCalls.at(-1)).toEqual({
       method: "open",
       threadId: "thread-3",
-      options: undefined,
     });
   });
 
@@ -287,7 +308,9 @@ describe("ConductorContextBar compact layout", () => {
       value: 360,
     });
     act(() => observer?.trigger());
-    expect(screen.getByRole("button", { name: "5 more" })).toBeDefined();
+    expect(
+      screen.getByRole("button", { name: "5 more conversations" }),
+    ).toBeDefined();
 
     Object.defineProperty(rail, "clientWidth", {
       configurable: true,

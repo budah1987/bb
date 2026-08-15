@@ -29,4 +29,25 @@ describe("Conductor sidebar theme mapping", () => {
       /\.conductor-conversation-tab:not\(\[data-active\]\)[^{]*\{\s*animation:\s*none/s,
     );
   });
+
+  it("reserves sturdy compact hit areas for tab utility controls", () => {
+    const overflowRules = Array.from(
+      css.matchAll(
+        /^\.conductor-context-bar\[data-compact\] \.conductor-more-tabs-trigger\s*\{([^}]*)\}/gms,
+      ),
+      (match) => match[1],
+    );
+    const newConversationRule = css.match(
+      /\.conductor-context-bar\[data-compact\] \.conductor-new-conversation-slot\s*\{([^}]*)\}/s,
+    )?.[1];
+
+    expect(overflowRules).toContainEqual(
+      expect.stringContaining("width: 3.5rem"),
+    );
+    expect(overflowRules).toContainEqual(
+      expect.stringContaining("flex-basis: 3.5rem"),
+    );
+    expect(newConversationRule).toContain("width: 2.75rem");
+    expect(newConversationRule).toContain("flex-basis: 2.75rem");
+  });
 });

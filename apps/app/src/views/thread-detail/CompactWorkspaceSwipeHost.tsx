@@ -440,7 +440,7 @@ export function CompactWorkspaceSwipeHost({
       }
       return {
         announcement:
-          current.direction === "left"
+          current.direction === "right"
             ? "Next conversation"
             : "Previous conversation",
         run: () => cycleConversation(threadId, current.direction),

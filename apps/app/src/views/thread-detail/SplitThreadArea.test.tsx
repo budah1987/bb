@@ -2523,7 +2523,7 @@ describe("SplitThreadArea", () => {
       return screen.getByTestId("location").textContent;
     }
 
-    it("moves to the previous pane on a short right swipe", async () => {
+    it("moves to the right tab on a short right swipe, wrapping", async () => {
       const store = renderSplitArea({
         path: threadPath("thr-b"),
         layout: twoPaneLayout("pane-2"),
@@ -2551,7 +2551,7 @@ describe("SplitThreadArea", () => {
       expect(swipeSurface().style.transform).toBe("");
     });
 
-    it("moves to the next pane on a short left swipe, wrapping", async () => {
+    it("moves to the left tab on a short left swipe, wrapping", async () => {
       const store = renderSplitArea({
         path: threadPath("thr-a"),
         layout: twoPaneLayout("pane-1"),
@@ -2606,7 +2606,7 @@ describe("SplitThreadArea", () => {
         expect(storedSplitLayout(store).focusedPaneId).toBe("pane-1");
         expect(locationPath()).toBe(threadPath("thr-a"));
         expect(screen.getByTestId("workspace-swipe-position").textContent).toBe(
-          "Next conversation",
+          "Previous conversation",
         );
       } finally {
         window.removeEventListener(
