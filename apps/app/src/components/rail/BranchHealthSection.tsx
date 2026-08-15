@@ -91,8 +91,15 @@ export function BranchHealthSection({
   const statusQuery = useEnvironmentWorkStatus(environmentId, undefined, {
     enabled,
   });
+  const githubAccounts = githubAccountsQuery.data?.accounts ?? [];
+  const selectedGithubAccountLogin =
+    environment?.githubAccountLogin ??
+    githubAccounts.find((account) => account.active)?.login ??
+    githubAccounts[0]?.login ??
+    null;
   const pullRequestQuery = useEnvironmentPullRequest(environmentId, {
-    enabled,
+    accountLogin: selectedGithubAccountLogin,
+    enabled: enabled && selectedGithubAccountLogin !== null,
   });
   const previewsQuery = useEnvironmentPreviews(environmentId, { enabled });
   const isLoading =
@@ -139,12 +146,6 @@ export function BranchHealthSection({
     void pullRequestQuery.refetch();
     void previewsQuery.refetch();
   };
-  const githubAccounts = githubAccountsQuery.data?.accounts ?? [];
-  const selectedGithubAccountLogin =
-    environment?.githubAccountLogin ??
-    githubAccounts.find((account) => account.active)?.login ??
-    githubAccounts[0]?.login ??
-    null;
   const handleGithubAccountChange = useCallback(
     async (login: string) => {
       if (!environmentId || environment?.githubAccountLogin === login) return;
@@ -154,7 +155,6 @@ export function BranchHealthSection({
           id: environmentId,
           githubAccountLogin: login,
         });
-        await pullRequestQuery.refetch();
         appToast.success(`Using @${login} for this worktree`, { id: toastId });
       } catch (error) {
         appToast.error("GitHub account was not changed", {
@@ -166,12 +166,7 @@ export function BranchHealthSection({
         });
       }
     },
-    [
-      environment?.githubAccountLogin,
-      environmentId,
-      pullRequestQuery,
-      updateEnvironment,
-    ],
+    [environment?.githubAccountLogin, environmentId, updateEnvironment],
   );
 
   return (

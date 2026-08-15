@@ -60,6 +60,7 @@ export async function getGithubPullRequests(
     command: {
       type: "github.pull_request_catalog",
       repository: query.repository,
+      githubAccountLogin: query.githubAccountLogin,
     },
   });
 }

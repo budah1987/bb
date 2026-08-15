@@ -14,6 +14,23 @@ import {
 } from "../views/manage/preset-dialog.js";
 import { Icon } from "@bb/shared-ui/icon";
 import { Skeleton } from "@bb/shared-ui/skeleton";
+import { Button } from "@bb/shared-ui/button";
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuSeparator,
+  ContextMenuTrigger,
+} from "@bb/shared-ui/context-menu";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@bb/shared-ui/dialog";
+import { Input } from "@bb/shared-ui/input";
 import {
   Tooltip,
   TooltipContent,
@@ -153,19 +170,43 @@ function ProjectRow({
   summary,
   active,
   onClick,
+  onRename,
+  onDelete,
 }: {
   project: Project;
   summary: SidebarProjectSummary | undefined;
   active: boolean;
   onClick: () => void;
+  onRename: () => void;
+  onDelete: () => void;
 }) {
   return (
-    <SidebarRow active={active} onClick={onClick} title={project.name}>
-      <ProjectDot color={project.color} />
-      <span className="min-w-0 flex-1 truncate">{project.name}</span>
-      {summary && summary.activeAgentCount > 0 ? <WorkingDot /> : null}
-      {summary ? <RowCount value={summary.taskCount} /> : null}
-    </SidebarRow>
+    <ContextMenu>
+      <ContextMenuTrigger asChild>
+        <div>
+          <SidebarRow active={active} onClick={onClick} title={project.name}>
+            <ProjectDot color={project.color} />
+            <span className="min-w-0 flex-1 truncate">{project.name}</span>
+            {summary && summary.activeAgentCount > 0 ? <WorkingDot /> : null}
+            {summary ? <RowCount value={summary.taskCount} /> : null}
+          </SidebarRow>
+        </div>
+      </ContextMenuTrigger>
+      <ContextMenuContent aria-label={`${project.name} actions`}>
+        <ContextMenuItem onSelect={onRename}>
+          <Icon name="Edit" aria-hidden="true" />
+          Rename
+        </ContextMenuItem>
+        <ContextMenuSeparator />
+        <ContextMenuItem
+          className="text-destructive focus:bg-destructive/15 focus:text-destructive data-[last-hovered]:bg-destructive/15 data-[last-hovered]:text-destructive"
+          onSelect={onDelete}
+        >
+          <Icon name="Trash2" aria-hidden="true" />
+          Delete project
+        </ContextMenuItem>
+      </ContextMenuContent>
+    </ContextMenu>
   );
 }
 
@@ -222,6 +263,13 @@ export function TasksSidebar({
     key: number;
     editing: Preset | null;
   } | null>(null);
+  const [renameProject, setRenameProject] = useState<Project | null>(null);
+  const [projectName, setProjectName] = useState("");
+  const [deleteProject, setDeleteProject] = useState<Project | null>(null);
+  const [projectActionError, setProjectActionError] = useState<string | null>(
+    null,
+  );
+  const [projectActionPending, setProjectActionPending] = useState(false);
   const [width, setWidth] = useState(loadSidebarWidth);
   const [resizing, setResizing] = useState(false);
   const asideRef = useRef<HTMLElement>(null);
@@ -268,6 +316,50 @@ export function TasksSidebar({
       projectId,
       view: route.kind === "project" ? route.view : "list",
     });
+  const requestRename = (project: Project) => {
+    setRenameProject(project);
+    setProjectName(project.name);
+    setProjectActionError(null);
+  };
+  const requestDelete = (project: Project) => {
+    setDeleteProject(project);
+    setProjectActionError(null);
+  };
+  const renameSelectedProject = async () => {
+    if (!renameProject || projectName.trim() === "") return;
+    setProjectActionPending(true);
+    setProjectActionError(null);
+    try {
+      await rpc.call("updateProject", {
+        projectId: renameProject.id,
+        name: projectName.trim(),
+      });
+      setRenameProject(null);
+    } catch (error) {
+      setProjectActionError(
+        error instanceof Error ? error.message : String(error),
+      );
+    } finally {
+      setProjectActionPending(false);
+    }
+  };
+  const deleteSelectedProject = async () => {
+    if (!deleteProject) return;
+    const projectId = deleteProject.id;
+    setProjectActionPending(true);
+    setProjectActionError(null);
+    try {
+      await rpc.call("deleteProject", { projectId, force: true });
+      setDeleteProject(null);
+      if (activeProjectId === projectId) onNavigate({ kind: "all" });
+    } catch (error) {
+      setProjectActionError(
+        error instanceof Error ? error.message : String(error),
+      );
+    } finally {
+      setProjectActionPending(false);
+    }
+  };
   const toggleFolder = (folderId: string) =>
     setCollapsedFolders((current) => {
       const next = new Set(current);
@@ -302,6 +394,8 @@ export function TasksSidebar({
                 summary={summaryByProject.get(project.id)}
                 active={activeProjectId === project.id}
                 onClick={() => openProject(project.id)}
+                onRename={() => requestRename(project)}
+                onDelete={() => requestDelete(project)}
               />
             ))}
             {/* Folders nest one level; children only render under roots. */}
@@ -376,6 +470,8 @@ export function TasksSidebar({
                       summary={summaryByProject.get(project.id)}
                       active={activeProjectId === project.id}
                       onClick={() => openProject(project.id)}
+                      onRename={() => requestRename(project)}
+                      onDelete={() => requestDelete(project)}
                     />
                   ))}
                 </div>
@@ -467,6 +563,93 @@ export function TasksSidebar({
           onSave={(draft) => savePresetDraft(rpc, presetDialog.editing, draft)}
         />
       ) : null}
+      <Dialog
+        open={renameProject !== null}
+        onOpenChange={(open) => {
+          if (!open && !projectActionPending) setRenameProject(null);
+        }}
+      >
+        <DialogContent
+          className="max-w-sm"
+          onKeyDown={(event) => {
+            if (event.key === "Enter") {
+              event.preventDefault();
+              void renameSelectedProject();
+            }
+          }}
+        >
+          <DialogHeader>
+            <DialogTitle>Rename project</DialogTitle>
+            <DialogDescription>
+              Change the name shown for this project. Its task key prefix stays
+              the same.
+            </DialogDescription>
+          </DialogHeader>
+          <Input
+            autoFocus
+            aria-label="Project name"
+            value={projectName}
+            onChange={(event) => setProjectName(event.target.value)}
+          />
+          {projectActionError ? (
+            <p className="text-xs text-destructive">{projectActionError}</p>
+          ) : null}
+          <DialogFooter>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={projectActionPending}
+              onClick={() => setRenameProject(null)}
+            >
+              Cancel
+            </Button>
+            <Button
+              size="sm"
+              disabled={projectName.trim() === "" || projectActionPending}
+              onClick={() => void renameSelectedProject()}
+            >
+              Rename
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      <Dialog
+        open={deleteProject !== null}
+        onOpenChange={(open) => {
+          if (!open && !projectActionPending) setDeleteProject(null);
+        }}
+      >
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Delete {deleteProject?.name}?</DialogTitle>
+            <DialogDescription>
+              This permanently deletes the project and all of its tasks. This
+              cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          {projectActionError ? (
+            <p className="text-xs text-destructive">{projectActionError}</p>
+          ) : null}
+          <DialogFooter>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={projectActionPending}
+              onClick={() => setDeleteProject(null)}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              size="sm"
+              disabled={projectActionPending}
+              onClick={() => void deleteSelectedProject()}
+            >
+              Delete project
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </aside>
   );
 }

@@ -909,6 +909,37 @@ describe("@bb/sdk", () => {
     ]);
   });
 
+  it("lists pull requests through an explicitly selected GitHub account", async () => {
+    const catalog = {
+      repository: "acme/bb",
+      account: "work-user",
+      pullRequests: [],
+    };
+    const queue = createFetchQueue([{ body: catalog }]);
+    const sdk = createBbSdk({
+      transport: createHttpTransport({
+        baseUrl: "http://bb.test",
+        fetch: queue.fetch,
+        runtime: "node",
+      }),
+    });
+
+    await expect(
+      sdk.system.githubPullRequests({
+        repository: "acme/bb",
+        githubAccountLogin: "work-user",
+        hostId: "host_remote",
+      }),
+    ).resolves.toEqual(catalog);
+    expect(queue.requests).toEqual([
+      {
+        bodyText: undefined,
+        method: "GET",
+        url: "http://bb.test/api/v1/system/github/pull-requests?repository=acme%2Fbb&githubAccountLogin=work-user&hostId=host_remote",
+      },
+    ]);
+  });
+
   it("routes onboarding agent status through a reused environment", async () => {
     const overview = { agents: [] };
     const queue = createFetchQueue([{ body: overview }]);

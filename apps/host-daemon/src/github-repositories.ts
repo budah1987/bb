@@ -381,16 +381,21 @@ function parsePullRequests(raw: string): GithubPullRequest[] {
 export async function getGithubPullRequestCatalog(args: {
   env: NodeJS.ProcessEnv;
   repository: string;
+  githubAccountLogin: string;
   ghPath?: string;
   run?: GithubCommandRunner;
 }): Promise<GithubPullRequestCatalog> {
   const run = args.run ?? runCommand;
   const ghPath = args.ghPath ?? "gh";
   const accounts = await listGithubAccounts({ env: args.env, ghPath, run });
-  const account = accounts.find((candidate) => candidate.active) ?? accounts[0];
+  const account = accounts.find(
+    (candidate) =>
+      candidate.login.toLocaleLowerCase() ===
+      args.githubAccountLogin.toLocaleLowerCase(),
+  );
   if (!account) {
     throw new Error(
-      "No authenticated github.com account was found. Run `gh auth login` first.",
+      `GitHub account @${args.githubAccountLogin} is not authenticated on this machine. Run \`gh auth login\` for that account first.`,
     );
   }
   const token = await tokenForAccount({ account, env: args.env, ghPath, run });

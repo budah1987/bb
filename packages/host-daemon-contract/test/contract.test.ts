@@ -1277,7 +1277,27 @@ describe("host-daemon local schemas", () => {
 });
 
 describe("host-daemon command schemas", () => {
-  // Version 124 is the first build carrying both wire surfaces: BBamir's
+  it("requires an explicit account for GitHub pull-request catalogs", () => {
+    expect(
+      hostDaemonOnlineRpcCommandSchema.parse({
+        type: "github.pull_request_catalog",
+        repository: "octocat/hello-world",
+        githubAccountLogin: "octocat",
+      }),
+    ).toEqual({
+      type: "github.pull_request_catalog",
+      repository: "octocat/hello-world",
+      githubAccountLogin: "octocat",
+    });
+    expect(
+      hostDaemonOnlineRpcCommandSchema.safeParse({
+        type: "github.pull_request_catalog",
+        repository: "octocat/hello-world",
+      }).success,
+    ).toBe(false);
+  });
+
+  // Version 125 is the first build carrying both wire surfaces: BBamir's
   // turn-qualified fileChange ids, direct publication payloads, and durable
   // dev-server supervision (89-92), plus every upstream change through 123.
   // A stock upstream daemon reports 123 and a BBamir daemon reports 103, so
@@ -1316,7 +1336,7 @@ describe("host-daemon command schemas", () => {
   // mixed version. Version 113 carried the Devin Desktop open target rename
   // and remains part of the protocol lineage.
   it("uses the current host-daemon protocol version", () => {
-    expect(HOST_DAEMON_PROTOCOL_VERSION).toBe(124);
+    expect(HOST_DAEMON_PROTOCOL_VERSION).toBe(125);
   });
 
   it("requires a positive preflight file limit for workspace diff lists", () => {

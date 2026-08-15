@@ -469,6 +469,38 @@ describe("FollowUpPromptBox", () => {
     expect(props.composer?.onSubmit).toHaveBeenCalledOnce();
   });
 
+  it("marks a side-chat composer with its exact scope", () => {
+    const scope = {
+      kind: "side-chat" as const,
+      projectId: "proj_test",
+      parentThreadId: "thr_parent",
+      tabId: "side-chat:one",
+      childThreadId: "thr_side",
+    };
+    const draft = { text: "", mentions: [], attachments: [] };
+    const { container } = render(
+      <FollowUpPromptBox
+        {...createFollowUpPromptBoxProps({ kind: "ready" })}
+        isPrimaryComposer={false}
+        pluginComposerHost={{
+          scope,
+          draft,
+          textEffectKey: "side-chat:one",
+          getCurrent: () => draft,
+          setDraft: vi.fn(),
+          focus: vi.fn(),
+        }}
+        pluginComposerScope={scope}
+      />,
+    );
+
+    expect(
+      container.querySelector("[data-app-composer]")?.getAttribute(
+        "data-app-composer-scope",
+      ),
+    ).toBe(JSON.stringify(scope));
+  });
+
   it.each([
     ["main-thread", true],
     ["side-chat", false],

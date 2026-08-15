@@ -45,7 +45,9 @@ export function SidebarThreadPullRequest({
 }: {
   environmentId: string;
 }) {
-  const query = useEnvironmentPullRequest(environmentId);
+  const query = useEnvironmentPullRequest(environmentId, {
+    accountLogin: null,
+  });
   const pullRequest = getEnvironmentPullRequestFromResponse(query.data);
 
   return pullRequest ? (

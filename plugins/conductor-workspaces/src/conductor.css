@@ -1825,12 +1825,6 @@ html[data-conductor-new-tab-transition] [data-conversation-surface] {
     animation-delay: calc(var(--pixel-phase) * -70ms);
   }
 
-  .conductor-conversation-tab:not([data-active])
-    .conductor-pixel-matrix--working
-    .conductor-pixel {
-    animation: none;
-  }
-
   html[data-conductor-new-tab-transition]::view-transition-old(root),
   html[data-conductor-new-tab-transition]::view-transition-new(root) {
     animation: none;

@@ -12,7 +12,10 @@ import {
   pluginThemeMetaSchema,
   providerInfoSchema,
 } from "@bb/domain";
-import { hostPlatformSchema } from "@bb/host-daemon-contract";
+import {
+  githubAccountLoginSchema,
+  hostPlatformSchema,
+} from "@bb/host-daemon-contract";
 
 export const systemExecutionOptionsModelLoadErrorCodeSchema = z.enum([
   "missing_executable",
@@ -124,6 +127,7 @@ export type SystemGithubRepositoriesQuery = z.infer<
 
 export const systemGithubPullRequestsQuerySchema = z.object({
   repository: z.string().regex(/^[\w.-]+\/[\w.-]+$/u),
+  githubAccountLogin: githubAccountLoginSchema,
   hostId: z.string().min(1).optional(),
 });
 export type SystemGithubPullRequestsQuery = z.infer<

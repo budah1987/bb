@@ -58,6 +58,10 @@ interface QueryOptions {
   enabled?: boolean;
 }
 
+interface EnvironmentPullRequestQueryOptions extends QueryOptions {
+  accountLogin: string | null;
+}
+
 interface EnvironmentQueryOptions extends QueryOptions {
   staleTime?: number;
 }
@@ -286,13 +290,16 @@ export function getEnvironmentPullRequestRefetchInterval(
 
 export function useEnvironmentPullRequest(
   environmentId: string | null | undefined,
-  options?: QueryOptions,
+  options: EnvironmentPullRequestQueryOptions,
 ) {
-  const enabled = (options?.enabled ?? true) && Boolean(environmentId);
+  const enabled = (options.enabled ?? true) && Boolean(environmentId);
   useEnvironmentDetailRealtimeSubscription(environmentId, { enabled });
 
   return useQuery<EnvironmentPullRequestResponse>({
-    queryKey: environmentPullRequestQueryKey(environmentId),
+    queryKey: environmentPullRequestQueryKey(
+      environmentId,
+      options.accountLogin,
+    ),
     queryFn: ({ signal }) =>
       sdk.environments.pullRequest({
         environmentId: requireEnvironmentId(

@@ -42,9 +42,9 @@ import {
   providerCliStatusResponseSchema,
 } from "./local.js";
 
-// Merged BBamir (103) and upstream (123) command sets, so the version must
-// exceed both: every enrolled daemon is rejected once and then auto-updates.
-export const HOST_DAEMON_PROTOCOL_VERSION = 124 as const;
+// Version 125 adds the required GitHub account login to pull-request catalog
+// commands on top of the merged BBamir/upstream version 124 wire surface.
+export const HOST_DAEMON_PROTOCOL_VERSION = 125 as const;
 export const githubAccountLoginSchema = z.string().trim().min(1).max(255);
 
 export {
@@ -2090,6 +2090,7 @@ const githubPullRequestCatalogCommandSchema = z
   .object({
     type: z.literal("github.pull_request_catalog"),
     repository: z.string().regex(/^[\w.-]+\/[\w.-]+$/u),
+    githubAccountLogin: githubAccountLoginSchema,
   })
   .strict();
 

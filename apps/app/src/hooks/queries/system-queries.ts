@@ -324,6 +324,7 @@ export function useGithubRepositories(args: UseGithubRepositoriesArgs = {}) {
 }
 
 export interface UseGithubPullRequestsArgs extends QueryOptions {
+  githubAccountLogin: string | null;
   repository: string;
   hostId?: string;
 }
@@ -331,14 +332,26 @@ export interface UseGithubPullRequestsArgs extends QueryOptions {
 export function useGithubPullRequests(args: UseGithubPullRequestsArgs) {
   const hostId = args.hostId ?? null;
   return useQuery<GithubPullRequestCatalog>({
-    queryKey: systemGithubPullRequestsQueryKey(args.repository, hostId),
+    queryKey: systemGithubPullRequestsQueryKey(
+      args.repository,
+      args.githubAccountLogin,
+      hostId,
+    ),
     queryFn: ({ signal }) =>
       sdk.system.githubPullRequests({
+        githubAccountLogin: requireEnabledQueryArg({
+          value: args.githubAccountLogin,
+          hookName: "useGithubPullRequests",
+          argName: "githubAccountLogin",
+        }),
         repository: args.repository,
         ...(args.hostId === undefined ? {} : { hostId: args.hostId }),
         signal,
       }),
-    enabled: (args.enabled ?? true) && args.repository.length > 0,
+    enabled:
+      (args.enabled ?? true) &&
+      args.repository.length > 0 &&
+      args.githubAccountLogin !== null,
     staleTime: 30_000,
   });
 }

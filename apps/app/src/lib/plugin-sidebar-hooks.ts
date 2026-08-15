@@ -330,7 +330,9 @@ export function useSidebarThreadPullRequest(
 ): PluginSidebarThreadPullRequestState {
   const entry = useSidebarThreadEntry(threadId);
   const environmentId = entry?.environmentId ?? null;
-  const query = useEnvironmentPullRequest(environmentId);
+  const query = useEnvironmentPullRequest(environmentId, {
+    accountLogin: null,
+  });
   const pullRequest = getEnvironmentPullRequestFromResponse(query.data);
 
   return useMemo<PluginSidebarThreadPullRequestState>(

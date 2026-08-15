@@ -15,6 +15,7 @@ import { createQueryClientTestHarness } from "@/test/queryClientTestHarness";
 import {
   hostProviderCliStatusQueryKey,
   onboardingAgentsQueryKey,
+  systemGithubPullRequestsQueryKey,
   systemExecutionOptionsQueryKey,
   systemProvidersQueryKey,
   systemUsageLimitsQueryKey,
@@ -22,6 +23,7 @@ import {
 import {
   useHostProviderCliStatus,
   useOnboardingAgents,
+  useGithubPullRequests,
   useSystemExecutionOptions,
   useSystemUsageLimits,
 } from "./system-queries";
@@ -32,6 +34,7 @@ vi.mock("@/lib/sdk", () => ({
     hosts: { providerCliStatus: vi.fn() },
     system: {
       executionOptions: vi.fn(),
+      githubPullRequests: vi.fn(),
       onboardingAgents: vi.fn(),
       usageLimits: vi.fn(),
     },
@@ -273,5 +276,55 @@ describe("useSystemUsageLimits", () => {
         staleTime: 30_000,
       }),
     );
+  });
+});
+
+describe("useGithubPullRequests", () => {
+  it("partitions requests by account and sends the selected login", async () => {
+    vi.mocked(sdk.system.githubPullRequests).mockResolvedValue({
+      repository: "acme/bb",
+      account: "work-account",
+      pullRequests: [],
+    });
+    const { queryClient, wrapper } = createQueryClientTestHarness();
+
+    renderHook(
+      () =>
+        useGithubPullRequests({
+          githubAccountLogin: "work-account",
+          repository: "acme/bb",
+          hostId: "host-1",
+        }),
+      { wrapper },
+    );
+
+    await waitFor(() => {
+      expect(sdk.system.githubPullRequests).toHaveBeenCalledWith({
+        githubAccountLogin: "work-account",
+        repository: "acme/bb",
+        hostId: "host-1",
+        signal: expect.any(AbortSignal),
+      });
+    });
+    expect(
+      queryClient.getQueryState(
+        systemGithubPullRequestsQueryKey("acme/bb", "work-account", "host-1"),
+      ),
+    ).toBeDefined();
+  });
+
+  it("stays disabled until both repository and account are known", () => {
+    const { wrapper } = createQueryClientTestHarness();
+
+    renderHook(
+      () =>
+        useGithubPullRequests({
+          githubAccountLogin: null,
+          repository: "acme/bb",
+        }),
+      { wrapper },
+    );
+
+    expect(sdk.system.githubPullRequests).not.toHaveBeenCalled();
   });
 });

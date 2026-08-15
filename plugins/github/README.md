@@ -1,6 +1,6 @@
 # bb-plugin-github
 
-GitHub issues and pull requests inside BB, with one-click agent dispatch.
+GitHub issues and pull requests for BB projects, with repo-scoped conversations.
 
 Install it from the BB Official catalog:
 
@@ -14,12 +14,12 @@ bb plugin install github
   across every tracked repo, with a repo filter (persisted in localStorage)
   and a New issue form.
 - **Issue detail**: markdown body, comments, comment box, status,
-  assignee, and label editing, plus "Send agent".
+  assignee, and label editing, plus a repo-scoped conversation action.
   Deep-linkable via the URL hash: `#/issues/<owner>/<repo>/<number>`.
-- **Send agent / Review with agent**: spawns a BB worker thread on the issue
-  (or a review thread on the PR) in the repo's BB project. The issue/PR then
-  shows a ⚡ pill linking to the thread.
-- **Homepage section**: recent open issues with the same Send agent buttons.
+- **Open / Start conversation**: opens an existing linked conversation or
+  creates a task in the item's BB project. Pull requests start in a managed
+  worktree at the PR head; issues start from the project's default branch.
+  The issue or pull request then links back to that task.
 - **Mentions**: `@` or `#` in any composer completes GitHub issues and PRs; the
   selected item's title/body/state is attached as agent context at send time.
 - **`bb github` CLI**: `repos`, `issues [repo]`, `prs [repo]`, `sync` — also
@@ -32,15 +32,13 @@ it reports needs-configuration. No tokens are stored by the plugin.
 
 ## Which repos are tracked
 
-- Every BB project source whose checkout has a GitHub `origin` remote
-  (repo → project mapping is also how spawn picks the project).
-- Plus the `extraRepos` setting: comma-separated `owner/repo` list.
-- `defaultProject` setting: where threads spawn for repos with no project.
-
-```
-bb plugin config github set extraRepos "owner/repo, owner/other"
-bb plugin reload github
-```
+Only repositories attached to BB projects are shown. The project's GitHub
+remote, selected GitHub account, and default local source determine both what
+can be viewed and exactly where a new conversation workspace is created.
+Repositories assigned to a different GitHub CLI identity stay visible. Existing
+BB conversations still open, while live GitHub actions and new workspaces wait
+until that identity is active (for example, with
+`gh auth switch --user <login>`).
 
 A background service refreshes the issue/PR cache every 5 minutes; the
 panel's Refresh button (or `bb github sync`) forces it.

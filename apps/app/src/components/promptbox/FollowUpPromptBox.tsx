@@ -791,6 +791,7 @@ function FollowUpPromptBoxWithComposer({
           <div
             data-app-composer=""
             data-app-composer-role={isPrimaryComposer ? "primary" : "secondary"}
+            data-app-composer-scope={JSON.stringify(composerView.scope)}
             data-promptbox-shell=""
             className="space-y-2"
           >

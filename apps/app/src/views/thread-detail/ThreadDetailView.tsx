@@ -30,6 +30,7 @@ import {
   defaultAppSettings,
   resolveEnvironmentMergeBaseBranch,
   type GitHostPullRequestCheck,
+  type ThreadPullRequest,
   type ThreadListEntry,
   type ThreadWithRuntime,
 } from "@bb/domain";
@@ -670,9 +671,7 @@ function ThreadDetailViewInternal(props: ThreadDetailViewInternalProps) {
   const pendingInteractionsQuery = useThreadPendingInteractions(
     thread?.id ?? "",
     {
-      enabled:
-        threadQueryState.status === "ready" &&
-        Boolean(thread?.id),
+      enabled: threadQueryState.status === "ready" && Boolean(thread?.id),
     },
   );
   const pendingInteractions = pendingInteractionsQuery.data ?? [];
@@ -873,9 +872,7 @@ function ThreadDetailViewInternal(props: ThreadDetailViewInternalProps) {
     return { parentThreadId: thread.id };
   }, [thread?.id]);
   const childThreadSubsetQuery = useProjectThreadSubset({
-    enabled:
-      threadQueryState.status === "ready" &&
-      Boolean(thread?.id),
+    enabled: threadQueryState.status === "ready" && Boolean(thread?.id),
     filters: childThreadSubsetFilters,
     projectId,
   });
@@ -1493,8 +1490,7 @@ function ThreadDetailViewInternal(props: ThreadDetailViewInternalProps) {
     thread?.environmentId,
     {
       enabled:
-        isSecondaryPanelOpen &&
-        activeFixedSecondaryTab?.kind === "thread-info",
+        isSecondaryPanelOpen && activeFixedSecondaryTab?.kind === "thread-info",
       hostId: environment?.hostId,
       rootPath: environment?.path,
     },
@@ -2026,9 +2022,6 @@ function ThreadDetailViewInternal(props: ThreadDetailViewInternalProps) {
     workStatusResponse?.outcome === "unavailable"
       ? workStatusResponse.failure
       : undefined;
-  const pullRequestQuery = useEnvironmentPullRequest(thread?.environmentId, {
-    enabled: canUseGitUi && environment !== undefined,
-  });
   const githubAccountsQuery = useGithubAccounts({
     ...(environment?.hostId === undefined
       ? {}
@@ -2045,6 +2038,10 @@ function ThreadDetailViewInternal(props: ThreadDetailViewInternalProps) {
     githubAccounts.find((account) => account.active)?.login ??
     githubAccounts[0]?.login ??
     null;
+  const pullRequestQuery = useEnvironmentPullRequest(thread?.environmentId, {
+    accountLogin: selectedGithubAccountLogin,
+    enabled: canUseGitUi && environment !== undefined,
+  });
   const pullRequest = getEnvironmentPullRequestFromResponse(
     pullRequestQuery.data,
   );
@@ -2058,7 +2055,6 @@ function ThreadDetailViewInternal(props: ThreadDetailViewInternalProps) {
           id: environmentId,
           githubAccountLogin: login,
         });
-        await pullRequestQuery.refetch();
         appToast.success(`Using @${login} for this worktree`, { id: toastId });
       } catch (error) {
         appToast.error("Failed to switch GitHub account", {
@@ -2070,12 +2066,7 @@ function ThreadDetailViewInternal(props: ThreadDetailViewInternalProps) {
         });
       }
     },
-    [
-      environment?.githubAccountLogin,
-      pullRequestQuery,
-      thread?.environmentId,
-      updateEnvironment,
-    ],
+    [environment?.githubAccountLogin, thread?.environmentId, updateEnvironment],
   );
   const handlePullRequestCreate = useCallback(
     async (input: PullRequestCreateInput): Promise<boolean> => {
@@ -2264,6 +2255,46 @@ function ThreadDetailViewInternal(props: ThreadDetailViewInternalProps) {
       }
     },
     [pullRequest?.number, sendMessage, thread],
+  );
+  const handleAskAgentToResolvePullRequest = useCallback(
+    async (pullRequestToResolve: ThreadPullRequest) => {
+      if (!thread || sendMessage.isPending) return;
+      const resolution =
+        pullRequestToResolve.attention === "conflicts"
+          ? "Update the branch from its base, resolve the merge conflicts, and verify the resolved diff."
+          : pullRequestToResolve.attention === "changes_requested"
+            ? "Inspect the review feedback, make the requested changes, and update the pull request."
+            : "Inspect the pull request's merge requirements and resolve the blocker where it is safe to do so.";
+      const toastId = appToast.loading("Sending pull request issue to agent");
+      try {
+        await sendMessage.mutateAsync({
+          id: thread.id,
+          mode: "queue-if-active",
+          input: [
+            {
+              type: "text",
+              mentions: [],
+              text: [
+                `Resolve the ${pullRequestToResolve.attention.replaceAll("_", " ")} blocking pull request #${pullRequestToResolve.number}.`,
+                `Pull request: ${pullRequestToResolve.url}`,
+                resolution,
+                "Use the GitHub CLI to inspect the current pull request state. Make the smallest safe change, run relevant local checks, push the update if appropriate, and report what changed or what still needs human input.",
+              ].join("\n"),
+            },
+          ],
+        });
+        appToast.success("Pull request issue sent to agent", { id: toastId });
+      } catch (error) {
+        appToast.error("Failed to message agent", {
+          id: toastId,
+          description: getMutationErrorMessage({
+            error,
+            fallbackMessage: "Pull request issue was not sent to the agent",
+          }),
+        });
+      }
+    },
+    [sendMessage, thread],
   );
   const workspaceBranch = workspaceStatus?.branch;
   const workspaceChangedFilesSection = useMemo(
@@ -3307,41 +3338,44 @@ function ThreadDetailViewInternal(props: ThreadDetailViewInternalProps) {
   const pullRequestPanelContent = (
     <Suspense fallback={null}>
       <PullRequestPanel
-      archiveErrorMessage={pullRequestArchive.errorMessage}
-      baseBranchOptions={[
-        ...new Set([
-          workspaceStatus?.branch.defaultBranch ?? "main",
-          ...(mergeBaseBranchOptions ?? []),
-        ]),
-      ]}
-      defaultBaseBranch={workspaceStatus?.branch.defaultBranch ?? "main"}
-      githubAccounts={githubAccounts}
-      isActionPending={
-        requestEnvironmentAction.isPending ||
-        pullRequestArchive.isPending ||
-        updateEnvironment.isPending
-      }
-      isGithubAccountLoading={githubAccountsQuery.isLoading}
-      isLoading={pullRequestQuery.isLoading}
-      onArchive={() => void pullRequestArchive.archive()}
-      onAskAgentToFix={(check) =>
-        void handleAskAgentToFixPullRequestCheck(check)
-      }
-      onConvertToDraft={() => void handlePullRequestDraft()}
-      onCommitChanges={() =>
-        gitActions.threadGitActionDialog.onOpen({ kind: "commit" })
-      }
-      onCreate={(input) => void handlePullRequestCreate(input)}
-      onGenerateMetadata={handleGeneratePullRequestMetadata}
-      onGithubAccountChange={(login) => void handleGithubAccountChange(login)}
-      onMarkReady={() => void handlePullRequestReady()}
-      onMerge={(method) => void handlePullRequestMerge(method)}
-      onRefresh={() => void pullRequestQuery.refetch()}
-      onReviewChanges={openSecondaryPanelDiffPanel}
-      pullRequestResponse={pullRequestQuery.data}
-      selectedGithubAccountLogin={selectedGithubAccountLogin}
-      threadTitle={threadTitle}
-      workspaceStatus={workspaceStatus}
+        archiveErrorMessage={pullRequestArchive.errorMessage}
+        baseBranchOptions={[
+          ...new Set([
+            workspaceStatus?.branch.defaultBranch ?? "main",
+            ...(mergeBaseBranchOptions ?? []),
+          ]),
+        ]}
+        defaultBaseBranch={workspaceStatus?.branch.defaultBranch ?? "main"}
+        githubAccounts={githubAccounts}
+        isActionPending={
+          requestEnvironmentAction.isPending ||
+          pullRequestArchive.isPending ||
+          updateEnvironment.isPending
+        }
+        isGithubAccountLoading={githubAccountsQuery.isLoading}
+        isLoading={pullRequestQuery.isLoading}
+        onArchive={() => void pullRequestArchive.archive()}
+        onAskAgentToFix={(check) =>
+          void handleAskAgentToFixPullRequestCheck(check)
+        }
+        onAskAgentToResolve={(pullRequestToResolve) =>
+          void handleAskAgentToResolvePullRequest(pullRequestToResolve)
+        }
+        onConvertToDraft={() => void handlePullRequestDraft()}
+        onCommitChanges={() =>
+          gitActions.threadGitActionDialog.onOpen({ kind: "commit" })
+        }
+        onCreate={(input) => void handlePullRequestCreate(input)}
+        onGenerateMetadata={handleGeneratePullRequestMetadata}
+        onGithubAccountChange={(login) => void handleGithubAccountChange(login)}
+        onMarkReady={() => void handlePullRequestReady()}
+        onMerge={(method) => void handlePullRequestMerge(method)}
+        onRefresh={() => void pullRequestQuery.refetch()}
+        onReviewChanges={openSecondaryPanelDiffPanel}
+        pullRequestResponse={pullRequestQuery.data}
+        selectedGithubAccountLogin={selectedGithubAccountLogin}
+        threadTitle={threadTitle}
+        workspaceStatus={workspaceStatus}
       />
     </Suspense>
   );

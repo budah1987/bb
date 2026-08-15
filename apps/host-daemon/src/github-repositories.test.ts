@@ -253,7 +253,7 @@ describe("getGithubRepositoryCatalog", () => {
 });
 
 describe("getGithubPullRequestCatalog", () => {
-  it("uses the active account token and parses open pull requests", async () => {
+  it("uses the explicitly selected account environment and parses pull requests", async () => {
     const run: GithubCommandRunner = async (_file, args, options) => {
       if (args[0] === "auth" && args[1] === "status") {
         return {
@@ -266,6 +266,12 @@ describe("getGithubPullRequestCatalog", () => {
                   host: "github.com",
                   login: "active-user",
                 },
+                {
+                  state: "success",
+                  active: false,
+                  host: "github.com",
+                  login: "selected-user",
+                },
               ],
             },
           }),
@@ -273,10 +279,12 @@ describe("getGithubPullRequestCatalog", () => {
         };
       }
       if (args[0] === "auth" && args[1] === "token") {
-        return { stdout: "active-token\n", stderr: "" };
+        expect(args).toContain("selected-user");
+        return { stdout: "selected-token\n", stderr: "" };
       }
-      if (args[0] === "pr" && options.env.GH_TOKEN === "active-token") {
+      if (args[0] === "pr" && options.env.GH_TOKEN === "selected-token") {
         expect(args).toContain("shared/console");
+        expect(options.env.GH_HOST).toBe("github.com");
         return {
           stdout: JSON.stringify([
             {
@@ -299,13 +307,18 @@ describe("getGithubPullRequestCatalog", () => {
 
     await expect(
       getGithubPullRequestCatalog({
-        env: { PATH: "/bin" },
+        env: {
+          PATH: "/bin",
+          GH_HOST: "ambient.example.com",
+          GH_TOKEN: "ambient-token",
+        },
         repository: "shared/console",
+        githubAccountLogin: "selected-user",
         run,
       }),
     ).resolves.toEqual({
       repository: "shared/console",
-      account: "active-user",
+      account: "selected-user",
       pullRequests: [
         {
           number: 17,
@@ -320,5 +333,37 @@ describe("getGithubPullRequestCatalog", () => {
         },
       ],
     });
+  });
+
+  it("rejects an account that is not authenticated on the host", async () => {
+    const run: GithubCommandRunner = async (_file, args) => {
+      if (args[0] === "auth" && args[1] === "status") {
+        return {
+          stdout: JSON.stringify({
+            hosts: {
+              "github.com": [
+                {
+                  state: "success",
+                  active: true,
+                  host: "github.com",
+                  login: "active-user",
+                },
+              ],
+            },
+          }),
+          stderr: "",
+        };
+      }
+      throw new Error(`Unexpected command: ${args.join(" ")}`);
+    };
+
+    await expect(
+      getGithubPullRequestCatalog({
+        env: {},
+        repository: "shared/console",
+        githubAccountLogin: "missing-user",
+        run,
+      }),
+    ).rejects.toThrow("@missing-user is not authenticated");
   });
 });

@@ -10,6 +10,7 @@ import type { SplitLayout } from "@/lib/split-layout";
 import {
   applyThreadOpenToLayout,
   applyThreadPaneActionToLayout,
+  createSinglePaneContentLayout,
   createSinglePaneLayout,
   focusedPaneRoute,
   reconcileLayoutForContent,
@@ -79,6 +80,26 @@ describe("mixed page navigation", () => {
       subPath: "work/today.md",
     });
     expect(focusedPaneRoute(after)).toBe("/plugins/notes/notes/work/today.md");
+  });
+
+  it("hands a plugin detail page into its thread without duplicating the pane", () => {
+    const before = createSinglePaneContentLayout({
+      kind: "plugin-panel",
+      pluginId: "github",
+      panelPath: "github",
+      subPath: "pulls/acme/widget/42",
+    });
+
+    const after = reconcileLayoutForContent(before, {
+      kind: "thread",
+      projectId: "proj_acme_widget",
+      threadId: "thr_pr_42",
+    });
+
+    expect(listPanes(after.root)).toHaveLength(1);
+    expect(focusedPaneRoute(after)).toBe(
+      "/projects/proj_acme_widget/threads/thr_pr_42",
+    );
   });
 });
 

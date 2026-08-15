@@ -20,4 +20,13 @@ describe("Conductor sidebar theme mapping", () => {
     expect(rule).toContain("var(--sidebar)");
     expect(rule).not.toContain("var(--canvas)");
   });
+
+  it("keeps working conversation indicators animated outside the active tab", () => {
+    expect(css).toContain(
+      ".conductor-pixel-matrix--working .conductor-pixel:nth-child(7)",
+    );
+    expect(css).not.toMatch(
+      /\.conductor-conversation-tab:not\(\[data-active\]\)[^{]*\{\s*animation:\s*none/s,
+    );
+  });
 });

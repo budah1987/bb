@@ -78,6 +78,7 @@ export interface PullRequestPanelProps {
   isLoading: boolean;
   onArchive: () => void;
   onAskAgentToFix: (check: GitHostPullRequestCheck) => void;
+  onAskAgentToResolve: (pullRequest: ThreadPullRequest) => void;
   onConvertToDraft: () => void;
   onCommitChanges: () => void;
   onCreate: (input: PullRequestCreateInput) => void;
@@ -777,6 +778,7 @@ function PullRequestDetails({
   isActionPending,
   onArchive,
   onAskAgentToFix,
+  onAskAgentToResolve,
   onConvertToDraft,
   onGithubAccountChange,
   onMarkReady,
@@ -792,6 +794,7 @@ function PullRequestDetails({
   | "isGithubAccountLoading"
   | "onArchive"
   | "onAskAgentToFix"
+  | "onAskAgentToResolve"
   | "onConvertToDraft"
   | "onGithubAccountChange"
   | "onMarkReady"
@@ -827,6 +830,7 @@ function PullRequestDetails({
       getPullRequestMergeabilityDisplay(pullRequest),
     ];
   }, [pullRequest]);
+  const recoveryCopy = getPullRequestRecoveryCopy(pullRequest.attention);
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
       <div className="min-h-0 flex-1 overflow-y-auto pb-4">
@@ -889,6 +893,26 @@ function PullRequestDetails({
             </div>
           ))}
         </section>
+        {recoveryCopy ? (
+          <section className="mx-4 mt-3 rounded-xl border border-destructive/25 bg-destructive/5 p-3">
+            <p className="text-sm font-medium text-foreground">
+              {recoveryCopy.title}
+            </p>
+            <p className="mt-1 text-xs leading-5 text-muted-foreground">
+              {recoveryCopy.description}
+            </p>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="mt-3 min-h-10"
+              disabled={isActionPending}
+              onClick={() => onAskAgentToResolve(pullRequest)}
+            >
+              Ask agent to resolve
+            </Button>
+          </section>
+        ) : null}
 
         <section className="mt-5">
           <div className="flex min-h-10 items-center justify-between gap-3 px-4">
@@ -932,6 +956,31 @@ function PullRequestDetails({
       </footer>
     </div>
   );
+}
+
+function getPullRequestRecoveryCopy(attention: ThreadPullRequest["attention"]) {
+  switch (attention) {
+    case "conflicts":
+      return {
+        title: "This pull request has merge conflicts",
+        description:
+          "Ask the agent to update the branch, resolve the conflicts, and verify the result.",
+      };
+    case "changes_requested":
+      return {
+        title: "Review changes are requested",
+        description:
+          "Ask the agent to inspect the review feedback, make the requested changes, and update the pull request.",
+      };
+    case "blocked":
+      return {
+        title: "This pull request is blocked",
+        description:
+          "Ask the agent to identify the merge requirement that is blocking it and resolve what it can.",
+      };
+    default:
+      return null;
+  }
 }
 
 export function PullRequestPanel(props: PullRequestPanelProps) {
