@@ -569,7 +569,7 @@ describe("builtin plugin reconciliation", () => {
       includeBuiltin: false,
     });
     await service.start();
-    await service.install(directRoot);
+    await service.install(directRoot, { kind: "root" });
     await service.setEnabled("builtin-fixture", false);
     await service.stop();
     await rm(directRoot, { recursive: true, force: true });

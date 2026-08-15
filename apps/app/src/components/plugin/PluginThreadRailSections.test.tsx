@@ -3,7 +3,7 @@
 import { cleanup, render, screen } from "@testing-library/react";
 import type { ComponentType } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { PluginThreadRailSectionProps } from "@bb/plugin-sdk";
+import type { PluginThreadRailSectionProps } from "@get-bb/plugin-sdk";
 import { resetAllCrashedPluginSlotsForTest } from "./PluginSlotMount";
 import { PluginThreadRailSections } from "./PluginThreadRailSections";
 

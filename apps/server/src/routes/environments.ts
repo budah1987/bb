@@ -1471,6 +1471,7 @@ export function registerEnvironmentRoutes(app: Hono, deps: AppDeps): void {
             },
             maxDiffBytes: AI_MAX_DIFF_BYTES,
             maxFileListBytes: AI_MAX_FILE_LIST_BYTES,
+            maxUntrackedFiles: WORKSPACE_DIFF_MAX_FILES,
           },
         });
         const workspaceDiff = requireAvailableWorkspaceDiff(diffResult);

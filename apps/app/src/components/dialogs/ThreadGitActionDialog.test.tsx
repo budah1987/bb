@@ -33,7 +33,12 @@ function section(
     label: "Uncommitted",
     files: sectionFiles,
     mergeBaseRef: null,
-    stats: { files: sectionFiles, insertions: 13, deletions: 1 },
+    stats: {
+      files: sectionFiles,
+      insertions: 13,
+      deletions: 1,
+      lineStatsComplete: true,
+    },
   };
 }
 

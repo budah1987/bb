@@ -46,7 +46,7 @@ export function selectReviewQueueItems(
     .flatMap((thread) => {
       // Forks and side chats are user-created branches. They are not delegated
       // tasks that the parent conversation must review.
-      if (thread.childOrigin !== null) return [];
+      if (thread.originKind !== null) return [];
       const state = reviewState(thread);
       if (state === null) return [];
       return [

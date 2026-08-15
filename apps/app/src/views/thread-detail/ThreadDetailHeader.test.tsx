@@ -95,6 +95,7 @@ describe("ThreadDetailHeader", () => {
             branchName: "feature/conductor-tabs",
           }}
           threadHeaderWorkflowActions={[]}
+          threadId={THREAD_ID}
           threadTitle="Conversation title"
         />
       </PaneContext.Provider>,
@@ -278,6 +279,7 @@ describe("ThreadDetailHeader", () => {
           isSecondaryPanelOpen={false}
           onToggleSecondaryPanel={vi.fn()}
           threadHeaderWorkflowActions={[{ label: "Commit", onSelect: vi.fn() }]}
+          threadId={THREAD_ID}
           threadTitle="Compact thread"
           workspaceOpenButton={<button>Open workspace</button>}
         />
@@ -299,6 +301,7 @@ describe("ThreadDetailHeader", () => {
           isSecondaryPanelOpen={false}
           onToggleSecondaryPanel={vi.fn()}
           threadHeaderWorkflowActions={[{ label: "Create PR", onSelect }]}
+          threadId={THREAD_ID}
           threadTitle="GitHub workflow"
         />
       </PaneContext.Provider>,
@@ -324,6 +327,7 @@ describe("ThreadDetailHeader", () => {
               tooltip: "Checks pending",
             },
           ]}
+          threadId={THREAD_ID}
           threadTitle="GitHub workflow"
         />
       </PaneContext.Provider>,
@@ -351,6 +355,7 @@ describe("ThreadDetailHeader", () => {
             isSecondaryPanelOpen={false}
             onToggleSecondaryPanel={vi.fn()}
             threadHeaderWorkflowActions={[]}
+            threadId={THREAD_ID}
             threadTitle="Rail toggle"
           />
         </PaneContext.Provider>
@@ -392,6 +397,7 @@ describe("ThreadDetailHeader", () => {
             isSecondaryPanelOpen={false}
             onToggleSecondaryPanel={vi.fn()}
             threadHeaderWorkflowActions={[]}
+            threadId={THREAD_ID}
             threadTitle="Compact rail toggle"
           />
         </PaneContext.Provider>

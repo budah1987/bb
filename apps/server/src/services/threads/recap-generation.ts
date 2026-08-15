@@ -3,6 +3,10 @@ import type { Environment, Thread, ThreadPullRequest } from "@bb/domain";
 import { renderTemplate } from "@bb/templates";
 import { THREAD_RECAP_MAX_LENGTH } from "@bb/server-contract";
 import { Type } from "@earendil-works/pi-ai";
+import {
+  WORKSPACE_STATUS_MAX_UNTRACKED_LINE_STAT_BYTES,
+  WORKSPACE_STATUS_MAX_UNTRACKED_LINE_STAT_FILES,
+} from "../../constants.js";
 import type { AppDeps, LoggedWorkSessionDeps } from "../../types.js";
 import { InferenceTimeoutError, inferenceComplete } from "../ai/inference.js";
 import { assembleThreadPullRequest } from "../environments/pull-request.js";
@@ -152,6 +156,10 @@ async function collectThreadRecapWorkspaceState(
           type: "workspace.status",
           environmentId: target.environmentId,
           workspaceContext: target.workspaceContext,
+          maxUntrackedLineStatFiles:
+            WORKSPACE_STATUS_MAX_UNTRACKED_LINE_STAT_FILES,
+          maxUntrackedLineStatBytes:
+            WORKSPACE_STATUS_MAX_UNTRACKED_LINE_STAT_BYTES,
         },
       }),
     ),

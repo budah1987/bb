@@ -253,7 +253,6 @@ async function startBbamirUpdate(
       },
       startedOnBehalfOf: null,
       originKind: null,
-      childOrigin: null,
     });
   } catch (error: unknown) {
     throw prependErrorContext(

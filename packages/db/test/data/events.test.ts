@@ -500,6 +500,7 @@ describe("events", () => {
       (tx) =>
         appendDaemonEventsInTransaction(tx, [
           {
+            daemonEventId: randomUUID(),
             threadId: thread.id,
             type: "provider/unhandled",
             ...createTurnEventFields({ turnId: "auto-compact-1" }),
@@ -517,6 +518,7 @@ describe("events", () => {
             }),
           },
           {
+            daemonEventId: randomUUID(),
             threadId: thread.id,
             type: "turn/started",
             ...createTurnEventFields({ turnId: "turn_after_compaction" }),

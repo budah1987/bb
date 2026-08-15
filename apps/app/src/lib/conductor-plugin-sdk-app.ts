@@ -7,7 +7,7 @@
 import type {
   PluginRpcClient,
   PluginRpcContract,
-} from "@bb/plugin-sdk";
+} from "@get-bb/plugin-sdk";
 import { conductorRpcClient } from "./conductor-core-rpc";
 import { pluginSdkAppImplementation } from "./plugin-sdk-app-impl";
 
@@ -35,4 +35,4 @@ export function useRpc<
   return conductorRpcClient as unknown as PluginRpcClient<Contract>;
 }
 
-export type * from "@bb/plugin-sdk";
+export type * from "@get-bb/plugin-sdk";

@@ -729,6 +729,7 @@ describe("public environment action regressions", () => {
           workingTree: {
             insertions: 1,
             deletions: 0,
+            lineStatsComplete: true,
             files: [
               {
                 path: "README.md",
@@ -1103,6 +1104,7 @@ describe("public environment action regressions", () => {
               status: "completed",
               conclusion: "failure",
               url: "https://github.com/acme/bb/actions/runs/123/job/456",
+              startedAt: null,
             },
           ],
         }),

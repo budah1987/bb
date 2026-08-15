@@ -384,33 +384,6 @@ function getItemProjectId(item: ProjectThreadItem): string {
   }
 }
 
-function projectThreadItemContainsThread(
-  item: ProjectThreadItem,
-  threadId: string,
-): boolean {
-  switch (item.kind) {
-    case "thread":
-      return (
-        item.node.thread.id === threadId ||
-        item.node.children.some((child) =>
-          projectThreadItemContainsThread(child, threadId),
-        )
-      );
-    case "environment":
-      return item.group.nodes.some(
-        (node) =>
-          node.thread.id === threadId ||
-          node.children.some((child) =>
-            projectThreadItemContainsThread(child, threadId),
-          ),
-      );
-    case "section":
-      return item.group.items.some((child) =>
-        projectThreadItemContainsThread(child, threadId),
-      );
-  }
-}
-
 interface EnvironmentThreadGroupRowProps {
   projectId: string;
   environmentThreadGroup: EnvironmentThreadGroup;

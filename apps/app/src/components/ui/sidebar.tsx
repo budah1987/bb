@@ -20,6 +20,10 @@ import {
 const SIDEBAR_WIDTH = "16rem";
 const SIDEBAR_WIDTH_MOBILE = "min(90vw, 320px)";
 const SIDEBAR_WIDTH_ICON = "3rem";
+// vaul's default drawer exit. `openMobile` flips before the panel has finished
+// sliding out, so the shell needs this window to keep painting the outgoing
+// sidebar content instead of swapping it mid-animation (#1380).
+const SIDEBAR_MOBILE_CLOSE_ANIMATION_MS = 500;
 const SIDEBAR_GROUP_LABEL_BASE_CLASS =
   "duration-200 flex shrink-0 items-center rounded-md px-1 text-xs font-medium text-sidebar-foreground/75 outline-none ring-sidebar-ring transition-[margin,opa] ease-linear focus-visible:ring-2 [&>svg]:size-4 [&>svg]:shrink-0";
 const SIDEBAR_GROUP_LABEL_COLLAPSED_CLASS =
@@ -43,6 +47,8 @@ type SidebarContext = {
   setSuppressMobileOpenAnimation: (suppress: boolean) => void;
   suppressMobileCloseAnimation: boolean;
   setSuppressMobileCloseAnimation: (suppress: boolean) => void;
+  /** True while the mobile drawer is animating shut but still on screen. */
+  isMobileSidebarClosing: boolean;
   isCompactViewport: boolean;
   toggleSidebar: () => void;
 };
@@ -119,6 +125,25 @@ const SidebarProvider = React.forwardRef<
       }
     }, [openMobile]);
 
+    const [isMobileSidebarClosing, setIsMobileSidebarClosing] =
+      React.useState(false);
+    const wasOpenMobileRef = React.useRef(openMobile);
+    React.useEffect(() => {
+      const wasOpen = wasOpenMobileRef.current;
+      wasOpenMobileRef.current = openMobile;
+      // A suppressed close jumps straight to the closed panel, so there is no
+      // exit animation for the shell to wait on.
+      if (openMobile || !wasOpen || suppressMobileCloseAnimation) {
+        setIsMobileSidebarClosing(false);
+        return;
+      }
+      setIsMobileSidebarClosing(true);
+      const timeout = window.setTimeout(() => {
+        setIsMobileSidebarClosing(false);
+      }, SIDEBAR_MOBILE_CLOSE_ANIMATION_MS);
+      return () => window.clearTimeout(timeout);
+    }, [openMobile, suppressMobileCloseAnimation]);
+
     const [_open, _setOpen] = React.useState(defaultOpen);
     const open = openProp ?? _open;
     const setOpen = React.useCallback(
@@ -156,6 +181,7 @@ const SidebarProvider = React.forwardRef<
         setSuppressMobileOpenAnimation,
         suppressMobileCloseAnimation,
         setSuppressMobileCloseAnimation,
+        isMobileSidebarClosing,
         toggleSidebar,
       }),
       [
@@ -169,6 +195,7 @@ const SidebarProvider = React.forwardRef<
         setSuppressMobileOpenAnimation,
         suppressMobileCloseAnimation,
         setSuppressMobileCloseAnimation,
+        isMobileSidebarClosing,
         toggleSidebar,
       ],
     );

@@ -330,35 +330,6 @@ export type PluginClaudeCodeSessionConfigurationProvider = (
   context: PluginAgentConfigurationContext,
 ) => PluginClaudeCodeSessionConfiguration | null;
 
-/** Duck-typed zod detection: plugin sources may carry their own zod copy,
- * so instanceof is useless — anything with safeParse is treated as zod. */
-function isZodSchemaLike(value: unknown): boolean {
-  return (
-    typeof value === "object" &&
-    value !== null &&
-    typeof (value as { safeParse?: unknown }).safeParse === "function"
-  );
-}
-
-/** Compact issue summary from a (possibly foreign-instance) zod error. */
-function summarizeParseIssues(error: unknown): string {
-  const issues = (
-    error as { issues?: Array<{ path?: PropertyKey[]; message?: string }> }
-  )?.issues;
-  if (Array.isArray(issues) && issues.length > 0) {
-    return issues
-      .map((issue) => {
-        const path =
-          Array.isArray(issue.path) && issue.path.length > 0
-            ? issue.path.join(".")
-            : "(input)";
-        return `${path}: ${issue.message ?? "invalid"}`;
-      })
-      .join("; ");
-  }
-  return error instanceof Error ? error.message : String(error);
-}
-
 /**
  * Wrap the shared server-bound SDK for one plugin: thread creation gets
  * default attribution (`origin: "plugin"`, `originPluginId: <plugin id>`)

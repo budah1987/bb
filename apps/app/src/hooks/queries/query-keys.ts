@@ -770,10 +770,6 @@ export function threadAnnotationsQueryKeyPrefix(
   return [THREAD_ANNOTATIONS_QUERY_KEY, threadId];
 }
 
-export function allThreadTabsQueryKeyPrefix(): ThreadTabsQueryKeyPrefix {
-  return [THREAD_TABS_QUERY_KEY];
-}
-
 export function threadDetailBootstrapQueryKey(
   threadId: string,
 ): ThreadDetailBootstrapQueryKey {

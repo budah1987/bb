@@ -252,6 +252,8 @@ function ChildThreadIcon({ className }: { className?: string }) {
 }
 
 interface SectionToggleButtonProps {
+  /** Tints the chevron and suppresses the expanded/collapsed text swap. */
+  active?: boolean;
   id: string;
   controlsId: string;
   ariaLabel?: string;
@@ -264,6 +266,7 @@ interface SectionToggleButtonProps {
 }
 
 function SectionToggleButton({
+  active = false,
   id,
   controlsId,
   ariaLabel,

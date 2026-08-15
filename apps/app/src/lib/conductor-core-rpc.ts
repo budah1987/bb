@@ -1,4 +1,4 @@
-import type { PluginRpcClient } from "@bb/plugin-sdk";
+import type { PluginRpcClient } from "@get-bb/plugin-sdk";
 import {
   conductorRpcContract,
   type WorkspaceGitSummary,

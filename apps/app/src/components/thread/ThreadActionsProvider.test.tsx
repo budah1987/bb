@@ -82,14 +82,13 @@ vi.mock("@/components/dialogs/ThreadDeleteDialog", () => ({
 function makeThread(overrides: Partial<Thread> = {}): Thread {
   return {
     archivedAt: null,
-    childOrigin: null,
+    originKind: null,
     createdAt: 1,
     deletedAt: null,
     environmentId: "env_test",
     id: "thr_test",
     lastReadAt: null,
     latestAttentionAt: 1,
-    originKind: null,
     originPluginId: null,
     parentThreadId: null,
     pinnedAt: null,

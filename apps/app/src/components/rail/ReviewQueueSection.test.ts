@@ -42,7 +42,6 @@ function thread(
     parentThreadId: "parent-1",
     sourceThreadId: null,
     originKind: null,
-    childOrigin: null,
     originPluginId: null,
     visibility: "visible",
     archivedAt: null,
@@ -96,7 +95,7 @@ describe("selectReviewQueueItems", () => {
   it("excludes read work and user-created side conversations", () => {
     const items = selectReviewQueueItems([
       thread("read", { lastReadAt: 100 }),
-      thread("fork", { childOrigin: "fork" }),
+      thread("fork", { originKind: "fork" }),
       thread("active", {
         runtime: {
           displayStatus: "active",

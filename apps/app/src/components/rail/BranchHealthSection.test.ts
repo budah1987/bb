@@ -20,6 +20,7 @@ function availableStatus(
       workingTree: {
         deletions: 0,
         files: [],
+        lineStatsComplete: true,
         hasUncommittedChanges: overrides.hasUncommittedChanges ?? false,
         insertions: 0,
         state: overrides.hasUncommittedChanges ? "dirty_uncommitted" : "clean",
@@ -31,6 +32,7 @@ function availableStatus(
         commits: [],
         deletions: 0,
         files: [],
+        lineStatsComplete: true,
         hasCommittedUnmergedChanges: true,
         insertions: 0,
         mergeBaseBranch: "main",

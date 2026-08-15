@@ -345,7 +345,7 @@ describe("environment reprovisioning", () => {
       });
 
       const thread = await createThreadFromRequest(harness.deps, {
-        childOrigin: null,
+        originKind: null,
         startedOnBehalfOf: null,
         environment: {
           type: "host",

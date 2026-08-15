@@ -215,6 +215,8 @@ function createWorkspaceStatusCommand(
       workspacePath: `/tmp/${environmentId}`,
       workspaceProvisionType: "unmanaged",
     },
+    maxUntrackedLineStatFiles: 50,
+    maxUntrackedLineStatBytes: 8 * 1024 * 1024,
   };
 }
 
