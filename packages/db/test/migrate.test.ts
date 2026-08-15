@@ -215,6 +215,11 @@ interface ReplaceAppliedMigrationHashArgs {
 interface RunMigrationFileArgs {
   db: DbConnection;
   migrationPath: string;
+  /**
+   * Run only the statements that mention this table. Replay tests seed one
+   * table, so a combined migration has to be narrowed to the part under test.
+   */
+  onlyStatementsFor?: string;
 }
 
 interface SeedPre0017TerminalSessionMigrationArgs {
@@ -346,6 +351,7 @@ function dropRewindAddedTables(db: DbConnection): void {
   db.$client.prepare("DROP TABLE IF EXISTS plugin_catalog").run();
   db.$client.prepare("DROP TABLE IF EXISTS marketplaces").run();
   dropMarketplaceCatalogSchema(db);
+  restoreThreadSearchSegmentThreadIndex(db);
   db.$client.prepare("DROP TABLE IF EXISTS plugins").run();
   db.$client.prepare("DROP TABLE IF EXISTS plugin_kv").run();
   db.$client.prepare("DROP TABLE IF EXISTS plugin_settings").run();
@@ -475,6 +481,10 @@ const sideChatPluginOnlyMigrationPath = resolve(
   "drizzle",
   "0084_side_chat_plugin_only.sql",
 );
+// Upstream 0091/0094/0095 landed in BBamir as one merge migration, so the
+// replay tests below pick out the statements that touch the table they seed.
+const MERGE_MIGRATION_FILE_NAME = "0099_upstream_merge_2026_08_14.sql";
+
 const experimentKeyValueMigrationPath = resolve(
   __dirname,
   "..",
@@ -485,19 +495,19 @@ const retireRequestedAtMigrationPath = resolve(
   __dirname,
   "..",
   "drizzle",
-  "0091_daffy_dark_phoenix.sql",
+  MERGE_MIGRATION_FILE_NAME,
 );
 const pluginArtifactCheckoutRootMigrationPath = resolve(
   __dirname,
   "..",
   "drizzle",
-  "0094_mighty_polaris.sql",
+  MERGE_MIGRATION_FILE_NAME,
 );
 const namedMarketplaceCatalogMigrationPath = resolve(
   __dirname,
   "..",
   "drizzle",
-  "0095_normal_elektra.sql",
+  MERGE_MIGRATION_FILE_NAME,
 );
 const sidebarOrderingMigrationPath = resolve(
   __dirname,
@@ -673,6 +683,21 @@ function resetMigrationsAfterThreadSearch(db: DbConnection): void {
   db.$client
     .prepare<[number]>("DELETE FROM __drizzle_migrations WHERE created_at > ?")
     .run(threadSearchRowidFtsMigrationWhen);
+}
+
+/**
+ * The upstream merge migration swaps the `thread_search_segments` thread index
+ * for a (thread_id, source_seq) one. Rewind scenarios that clear its journal
+ * row must put the old index back, or migrate() replays the CREATE INDEX
+ * against a DB that already has the new one.
+ */
+function restoreThreadSearchSegmentThreadIndex(db: DbConnection): void {
+  db.$client.exec(
+    "DROP INDEX IF EXISTS `thread_search_segments_thread_source_seq_idx`",
+  );
+  db.$client.exec(
+    "CREATE INDEX IF NOT EXISTS `thread_search_segments_thread_idx` ON `thread_search_segments` (`thread_id`)",
+  );
 }
 
 /**
@@ -971,10 +996,14 @@ function replaceAppliedMigrationHash(
 function runMigrationFile(args: RunMigrationFileArgs): void {
   const migrationSql = readFileSync(args.migrationPath, "utf-8");
 
+  const table = args.onlyStatementsFor;
   const statements = migrationSql
     .split("--> statement-breakpoint")
     .map((statement) => statement.trim())
-    .filter((statement) => statement.length > 0);
+    .filter((statement) => statement.length > 0)
+    .filter(
+      (statement) => table === undefined || statement.includes(`\`${table}\``),
+    );
 
   for (const statement of statements) {
     args.db.$client.exec(statement);
@@ -1468,6 +1497,7 @@ describe("migrate", () => {
       runMigrationFile({
         db,
         migrationPath: pluginArtifactCheckoutRootMigrationPath,
+        onlyStatementsFor: "plugin_artifacts",
       });
 
       expect(
@@ -1507,6 +1537,7 @@ describe("migrate", () => {
       runMigrationFile({
         db,
         migrationPath: retireRequestedAtMigrationPath,
+        onlyStatementsFor: "environments",
       });
 
       expect(
@@ -1582,6 +1613,7 @@ describe("migrate", () => {
     dropEnvironmentRetireRequestedAtColumn(db);
     dropPluginArtifactGitCheckoutRootColumn(db);
     dropMarketplaceCatalogSchema(db);
+    restoreThreadSearchSegmentThreadIndex(db);
     // Delete by the journal timestamp, not a hash substring: migration hashes
     // are hex and can contain "0085" by coincidence.
     db.$client
@@ -1877,6 +1909,7 @@ describe("migrate", () => {
       dropEnvironmentRetireRequestedAtColumn(db);
       dropPluginArtifactGitCheckoutRootColumn(db);
       dropMarketplaceCatalogSchema(db);
+      restoreThreadSearchSegmentThreadIndex(db);
 
       restoreLegacyThreadOriginColumn(db);
       migrate(db);
@@ -2280,6 +2313,7 @@ describe("migrate", () => {
       dropEnvironmentRetireRequestedAtColumn(db);
       dropPluginArtifactGitCheckoutRootColumn(db);
       dropMarketplaceCatalogSchema(db);
+      restoreThreadSearchSegmentThreadIndex(db);
 
       restoreLegacyThreadOriginColumn(db);
       expect(
@@ -2380,6 +2414,7 @@ describe("migrate", () => {
       dropEnvironmentRetireRequestedAtColumn(db);
       dropPluginArtifactGitCheckoutRootColumn(db);
       dropMarketplaceCatalogSchema(db);
+      restoreThreadSearchSegmentThreadIndex(db);
 
       restoreLegacyThreadOriginColumn(db);
       expect(() => migrate(db)).not.toThrow();
@@ -4186,6 +4221,13 @@ describe("migrate", () => {
       // Rewinding past 0092 also rewinds past upstream's 0095 experiments
       // rebuild, so the wide table has to come back before migrating forward.
       restoreWideExperimentsTable(db);
+      // It rewinds past the upstream merge migration as well, so everything
+      // that migration creates has to go before migrating forward.
+      dropMarketplaceCatalogSchema(db);
+      restoreThreadSearchSegmentThreadIndex(db);
+      dropEnvironmentRetireRequestedAtColumn(db);
+      dropPluginArtifactGitCheckoutRootColumn(db);
+      restoreLegacyThreadOriginColumn(db);
 
       migrate(db);
 
@@ -4763,6 +4805,7 @@ describe("migrate", () => {
       runMigrationFile({
         db,
         migrationPath: namedMarketplaceCatalogMigrationPath,
+        onlyStatementsFor: "plugins",
       });
 
       expect(

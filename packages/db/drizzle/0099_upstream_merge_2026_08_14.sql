@@ -26,14 +26,18 @@ CREATE TABLE `plugin_marketplaces` (
 	`updated_at` integer NOT NULL
 );
 --> statement-breakpoint
-DROP INDEX `thread_search_segments_thread_idx`;--> statement-breakpoint
+DROP INDEX IF EXISTS `thread_search_segments_thread_idx`;--> statement-breakpoint
 CREATE INDEX `thread_search_segments_thread_source_seq_idx` ON `thread_search_segments` (`thread_id`,`source_seq`);--> statement-breakpoint
 ALTER TABLE `environments` ADD `retire_requested_at` integer;
 --> statement-breakpoint
 UPDATE `environments`
 SET `retire_requested_at` = `updated_at`
 WHERE `status` = 'retiring';--> statement-breakpoint
-ALTER TABLE `plugins` ADD `catalog_marketplace_name` text;--> statement-breakpoint
+ALTER TABLE `plugins` ADD `catalog_marketplace_name` text;
+--> statement-breakpoint
+UPDATE `plugins`
+SET `catalog_marketplace_name` = 'bb-official'
+WHERE `provenance` = 'catalog';--> statement-breakpoint
 ALTER TABLE `plugins` ADD `source_git_range` text;--> statement-breakpoint
 ALTER TABLE `plugins` ADD `source_git_tag_prefix` text;--> statement-breakpoint
 ALTER TABLE `plugins` ADD `source_git_resolved_tag` text;--> statement-breakpoint
