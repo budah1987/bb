@@ -60,10 +60,10 @@ describe("GitHub official plugin frontend bundle", () => {
         return name !== "dist" && name !== "node_modules";
       },
     });
-    // The temp copy has no node_modules; link @bb/shared-ui (the plugin's UI
-    // components — its own deps resolve through the workspace realpath) so
-    // buildPluginApp can bundle it. Shimmed packages — react, radix portal
-    // families, sonner, vaul, pierre — never resolve from disk.
+    // The temp copy has no node_modules; link the plugin's non-shimmed runtime
+    // dependencies so buildPluginApp can bundle them. @bb/shared-ui's own deps
+    // resolve through its workspace realpath. Shimmed packages — react, radix
+    // portal families, sonner, vaul, pierre — never resolve from disk.
     const sharedUiLink = join(pluginDir, "node_modules", "@bb", "shared-ui");
     await mkdir(dirname(sharedUiLink), { recursive: true });
     await symlink(
@@ -71,6 +71,8 @@ describe("GitHub official plugin frontend bundle", () => {
       sharedUiLink,
       "dir",
     );
+    const zodLink = join(pluginDir, "node_modules", "zod");
+    await symlink(join(GITHUB_DIR, "node_modules", "zod"), zodLink, "dir");
     const { jsPath } = await buildPluginApp(pluginDir, "0.9.0-test", await testToolchain());
 
     const registered: Record<string, SlotRegistration[]> = {
