@@ -72,6 +72,7 @@ function renderPanel(
 ) {
   const onCreate = vi.fn();
   const onAskAgentToFix = vi.fn();
+  const onAskAgentToResolve = vi.fn();
   const onArchive = vi.fn();
   render(
     <PullRequestPanel
@@ -87,6 +88,7 @@ function renderPanel(
       isLoading={false}
       onArchive={onArchive}
       onAskAgentToFix={onAskAgentToFix}
+      onAskAgentToResolve={onAskAgentToResolve}
       onCommitChanges={noop}
       onConvertToDraft={noop}
       onCreate={onCreate}
@@ -106,7 +108,7 @@ function renderPanel(
       {...overrides}
     />,
   );
-  return { onArchive, onAskAgentToFix, onCreate };
+  return { onArchive, onAskAgentToFix, onAskAgentToResolve, onCreate };
 }
 
 function pullRequest(
@@ -248,6 +250,38 @@ describe("PullRequestPanel", () => {
     expect(
       screen.getByRole("button", { name: "Checks failing" }),
     ).toHaveProperty("disabled", true);
+  });
+
+  it("lets the agent resolve a merge conflict instead of leaving merge disabled", () => {
+    const conflictingPullRequest = pullRequest({
+      attention: "conflicts",
+      checks: {
+        state: "passing",
+        totalCount: 1,
+        passedCount: 1,
+        failedCount: 0,
+        pendingCount: 0,
+        items: [],
+      },
+      mergeability: {
+        state: "conflicts",
+        mergeStateStatus: "DIRTY",
+        mergeable: "CONFLICTING",
+      },
+    });
+    const { onAskAgentToResolve } = renderPanel({
+      outcome: "available",
+      pullRequest: conflictingPullRequest,
+    });
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Ask agent to resolve" }),
+    );
+
+    expect(onAskAgentToResolve).toHaveBeenCalledWith(conflictingPullRequest);
+    expect(
+      screen.getByText("This pull request has merge conflicts"),
+    ).toBeTruthy();
   });
 
   it("shows a merged summary without review or mergeability signals", () => {

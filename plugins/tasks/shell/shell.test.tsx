@@ -705,6 +705,48 @@ describe("tasks app shell", () => {
     expect(slot.getByRole("button", { name: "Manage" })).toBeDefined();
   });
 
+  it("renames and deletes a project from its sidebar context menu", async () => {
+    const updateProject = vi.fn(() => ({ project }));
+    const deleteProject = vi.fn(() => ({ ok: true, deleted: true }));
+    const slot = renderSlot(
+      app.navPanels[0]!,
+      { subPath: "all" },
+      {
+        rpc: seededRpc({ updateProject, deleteProject }),
+      },
+    );
+    const projectName = await slot.findByText("Tasks Plugin");
+
+    fireEvent.contextMenu(projectName);
+    fireEvent.click(await slot.findByRole("menuitem", { name: "Rename" }));
+    const nameInput = await slot.findByRole("textbox", {
+      name: "Project name",
+    });
+    fireEvent.change(nameInput, { target: { value: "Renamed tasks" } });
+    fireEvent.click(slot.getByRole("button", { name: "Rename" }));
+    await waitFor(() =>
+      expect(updateProject).toHaveBeenCalledWith({
+        projectId: PROJECT_ID,
+        name: "Renamed tasks",
+      }),
+    );
+
+    fireEvent.contextMenu(projectName);
+    fireEvent.click(
+      await slot.findByRole("menuitem", { name: "Delete project" }),
+    );
+    await slot.findByText(
+      "This permanently deletes the project and all of its tasks. This cannot be undone.",
+    );
+    fireEvent.click(slot.getByRole("button", { name: "Delete project" }));
+    await waitFor(() =>
+      expect(deleteProject).toHaveBeenCalledWith({
+        projectId: PROJECT_ID,
+        force: true,
+      }),
+    );
+  });
+
   it("opens quick-create on bare 'c' but not from editable targets or dialogs", async () => {
     const slot = renderSlot(app.navPanels[0]!, { subPath: "all" }, {
       rpc: seededRpc(),

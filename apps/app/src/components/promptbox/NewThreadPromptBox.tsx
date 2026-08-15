@@ -384,6 +384,7 @@ export const NewThreadPromptBoxUI = memo(function NewThreadPromptBoxUI({
       ref={composerShellRef}
       data-app-composer=""
       data-app-composer-role="primary"
+      data-app-composer-scope={JSON.stringify(composerView.scope)}
       data-promptbox-shell=""
       data-mobile-quick-composer={mobileQuickComposer ? "" : undefined}
       className="w-full"
