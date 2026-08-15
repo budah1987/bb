@@ -60,6 +60,7 @@ Discovery:
     --host <id-or-name>                      Alias for --machine
   bb project github-pull-requests <owner/repo>
                                               List open pull requests
+    --github-account <login>                  Authenticated account to use
     --machine <id-or-name>                   Machine whose GitHub account to use
     --host <id-or-name>                      Alias for --machine
   bb project branches <id> --host <id>   List branches for a machine source
@@ -82,8 +83,9 @@ Discovery:
   accounts can access each one. Human output identifies the repository owner,
   every account with access, and the active account; --json returns the complete
   typed catalog.
-  Pull-request discovery uses the active account and returns the PR head
-  repository and branch so agents can reproduce the selected starting point.
+  Pull-request discovery requires --github-account, scopes the operation to
+  that authenticated account, and returns the PR head repository and branch so
+  agents can reproduce the selected starting point.
   The project GitHub account is a repository default inherited by new
   workspaces; an explicit workspace account still takes precedence.
 

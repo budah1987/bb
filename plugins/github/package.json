@@ -27,7 +27,7 @@
   },
   "bb": {
     "name": "GitHub",
-    "description": "Browse GitHub issues and pull requests in BB, then send them to agents.",
+    "description": "Browse GitHub issues and pull requests, then open repo-scoped BB conversations.",
     "branding": {
       "icon": "Github"
     },

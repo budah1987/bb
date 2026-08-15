@@ -299,6 +299,7 @@ export function createSystemArea(args: CreateSdkAreaArgs): SystemArea {
           {
             query: {
               repository: input.repository,
+              githubAccountLogin: input.githubAccountLogin,
               hostId: input.hostId,
             },
           },

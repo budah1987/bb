@@ -1,8 +1,8 @@
 // bb-plugin-github — GitHub issues & pull requests inside BB.
 //
 // Auth rides on the GitHub CLI: if `gh auth status` passes, the plugin
-// works. Repos are discovered from BB project sources (each local checkout's
-// `origin` remote) plus an optional extraRepos setting. A background service
+// works. Repos are discovered from BB projects whose stored remote points at
+// GitHub. A background service
 // syncs open + recently-closed issues/PRs into the plugin's SQLite cache;
 // the frontend panel and mention providers read that cache, while
 // mutations (comment, create, close/reopen, assign, label) and detail views go
@@ -31,7 +31,13 @@ const nonBlankStringSchema = z
   .string()
   .refine((value) => value.trim().length > 0, "must not be blank");
 const repoInfoSchema = z
-  .object({ repo: repoNameSchema, projectId: z.string().nullable() })
+  .object({
+    repo: repoNameSchema,
+    projectId: z.string().min(1),
+    githubAccountLogin: z.string().min(1).nullable(),
+    available: z.boolean(),
+    unavailableReason: z.string().nullable(),
+  })
   .strict();
 const itemSchema = z
   .object({
@@ -124,18 +130,17 @@ const pullActivitySchema = z
     ),
   })
   .strict();
-const pullFilesSchema = z
-  .array(
-    z
-      .object({
-        path: z.string(),
-        status: z.string(),
-        additions: z.number().nonnegative(),
-        deletions: z.number().nonnegative(),
-        patch: z.string().nullable(),
-      })
-      .strict(),
-  );
+const pullFilesSchema = z.array(
+  z
+    .object({
+      path: z.string(),
+      status: z.string(),
+      additions: z.number().nonnegative(),
+      deletions: z.number().nonnegative(),
+      patch: z.string().nullable(),
+    })
+    .strict(),
+);
 
 export const githubRpcContract = defineRpcContract({
   status: {
@@ -254,11 +259,15 @@ export const githubRpcContract = defineRpcContract({
   },
   startWork: {
     input: itemInputSchema,
-    output: z.object({ threadId: z.string().min(1) }).strict(),
+    output: z
+      .object({ threadId: z.string().min(1), created: z.boolean() })
+      .strict(),
   },
   startReview: {
     input: itemInputSchema,
-    output: z.object({ threadId: z.string().min(1) }).strict(),
+    output: z
+      .object({ threadId: z.string().min(1), created: z.boolean() })
+      .strict(),
   },
   listLinks: {
     input: z.null(),
@@ -270,7 +279,10 @@ export const githubRpcContract = defineRpcContract({
 
 interface RepoInfo {
   repo: string; // "owner/name"
-  projectId: string | null;
+  projectId: string;
+  /** Null deliberately means this project follows the active gh CLI viewer. */
+  githubAccountLogin: string | null;
+  defaultSourceHostId: string | null;
 }
 
 interface CachedItem {
@@ -312,10 +324,11 @@ interface ThreadLink {
 interface BbProjectSummary {
   id: string;
   gitRemoteUrl?: string | null;
-}
-
-interface SpawnedThreadSummary {
-  id: string;
+  githubAccountLogin?: string | null;
+  sources?: readonly {
+    hostId: string;
+    isDefault: boolean;
+  }[];
 }
 
 function needsConfiguration(message: string): Error {
@@ -339,8 +352,28 @@ export function githubReposFromProjects(
   const byRepo = new Map<string, RepoInfo>();
   for (const project of projects) {
     const repo = parseGithubRemote(project.gitRemoteUrl ?? "");
-    if (repo !== null && !byRepo.has(repo)) {
-      byRepo.set(repo, { repo, projectId: project.id });
+    const githubAccountLogin =
+      project.githubAccountLogin?.trim().toLowerCase() || null;
+    const key = `${githubAccountLogin ?? ""}:${repo ?? ""}`;
+    if (repo !== null) {
+      const sources = project.sources ?? [];
+      const defaultSource = sources.find((source) => source.isDefault) ?? null;
+      const candidate = {
+        repo,
+        projectId: project.id,
+        githubAccountLogin,
+        defaultSourceHostId: defaultSource?.hostId ?? null,
+      };
+      const current = byRepo.get(key);
+      // One GitHub repository can be attached to multiple BB projects. The
+      // smallest stable project id owns this repo+account association so
+      // workspace placement never depends on projects.list response order.
+      if (
+        current === undefined ||
+        candidate.projectId.localeCompare(current.projectId) < 0
+      ) {
+        byRepo.set(key, candidate);
+      }
     }
   }
   return [...byRepo.values()];
@@ -423,10 +456,17 @@ export function shouldRefreshGithubCache(
 ): boolean {
   if (lastSyncedAt === null) return true;
   const lastSyncedMs = Date.parse(lastSyncedAt);
-  return !Number.isFinite(lastSyncedMs) || nowMs - lastSyncedMs >= DEMAND_SYNC_STALE_MS;
+  return (
+    !Number.isFinite(lastSyncedMs) ||
+    nowMs - lastSyncedMs >= DEMAND_SYNC_STALE_MS
+  );
 }
 
-function toItems(raw: string, repo: string, kind: "issue" | "pr"): CachedItem[] {
+function toItems(
+  raw: string,
+  repo: string,
+  kind: "issue" | "pr",
+): CachedItem[] {
   const entries = JSON.parse(raw) as GhListEntry[];
   return entries
     .filter(
@@ -441,7 +481,9 @@ function toItems(raw: string, repo: string, kind: "issue" | "pr"): CachedItem[] 
       state: String(entry.state ?? "OPEN"),
       author: String(entry.author?.login ?? ""),
       labels: (entry.labels ?? []).map((label) => String(label?.name ?? "")),
-      assignees: (entry.assignees ?? []).map((user) => String(user?.login ?? "")),
+      assignees: (entry.assignees ?? []).map((user) =>
+        String(user?.login ?? ""),
+      ),
       url: String(entry.url ?? ""),
       body: typeof entry.body === "string" ? entry.body : "",
       updatedAt: String(entry.updatedAt ?? ""),
@@ -454,7 +496,8 @@ export async function fetchRepoItems(
   gh: GhRunner,
   repo: string,
 ): Promise<CachedItem[]> {
-  const fields = "number,title,state,author,labels,assignees,url,body,updatedAt";
+  const fields =
+    "number,title,state,author,labels,assignees,url,body,updatedAt";
   // A repo with GitHub Issues disabled must not abort the whole sync —
   // PRs still exist and should be cached.
   const ghIssuesTolerant = (args: string[]) =>
@@ -464,20 +507,52 @@ export async function fetchRepoItems(
     });
   const [openIssues, closedIssues, openPrs, closedPrs] = await Promise.all([
     ghIssuesTolerant([
-      "issue", "list", "-R", repo, "--state", "open",
-      "--limit", String(ISSUE_PAGE), "--json", fields,
+      "issue",
+      "list",
+      "-R",
+      repo,
+      "--state",
+      "open",
+      "--limit",
+      String(ISSUE_PAGE),
+      "--json",
+      fields,
     ]),
     ghIssuesTolerant([
-      "issue", "list", "-R", repo, "--state", "closed",
-      "--limit", String(CLOSED_ISSUE_PAGE), "--json", fields,
+      "issue",
+      "list",
+      "-R",
+      repo,
+      "--state",
+      "closed",
+      "--limit",
+      String(CLOSED_ISSUE_PAGE),
+      "--json",
+      fields,
     ]),
     gh([
-      "pr", "list", "-R", repo, "--state", "open",
-      "--limit", String(PR_PAGE), "--json", fields,
+      "pr",
+      "list",
+      "-R",
+      repo,
+      "--state",
+      "open",
+      "--limit",
+      String(PR_PAGE),
+      "--json",
+      fields,
     ]),
     gh([
-      "pr", "list", "-R", repo, "--state", "closed",
-      "--limit", String(CLOSED_PR_PAGE), "--json", fields,
+      "pr",
+      "list",
+      "-R",
+      repo,
+      "--state",
+      "closed",
+      "--limit",
+      String(CLOSED_PR_PAGE),
+      "--json",
+      fields,
     ]),
   ]);
   return [
@@ -489,22 +564,6 @@ export async function fetchRepoItems(
 }
 
 export default async function plugin(bb: BbPluginApi) {
-  const settings = bb.settings.define({
-    extraRepos: {
-      type: "string",
-      label: "Extra repositories",
-      description:
-        'Comma-separated "owner/repo" list to track in addition to repos discovered from BB projects.',
-      default: "",
-    },
-    defaultProject: {
-      type: "project",
-      label: "Default BB project",
-      description:
-        "Where agent threads spawn for repos that are not attached to a BB project.",
-    },
-  });
-
   // ------------------------------------------------------------------
   // gh CLI plumbing. The server process may have a trimmed PATH, so probe
   // common install locations once and remember the winner.
@@ -549,33 +608,99 @@ export default async function plugin(bb: BbPluginApi) {
   let repoCache: { repos: RepoInfo[]; fetchedAt: number } | null = null;
 
   async function discoverRepos(force = false): Promise<RepoInfo[]> {
-    if (!force && repoCache !== null && Date.now() - repoCache.fetchedAt < 60_000) {
+    if (
+      !force &&
+      repoCache !== null &&
+      Date.now() - repoCache.fetchedAt < 60_000
+    ) {
       return repoCache.repos;
     }
-    const byRepo = new Map<string, RepoInfo>();
+    let repos: RepoInfo[] = [];
     try {
-      const projects = (await bb.sdk.projects.list()) as unknown as BbProjectSummary[];
-      for (const info of githubReposFromProjects(projects)) {
-        byRepo.set(info.repo, info);
-      }
+      const projects = await bb.sdk.projects.list();
+      repos = githubReposFromProjects(projects);
     } catch (error) {
       bb.log.warn(
         `project discovery failed: ${error instanceof Error ? error.message : String(error)}`,
       );
     }
-    const { extraRepos } = await settings.get();
-    for (const raw of extraRepos.split(/[\s,]+/)) {
-      if (isRepoName(raw) && !byRepo.has(raw)) {
-        byRepo.set(raw, { repo: raw, projectId: null });
-      }
-    }
-    const repos = [...byRepo.values()];
     repoCache = { repos, fetchedAt: Date.now() };
     return repos;
   }
 
+  function reposForAccount(
+    repos: readonly RepoInfo[],
+    accountLogin: string,
+  ): RepoInfo[] {
+    const byRepo = new Map<string, RepoInfo>();
+    for (const repo of repos
+      .filter(
+        (entry) =>
+          entry.githubAccountLogin === null ||
+          entry.githubAccountLogin === accountLogin,
+      )
+      .sort((left, right) => left.projectId.localeCompare(right.projectId))) {
+      const current = byRepo.get(repo.repo);
+      if (
+        current === undefined ||
+        (current.githubAccountLogin === null &&
+          repo.githubAccountLogin === accountLogin)
+      ) {
+        byRepo.set(repo.repo, repo);
+      }
+    }
+    return [...byRepo.values()];
+  }
+
+  function publicRepoInfo(repo: RepoInfo, accountLogin: string | null) {
+    const available =
+      accountLogin !== null &&
+      (repo.githubAccountLogin === null ||
+        repo.githubAccountLogin === accountLogin);
+    return {
+      repo: repo.repo,
+      projectId: repo.projectId,
+      githubAccountLogin: repo.githubAccountLogin,
+      available,
+      unavailableReason: available
+        ? null
+        : accountLogin === null
+          ? "The active GitHub CLI account could not be resolved."
+          : `This project uses ${repo.githubAccountLogin}; gh is authenticated as ${accountLogin}.`,
+    };
+  }
+
+  function publicRepos(
+    repos: readonly RepoInfo[],
+    accountLogin: string | null,
+  ) {
+    const byRepo = new Map<string, RepoInfo>();
+    for (const repo of [...repos].sort((left, right) =>
+      left.projectId.localeCompare(right.projectId),
+    )) {
+      const current = byRepo.get(repo.repo);
+      const repoAvailable =
+        accountLogin !== null &&
+        (repo.githubAccountLogin === null ||
+          repo.githubAccountLogin === accountLogin);
+      const currentAvailable =
+        current !== undefined &&
+        accountLogin !== null &&
+        (current.githubAccountLogin === null ||
+          current.githubAccountLogin === accountLogin);
+      if (current === undefined || (repoAvailable && !currentAvailable)) {
+        byRepo.set(repo.repo, repo);
+      }
+    }
+    return [...byRepo.values()].map((repo) =>
+      publicRepoInfo(repo, accountLogin),
+    );
+  }
+
   // ------------------------------------------------------------------
-  // SQLite cache of open issues + PRs across tracked repos.
+  // SQLite cache of open issues + PRs across tracked repos. Repo discovery is
+  // intentionally GitHub.com-only, so the gh viewer login is the complete
+  // account partition here; this plugin has no separate GitHub host dimension.
   // ------------------------------------------------------------------
   const db = bb.storage.database();
   bb.storage.migrate(db, [
@@ -593,6 +718,31 @@ export default async function plugin(bb: BbPluginApi) {
        PRIMARY KEY (repo, kind, number)
      )`,
     `ALTER TABLE items ADD COLUMN assignees TEXT NOT NULL DEFAULT '[]'`,
+    `ALTER TABLE items RENAME TO items_without_account;
+     CREATE TABLE items (
+       account_login TEXT NOT NULL,
+       repo TEXT NOT NULL,
+       number INTEGER NOT NULL,
+       kind TEXT NOT NULL,
+       title TEXT NOT NULL,
+       state TEXT NOT NULL,
+       author TEXT NOT NULL,
+       labels TEXT NOT NULL,
+       assignees TEXT NOT NULL,
+       url TEXT NOT NULL,
+       body TEXT NOT NULL,
+       updated_at TEXT NOT NULL,
+       PRIMARY KEY (account_login, repo, kind, number)
+     );
+     INSERT INTO items (
+       account_login, repo, number, kind, title, state, author, labels,
+       assignees, url, body, updated_at
+     )
+     SELECT
+       '', repo, number, kind, title, state, author, labels,
+       assignees, url, body, updated_at
+     FROM items_without_account;
+     DROP TABLE items_without_account`,
   ]);
 
   function parseStringArray(raw: unknown): string[] {
@@ -621,17 +771,20 @@ export default async function plugin(bb: BbPluginApi) {
     };
   }
 
-  function listCachedItems(options: {
-    kind?: "issue" | "pr";
-    repo?: string;
-    query?: string;
-    /** "open" → OPEN only; "closed" → everything else (CLOSED, MERGED). */
-    state?: "open" | "closed";
-    /** Only items whose assignees include this login. */
-    assignee?: string;
-  }): CachedItem[] {
-    const clauses: string[] = [];
-    const params: unknown[] = [];
+  function listCachedItems(
+    accountLogin: string,
+    options: {
+      kind?: "issue" | "pr";
+      repo?: string;
+      query?: string;
+      /** "open" → OPEN only; "closed" → everything else (CLOSED, MERGED). */
+      state?: "open" | "closed";
+      /** Only items whose assignees include this login. */
+      assignee?: string;
+    },
+  ): CachedItem[] {
+    const clauses = ["account_login = ?"];
+    const params: unknown[] = [accountLogin];
     if (options.kind !== undefined) {
       clauses.push("kind = ?");
       params.push(options.kind);
@@ -651,7 +804,9 @@ export default async function plugin(bb: BbPluginApi) {
     }
     const query = options.query?.trim() ?? "";
     if (query.length > 0) {
-      clauses.push("(title LIKE ? OR CAST(number AS TEXT) LIKE ? OR repo LIKE ?)");
+      clauses.push(
+        "(title LIKE ? OR CAST(number AS TEXT) LIKE ? OR repo LIKE ?)",
+      );
       const like = `%${query.replace(/^#/, "")}%`;
       params.push(like, like, like);
     }
@@ -663,28 +818,49 @@ export default async function plugin(bb: BbPluginApi) {
   }
 
   function getCachedItem(
+    accountLogin: string,
     kind: "issue" | "pr",
     repo: string,
     number: number,
   ): CachedItem | null {
     const row = db
-      .prepare("SELECT * FROM items WHERE repo = ? AND kind = ? AND number = ?")
-      .get(repo, kind, number) as Record<string, unknown> | undefined;
+      .prepare(
+        "SELECT * FROM items WHERE account_login = ? AND repo = ? AND kind = ? AND number = ?",
+      )
+      .get(accountLogin, repo, kind, number) as
+      | Record<string, unknown>
+      | undefined;
     return row === undefined ? null : rowToItem(row);
   }
 
-  function replaceRepoRows(repo: string, items: CachedItem[]): void {
+  function replaceRepoRows(
+    accountLogin: string,
+    repo: string,
+    items: CachedItem[],
+  ): void {
     const insert = db.prepare(
-      `INSERT INTO items (repo, number, kind, title, state, author, labels, assignees, url, body, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO items (account_login, repo, number, kind, title, state, author, labels, assignees, url, body, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     );
     db.transaction(() => {
-      db.prepare("DELETE FROM items WHERE repo = ?").run(repo);
+      db.prepare("DELETE FROM items WHERE account_login = ? AND repo = ?").run(
+        accountLogin,
+        repo,
+      );
       for (const item of items) {
         insert.run(
-          item.repo, item.number, item.kind, item.title, item.state,
-          item.author, JSON.stringify(item.labels), JSON.stringify(item.assignees),
-          item.url, item.body, item.updatedAt,
+          accountLogin,
+          item.repo,
+          item.number,
+          item.kind,
+          item.title,
+          item.state,
+          item.author,
+          JSON.stringify(item.labels),
+          JSON.stringify(item.assignees),
+          item.url,
+          item.body,
+          item.updatedAt,
         );
       }
     })();
@@ -693,38 +869,48 @@ export default async function plugin(bb: BbPluginApi) {
   /** Patch a cached row in place after a mutation so the UI updates without
       waiting for the next full sync. */
   function patchCachedItem(
+    accountLogin: string,
     kind: "issue" | "pr",
     repo: string,
     number: number,
     patch: { state?: string; assignees?: string[]; labels?: string[] },
   ): void {
     if (patch.state !== undefined) {
-      db.prepare("UPDATE items SET state = ? WHERE repo = ? AND kind = ? AND number = ?")
-        .run(patch.state, repo, kind, number);
+      db.prepare(
+        "UPDATE items SET state = ? WHERE account_login = ? AND repo = ? AND kind = ? AND number = ?",
+      ).run(patch.state, accountLogin, repo, kind, number);
     }
     if (patch.assignees !== undefined) {
-      db.prepare("UPDATE items SET assignees = ? WHERE repo = ? AND kind = ? AND number = ?")
-        .run(JSON.stringify(patch.assignees), repo, kind, number);
+      db.prepare(
+        "UPDATE items SET assignees = ? WHERE account_login = ? AND repo = ? AND kind = ? AND number = ?",
+      ).run(JSON.stringify(patch.assignees), accountLogin, repo, kind, number);
     }
     if (patch.labels !== undefined) {
-      db.prepare("UPDATE items SET labels = ? WHERE repo = ? AND kind = ? AND number = ?")
-        .run(JSON.stringify(patch.labels), repo, kind, number);
+      db.prepare(
+        "UPDATE items SET labels = ? WHERE account_login = ? AND repo = ? AND kind = ? AND number = ?",
+      ).run(JSON.stringify(patch.labels), accountLogin, repo, kind, number);
     }
     bb.realtime.publish("data-changed", {});
   }
 
-  async function syncAll(force = false): Promise<{ repos: number; items: number }> {
+  async function syncAll(
+    accountLogin: string,
+    force = false,
+  ): Promise<{ repos: number; items: number }> {
     await checkAuth();
-    await ensureCacheAccount();
-    const repos = await discoverRepos(force);
+    const repos = reposForAccount(await discoverRepos(force), accountLogin);
     const before = JSON.stringify(
-      db.prepare("SELECT repo, kind, number, updated_at FROM items ORDER BY repo, kind, number").all(),
+      db
+        .prepare(
+          "SELECT repo, kind, number, updated_at FROM items WHERE account_login = ? ORDER BY repo, kind, number",
+        )
+        .all(accountLogin),
     );
     let total = 0;
     for (const { repo } of repos) {
       try {
         const items = await fetchRepoItems(gh, repo);
-        replaceRepoRows(repo, items);
+        replaceRepoRows(accountLogin, repo, items);
         total += items.length;
       } catch (error) {
         bb.log.warn(
@@ -733,9 +919,13 @@ export default async function plugin(bb: BbPluginApi) {
       }
     }
     const after = JSON.stringify(
-      db.prepare("SELECT repo, kind, number, updated_at FROM items ORDER BY repo, kind, number").all(),
+      db
+        .prepare(
+          "SELECT repo, kind, number, updated_at FROM items WHERE account_login = ? ORDER BY repo, kind, number",
+        )
+        .all(accountLogin),
     );
-    await bb.storage.kv.set("sync-cursor", {
+    await bb.storage.kv.set(syncCursorKey(accountLogin), {
       lastSyncedAt: new Date().toISOString(),
       repos: repos.length,
       items: total,
@@ -748,14 +938,25 @@ export default async function plugin(bb: BbPluginApi) {
     return { repos: repos.length, items: total };
   }
 
-  let syncInFlight: Promise<{ repos: number; items: number }> | null = null;
-  let nextDemandSyncAtMs = 0;
-  function requestSync(force = false): Promise<{ repos: number; items: number }> {
-    if (syncInFlight !== null) return syncInFlight;
-    const request = syncAll(force).finally(() => {
-      if (syncInFlight === request) syncInFlight = null;
+  const syncInFlightByLogin = new Map<
+    string,
+    Promise<{ repos: number; items: number }>
+  >();
+  const nextDemandSyncAtMsByLogin = new Map<string, number>();
+  async function requestSync(
+    force = false,
+  ): Promise<{ repos: number; items: number }> {
+    // `gh auth switch` can happen while the plugin process stays alive. Never
+    // choose a cache partition for a live sync from the TTL viewer cache.
+    const accountLogin = await ensureCacheAccount(true);
+    const existing = syncInFlightByLogin.get(accountLogin);
+    if (existing !== undefined) return existing;
+    const request = syncAll(accountLogin, force).finally(() => {
+      if (syncInFlightByLogin.get(accountLogin) === request) {
+        syncInFlightByLogin.delete(accountLogin);
+      }
     });
-    syncInFlight = request;
+    syncInFlightByLogin.set(accountLogin, request);
     return request;
   }
 
@@ -789,27 +990,199 @@ export default async function plugin(bb: BbPluginApi) {
   // ------------------------------------------------------------------
   // Spawning agent threads on issues / PR reviews.
   // ------------------------------------------------------------------
-  async function resolveProjectId(repo: string): Promise<string> {
-    const repos = await discoverRepos();
-    const info = repos.find((entry) => entry.repo === repo);
-    if (info?.projectId != null) return info.projectId;
-    const { defaultProject } = await settings.get();
-    if (defaultProject) return defaultProject;
-    throw new Error(
-      `No BB project is attached to ${repo}. Create a project whose checkout has ` +
-        "that origin remote, or set the defaultProject plugin setting.",
+  async function resolveRepoProject(
+    repo: string,
+    accountLogin: string,
+  ): Promise<RepoInfo> {
+    const candidates = (await discoverRepos(true))
+      .filter((entry) => entry.repo === repo)
+      .sort((left, right) => left.projectId.localeCompare(right.projectId));
+    if (candidates.length === 0) {
+      throw new Error(
+        `No BB project is attached to ${repo}. Add this repository to BB before starting a conversation.`,
+      );
+    }
+    const info =
+      candidates.find((entry) => entry.githubAccountLogin === accountLogin) ??
+      candidates.find((entry) => entry.githubAccountLogin === null);
+    if (info === undefined) {
+      const configuredAccounts = [
+        ...new Set(
+          candidates
+            .map((entry) => entry.githubAccountLogin)
+            .filter((login): login is string => login !== null),
+        ),
+      ].join(", ");
+      throw new Error(
+        `${repo} is attached to GitHub account ${configuredAccounts}, but gh is authenticated as ${accountLogin}. ` +
+          "Select the matching GitHub account for the BB project or authenticate gh with that account.",
+      );
+    }
+    return info;
+  }
+
+  function requireWorkspaceProject(
+    info: RepoInfo,
+  ): RepoInfo & { defaultSourceHostId: string } {
+    if (info.defaultSourceHostId === null) {
+      throw new Error(
+        `The BB project for ${info.repo} has no default local source. Add a default project source before starting a conversation.`,
+      );
+    }
+    return { ...info, defaultSourceHostId: info.defaultSourceHostId };
+  }
+
+  async function reusableThreadId(
+    kind: "issue" | "pr",
+    repo: string,
+    number: number,
+    projectIds: ReadonlySet<string>,
+  ): Promise<string | null> {
+    const links =
+      (await bb.storage.kv.get<ThreadLink[]>(linkKey(kind, repo, number))) ??
+      [];
+    for (const link of [...links].reverse()) {
+      try {
+        const thread = await bb.sdk.threads.get({ threadId: link.threadId });
+        if (projectIds.has(thread.projectId)) return link.threadId;
+      } catch {
+        // Deleted or inaccessible threads are stale links; try an older one.
+      }
+    }
+    return null;
+  }
+
+  async function reusablePullWorkspaceThreadId(
+    repo: string,
+    number: number,
+    projectId: string,
+    headRefName: string,
+  ): Promise<string | null> {
+    const threads = await bb.sdk.threads.list({
+      projectId,
+      archived: false,
+      limit: 100,
+    });
+    const candidates = threads
+      .filter(
+        (thread) =>
+          thread.environmentId !== null &&
+          thread.environmentBranchName === headRefName,
+      )
+      .sort((left, right) => right.updatedAt - left.updatedAt);
+    for (const thread of candidates) {
+      if (thread.environmentId === null) continue;
+      try {
+        const result = await bb.sdk.environments.pullRequest({
+          environmentId: thread.environmentId,
+        });
+        if (
+          result.outcome === "available" &&
+          result.pullRequest.number === number &&
+          parseGithubPullUrl(result.pullRequest.url)?.repo === repo
+        ) {
+          return thread.id;
+        }
+      } catch {
+        // A stale environment must not prevent checking another matching tab.
+      }
+    }
+    return null;
+  }
+
+  function parseGithubPullUrl(
+    url: string,
+  ): { repo: string; number: number } | null {
+    const match = url.match(
+      /^https:\/\/github\.com\/([\w.-]+\/[\w.-]+)\/pull\/(\d+)(?:[/?#]|$)/,
     );
+    if (match === null) return null;
+    return { repo: match[1], number: Number(match[2]) };
   }
 
   async function spawnOnItem(
     kind: "issue" | "pr",
     repo: string,
     number: number,
-  ): Promise<{ threadId: string }> {
-    await ensureCacheAccount();
-    const item = getCachedItem(kind, repo, number);
-    const title = item?.title ?? `${kind === "pr" ? "PR" : "issue"} #${number}`;
-    const projectId = await resolveProjectId(repo);
+  ): Promise<{ threadId: string; created: boolean }> {
+    const attachedProjects = (await discoverRepos(true))
+      .filter((entry) => entry.repo === repo)
+      .sort((left, right) => left.projectId.localeCompare(right.projectId));
+    if (attachedProjects.length === 0) {
+      throw new Error(
+        `No BB project is attached to ${repo}. Add this repository to BB before starting a conversation.`,
+      );
+    }
+    // Opening an existing local conversation is read-only. Resolve it before
+    // touching gh so a switched/offline account never blocks navigation.
+    const existingThreadId = await reusableThreadId(
+      kind,
+      repo,
+      number,
+      new Set(attachedProjects.map((project) => project.projectId)),
+    );
+    if (existingThreadId !== null) {
+      return { threadId: existingThreadId, created: false };
+    }
+
+    const access = await requireRepoAccess(repo);
+    const accountLogin = access.accountLogin;
+    const project = requireWorkspaceProject(access.project);
+    const item = getCachedItem(accountLogin, kind, repo, number);
+    let title = item?.title ?? `${kind === "pr" ? "PR" : "issue"} #${number}`;
+    let pullBaseRefName: string | null = null;
+    let pullHeadRefName: string | null = null;
+    if (kind === "pr") {
+      const raw = await gh([
+        "pr",
+        "view",
+        String(number),
+        "-R",
+        repo,
+        "--json",
+        "number,title,baseRefName,headRefName",
+      ]);
+      const pull = JSON.parse(raw) as {
+        number?: unknown;
+        title?: unknown;
+        baseRefName?: unknown;
+        headRefName?: unknown;
+      };
+      if (Number(pull.number) !== number) {
+        throw new Error(
+          `GitHub returned an unexpected pull request for ${repo}#${number}.`,
+        );
+      }
+      title = String(pull.title ?? title);
+      pullBaseRefName = String(pull.baseRefName ?? "").trim();
+      pullHeadRefName = String(pull.headRefName ?? "").trim();
+      if (pullBaseRefName.length === 0) {
+        throw new Error(
+          `GitHub did not return a base branch for ${repo}#${number}.`,
+        );
+      }
+      if (pullHeadRefName.length === 0) {
+        throw new Error(
+          `GitHub did not return a head branch for ${repo}#${number}.`,
+        );
+      }
+      const workspaceThreadId = await reusablePullWorkspaceThreadId(
+        repo,
+        number,
+        project.projectId,
+        pullHeadRefName,
+      );
+      if (workspaceThreadId !== null) {
+        await addLink({
+          kind,
+          repo,
+          number,
+          threadId: workspaceThreadId,
+          createdAt: new Date().toISOString(),
+        });
+        return { threadId: workspaceThreadId, created: false };
+      }
+    }
     const ref = `${repo}#${number}`;
     const prompt =
       kind === "issue"
@@ -837,12 +1210,32 @@ export default async function plugin(bb: BbPluginApi) {
               "Summarize your findings with file/line references. Do not push " +
               "changes or post to GitHub unless asked.",
           ].join("\n");
-    const thread = (await bb.sdk.threads.spawn({
-      projectId,
-      environment: { type: "project-default" },
+    const workspace = (() => {
+      if (kind === "pr") {
+        if (pullBaseRefName === null) {
+          throw new Error(`GitHub did not return a base branch for ${ref}.`);
+        }
+        return {
+          type: "managed-worktree" as const,
+          baseBranch: { kind: "named" as const, name: pullBaseRefName },
+          pullRequestNumber: number,
+        };
+      }
+      return {
+        type: "managed-worktree" as const,
+        baseBranch: { kind: "default" as const },
+      };
+    })();
+    const thread = await bb.sdk.threads.spawn({
+      projectId: project.projectId,
+      environment: {
+        type: "host",
+        hostId: project.defaultSourceHostId,
+        workspace,
+      },
       title: `${ref}: ${title}`.slice(0, 120),
       prompt,
-    })) as unknown as SpawnedThreadSummary;
+    });
     await addLink({
       kind,
       repo,
@@ -851,7 +1244,29 @@ export default async function plugin(bb: BbPluginApi) {
       createdAt: new Date().toISOString(),
     });
     bb.log.info(`spawned thread ${thread.id} for ${kind} ${ref}`);
-    return { threadId: thread.id };
+    return { threadId: thread.id, created: true };
+  }
+
+  const conversationInFlight = new Map<
+    string,
+    Promise<{ threadId: string; created: boolean }>
+  >();
+
+  async function openConversation(
+    kind: "issue" | "pr",
+    repo: string,
+    number: number,
+  ): Promise<{ threadId: string; created: boolean }> {
+    const key = `${kind}:${repo}#${number}`;
+    const existing = conversationInFlight.get(key);
+    if (existing !== undefined) return existing;
+    const request = spawnOnItem(kind, repo, number).finally(() => {
+      if (conversationInFlight.get(key) === request) {
+        conversationInFlight.delete(key);
+      }
+    });
+    conversationInFlight.set(key, request);
+    return request;
   }
 
   // ------------------------------------------------------------------
@@ -862,15 +1277,24 @@ export default async function plugin(bb: BbPluginApi) {
   let viewerInFlight: Promise<string> | null = null;
   let verifiedCacheLogin: string | null = null;
 
-  async function getViewer(): Promise<string> {
-    if (viewerCache !== null && Date.now() - viewerCache.fetchedAt < VIEWER_CACHE_TTL_MS) {
+  async function getViewer(force = false): Promise<string> {
+    if (
+      !force &&
+      viewerCache !== null &&
+      Date.now() - viewerCache.fetchedAt < VIEWER_CACHE_TTL_MS
+    ) {
       return viewerCache.login;
     }
     if (viewerInFlight !== null) return viewerInFlight;
     const request = gh(["api", "user"], 15_000)
       .then((raw) => {
-        const login = String((JSON.parse(raw) as { login?: unknown })?.login ?? "");
-        if (login.length === 0) throw new Error("could not resolve the gh viewer login");
+        const login = String(
+          (JSON.parse(raw) as { login?: unknown })?.login ?? "",
+        )
+          .trim()
+          .toLowerCase();
+        if (login.length === 0)
+          throw new Error("could not resolve the gh viewer login");
         viewerCache = { login, fetchedAt: Date.now() };
         return login;
       })
@@ -881,40 +1305,91 @@ export default async function plugin(bb: BbPluginApi) {
     return request;
   }
 
-  async function ensureCacheAccount(): Promise<string> {
-    const login = await getViewer();
+  async function ensureCacheAccount(forceViewer = false): Promise<string> {
+    const login = await getViewer(forceViewer);
     if (verifiedCacheLogin === login) return login;
-    const cachedLogin = await bb.storage.kv.get<string>("cache-account-login");
-    if (cachedLogin !== login) {
-      db.prepare("DELETE FROM items").run();
-      await bb.storage.kv.delete("sync-cursor");
-      await bb.storage.kv.set("cache-account-login", login);
-      bb.realtime.publish("data-changed", { items: 0 });
+    const legacyLoginRaw = await bb.storage.kv.get<string>(
+      "cache-account-login",
+    );
+    const legacyLogin = legacyLoginRaw?.trim().toLowerCase();
+    if (legacyLogin !== undefined) {
+      db.prepare(
+        "UPDATE OR IGNORE items SET account_login = ? WHERE account_login = ''",
+      ).run(legacyLogin);
+      db.prepare("DELETE FROM items WHERE account_login = ''").run();
+      const legacyCursor = await bb.storage.kv.get<{
+        lastSyncedAt: string;
+        repos: number;
+        items: number;
+      }>("sync-cursor");
+      if (
+        legacyCursor !== undefined &&
+        (await bb.storage.kv.get(syncCursorKey(legacyLogin))) === undefined
+      ) {
+        await bb.storage.kv.set(syncCursorKey(legacyLogin), legacyCursor);
+      }
+    } else {
+      db.prepare("DELETE FROM items WHERE account_login = ''").run();
     }
+    await bb.storage.kv.delete("sync-cursor");
+    await bb.storage.kv.set("cache-account-login", login);
     verifiedCacheLogin = login;
     return login;
   }
 
-  const assignableCache = new Map<string, { users: string[]; fetchedAt: number }>();
-  const labelsCache = new Map<string, { labels: string[]; fetchedAt: number }>();
+  async function requireRepoAccess(repo: string): Promise<{
+    accountLogin: string;
+    project: RepoInfo;
+  }> {
+    // Every live repo operation crosses the gh CLI boundary, so resolve the
+    // viewer again first. This prevents a same-process `gh auth switch` from
+    // authorizing Bob's operation with Alice's cached identity or cache key.
+    const accountLogin = await ensureCacheAccount(true);
+    const project = await resolveRepoProject(repo, accountLogin);
+    return { accountLogin, project };
+  }
 
-  async function getAssignableUsers(repo: string): Promise<string[]> {
-    const cached = assignableCache.get(repo);
+  function syncCursorKey(accountLogin: string): string {
+    return `sync-cursor:${accountLogin}`;
+  }
+
+  const assignableCache = new Map<
+    string,
+    { users: string[]; fetchedAt: number }
+  >();
+  const labelsCache = new Map<
+    string,
+    { labels: string[]; fetchedAt: number }
+  >();
+
+  async function getAssignableUsers(
+    accountLogin: string,
+    repo: string,
+  ): Promise<string[]> {
+    const cacheKey = `${accountLogin}:${repo}`;
+    const cached = assignableCache.get(cacheKey);
     if (cached !== undefined && Date.now() - cached.fetchedAt < 10 * 60_000) {
       return cached.users;
     }
-    const raw = await gh(["api", `repos/${repo}/assignees?per_page=100`], 15_000);
+    const raw = await gh(
+      ["api", `repos/${repo}/assignees?per_page=100`],
+      15_000,
+    );
     const entries = JSON.parse(raw) as Array<{ login?: unknown }>;
     const users = entries
       .map((entry) => String(entry?.login ?? ""))
       .filter((login) => login.length > 0)
       .sort((a, b) => a.localeCompare(b));
-    assignableCache.set(repo, { users, fetchedAt: Date.now() });
+    assignableCache.set(cacheKey, { users, fetchedAt: Date.now() });
     return users;
   }
 
-  async function getRepoLabels(repo: string): Promise<string[]> {
-    const cached = labelsCache.get(repo);
+  async function getRepoLabels(
+    accountLogin: string,
+    repo: string,
+  ): Promise<string[]> {
+    const cacheKey = `${accountLogin}:${repo}`;
+    const cached = labelsCache.get(cacheKey);
     if (cached !== undefined && Date.now() - cached.fetchedAt < 10 * 60_000) {
       return cached.labels;
     }
@@ -924,7 +1399,7 @@ export default async function plugin(bb: BbPluginApi) {
       .map((entry) => String(entry?.name ?? "").trim())
       .filter((name) => name.length > 0)
       .sort((a, b) => a.localeCompare(b));
-    labelsCache.set(repo, { labels, fetchedAt: Date.now() });
+    labelsCache.set(cacheKey, { labels, fetchedAt: Date.now() });
     return labels;
   }
 
@@ -934,14 +1409,15 @@ export default async function plugin(bb: BbPluginApi) {
   bb.rpc.register(githubRpcContract, {
     /** () → auth/sync status for the panel banner. */
     async status() {
-      const repos = await discoverRepos();
+      const discoveredRepos = await discoverRepos();
+      let accountLogin: string;
       try {
-        await ensureCacheAccount();
+        accountLogin = await ensureCacheAccount(true);
       } catch (error) {
         return {
           ghOk: false,
           ghError: error instanceof Error ? error.message : String(error),
-          repos,
+          repos: publicRepos(discoveredRepos, null),
           lastSyncedAt: null,
         };
       }
@@ -949,12 +1425,15 @@ export default async function plugin(bb: BbPluginApi) {
         lastSyncedAt: string;
         repos: number;
         items: number;
-      }>("sync-cursor");
+      }>(syncCursorKey(accountLogin));
       if (
         shouldRefreshGithubCache(cursor?.lastSyncedAt ?? null) &&
-        Date.now() >= nextDemandSyncAtMs
+        Date.now() >= (nextDemandSyncAtMsByLogin.get(accountLogin) ?? 0)
       ) {
-        nextDemandSyncAtMs = Date.now() + DEMAND_SYNC_STALE_MS;
+        nextDemandSyncAtMsByLogin.set(
+          accountLogin,
+          Date.now() + DEMAND_SYNC_STALE_MS,
+        );
         void requestSync().catch((error: unknown) => {
           bb.status.needsConfiguration(
             error instanceof Error ? error.message : String(error),
@@ -968,7 +1447,7 @@ export default async function plugin(bb: BbPluginApi) {
       return {
         ghOk: ghAuthError === null,
         ghError: ghAuthError,
-        repos,
+        repos: publicRepos(discoveredRepos, accountLogin),
         lastSyncedAt: cursor?.lastSyncedAt ?? null,
       };
     },
@@ -980,40 +1459,46 @@ export default async function plugin(bb: BbPluginApi) {
 
     /** { kind?, repo?, query?, state?, mine? } → cached items, newest first. */
     async listItems(input) {
-      await ensureCacheAccount();
+      const accountLogin = await ensureCacheAccount(true);
       return {
-        items: listCachedItems({
+        items: listCachedItems(accountLogin, {
           kind: input.kind,
           repo: input.repo,
           query: input.query,
           state: input.state,
-          assignee: input.mine === true ? await ensureCacheAccount() : undefined,
+          assignee: input.mine === true ? accountLogin : undefined,
         }),
       };
     },
 
     /** () → the authenticated gh login, for "assign to me" affordances. */
     async viewer() {
-      return { login: await ensureCacheAccount() };
+      return { login: await ensureCacheAccount(true) };
     },
 
     /** { repo } → logins that can be assigned to issues in that repo. */
     async assignableUsers(input) {
-      return { users: await getAssignableUsers(input.repo) };
+      const { accountLogin } = await requireRepoAccess(input.repo);
+      return { users: await getAssignableUsers(accountLogin, input.repo) };
     },
 
     /** { repo } → labels available in that repo. */
     async repositoryLabels(input) {
-      return { labels: await getRepoLabels(input.repo) };
+      const { accountLogin } = await requireRepoAccess(input.repo);
+      return { labels: await getRepoLabels(accountLogin, input.repo) };
     },
 
     /** { repo, number, state: "open"|"closed" } → close or reopen an issue. */
     async setIssueState({ repo, number, state }): Promise<{ ok: true }> {
-      await ensureCacheAccount();
+      const { accountLogin } = await requireRepoAccess(repo);
       await gh([
-        "issue", state === "closed" ? "close" : "reopen", String(number), "-R", repo,
+        "issue",
+        state === "closed" ? "close" : "reopen",
+        String(number),
+        "-R",
+        repo,
       ]);
-      patchCachedItem("issue", repo, number, {
+      patchCachedItem(accountLogin, "issue", repo, number, {
         state: state === "closed" ? "CLOSED" : "OPEN",
       });
       return { ok: true };
@@ -1025,17 +1510,19 @@ export default async function plugin(bb: BbPluginApi) {
       number,
       assignees,
     }): Promise<{ ok: true; assignees: string[] }> {
-      await ensureCacheAccount();
+      const { accountLogin } = await requireRepoAccess(repo);
       const next = [...new Set(assignees)];
-      const current = getCachedItem("issue", repo, number)?.assignees ?? [];
+      const current =
+        getCachedItem(accountLogin, "issue", repo, number)?.assignees ?? [];
       const add = next.filter((login) => !current.includes(login));
       const remove = current.filter((login) => !next.includes(login));
-      if (add.length === 0 && remove.length === 0) return { ok: true, assignees: next };
+      if (add.length === 0 && remove.length === 0)
+        return { ok: true, assignees: next };
       const args = ["issue", "edit", String(number), "-R", repo];
       if (add.length > 0) args.push("--add-assignee", add.join(","));
       if (remove.length > 0) args.push("--remove-assignee", remove.join(","));
       await gh(args);
-      patchCachedItem("issue", repo, number, { assignees: next });
+      patchCachedItem(accountLogin, "issue", repo, number, { assignees: next });
       return { ok: true, assignees: next };
     },
 
@@ -1045,13 +1532,14 @@ export default async function plugin(bb: BbPluginApi) {
       number,
       labels,
     }): Promise<{ ok: true; labels: string[] }> {
-      await ensureCacheAccount();
+      const { accountLogin } = await requireRepoAccess(repo);
       const next = [
         ...new Set(labels.map((label) => label.trim()).filter(Boolean)),
       ];
-      const currentRaw = await gh([
-        "issue", "view", String(number), "-R", repo, "--json", "labels",
-      ], 15_000);
+      const currentRaw = await gh(
+        ["issue", "view", String(number), "-R", repo, "--json", "labels"],
+        15_000,
+      );
       const currentDetail = JSON.parse(currentRaw) as {
         labels?: Array<{ name?: unknown }>;
       };
@@ -1060,20 +1548,27 @@ export default async function plugin(bb: BbPluginApi) {
         .filter((label) => label.length > 0);
       const add = next.filter((label) => !current.includes(label));
       const remove = current.filter((label) => !next.includes(label));
-      if (add.length === 0 && remove.length === 0) return { ok: true, labels: next };
+      if (add.length === 0 && remove.length === 0)
+        return { ok: true, labels: next };
       const args = ["issue", "edit", String(number), "-R", repo];
       for (const label of add) args.push("--add-label", label);
       for (const label of remove) args.push("--remove-label", label);
       await gh(args);
-      patchCachedItem("issue", repo, number, { labels: next });
+      patchCachedItem(accountLogin, "issue", repo, number, { labels: next });
       return { ok: true, labels: next };
     },
 
     /** { repo, number } → live issue detail incl. comments. */
     async getIssue({ repo, number }) {
+      await requireRepoAccess(repo);
       const raw = await gh([
-        "issue", "view", String(number), "-R", repo,
-        "--json", "number,title,body,state,author,createdAt,updatedAt,labels,assignees,url,comments",
+        "issue",
+        "view",
+        String(number),
+        "-R",
+        repo,
+        "--json",
+        "number,title,body,state,author,createdAt,updatedAt,labels,assignees,url,comments",
       ]);
       const detail = JSON.parse(raw) as {
         comments?: Array<{
@@ -1090,8 +1585,12 @@ export default async function plugin(bb: BbPluginApi) {
           state: String(detail.state ?? ""),
           author: String(detail.author?.login ?? ""),
           body: typeof detail.body === "string" ? detail.body : "",
-          labels: (detail.labels ?? []).map((label) => String(label?.name ?? "")),
-          assignees: (detail.assignees ?? []).map((user) => String(user?.login ?? "")),
+          labels: (detail.labels ?? []).map((label) =>
+            String(label?.name ?? ""),
+          ),
+          assignees: (detail.assignees ?? []).map((user) =>
+            String(user?.login ?? ""),
+          ),
           url: String(detail.url ?? ""),
           updatedAt: String(detail.updatedAt ?? ""),
           comments: (detail.comments ?? []).map((comment) => ({
@@ -1107,6 +1606,7 @@ export default async function plugin(bb: BbPluginApi) {
         patches have separate calls so the first panel render starts one
         `gh` process instead of three. */
     async getPull({ repo, number }) {
+      await requireRepoAccess(repo);
       const prFields =
         "number,title,body,state,isDraft,author,createdAt,updatedAt,labels," +
         "assignees,url,baseRefName,headRefName,additions,deletions," +
@@ -1137,14 +1637,20 @@ export default async function plugin(bb: BbPluginApi) {
           detailsUrl?: unknown;
           targetUrl?: unknown;
         }>;
-        reviewRequests?: Array<{ login?: unknown; name?: unknown; slug?: unknown }>;
+        reviewRequests?: Array<{
+          login?: unknown;
+          name?: unknown;
+          slug?: unknown;
+        }>;
       }
       const view = JSON.parse(viewRaw) as GhPullView;
 
       // CheckRun rows carry status/conclusion; classic StatusContext rows a
       // single state. Normalize both to one traffic-light value.
       const checks = (view.statusCheckRollup ?? []).map((entry) => {
-        const conclusion = String(entry.conclusion ?? entry.state ?? "").toUpperCase();
+        const conclusion = String(
+          entry.conclusion ?? entry.state ?? "",
+        ).toUpperCase();
         const running =
           entry.conclusion === "" ||
           ["IN_PROGRESS", "QUEUED", "PENDING", "EXPECTED", "WAITING"].includes(
@@ -1153,7 +1659,9 @@ export default async function plugin(bb: BbPluginApi) {
         const status: "success" | "failure" | "pending" | "neutral" =
           conclusion === "SUCCESS"
             ? "success"
-            : conclusion === "FAILURE" || conclusion === "ERROR" || conclusion === "TIMED_OUT"
+            : conclusion === "FAILURE" ||
+                conclusion === "ERROR" ||
+                conclusion === "TIMED_OUT"
               ? "failure"
               : running
                 ? "pending"
@@ -1170,9 +1678,10 @@ export default async function plugin(bb: BbPluginApi) {
           repo,
           number,
           title: String(view.title ?? ""),
-          state: view.isDraft === true && String(view.state ?? "") === "OPEN"
-            ? "DRAFT"
-            : String(view.state ?? ""),
+          state:
+            view.isDraft === true && String(view.state ?? "") === "OPEN"
+              ? "DRAFT"
+              : String(view.state ?? ""),
           author: String(view.author?.login ?? ""),
           body: typeof view.body === "string" ? view.body : "",
           url: String(view.url ?? ""),
@@ -1184,11 +1693,15 @@ export default async function plugin(bb: BbPluginApi) {
           deletions: Number(view.deletions ?? 0),
           changedFiles: Number(view.changedFiles ?? 0),
           labels: (view.labels ?? []).map((label) => String(label?.name ?? "")),
-          assignees: (view.assignees ?? []).map((user) => String(user?.login ?? "")),
+          assignees: (view.assignees ?? []).map((user) =>
+            String(user?.login ?? ""),
+          ),
           reviewDecision: String(view.reviewDecision ?? ""),
           mergeStateStatus: String(view.mergeStateStatus ?? ""),
           reviewRequests: (view.reviewRequests ?? [])
-            .map((entry) => String(entry.login ?? entry.name ?? entry.slug ?? ""))
+            .map((entry) =>
+              String(entry.login ?? entry.name ?? entry.slug ?? ""),
+            )
             .filter((name) => name.length > 0),
           checks,
         },
@@ -1197,13 +1710,27 @@ export default async function plugin(bb: BbPluginApi) {
 
     /** { repo, number } → comments, reviews, and inline review threads. */
     async getPullActivity({ repo, number }) {
+      await requireRepoAccess(repo);
       const [viewRaw, reviewCommentsRaw] = await Promise.all([
         gh(
-          ["pr", "view", String(number), "-R", repo, "--json", "comments,reviews"],
+          [
+            "pr",
+            "view",
+            String(number),
+            "-R",
+            repo,
+            "--json",
+            "comments,reviews",
+          ],
           30_000,
         ),
         gh(
-          ["api", "--paginate", "--slurp", `repos/${repo}/pulls/${number}/comments?per_page=100`],
+          [
+            "api",
+            "--paginate",
+            "--slurp",
+            `repos/${repo}/pulls/${number}/comments?per_page=100`,
+          ],
           30_000,
         ),
       ]);
@@ -1231,7 +1758,9 @@ export default async function plugin(bb: BbPluginApi) {
         created_at?: unknown;
         user?: { login?: unknown };
       }
-      const reviewComments = parsePaginatedGhApi(reviewCommentsRaw) as GhReviewComment[];
+      const reviewComments = parsePaginatedGhApi(
+        reviewCommentsRaw,
+      ) as GhReviewComment[];
       interface ReviewThread {
         path: string;
         line: number | null;
@@ -1249,7 +1778,9 @@ export default async function plugin(bb: BbPluginApi) {
           body: typeof comment.body === "string" ? comment.body : "",
           createdAt: String(comment.created_at ?? ""),
         };
-        const rootThread = Number.isFinite(replyTo) ? threadByRootId.get(replyTo) : undefined;
+        const rootThread = Number.isFinite(replyTo)
+          ? threadByRootId.get(replyTo)
+          : undefined;
         if (rootThread !== undefined) {
           rootThread.comments.push(entry);
           if (Number.isFinite(id)) threadByRootId.set(id, rootThread);
@@ -1259,7 +1790,8 @@ export default async function plugin(bb: BbPluginApi) {
         const thread: ReviewThread = {
           path: String(comment.path ?? ""),
           line: Number.isFinite(line) ? line : null,
-          diffHunk: typeof comment.diff_hunk === "string" ? comment.diff_hunk : "",
+          diffHunk:
+            typeof comment.diff_hunk === "string" ? comment.diff_hunk : "",
           comments: [entry],
         };
         if (Number.isFinite(id)) threadByRootId.set(id, thread);
@@ -1286,8 +1818,14 @@ export default async function plugin(bb: BbPluginApi) {
 
     /** { repo, number } → changed files and bounded patches. */
     async getPullFiles({ repo, number }) {
+      await requireRepoAccess(repo);
       const filesRaw = await gh(
-        ["api", "--paginate", "--slurp", `repos/${repo}/pulls/${number}/files?per_page=100`],
+        [
+          "api",
+          "--paginate",
+          "--slurp",
+          `repos/${repo}/pulls/${number}/files?per_page=100`,
+        ],
         30_000,
       );
       interface GhPullFile {
@@ -1297,23 +1835,26 @@ export default async function plugin(bb: BbPluginApi) {
         deletions?: unknown;
         patch?: unknown;
       }
-      const files = (parsePaginatedGhApi(filesRaw) as GhPullFile[]).map((file) => {
-        const patch = typeof file.patch === "string" ? file.patch : null;
-        return {
-          path: String(file.filename ?? ""),
-          status: String(file.status ?? "modified"),
-          additions: Number(file.additions ?? 0),
-          deletions: Number(file.deletions ?? 0),
-          // Very large patches stay on GitHub — the panel shows a link.
-          patch: patch !== null && patch.length <= 20_000 ? patch : null,
-        };
-      });
+      const files = (parsePaginatedGhApi(filesRaw) as GhPullFile[]).map(
+        (file) => {
+          const patch = typeof file.patch === "string" ? file.patch : null;
+          return {
+            path: String(file.filename ?? ""),
+            status: String(file.status ?? "modified"),
+            additions: Number(file.additions ?? 0),
+            deletions: Number(file.deletions ?? 0),
+            // Very large patches stay on GitHub — the panel shows a link.
+            patch: patch !== null && patch.length <= 20_000 ? patch : null,
+          };
+        },
+      );
 
       return { files };
     },
 
     /** { repo, number, body } → add a PR conversation comment. */
     async commentPull({ repo, number, body }): Promise<{ ok: true }> {
+      await requireRepoAccess(repo);
       await gh(["pr", "comment", String(number), "-R", repo, "--body", body]);
       return { ok: true };
     },
@@ -1356,22 +1897,41 @@ export default async function plugin(bb: BbPluginApi) {
 
     /** { repo, number, body } → add an issue comment. */
     async commentIssue({ repo, number, body }): Promise<{ ok: true }> {
-      await gh(["issue", "comment", String(number), "-R", repo, "--body", body]);
+      await requireRepoAccess(repo);
+      await gh([
+        "issue",
+        "comment",
+        String(number),
+        "-R",
+        repo,
+        "--body",
+        body,
+      ]);
       return { ok: true };
     },
 
     /** { repo, title, body? } → create an issue, sync, return number+url. */
     async createIssue(input) {
-      await ensureCacheAccount();
+      const { accountLogin } = await requireRepoAccess(input.repo);
       const body = input.body ?? "";
       const stdout = await gh([
-        "issue", "create", "-R", input.repo,
-        "--title", input.title, "--body", body,
+        "issue",
+        "create",
+        "-R",
+        input.repo,
+        "--title",
+        input.title,
+        "--body",
+        body,
       ]);
       const match = stdout.trim().match(/\/issues\/(\d+)\s*$/);
       const number = match !== null ? Number(match[1]) : null;
       try {
-        replaceRepoRows(input.repo, await fetchRepoItems(gh, input.repo));
+        replaceRepoRows(
+          accountLogin,
+          input.repo,
+          await fetchRepoItems(gh, input.repo),
+        );
         bb.realtime.publish("data-changed", {});
       } catch {
         // creation succeeded; the next scheduled sync will pick it up
@@ -1381,12 +1941,12 @@ export default async function plugin(bb: BbPluginApi) {
 
     /** { repo, number } → spawn a worker thread on an issue. */
     async startWork({ repo, number }) {
-      return await spawnOnItem("issue", repo, number);
+      return await openConversation("issue", repo, number);
     },
 
     /** { repo, number } → spawn a review thread on a PR. */
     async startReview({ repo, number }) {
-      return await spawnOnItem("pr", repo, number);
+      return await openConversation("pr", repo, number);
     },
 
     /** () → every issue/PR → thread link, keyed "<kind>:<repo>#<number>". */
@@ -1402,7 +1962,7 @@ export default async function plugin(bb: BbPluginApi) {
   // ------------------------------------------------------------------
   function mentionItems(kind: "issue" | "pr", query: string) {
     if (verifiedCacheLogin === null) return [];
-    return listCachedItems({ kind, query, state: "open" })
+    return listCachedItems(verifiedCacheLogin, { kind, query, state: "open" })
       .slice(0, 8)
       .map((item) => ({
         id: `${item.repo}#${item.number}`,
@@ -1421,14 +1981,30 @@ export default async function plugin(bb: BbPluginApi) {
     kind: "issue" | "pr",
     itemId: string,
   ): Promise<{ context: string }> {
-    await ensureCacheAccount();
     const { repo, number } = parseMentionId(itemId);
+    const { accountLogin } = await requireRepoAccess(repo);
     const noun = kind === "pr" ? "pull request" : "issue";
     try {
       const raw = await gh(
         kind === "pr"
-          ? ["pr", "view", String(number), "-R", repo, "--json", "number,title,body,state,author,url"]
-          : ["issue", "view", String(number), "-R", repo, "--json", "number,title,body,state,author,url"],
+          ? [
+              "pr",
+              "view",
+              String(number),
+              "-R",
+              repo,
+              "--json",
+              "number,title,body,state,author,url",
+            ]
+          : [
+              "issue",
+              "view",
+              String(number),
+              "-R",
+              repo,
+              "--json",
+              "number,title,body,state,author,url",
+            ],
         15_000,
       );
       const detail = JSON.parse(raw) as GhListEntry;
@@ -1447,8 +2023,9 @@ export default async function plugin(bb: BbPluginApi) {
         ].join("\n"),
       };
     } catch (error) {
-      const cached = getCachedItem(kind, repo, number);
-      if (cached === null) throw error instanceof Error ? error : new Error(String(error));
+      const cached = getCachedItem(accountLogin, kind, repo, number);
+      if (cached === null)
+        throw error instanceof Error ? error : new Error(String(error));
       return {
         context: [
           `# GitHub ${noun} ${repo}#${number}: ${cached.title}`,
@@ -1501,10 +2078,26 @@ export default async function plugin(bb: BbPluginApi) {
     name: "github",
     summary: "Browse tracked GitHub repos, issues, and PRs",
     commands: [
-      { name: "repos", summary: "List tracked repositories", usage: "bb github repos" },
-      { name: "issues", summary: "List cached open issues", usage: "bb github issues [owner/repo]" },
-      { name: "prs", summary: "List cached open pull requests", usage: "bb github prs [owner/repo]" },
-      { name: "sync", summary: "Refresh the cache from GitHub now", usage: "bb github sync" },
+      {
+        name: "repos",
+        summary: "List tracked repositories",
+        usage: "bb github repos",
+      },
+      {
+        name: "issues",
+        summary: "List cached open issues",
+        usage: "bb github issues [owner/repo]",
+      },
+      {
+        name: "prs",
+        summary: "List cached open pull requests",
+        usage: "bb github prs [owner/repo]",
+      },
+      {
+        name: "sync",
+        summary: "Refresh the cache from GitHub now",
+        usage: "bb github sync",
+      },
     ],
     async run(argv) {
       const [sub, arg] = argv;
@@ -1517,39 +2110,58 @@ export default async function plugin(bb: BbPluginApi) {
           return { exitCode: 0, stdout: USAGE };
         }
         if (sub === "repos") {
-          const repos = await discoverRepos(true);
+          const accountLogin = await ensureCacheAccount(true);
+          const repos = publicRepos(await discoverRepos(true), accountLogin);
           if (repos.length === 0) {
-            return { exitCode: 0, stdout: "No tracked repos. Attach a project with a GitHub remote or set extraRepos." };
+            return {
+              exitCode: 0,
+              stdout: "No tracked repos. Add a project with a GitHub remote.",
+            };
           }
           return {
             exitCode: 0,
             stdout: repos
-              .map((entry) => `${entry.repo}${entry.projectId !== null ? `\t(${entry.projectId})` : ""}`)
+              .map(
+                (entry) =>
+                  `${entry.repo}\t(${entry.projectId})${entry.available ? "" : `\t(unavailable: ${entry.unavailableReason})`}`,
+              )
               .join("\n"),
           };
         }
         if (sub === "issues" || sub === "prs") {
-          await ensureCacheAccount();
-          const items = listCachedItems({
+          const accountLogin = await ensureCacheAccount(true);
+          const items = listCachedItems(accountLogin, {
             kind: sub === "prs" ? "pr" : "issue",
             repo: isRepoName(arg) ? arg : undefined,
             state: "open",
           });
           if (items.length === 0) {
-            return { exitCode: 0, stdout: "Nothing cached. Run `bb github sync` first." };
+            return {
+              exitCode: 0,
+              stdout: "Nothing cached. Run `bb github sync` first.",
+            };
           }
           return {
             exitCode: 0,
             stdout: items
-              .map((item) => `${item.repo}#${item.number}\t[${item.state}]\t${item.title}`)
+              .map(
+                (item) =>
+                  `${item.repo}#${item.number}\t[${item.state}]\t${item.title}`,
+              )
               .join("\n"),
           };
         }
         if (sub === "sync") {
           const { repos, items } = await requestSync(true);
-          return { exitCode: 0, stdout: `Synced ${items} item(s) across ${repos} repo(s).` };
+          return {
+            exitCode: 0,
+            stdout: `Synced ${items} item(s) across ${repos} repo(s).`,
+          };
         }
-        return { exitCode: 1, stderr: `Unknown subcommand "${sub}".\n${USAGE}` };
+        return {
+          exitCode: 1,
+          stderr: `Unknown subcommand "${sub}".\n${USAGE}`,
+        };
       } catch (error) {
         return {
           exitCode: 1,

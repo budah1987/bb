@@ -171,14 +171,20 @@ describe("useEnvironmentPullRequest", () => {
       pullRequestResponse(pullRequestFixture),
     );
 
-    renderHook(() => useEnvironmentPullRequest(ENVIRONMENT_ID), { wrapper });
+    renderHook(
+      () =>
+        useEnvironmentPullRequest(ENVIRONMENT_ID, {
+          accountLogin: "work-account",
+        }),
+      { wrapper },
+    );
 
     await waitFor(() => {
       expect(sdk.environments.pullRequest).toHaveBeenCalledTimes(1);
     });
 
     const query = queryClient.getQueryCache().find({
-      queryKey: environmentPullRequestQueryKey(ENVIRONMENT_ID),
+      queryKey: environmentPullRequestQueryKey(ENVIRONMENT_ID, "work-account"),
     });
 
     expect(query?.options).toEqual(
@@ -189,5 +195,76 @@ describe("useEnvironmentPullRequest", () => {
         staleTime: expect.any(Function),
       }),
     );
+  });
+
+  it("keeps cached pull request data isolated by selected account", async () => {
+    const { wrapper, queryClient } = createQueryClientTestHarness();
+    const workResponse = pullRequestResponse(pullRequestFixture);
+    const personalResponse = pullRequestResponse({
+      ...pullRequestFixture,
+      number: 256,
+      title: "Personal account view",
+    });
+    vi.mocked(sdk.environments.pullRequest)
+      .mockResolvedValueOnce(workResponse)
+      .mockResolvedValueOnce(personalResponse);
+
+    const { rerender, result } = renderHook(
+      ({ accountLogin }: { accountLogin: string }) =>
+        useEnvironmentPullRequest(ENVIRONMENT_ID, { accountLogin }),
+      {
+        initialProps: { accountLogin: "work-account" },
+        wrapper,
+      },
+    );
+
+    await waitFor(() => expect(result.current.data).toEqual(workResponse));
+    rerender({ accountLogin: "personal-account" });
+    await waitFor(() => expect(result.current.data).toEqual(personalResponse));
+
+    expect(
+      queryClient.getQueryData(
+        environmentPullRequestQueryKey(ENVIRONMENT_ID, "work-account"),
+      ),
+    ).toEqual(workResponse);
+    expect(
+      queryClient.getQueryData(
+        environmentPullRequestQueryKey(ENVIRONMENT_ID, "personal-account"),
+      ),
+    ).toEqual(personalResponse);
+  });
+
+  it("uses a null partition when no selected account is locally available", async () => {
+    const { wrapper, queryClient } = createQueryClientTestHarness();
+    const response = pullRequestResponse(pullRequestFixture);
+    vi.mocked(sdk.environments.pullRequest).mockResolvedValue(response);
+
+    renderHook(
+      () => useEnvironmentPullRequest(ENVIRONMENT_ID, { accountLogin: null }),
+      { wrapper },
+    );
+
+    await waitFor(() => {
+      expect(
+        queryClient.getQueryData(
+          environmentPullRequestQueryKey(ENVIRONMENT_ID, null),
+        ),
+      ).toEqual(response);
+    });
+  });
+
+  it("does not fetch while disabled", () => {
+    const { wrapper } = createQueryClientTestHarness();
+
+    renderHook(
+      () =>
+        useEnvironmentPullRequest(ENVIRONMENT_ID, {
+          accountLogin: "work-account",
+          enabled: false,
+        }),
+      { wrapper },
+    );
+
+    expect(sdk.environments.pullRequest).not.toHaveBeenCalled();
   });
 });

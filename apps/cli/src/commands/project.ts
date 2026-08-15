@@ -69,6 +69,11 @@ interface GithubRepositoryCommandOptions {
   json?: boolean;
 }
 
+interface GithubPullRequestCommandOptions
+  extends GithubRepositoryCommandOptions {
+  githubAccount: string;
+}
+
 function addProjectWorkspaceRoutingOptions(command: Command): Command {
   return command
     .option("--machine <id-or-name>", "Project source machine")
@@ -543,12 +548,16 @@ export function registerProjectCommands(
   project
     .command("github-pull-requests <repository>")
     .description("List open pull requests for one GitHub repository")
+    .requiredOption(
+      "--github-account <login>",
+      "Authenticated GitHub account to use",
+    )
     .option("--machine <id-or-name>", "Machine whose GitHub account to use")
     .option("--host <id-or-name>", "Alias for --machine")
     .option("--json", "Print machine-readable JSON output")
     .action(
       action(
-        async (repository: string, opts: GithubRepositoryCommandOptions) => {
+        async (repository: string, opts: GithubPullRequestCommandOptions) => {
           const target = resolveMachineTargetOption(opts);
           const hostId =
             target === undefined
@@ -561,6 +570,7 @@ export function registerProjectCommands(
             getUrl(),
           ).system.githubPullRequests({
             repository,
+            githubAccountLogin: opts.githubAccount,
             ...(hostId === undefined ? {} : { hostId }),
           });
           if (outputJson(opts, catalog)) return;

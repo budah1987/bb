@@ -8,11 +8,12 @@ import {
   screen,
   waitFor,
 } from "@testing-library/react";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter, useLocation, useNavigate } from "react-router-dom";
 import { PluginContext } from "@/components/plugin/plugin-context";
 import { SidebarHistoryNavigationControls } from "@/components/sidebar/SidebarHistoryNavigationControls";
 import { useBbNavigate } from "./plugin-sdk-hooks";
+import { sdk } from "./sdk";
 import {
   AUTOMATIONS_PLUGIN_ID,
   AUTOMATIONS_PLUGIN_PANEL_PATH,
@@ -160,6 +161,34 @@ function RemountablePluginNavigationHarness() {
   );
 }
 
+function GithubNavigationHarness() {
+  const location = useLocation();
+  const navigate = useBbNavigate();
+  const routerNavigate = useNavigate();
+
+  return (
+    <div>
+      <div data-testid="path">{location.pathname}</div>
+      <button
+        type="button"
+        onClick={() =>
+          navigate.toPluginPanel("github", {
+            subPath: "pulls/acme/widget/42",
+          })
+        }
+      >
+        Open pull request
+      </button>
+      <button type="button" onClick={() => navigate.toThread("thr_pr_42")}>
+        Open conversation
+      </button>
+      <button type="button" onClick={() => routerNavigate(-1)}>
+        Browser back
+      </button>
+    </div>
+  );
+}
+
 async function clickAndExpectPath(label: string, path: string) {
   fireEvent.click(screen.getByRole("button", { name: label }));
   await waitFor(() => {
@@ -180,7 +209,10 @@ async function expectSidebarButtonState(
 }
 
 describe("useRouteStateHistoryNavigation", () => {
-  afterEach(cleanup);
+  afterEach(() => {
+    cleanup();
+    vi.restoreAllMocks();
+  });
 
   it("tracks every Tools route for sidebar back and forward controls", async () => {
     render(
@@ -279,6 +311,39 @@ describe("useRouteStateHistoryNavigation", () => {
         path: AUTOMATIONS_PLUGIN_PANEL_PATH,
         subPath: editSubPath,
       }),
+    );
+  });
+
+  it("keeps GitHub detail and conversation handoff in browser history", async () => {
+    vi.spyOn(sdk.threads, "get").mockResolvedValue({
+      projectId: "proj_acme_widget",
+    } as never);
+
+    render(
+      <MemoryRouter initialEntries={["/plugins/github/github/pulls"]}>
+        <PluginContext.Provider value="github">
+          <GithubNavigationHarness />
+        </PluginContext.Provider>
+      </MemoryRouter>,
+    );
+
+    await clickAndExpectPath(
+      "Open pull request",
+      "/plugins/github/github/pulls/acme/widget/42",
+    );
+    await clickAndExpectPath(
+      "Open conversation",
+      "/projects/proj_acme_widget/threads/thr_pr_42",
+    );
+    expect(sdk.threads.get).toHaveBeenCalledWith({ threadId: "thr_pr_42" });
+
+    await clickAndExpectPath(
+      "Browser back",
+      "/plugins/github/github/pulls/acme/widget/42",
+    );
+    await clickAndExpectPath(
+      "Browser back",
+      "/plugins/github/github/pulls",
     );
   });
 });

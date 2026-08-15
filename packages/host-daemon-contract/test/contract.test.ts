@@ -1268,6 +1268,26 @@ describe("host-daemon local schemas", () => {
 });
 
 describe("host-daemon command schemas", () => {
+  it("requires an explicit account for GitHub pull-request catalogs", () => {
+    expect(
+      hostDaemonOnlineRpcCommandSchema.parse({
+        type: "github.pull_request_catalog",
+        repository: "octocat/hello-world",
+        githubAccountLogin: "octocat",
+      }),
+    ).toEqual({
+      type: "github.pull_request_catalog",
+      repository: "octocat/hello-world",
+      githubAccountLogin: "octocat",
+    });
+    expect(
+      hostDaemonOnlineRpcCommandSchema.safeParse({
+        type: "github.pull_request_catalog",
+        repository: "octocat/hello-world",
+      }).success,
+    ).toBe(false);
+  });
+
   // Version 96 is the first build carrying both wire surfaces: BBamir's
   // turn-qualified fileChange ids, direct publication payloads, and durable
   // dev-server supervision (89-92), and upstream's ACP context-window usage
@@ -1275,8 +1295,8 @@ describe("host-daemon command schemas", () => {
   // satisfy a `>= 95` check while missing the BBamir payloads, so the merged
   // build claims the current version to force every older daemon to update
   // before it connects.
-  it("uses protocol version 103 for the current wire surface", () => {
-    expect(HOST_DAEMON_PROTOCOL_VERSION).toBe(103);
+  it("uses protocol version 104 for the current wire surface", () => {
+    expect(HOST_DAEMON_PROTOCOL_VERSION).toBe(104);
   });
 
   it("requires a positive preflight file limit for workspace diff lists", () => {

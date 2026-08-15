@@ -71,7 +71,7 @@ import {
   allTerminalsQueryKeyPrefix,
   environmentDiffFilesQueryKeyPrefix,
   environmentFilePreviewQueryKeyPrefix,
-  environmentPullRequestQueryKey,
+  environmentPullRequestQueryKeyPrefix,
   environmentWorkspaceFilesQueryKeyPrefix,
   environmentWorkStatusQueryKeyPrefix,
   hostsQueryKey,
@@ -734,7 +734,9 @@ function dirtyThreadPullRequestQueryForCompletedTurn({
       (thread) => thread.id === threadId,
     );
   const environmentId = cachedThread?.environmentId;
-  return environmentId ? [environmentPullRequestQueryKey(environmentId)] : [];
+  return environmentId
+    ? [environmentPullRequestQueryKeyPrefix(environmentId)]
+    : [];
 }
 
 function dirtyThreadPendingInteractionQueries({
@@ -863,7 +865,7 @@ function dirtyEnvironmentLiveWorkspaceStateQueries({
     queryKey: environmentWorkStatusQueryKeyPrefix(environmentId),
   });
   queryClient.invalidateQueries({
-    queryKey: environmentPullRequestQueryKey(environmentId),
+    queryKey: environmentPullRequestQueryKeyPrefix(environmentId),
   });
   queryClient.invalidateQueries({
     queryKey: environmentFilePreviewQueryKeyPrefix(environmentId),

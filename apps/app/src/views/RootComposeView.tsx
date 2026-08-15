@@ -324,6 +324,18 @@ type NullableSecondaryPanelChangeHandler = (
   panel: ThreadSecondaryPanelTab | null,
 ) => void;
 
+export function resolveGithubWorkflowAccountLogin(args: {
+  persistedAccountLogin: string | null | undefined;
+  repository: ProjectSelectorOption["githubRepository"] | undefined;
+}): string | null {
+  return (
+    args.persistedAccountLogin ??
+    args.repository?.activeAccount ??
+    args.repository?.accessibleBy[0] ??
+    null
+  );
+}
+
 export function mergeMissingPromptDraftAttachments(
   currentAttachments: readonly PromptDraftAttachment[],
   preservedAttachments: readonly PromptDraftAttachment[],
@@ -1875,13 +1887,24 @@ export function RootComposeView() {
       }) ?? [],
     [githubRepositoryByName, projects],
   );
+  const selectedGithubProject = projectOptions.find(
+    (project) => project.id === projectId,
+  );
   const selectedGithubRepository =
-    projectOptions.find((project) => project.id === projectId)?.githubRepository
-      ?.nameWithOwner ?? "";
+    selectedGithubProject?.githubRepository?.nameWithOwner ?? "";
+  const selectedGithubAccountLogin = resolveGithubWorkflowAccountLogin({
+    persistedAccountLogin: projects?.find((project) => project.id === projectId)
+      ?.githubAccountLogin,
+    repository: selectedGithubProject?.githubRepository,
+  });
   const githubPullRequestsQuery = useGithubPullRequests({
+    githubAccountLogin: selectedGithubAccountLogin,
     repository: selectedGithubRepository,
     ...(workflowBranchHostId === null ? {} : { hostId: workflowBranchHostId }),
-    enabled: githubWorkflowOpen && selectedGithubRepository.length > 0,
+    enabled:
+      githubWorkflowOpen &&
+      selectedGithubRepository.length > 0 &&
+      selectedGithubAccountLogin !== null,
   });
   const mobileSessionProjectNamesById = useMemo(() => {
     const namesById = new Map<string, string>();

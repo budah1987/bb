@@ -671,6 +671,7 @@ const onlineRpcHandlers: OnlineRpcHandlerMap = {
     getGithubPullRequestCatalog({
       env: options.runtimeManager.getShellEnv(),
       repository: command.repository,
+      githubAccountLogin: command.githubAccountLogin,
     }),
   "provider_cli.status": async (_command, options) =>
     getProviderCliStatus({

@@ -28,6 +28,7 @@ import {
   readInitialPromptFromLocationState,
   readLockedReuseEnvironmentIdFromLocationState,
   requestRootComposePluginFocus,
+  resolveGithubWorkflowAccountLogin,
   resolveRootComposeProjectDefaultsState,
   restorePromptDraftAfterOptionChange,
   resolveRootComposePanelThreadId,
@@ -43,6 +44,44 @@ import {
   resolveRootComposeProjectRouting,
   resolveRootComposeProviderRouting,
 } from "./root-compose-environment-selection";
+
+describe("GitHub workflow account selection", () => {
+  const repository = {
+    nameWithOwner: "acme/bb",
+    accessibleBy: ["fallback-account", "other-account"],
+    activeAccount: "active-account",
+  };
+
+  it("prefers the project's persisted account", () => {
+    expect(
+      resolveGithubWorkflowAccountLogin({
+        persistedAccountLogin: "persisted-account",
+        repository,
+      }),
+    ).toBe("persisted-account");
+  });
+
+  it("falls back through the catalog accounts", () => {
+    expect(
+      resolveGithubWorkflowAccountLogin({
+        persistedAccountLogin: null,
+        repository,
+      }),
+    ).toBe("active-account");
+    expect(
+      resolveGithubWorkflowAccountLogin({
+        persistedAccountLogin: null,
+        repository: { ...repository, activeAccount: null },
+      }),
+    ).toBe("fallback-account");
+    expect(
+      resolveGithubWorkflowAccountLogin({
+        persistedAccountLogin: null,
+        repository: undefined,
+      }),
+    ).toBeNull();
+  });
+});
 
 describe("locked reuse environment navigation", () => {
   it("accepts only an explicit lock paired with a reusable environment", () => {

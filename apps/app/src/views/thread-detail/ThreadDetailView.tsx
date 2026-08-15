@@ -1809,9 +1809,6 @@ function ThreadDetailViewInternal(props: ThreadDetailViewInternalProps) {
     workStatusResponse?.outcome === "unavailable"
       ? workStatusResponse.failure
       : undefined;
-  const pullRequestQuery = useEnvironmentPullRequest(thread?.environmentId, {
-    enabled: canUseGitUi && environment !== undefined,
-  });
   const githubAccountsQuery = useGithubAccounts({
     ...(environment?.hostId === undefined
       ? {}
@@ -1828,6 +1825,10 @@ function ThreadDetailViewInternal(props: ThreadDetailViewInternalProps) {
     githubAccounts.find((account) => account.active)?.login ??
     githubAccounts[0]?.login ??
     null;
+  const pullRequestQuery = useEnvironmentPullRequest(thread?.environmentId, {
+    accountLogin: selectedGithubAccountLogin,
+    enabled: canUseGitUi && environment !== undefined,
+  });
   const pullRequest = getEnvironmentPullRequestFromResponse(
     pullRequestQuery.data,
   );
@@ -1841,7 +1842,6 @@ function ThreadDetailViewInternal(props: ThreadDetailViewInternalProps) {
           id: environmentId,
           githubAccountLogin: login,
         });
-        await pullRequestQuery.refetch();
         appToast.success(`Using @${login} for this worktree`, { id: toastId });
       } catch (error) {
         appToast.error("Failed to switch GitHub account", {
@@ -1853,12 +1853,7 @@ function ThreadDetailViewInternal(props: ThreadDetailViewInternalProps) {
         });
       }
     },
-    [
-      environment?.githubAccountLogin,
-      pullRequestQuery,
-      thread?.environmentId,
-      updateEnvironment,
-    ],
+    [environment?.githubAccountLogin, thread?.environmentId, updateEnvironment],
   );
   const handlePullRequestCreate = useCallback(
     async (input: PullRequestCreateInput): Promise<boolean> => {

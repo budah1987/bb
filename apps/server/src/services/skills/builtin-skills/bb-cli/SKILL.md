@@ -307,9 +307,10 @@ status|install` to inspect or install provider CLIs on a selected machine.
   repositories accessible to every authenticated github.com account on that
   machine. The result names the repository owner, every account with access,
   and which account is active; use `--json` for the typed catalog.
-- Use `bb project github-pull-requests <owner/repo> [--machine <id-or-name>]`
-  to list open pull requests with their head repository, head branch, draft
-  state, and title; use `--json` for the typed catalog.
+- Use `bb project github-pull-requests <owner/repo> --github-account <login>`
+  with optional `--machine <id-or-name>` to list open pull requests through one
+  explicitly selected authenticated account, with their head repository, head
+  branch, draft state, and title; use `--json` for the typed catalog.
 - Use `bb project source add <project-id> --machine <id-or-name> --path <path>`
   to register a path on another connected machine. It uses the same selector
   resolution and fallback as project create. Use `--clone` instead of `--path`

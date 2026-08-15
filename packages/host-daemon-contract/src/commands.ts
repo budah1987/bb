@@ -42,7 +42,7 @@ import {
   providerCliStatusResponseSchema,
 } from "./local.js";
 
-export const HOST_DAEMON_PROTOCOL_VERSION = 103 as const;
+export const HOST_DAEMON_PROTOCOL_VERSION = 104 as const;
 export const githubAccountLoginSchema = z.string().trim().min(1).max(255);
 
 export {
@@ -2050,6 +2050,7 @@ const githubPullRequestCatalogCommandSchema = z
   .object({
     type: z.literal("github.pull_request_catalog"),
     repository: z.string().regex(/^[\w.-]+\/[\w.-]+$/u),
+    githubAccountLogin: githubAccountLoginSchema,
   })
   .strict();
 

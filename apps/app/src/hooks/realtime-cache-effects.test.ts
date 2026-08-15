@@ -435,12 +435,20 @@ describe("createRealtimeCacheEffects", () => {
     async (cacheSource) => {
       vi.useFakeTimers();
       const { effects, queryClient } = createRealtimeEffectsTestContext();
-      const pullRequestKey = environmentPullRequestQueryKey("env-1");
+      const workPullRequestKey = environmentPullRequestQueryKey(
+        "env-1",
+        "work-account",
+      );
+      const personalPullRequestKey = environmentPullRequestQueryKey(
+        "env-1",
+        "personal-account",
+      );
       const nextPullRequest = {
         outcome: "available",
         pullRequest: { number: 42 },
       };
-      const pullRequestQueryFn = vi.fn(async () => nextPullRequest);
+      const workPullRequestQueryFn = vi.fn(async () => nextPullRequest);
+      const personalPullRequestQueryFn = vi.fn(async () => nextPullRequest);
       if (cacheSource === "thread detail") {
         queryClient.setQueryData(threadQueryKey("thr_1"), {
           environmentId: "env-1",
@@ -456,13 +464,23 @@ describe("createRealtimeCacheEffects", () => {
           ],
         });
       }
-      queryClient.setQueryData(pullRequestKey, { outcome: "absent" });
-      const pullRequestObserver = new QueryObserver(queryClient, {
-        queryFn: pullRequestQueryFn,
-        queryKey: pullRequestKey,
+      queryClient.setQueryData(workPullRequestKey, { outcome: "absent" });
+      queryClient.setQueryData(personalPullRequestKey, { outcome: "absent" });
+      const workPullRequestObserver = new QueryObserver(queryClient, {
+        queryFn: workPullRequestQueryFn,
+        queryKey: workPullRequestKey,
         staleTime: Infinity,
       });
-      const unsubscribePullRequest = pullRequestObserver.subscribe(() => {});
+      const personalPullRequestObserver = new QueryObserver(queryClient, {
+        queryFn: personalPullRequestQueryFn,
+        queryKey: personalPullRequestKey,
+        staleTime: Infinity,
+      });
+      const unsubscribeWorkPullRequest = workPullRequestObserver.subscribe(
+        () => {},
+      );
+      const unsubscribePersonalPullRequest =
+        personalPullRequestObserver.subscribe(() => {});
 
       effects.handleChanged({
         type: "changed",
@@ -473,10 +491,17 @@ describe("createRealtimeCacheEffects", () => {
       });
       await vi.advanceTimersByTimeAsync(50);
 
-      expect(pullRequestQueryFn).toHaveBeenCalledTimes(1);
-      expect(queryClient.getQueryData(pullRequestKey)).toEqual(nextPullRequest);
+      expect(workPullRequestQueryFn).toHaveBeenCalledTimes(1);
+      expect(personalPullRequestQueryFn).toHaveBeenCalledTimes(1);
+      expect(queryClient.getQueryData(workPullRequestKey)).toEqual(
+        nextPullRequest,
+      );
+      expect(queryClient.getQueryData(personalPullRequestKey)).toEqual(
+        nextPullRequest,
+      );
 
-      unsubscribePullRequest();
+      unsubscribeWorkPullRequest();
+      unsubscribePersonalPullRequest();
       effects.dispose();
     },
   );

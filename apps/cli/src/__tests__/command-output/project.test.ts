@@ -109,6 +109,36 @@ describe("bb project command output", () => {
     ]);
   });
 
+  it("lists pull requests through the requested GitHub account", async () => {
+    const get = vi.fn(async () => ({
+      repository: "acme/bb",
+      account: "work-user",
+      pullRequests: [],
+    }));
+    stubServerApi({ "v1.system.github.pull-requests.$get": get });
+
+    await runCommand(
+      [
+        "project",
+        "github-pull-requests",
+        "acme/bb",
+        "--github-account",
+        "work-user",
+      ],
+      register,
+    );
+
+    expect(get).toHaveBeenCalledWith({
+      query: {
+        repository: "acme/bb",
+        githubAccountLogin: "work-user",
+      },
+    });
+    expect(collectLogLines(vi.mocked(console.log))).toEqual([
+      "No open pull requests found for acme/bb.",
+    ]);
+  });
+
   it("uploads binary bytes read on a remote CLI machine with explicit metadata", async () => {
     const clientDir = await mkdtemp(join(tmpdir(), "bb-cli-attachment-"));
     try {

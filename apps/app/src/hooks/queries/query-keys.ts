@@ -352,6 +352,11 @@ export type EnvironmentPreviewsQueryKey = readonly [
 export type EnvironmentPullRequestQueryKey = readonly [
   typeof ENVIRONMENT_PULL_REQUEST_QUERY_KEY,
   string | null | undefined,
+  string | null,
+];
+export type EnvironmentPullRequestQueryKeyPrefix = readonly [
+  typeof ENVIRONMENT_PULL_REQUEST_QUERY_KEY,
+  string,
 ];
 export type EnvironmentMergeBaseBranchesQueryKeyRootPrefix = readonly [
   typeof ENVIRONMENT_MERGE_BASE_BRANCHES_QUERY_KEY,
@@ -514,6 +519,7 @@ export type SystemGithubRepositoriesQueryKey = readonly [
 export type SystemGithubPullRequestsQueryKey = readonly [
   typeof SYSTEM_GITHUB_PULL_REQUESTS_QUERY_KEY,
   string,
+  string | null,
   string | null,
 ];
 export type OnboardingAgentsQueryKey = readonly [
@@ -979,7 +985,14 @@ export function environmentWorkStatusQueryKeyPrefix(
 
 export function environmentPullRequestQueryKey(
   environmentId: string | null | undefined,
+  accountLogin: string | null,
 ): EnvironmentPullRequestQueryKey {
+  return [ENVIRONMENT_PULL_REQUEST_QUERY_KEY, environmentId, accountLogin];
+}
+
+export function environmentPullRequestQueryKeyPrefix(
+  environmentId: string,
+): EnvironmentPullRequestQueryKeyPrefix {
   return [ENVIRONMENT_PULL_REQUEST_QUERY_KEY, environmentId];
 }
 
@@ -1231,9 +1244,15 @@ export function systemGithubAccountsQueryKey(
 
 export function systemGithubPullRequestsQueryKey(
   repository: string,
+  githubAccountLogin: string | null,
   hostId: string | null,
 ): SystemGithubPullRequestsQueryKey {
-  return [SYSTEM_GITHUB_PULL_REQUESTS_QUERY_KEY, repository, hostId];
+  return [
+    SYSTEM_GITHUB_PULL_REQUESTS_QUERY_KEY,
+    repository,
+    githubAccountLogin,
+    hostId,
+  ];
 }
 
 export function onboardingAgentsQueryKey(
