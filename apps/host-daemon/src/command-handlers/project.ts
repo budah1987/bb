@@ -73,21 +73,45 @@ export async function cloneProject(args: {
   );
   await requireEmptyOrMissingTarget(targetPath);
   await fs.mkdir(path.dirname(targetPath), { recursive: true });
+  // Clone into a sibling staging directory. `git clone` can leave a partial
+  // checkout behind when authentication or the network fails; staging keeps
+  // that failed attempt from making every retry look like a user-owned,
+  // non-empty destination.
+  const stagingRoot = await fs.mkdtemp(
+    path.join(path.dirname(targetPath), `.${path.basename(targetPath)}.clone-`),
+  );
+  const stagingPath = path.join(stagingRoot, "checkout");
   try {
     const githubAccountEnvironment = await getGithubAccountEnvironment({
       env: process.env,
       login: args.githubAccountLogin ?? null,
     });
-    await runGit(["clone", args.remoteUrl, targetPath], {
-      cwd: path.dirname(targetPath),
+    await runGit(["clone", args.remoteUrl, stagingPath], {
+      cwd: stagingRoot,
       ...(githubAccountEnvironment ? { env: githubAccountEnvironment } : {}),
       timeoutMs: PROJECT_CLONE_TIMEOUT_MS,
     });
+    // Preserve the existing safety rule if the destination changes while the
+    // potentially long-running clone is in progress. Empty directories are
+    // safe to replace; anything with contents is not.
+    await requireEmptyOrMissingTarget(targetPath);
+    try {
+      await fs.rmdir(targetPath);
+    } catch (error) {
+      if (
+        !(error instanceof Error && "code" in error && error.code === "ENOENT")
+      ) {
+        throw error;
+      }
+    }
+    await fs.rename(stagingPath, targetPath);
   } catch (error) {
     if (error instanceof WorkspaceError) {
       throw new ExpectedCommandDispatchError(error.code, error.message);
     }
     throw error;
+  } finally {
+    await fs.rm(stagingRoot, { recursive: true, force: true });
   }
   return inspectProjectPath(targetPath);
 }
