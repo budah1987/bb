@@ -94,6 +94,9 @@ describe("project.clone", () => {
     expect(error.message).toContain(
       `fatal: repository '${missingRemote}' does not exist`,
     );
+    await expect(
+      fs.stat(path.join(root, "data", "checkouts", "project")),
+    ).rejects.toMatchObject({ code: "ENOENT" });
   });
 
   it("derives the checkout convention without touching the filesystem", async () => {
