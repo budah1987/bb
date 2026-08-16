@@ -58,6 +58,12 @@ import { Textarea } from "@bb/shared-ui/textarea";
 import { EmptyState } from "@/components/empty-state";
 import { Markdown } from "@/components/markdown-lite";
 import { PageBody } from "@/components/page-body";
+import {
+  DEFAULT_GITHUB_QUERY,
+  readGithubQueries,
+  writeGithubQuery,
+  type GithubItemKind,
+} from "./query-state";
 
 interface Item {
   repo: string;
@@ -3312,24 +3318,21 @@ function PanelHeader() {
   );
 }
 
-const QUERY_KEY = "bb-plugin-github:query";
-const DEFAULT_QUERY = "is:open ";
-
 function GithubPanel({ subPath }: PluginNavPanelProps) {
   useGithubStoreRealtime();
   const [route, navigate] = useSubPathRoute(subPath);
   const { status } = useStatus();
-  const [query, setQueryState] = useState<string>(() => {
+  const [queries, setQueries] = useState<Record<GithubItemKind, string>>(() => {
     try {
-      return window.localStorage.getItem(QUERY_KEY) ?? DEFAULT_QUERY;
+      return readGithubQueries(window.localStorage);
     } catch {
-      return DEFAULT_QUERY;
+      return { issue: DEFAULT_GITHUB_QUERY, pr: DEFAULT_GITHUB_QUERY };
     }
   });
-  const setQuery = useCallback((next: string) => {
-    setQueryState(next);
+  const setQuery = useCallback((kind: GithubItemKind, next: string) => {
+    setQueries((current) => ({ ...current, [kind]: next }));
     try {
-      window.localStorage.setItem(QUERY_KEY, next);
+      writeGithubQuery(window.localStorage, kind, next);
     } catch {
       // private mode / storage disabled — the filter just won't persist
     }
@@ -3342,7 +3345,7 @@ function GithubPanel({ subPath }: PluginNavPanelProps) {
           route={route}
           navigate={navigate}
           status={status}
-          query={query}
+          queries={queries}
           setQuery={setQuery}
         />
       </PageBody>
@@ -3418,14 +3421,14 @@ function GithubPanelBody({
   route,
   navigate,
   status,
-  query,
+  queries,
   setQuery,
 }: {
   route: Route;
   navigate: (route: Route) => void;
   status: Status | null;
-  query: string;
-  setQuery: (query: string) => void;
+  queries: Record<GithubItemKind, string>;
+  setQuery: (kind: GithubItemKind, query: string) => void;
 }) {
   if (status !== null && !status.ghOk) {
     return (
@@ -3483,6 +3486,7 @@ function GithubPanelBody({
   }
 
   const kind = route.view === "pulls" ? "pr" : "issue";
+  const query = queries[kind];
   return (
     <div className="flex flex-col gap-3 px-3 sm:px-0">
       <div className="flex items-center gap-2">
@@ -3518,7 +3522,7 @@ function GithubPanelBody({
       <ListView
         kind={kind}
         query={query}
-        setQuery={setQuery}
+        setQuery={(next) => setQuery(kind, next)}
         repos={status?.repos ?? []}
         onOpenItem={(repo, number) =>
           navigate(
