@@ -80,6 +80,23 @@ describe("project.clone", () => {
     expect(error).toMatchObject({ code: "target_not_empty" });
   });
 
+  it("reuses an existing checkout for the same remote", async () => {
+    const root = await tempDir();
+    const remoteUrl = await createRemoteRepo(root);
+    const first = await cloneProject({
+      dataDir: path.join(root, "data"),
+      projectSlug: "project",
+      remoteUrl,
+    });
+    const second = await cloneProject({
+      dataDir: path.join(root, "data"),
+      projectSlug: "project",
+      remoteUrl: remoteUrl.replace(/\.git$/u, ""),
+    });
+
+    expect(second).toEqual(first);
+  });
+
   it("preserves git stderr in a structured clone failure", async () => {
     const root = await tempDir();
     const missingRemote = path.join(root, "missing.git");
