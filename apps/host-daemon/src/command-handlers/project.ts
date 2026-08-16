@@ -17,6 +17,10 @@ function normalizeProjectSlug(value: string): string {
   return slug || "project";
 }
 
+function normalizeRemoteUrl(value: string): string {
+  return value.trim().replace(/\/+$/u, "").replace(/\.git$/u, "").toLowerCase();
+}
+
 export function resolveProjectCloneDefaultPath(
   dataDir: string,
   projectSlug: string,
@@ -71,6 +75,15 @@ export async function cloneProject(args: {
     args.targetPath ??
       resolveProjectCloneDefaultPath(args.dataDir, args.projectSlug),
   );
+  const existingTarget = await inspectProjectPath(targetPath).catch(() => null);
+  if (
+    existingTarget?.gitRemoteUrl !== null &&
+    existingTarget?.gitRemoteUrl !== undefined &&
+    normalizeRemoteUrl(existingTarget.gitRemoteUrl) ===
+      normalizeRemoteUrl(args.remoteUrl)
+  ) {
+    return existingTarget;
+  }
   await requireEmptyOrMissingTarget(targetPath);
   await fs.mkdir(path.dirname(targetPath), { recursive: true });
   // Clone into a sibling staging directory. `git clone` can leave a partial
