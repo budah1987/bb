@@ -1597,7 +1597,7 @@ export function ThreadDetailPromptArea({
       activeWorkflows,
       expandedWorkflowIds,
       toggleWorkflowExpanded,
-      activeBackgroundCommands,
+      promptBackgroundCommands,
       isBackgroundCommandsExpanded,
       modelFallback,
       parentThreadSection,
