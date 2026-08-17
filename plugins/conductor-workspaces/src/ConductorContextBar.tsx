@@ -7,7 +7,6 @@ import {
   useRef,
   useState,
   type ComponentPropsWithoutRef,
-  type PointerEvent as ReactPointerEvent,
 } from "react";
 import {
   experimental_useSidebarThreadActions as useSidebarThreadActions,
@@ -39,20 +38,11 @@ import {
   pickDeleteFallbackThread,
 } from "./ConversationActions";
 
-const COMPACT_TAB_SWIPE_INTENT_PX = 10;
-const COMPACT_TAB_SWIPE_COMMIT_PX = 36;
 const COMPACT_CONVERSATION_CYCLE_EVENT =
   "bb:conductor-compact-conversation-cycle";
 const COMPACT_CONVERSATION_AVAILABLE_EVENT =
   "bb:conductor-compact-conversation-available";
 const TAB_CLOSE_TRANSITION_MS = 150;
-
-interface CompactTabSwipeSession {
-  active: boolean;
-  pointerId: number;
-  startX: number;
-  startY: number;
-}
 
 export function ConductorContextBar({
   threadId,
@@ -115,8 +105,6 @@ function ConductorWorkspaceContextBar({
   const tabRailRef = useRef<HTMLElement>(null);
   const cycleThreadIdRef = useRef(activeThreadId);
   const closeInFlightRef = useRef(false);
-  const tabSwipeRef = useRef<CompactTabSwipeSession | null>(null);
-  const suppressTabClickRef = useRef(false);
   const closingTabIdsRef = useRef(new Set<string>());
   const [tabRailWidth, setTabRailWidth] = useState<number | null>(null);
   const [, setTabRevision] = useState(0);
@@ -187,13 +175,11 @@ function ConductorWorkspaceContextBar({
         ) ?? [],
       ).find((candidate) => candidate.dataset.conductorThreadId === threadId);
       runTabCloseTransition(tab ?? null, () => {
+        // Closing a conversation tab is an archive action. Keep the closed-tab
+        // preference for the temporary new-conversation surface only; archived
+        // conversations should leave the active projection naturally.
+        actions.archive(threadId);
         closingTabIdsRef.current.delete(threadId);
-        saveClosedTabIds(workspace.key, [
-          threadId,
-          ...loadClosedTabIds(workspace.key).filter(
-            (closedId) => closedId !== threadId,
-          ),
-        ]);
 
         if (threadId !== cycleThreadIdRef.current) {
           setTabRevision((revision) => revision + 1);
@@ -326,7 +312,7 @@ function ConductorWorkspaceContextBar({
       if (direction !== "left" && direction !== "right") return;
       const currentThreadId = cycleThreadIdRef.current;
       if (currentThreadId === null || openThreads.length < 2) return;
-      openAdjacentConversation(currentThreadId, direction === "left" ? 1 : -1);
+      openAdjacentConversation(currentThreadId, direction === "right" ? 1 : -1);
     };
     window.addEventListener(
       COMPACT_CONVERSATION_CYCLE_EVENT,
@@ -353,64 +339,6 @@ function ConductorWorkspaceContextBar({
     openThreads.length,
     workspace,
   ]);
-
-  const resetTabSwipe = useCallback(() => {
-    tabSwipeRef.current = null;
-  }, []);
-  const handleTabSwipeStart = (event: ReactPointerEvent<HTMLElement>) => {
-    if (
-      !isCompactViewport ||
-      event.pointerType !== "touch" ||
-      event.button !== 0
-    ) {
-      return;
-    }
-    suppressTabClickRef.current = false;
-    tabSwipeRef.current = {
-      active: false,
-      pointerId: event.pointerId,
-      startX: event.clientX,
-      startY: event.clientY,
-    };
-  };
-  const handleTabSwipeMove = (event: ReactPointerEvent<HTMLElement>) => {
-    const swipe = tabSwipeRef.current;
-    if (swipe === null || swipe.pointerId !== event.pointerId) return;
-    const deltaX = event.clientX - swipe.startX;
-    const deltaY = event.clientY - swipe.startY;
-    if (!swipe.active) {
-      if (
-        Math.abs(deltaY) > COMPACT_TAB_SWIPE_INTENT_PX &&
-        Math.abs(deltaY) > Math.abs(deltaX)
-      ) {
-        resetTabSwipe();
-        return;
-      }
-      if (
-        Math.abs(deltaX) < COMPACT_TAB_SWIPE_INTENT_PX ||
-        Math.abs(deltaX) <= Math.abs(deltaY) * 1.25
-      ) {
-        return;
-      }
-      swipe.active = true;
-      suppressTabClickRef.current = true;
-      event.currentTarget.setPointerCapture?.(event.pointerId);
-    }
-    event.preventDefault();
-  };
-  const handleTabSwipeEnd = (event: ReactPointerEvent<HTMLElement>) => {
-    const swipe = tabSwipeRef.current;
-    if (swipe === null || swipe.pointerId !== event.pointerId) return;
-    const deltaX = event.clientX - swipe.startX;
-    if (
-      swipe.active &&
-      Math.abs(deltaX) >= COMPACT_TAB_SWIPE_COMMIT_PX &&
-      activeThreadId !== null
-    ) {
-      openAdjacentConversation(activeThreadId, deltaX < 0 ? 1 : -1);
-    }
-    resetTabSwipe();
-  };
 
   const reopenClosedConversation = useCallback(() => {
     if (!workspace) return;
@@ -516,17 +444,6 @@ function ConductorWorkspaceContextBar({
         ref={tabRailRef}
         className="conductor-tab-rail"
         aria-label="Workspace conversations"
-        data-no-workspace-swipe=""
-        onClickCapture={(event) => {
-          if (!suppressTabClickRef.current) return;
-          event.preventDefault();
-          event.stopPropagation();
-          suppressTabClickRef.current = false;
-        }}
-        onPointerCancel={resetTabSwipe}
-        onPointerDown={handleTabSwipeStart}
-        onPointerMove={handleTabSwipeMove}
-        onPointerUp={handleTabSwipeEnd}
       >
         {visibleTabs.map((thread) => (
           <ConversationActionMenu
@@ -571,8 +488,13 @@ function ConductorWorkspaceContextBar({
         {hiddenTabs.length > 0 ? (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <button type="button" className="conductor-more-tabs-trigger">
-                {hiddenTabs.length} more
+              <button
+                type="button"
+                className="conductor-more-tabs-trigger"
+                aria-label={`${hiddenTabs.length} more conversations`}
+                title={`${hiddenTabs.length} more conversations`}
+              >
+                +{hiddenTabs.length}
               </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent
@@ -757,8 +679,8 @@ const ConversationTab = forwardRef<HTMLDivElement, ConversationTabProps>(
           type="button"
           className="conductor-conversation-tab-close"
           tabIndex={active ? 0 : -1}
-          aria-label={`Close ${title}`}
-          title={`Close ${title}`}
+          aria-label={`Archive ${title}`}
+          title={`Archive ${title}`}
           onClick={onClose}
         >
           <Icon name="X" className="size-3" aria-hidden />
