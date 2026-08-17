@@ -175,13 +175,11 @@ function ConductorWorkspaceContextBar({
         ) ?? [],
       ).find((candidate) => candidate.dataset.conductorThreadId === threadId);
       runTabCloseTransition(tab ?? null, () => {
+        // Closing a conversation tab is an archive action. Keep the closed-tab
+        // preference for the temporary new-conversation surface only; archived
+        // conversations should leave the active projection naturally.
+        actions.archive(threadId);
         closingTabIdsRef.current.delete(threadId);
-        saveClosedTabIds(workspace.key, [
-          threadId,
-          ...loadClosedTabIds(workspace.key).filter(
-            (closedId) => closedId !== threadId,
-          ),
-        ]);
 
         if (threadId !== cycleThreadIdRef.current) {
           setTabRevision((revision) => revision + 1);
@@ -681,8 +679,8 @@ const ConversationTab = forwardRef<HTMLDivElement, ConversationTabProps>(
           type="button"
           className="conductor-conversation-tab-close"
           tabIndex={active ? 0 : -1}
-          aria-label={`Close ${title}`}
-          title={`Close ${title}`}
+          aria-label={`Archive ${title}`}
+          title={`Archive ${title}`}
           onClick={onClose}
         >
           <Icon name="X" className="size-3" aria-hidden />

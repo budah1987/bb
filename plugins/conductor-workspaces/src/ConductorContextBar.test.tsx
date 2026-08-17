@@ -372,6 +372,43 @@ describe("ConductorContextBar compact layout", () => {
     });
   });
 
+  it("archives a conversation when its tab is closed", async () => {
+    const rendered = renderSlot(
+      contextBar,
+      {
+        threadId: "thread-2",
+        projectId: "project-1",
+        environmentId: "environment-1",
+        isCompactViewport: false,
+      },
+      {
+        sidebarThreads: {
+          status: "ready",
+          threads: [thread(1), thread(2)],
+          projects: [{ id: "project-1", name: "BB", isPersonal: false }],
+        },
+        rpc: {
+          readReconciliation: () => ({
+            legacyWorkspaces: [],
+            recordedSignature: null,
+          }),
+        },
+      },
+    );
+
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Archive Conversation 1" }),
+    );
+
+    expect(rendered.sidebarActionCalls).toContainEqual({
+      method: "archive",
+      threadId: "thread-1",
+    });
+    expect(window.localStorage.getItem("bb.conductor.closed-tabs.v1")).toBe(
+      null,
+    );
+  });
+
   it("opens a complete conversation as a temporary fork tab", async () => {
     const rendered = renderSlot(
       contextBar,
@@ -802,12 +839,16 @@ describe("ConductorContextBar compact layout", () => {
       },
     );
 
-    await screen.findByRole("button", { name: "Close Conversation 2" });
+    await screen.findByRole("button", { name: "Archive Conversation 2" });
     fireEvent.click(
-      screen.getByRole("button", { name: "Close Conversation 2" }),
+      screen.getByRole("button", { name: "Archive Conversation 2" }),
     );
 
-    expect(rendered.sidebarActionCalls.at(-1)).toEqual({
+    expect(rendered.sidebarActionCalls).toContainEqual({
+      method: "archive",
+      threadId: "thread-2",
+    });
+    expect(rendered.sidebarActionCalls).toContainEqual({
       method: "open",
       threadId: "thread-3",
       options: undefined,
@@ -843,14 +884,18 @@ describe("ConductorContextBar compact layout", () => {
       new MouseEvent("auxclick", { bubbles: true, button: 1 }),
     );
 
-    expect(rendered.sidebarActionCalls.at(-1)).toEqual({
+    expect(rendered.sidebarActionCalls).toContainEqual({
+      method: "archive",
+      threadId: "thread-2",
+    });
+    expect(rendered.sidebarActionCalls).toContainEqual({
       method: "open",
       threadId: "thread-3",
       options: undefined,
     });
   });
 
-  it("closes the focused tab and reopens it with Shift+Command+W", async () => {
+  it("archives the focused tab with Command+W", async () => {
     let closeHandler: (() => boolean) | null = null;
     const rendered = renderSlot(
       contextBar,
@@ -884,7 +929,11 @@ describe("ConductorContextBar compact layout", () => {
       handled = closeHandler?.() ?? false;
     });
     expect(handled).toBe(true);
-    expect(rendered.sidebarActionCalls.at(-1)).toEqual({
+    expect(rendered.sidebarActionCalls).toContainEqual({
+      method: "archive",
+      threadId: "thread-2",
+    });
+    expect(rendered.sidebarActionCalls).toContainEqual({
       method: "open",
       threadId: "thread-3",
       options: undefined,
@@ -896,11 +945,7 @@ describe("ConductorContextBar compact layout", () => {
       metaKey: true,
       shiftKey: true,
     });
-    expect(rendered.sidebarActionCalls.at(-1)).toEqual({
-      method: "open",
-      threadId: "thread-2",
-      options: undefined,
-    });
+    expect(rendered.sidebarActionCalls).toHaveLength(2);
   });
 
   it("opens a blank workspace conversation when the final tab closes", async () => {
@@ -938,6 +983,7 @@ describe("ConductorContextBar compact layout", () => {
     });
     expect(handled).toBe(true);
     expect(rendered.sidebarActionCalls).toEqual([
+      { method: "archive", threadId: "thread-1" },
       {
         method: "openNewThread",
         options: {
@@ -984,7 +1030,9 @@ describe("ConductorContextBar compact layout", () => {
     );
 
     expect(closePane).toHaveBeenCalledOnce();
-    expect(rendered.sidebarActionCalls).toEqual([]);
+    expect(rendered.sidebarActionCalls).toEqual([
+      { method: "archive", threadId: "thread-1" },
+    ]);
   });
 
   it("adds a workspace transcript to a blank conversation", async () => {
