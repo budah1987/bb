@@ -42,9 +42,9 @@ import {
   providerCliStatusResponseSchema,
 } from "./local.js";
 
-// Version 125 adds the required GitHub account login to pull-request catalog
-// commands on top of the merged BBamir/upstream version 124 wire surface.
-export const HOST_DAEMON_PROTOCOL_VERSION = 125 as const;
+// Version 126 scopes deployment discovery to the environment's GitHub account
+// and carries distinct stable-branch and immutable-deployment preview URLs.
+export const HOST_DAEMON_PROTOCOL_VERSION = 126 as const;
 export const githubAccountLoginSchema = z.string().trim().min(1).max(255);
 
 export {
@@ -1294,6 +1294,7 @@ const workspaceDockerPathActivityCommandSchema = hostDaemonWorkspaceTargetSchema
 const workspaceGithubDeploymentsCommandSchema = hostDaemonWorkspaceTargetSchema
   .extend({
     type: z.literal("workspace.github_deployments"),
+    githubAccountLogin: githubAccountLoginSchema.nullable().default(null),
   })
   .strict();
 
@@ -1592,8 +1593,9 @@ const workspaceDockerPathActivityResultSchema = z.discriminatedUnion(
 
 const githubDeploymentStatusSchema = z
   .object({
+    branchUrl: z.string().min(1).nullable(),
     createdAt: z.string().min(1),
-    environmentUrl: z.string().min(1).nullable(),
+    deploymentUrl: z.string().min(1).nullable(),
     logUrl: z.string().min(1).nullable(),
     state: z.string().min(1),
     updatedAt: z.string().min(1),

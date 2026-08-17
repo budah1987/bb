@@ -374,6 +374,8 @@ export type EnvironmentDockerControlResponse = z.infer<
 
 export const environmentPreviewProviderSchema = z
   .object({
+    branchUrl: z.string().url().nullable(),
+    deploymentUrl: z.string().url().nullable(),
     environment: z.string().min(1).nullable(),
     framePolicy: z.enum(["allowed", "blocked", "unknown"]),
     frameReason: z.string().min(1).nullable(),

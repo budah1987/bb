@@ -29,6 +29,19 @@ const githubDeploymentStatusSchema = z
 
 const githubDeploymentsSchema = z.array(githubDeploymentSchema);
 const githubDeploymentStatusesSchema = z.array(githubDeploymentStatusSchema);
+const githubPullRequestCommentsSchema = z
+  .object({
+    comments: z.array(
+      z
+        .object({
+          author: z.object({ login: z.string() }).passthrough(),
+          body: z.string(),
+          createdAt: z.string(),
+        })
+        .passthrough(),
+    ),
+  })
+  .passthrough();
 
 interface CommandOutput {
   stdout: string;
@@ -52,7 +65,8 @@ export interface WorkspaceGithubDeploymentsAvailable {
     updatedAt: string;
     latestStatus: {
       state: string;
-      environmentUrl: string | null;
+      branchUrl: string | null;
+      deploymentUrl: string | null;
       logUrl: string | null;
       createdAt: string;
       updatedAt: string;
@@ -113,6 +127,76 @@ function nonEmptyUrl(value: string | null): string | null {
   if (value === null) return null;
   const trimmed = value.trim();
   return trimmed.length > 0 ? trimmed : null;
+}
+
+function safeVercelPreviewUrl(value: string): string | null {
+  try {
+    const url = new URL(value);
+    return url.protocol === "https:" &&
+      (url.hostname.endsWith(".vercel.app") ||
+        url.hostname.endsWith(".vercel.sh"))
+      ? url.toString()
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Vercel's GitHub deployment status points at one immutable deployment. Its
+ * edited PR comment is the credential-free source for the stable branch alias.
+ * Parse only the visible project table so an opaque Vercel metadata format
+ * change cannot break discovery.
+ */
+export function parseVercelBranchUrls(
+  commentBody: string,
+): ReadonlyMap<string, string> {
+  const urls = new Map<string, string>();
+  const rowPattern =
+    /\|\s*(?:<a[^>]*>.*?<\/a>\s*)?\[([^\]]+)\]\(https:\/\/vercel\.com\/[^)]+\)\s*\|[^|]*\|\s*\[Preview\]\((https:\/\/[^)]+)\)/giu;
+  for (const match of commentBody.matchAll(rowPattern)) {
+    const project = match[1]?.trim();
+    const url = match[2] === undefined ? null : safeVercelPreviewUrl(match[2]);
+    if (project && url !== null) urls.set(project, url);
+  }
+  return urls;
+}
+
+function vercelProjectForEnvironment(environment: string): string | null {
+  const match = /^Preview(?:\s*[–—-]\s*(.+))?$/iu.exec(environment.trim());
+  return match?.[1]?.trim() || null;
+}
+
+async function discoverVercelBranchUrls(args: {
+  env: NodeJS.ProcessEnv;
+  ref: string;
+  repository: string;
+  run: GithubDeploymentCommandRunner;
+}): Promise<ReadonlyMap<string, string>> {
+  try {
+    const response = await args.run(
+      "gh",
+      ["pr", "view", args.ref, "--repo", args.repository, "--json", "comments"],
+      { env: args.env },
+    );
+    const { comments } = githubPullRequestCommentsSchema.parse(
+      JSON.parse(response.stdout),
+    );
+    const comment = comments
+      .filter((candidate) =>
+        ["vercel", "vercel[bot]"].includes(
+          candidate.author.login.toLocaleLowerCase(),
+        ),
+      )
+      .sort((left, right) => right.createdAt.localeCompare(left.createdAt))[0];
+    return comment === undefined
+      ? new Map()
+      : parseVercelBranchUrls(comment.body);
+  } catch {
+    // A branch need not have a PR, and GitHub may withhold comments even when
+    // deployment status is readable. The immutable deployment remains useful.
+    return new Map();
+  }
 }
 
 export function parseGithubRepository(remoteUrl: string): string | null {
@@ -206,43 +290,71 @@ export async function discoverWorkspaceGithubDeployments({
   }
 
   try {
-    const results = await Promise.all(
-      deployments.slice(0, MAX_DEPLOYMENTS).map(async (deployment) => {
-        const response = await run(
-          "gh",
-          [
-            "api",
-            "--method",
-            "GET",
-            `repos/${repository}/deployments/${deployment.id}/statuses`,
-            "-f",
-            "per_page=1",
-          ],
-          { env },
-        );
-        const statuses = githubDeploymentStatusesSchema.parse(
-          JSON.parse(response.stdout),
-        );
-        const latest = statuses[0];
+    const [branchUrls, rawResults] = await Promise.all([
+      deployments.length === 0
+        ? Promise.resolve(new Map<string, string>())
+        : discoverVercelBranchUrls({ env, ref, repository, run }),
+      Promise.all(
+        deployments.slice(0, MAX_DEPLOYMENTS).map(async (deployment) => {
+          const response = await run(
+            "gh",
+            [
+              "api",
+              "--method",
+              "GET",
+              `repos/${repository}/deployments/${deployment.id}/statuses`,
+              "-f",
+              "per_page=1",
+            ],
+            { env },
+          );
+          const statuses = githubDeploymentStatusesSchema.parse(
+            JSON.parse(response.stdout),
+          );
+          const latest = statuses[0];
+          return {
+            id: deployment.id,
+            environment: deployment.environment,
+            ref: deployment.ref,
+            createdAt: deployment.created_at,
+            updatedAt: deployment.updated_at,
+            latestStatus:
+              latest === undefined
+                ? null
+                : {
+                    state: latest.state,
+                    branchUrl: null,
+                    deploymentUrl: nonEmptyUrl(latest.environment_url),
+                    logUrl: nonEmptyUrl(latest.log_url),
+                    createdAt: latest.created_at,
+                    updatedAt: latest.updated_at,
+                  },
+          };
+        }),
+      ),
+    ]);
+    const results: WorkspaceGithubDeploymentsAvailable["deployments"] =
+      rawResults.map((deployment) => {
+        const status = deployment.latestStatus;
+        if (
+          status === null ||
+          status.deploymentUrl === null ||
+          safeVercelPreviewUrl(status.deploymentUrl) === null
+        ) {
+          return deployment;
+        }
+        const project = vercelProjectForEnvironment(deployment.environment);
+        const branchUrl =
+          project === null && branchUrls.size === 1
+            ? branchUrls.values().next().value
+            : project === null
+              ? undefined
+              : branchUrls.get(project);
         return {
-          id: deployment.id,
-          environment: deployment.environment,
-          ref: deployment.ref,
-          createdAt: deployment.created_at,
-          updatedAt: deployment.updated_at,
-          latestStatus:
-            latest === undefined
-              ? null
-              : {
-                  state: latest.state,
-                  environmentUrl: nonEmptyUrl(latest.environment_url),
-                  logUrl: nonEmptyUrl(latest.log_url),
-                  createdAt: latest.created_at,
-                  updatedAt: latest.updated_at,
-                },
+          ...deployment,
+          latestStatus: { ...status, branchUrl: branchUrl ?? null },
         };
-      }),
-    );
+      });
     return { outcome: "available", deployments: results, ref, repository };
   } catch (error) {
     return {

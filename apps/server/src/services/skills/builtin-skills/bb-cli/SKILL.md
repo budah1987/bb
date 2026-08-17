@@ -36,7 +36,9 @@ message agents, or inspect projects, providers, and environments.
 - Use `bb environment docker-activity <id> --json` to inspect source and build
   freshness for mounted Docker builds.
 - Use `bb environment previews <id> --json` to inspect local and deployment
-  preview providers.
+  preview providers. Deployment results distinguish the stable branch URL from
+  the immutable URL for the current deployment and use the environment's saved
+  GitHub account.
 - Use `bb environment dev-server-start <id> --thread <thread-id> --title <title>
 --command '<command with {port}>'` to select a free port and start a durable
   server.

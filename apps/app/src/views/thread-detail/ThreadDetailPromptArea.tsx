@@ -7,7 +7,11 @@ import {
   getFollowUpPromptPlaceholder,
   getCompactFollowUpPromptPlaceholder,
 } from "@/components/promptbox/follow-up-placeholder";
-import { isPluginPendingInteraction, PERSONAL_PROJECT_ID } from "@bb/domain";
+import {
+  isBackgroundAgentTaskType,
+  isPluginPendingInteraction,
+  PERSONAL_PROJECT_ID,
+} from "@bb/domain";
 import type {
   EnvironmentStatus,
   PendingInteraction,
@@ -63,6 +67,9 @@ import { useComposerTextEffects } from "@/lib/composer-text-effects";
 import { useEscapeToHide } from "@/hooks/useEscapeToHide";
 import { useThreadCreationOptions } from "@/hooks/useThreadCreationOptions";
 import { useProjectDisplayName } from "@/hooks/queries/sidebar-navigation-query";
+import { useIsCompactViewport } from "@bb/shared-ui/hooks/use-compact-viewport";
+import { useStandaloneCompactPwa } from "@/hooks/useStandaloneCompactPwa";
+import { useIsRailVisible } from "@/lib/rail-visibility";
 import {
   useActiveComposerDraft,
   useComposerAttachmentUploads,
@@ -307,6 +314,15 @@ function buildInlineDraftComposer(options: InlineDraftComposerOptions) {
   );
 }
 
+export function selectPromptBackgroundCommands(args: {
+  commands: readonly TimelineWorkflowWorkRow[];
+  showAgentsInRail: boolean;
+}): TimelineWorkflowWorkRow[] {
+  return args.showAgentsInRail
+    ? args.commands.filter((row) => !isBackgroundAgentTaskType(row.taskType))
+    : [...args.commands];
+}
+
 export function ThreadDetailPromptArea({
   activeBackgroundAgentCount,
   canUseGitUi,
@@ -350,6 +366,23 @@ export function ThreadDetailPromptArea({
   thread,
 }: ThreadDetailPromptAreaProps) {
   const navigate = useNavigate();
+  const isCompactViewport = useIsCompactViewport();
+  const isStandaloneCompactPwa = useStandaloneCompactPwa();
+  const isRailVisible = useIsRailVisible(thread.id);
+  const promptBackgroundCommands = useMemo(
+    () =>
+      selectPromptBackgroundCommands({
+        commands: activeBackgroundCommands,
+        showAgentsInRail:
+          isRailVisible && !isCompactViewport && !isStandaloneCompactPwa,
+      }),
+    [
+      activeBackgroundCommands,
+      isCompactViewport,
+      isRailVisible,
+      isStandaloneCompactPwa,
+    ],
+  );
   const bottomAnchor = useBottomAnchoredScroll();
   const defaultExecutionOptionsQuery = useThreadDefaultExecutionOptions(
     thread.id,
@@ -1434,9 +1467,7 @@ export function ThreadDetailPromptArea({
             >
               From child thread: {item.childTitle}
             </NavLink>
-            <PluginPendingInteractionComposer
-              interaction={item.interaction}
-            />
+            <PluginPendingInteractionComposer interaction={item.interaction} />
           </div>
         ) : (
           <ThreadPendingInteractionBanner
@@ -1462,7 +1493,7 @@ export function ThreadDetailPromptArea({
           />
         ))}
         <ThreadBackgroundCommandsCard
-          commands={activeBackgroundCommands}
+          commands={promptBackgroundCommands}
           isExpanded={isBackgroundCommandsExpanded}
           onToggle={() => setIsBackgroundCommandsExpanded((value) => !value)}
         />
@@ -1566,7 +1597,7 @@ export function ThreadDetailPromptArea({
       activeWorkflows,
       expandedWorkflowIds,
       toggleWorkflowExpanded,
-      activeBackgroundCommands,
+      promptBackgroundCommands,
       isBackgroundCommandsExpanded,
       modelFallback,
       parentThreadSection,

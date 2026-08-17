@@ -535,6 +535,7 @@ export function registerEnvironmentRoutes(app: Hono, deps: AppDeps): void {
       context.req.param("id"),
     );
     const previews = await getEnvironmentPreviews(deps, {
+      githubAccountLogin: environment.githubAccountLogin,
       target: requireWorkspaceCommandTarget(environment),
     });
     const provider = previews.providers.find(
@@ -858,7 +859,12 @@ export function registerEnvironmentRoutes(app: Hono, deps: AppDeps): void {
       context.req.param("id"),
     );
     const target = requireWorkspaceCommandTarget(environment);
-    return context.json(await getEnvironmentPreviews(deps, { target }));
+    return context.json(
+      await getEnvironmentPreviews(deps, {
+        githubAccountLogin: environment.githubAccountLogin,
+        target,
+      }),
+    );
   });
 
   get(routes.pullRequest, async (context) => {

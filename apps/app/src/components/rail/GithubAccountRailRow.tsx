@@ -46,7 +46,7 @@ export function GithubAccountRailRow({
           )}
         >
           <Icon
-            name={isLoading ? "Spinner" : "Github"}
+            name={isLoading ? "Spinner" : "UserRound"}
             className={cn("size-4 shrink-0", isLoading && "animate-spin")}
             aria-hidden
           />
@@ -73,11 +73,6 @@ export function GithubAccountRailRow({
             className="min-h-11 gap-2"
             onSelect={() => onChange(account.login)}
           >
-            <Icon
-              name="Github"
-              className="size-4 text-muted-foreground"
-              aria-hidden
-            />
             <span className="min-w-0 flex-1 truncate">@{account.login}</span>
             {account.active ? (
               <span className="text-xs text-muted-foreground">CLI default</span>

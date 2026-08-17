@@ -32,6 +32,7 @@ import {
 } from "@/lib/plugin-slots";
 import type { ChildThreadPendingAttention } from "@/hooks/queries/child-thread-pending-interactions";
 import {
+  selectPromptBackgroundCommands,
   ThreadDetailPromptArea,
   type ThreadDetailSentMessageEdit,
 } from "./ThreadDetailPromptArea";
@@ -732,6 +733,32 @@ afterEach(() => {
 });
 
 describe("ThreadDetailPromptArea", () => {
+  it("moves only agent activity into the visible desktop rail", () => {
+    const agent = workflowRow({
+      id: "agent",
+      itemId: "agent",
+      taskType: "local_subagent",
+    });
+    const command = workflowRow({
+      id: "command",
+      itemId: "command",
+      taskType: "local_bash",
+    });
+
+    expect(
+      selectPromptBackgroundCommands({
+        commands: [agent, command],
+        showAgentsInRail: true,
+      }),
+    ).toEqual([command]);
+    expect(
+      selectPromptBackgroundCommands({
+        commands: [agent, command],
+        showAgentsInRail: false,
+      }),
+    ).toEqual([agent, command]);
+  });
+
   it("keeps sent-message edit submission out of the normal send path", () => {
     mocks.defaultExecutionOptions = {
       model: "gpt-5",

@@ -74,7 +74,7 @@ Making your repo work with bb:
     --container <id>                     Docker container ID (required)
     --action <restart|stop>               Docker action (required)
 
-  bb environment previews <id>            Show local and deployment preview providers
+  bb environment previews <id>            Show local previews and branch/deployment URLs
 
   bb environment dev-server-start <id>    Start a durable development server
     --thread <id>                        Owning thread (required)

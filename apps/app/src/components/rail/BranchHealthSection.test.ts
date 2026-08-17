@@ -75,6 +75,8 @@ describe("summarizeBranchHealth", () => {
           issues: [],
           providers: [
             {
+              branchUrl: null,
+              deploymentUrl: null,
               environment: "preview",
               framePolicy: "unknown",
               frameReason: null,

@@ -3,6 +3,7 @@ import type { Environment, ThreadListEntry } from "@bb/domain";
 import type { SidebarBootstrapResponse } from "@bb/server-contract";
 import { createAppQueryClient } from "@/lib/query-client";
 import {
+  environmentPreviewsQueryKey,
   sidebarNavigationQueryKey,
   threadListQueryKey,
   threadSearchQueryKey,
@@ -162,5 +163,21 @@ describe("applyEnvironmentUpdateResult", () => {
     expect(queryClient.getQueryState(threadSearchKey)?.isInvalidated).toBe(
       true,
     );
+  });
+
+  it("invalidates previews when the selected GitHub account changes", () => {
+    const queryClient = createAppQueryClient({
+      defaultOptions: { queries: { gcTime: Infinity, retry: false } },
+      showMutationErrorToasts: false,
+    });
+    const previewsKey = environmentPreviewsQueryKey("env_1");
+    queryClient.setQueryData(previewsKey, { issues: [], providers: [] });
+
+    applyEnvironmentUpdateResult({
+      environment: { ...createEnvironment(), githubAccountLogin: "amirghst" },
+      queryClient,
+    });
+
+    expect(queryClient.getQueryState(previewsKey)?.isInvalidated).toBe(true);
   });
 });

@@ -1277,6 +1277,63 @@ describe("host-daemon local schemas", () => {
 });
 
 describe("host-daemon command schemas", () => {
+  it("carries the selected account and both deployment URLs", () => {
+    const command = {
+      type: "workspace.github_deployments" as const,
+      environmentId: "env_123",
+      workspaceContext: {
+        workspacePath: "/tmp/workspace",
+        workspaceProvisionType: "unmanaged" as const,
+      },
+    };
+    expect(hostDaemonOnlineRpcCommandSchema.parse(command)).toMatchObject({
+      ...command,
+      githubAccountLogin: null,
+    });
+    expect(
+      hostDaemonOnlineRpcCommandSchema.parse({
+        ...command,
+        githubAccountLogin: "amirghst",
+      }),
+    ).toMatchObject({ githubAccountLogin: "amirghst" });
+
+    expect(
+      hostDaemonOnlineRpcResultSchemaByType[
+        "workspace.github_deployments"
+      ].parse({
+        deployments: [
+          {
+            createdAt: "2026-08-17T10:00:00Z",
+            environment: "Preview – web",
+            id: 42,
+            latestStatus: {
+              branchUrl: "https://web-git-draft-acme.vercel.app",
+              createdAt: "2026-08-17T10:01:00Z",
+              deploymentUrl: "https://web-abc123-acme.vercel.app",
+              logUrl: null,
+              state: "success",
+              updatedAt: "2026-08-17T10:02:00Z",
+            },
+            ref: "draft/auth",
+            updatedAt: "2026-08-17T10:02:00Z",
+          },
+        ],
+        outcome: "available",
+        ref: "draft/auth",
+        repository: "acme/web",
+      }),
+    ).toMatchObject({
+      deployments: [
+        {
+          latestStatus: {
+            branchUrl: "https://web-git-draft-acme.vercel.app",
+            deploymentUrl: "https://web-abc123-acme.vercel.app",
+          },
+        },
+      ],
+    });
+  });
+
   it("requires an explicit account for GitHub pull-request catalogs", () => {
     expect(
       hostDaemonOnlineRpcCommandSchema.parse({
@@ -1297,6 +1354,8 @@ describe("host-daemon command schemas", () => {
     ).toBe(false);
   });
 
+  // Version 126 adds account-scoped deployment discovery and distinct stable
+  // branch and immutable deployment URLs to the GitHub deployment wire.
   // Version 125 is the first build carrying both wire surfaces: BBamir's
   // turn-qualified fileChange ids, direct publication payloads, and durable
   // dev-server supervision (89-92), plus every upstream change through 123.
@@ -1336,7 +1395,7 @@ describe("host-daemon command schemas", () => {
   // mixed version. Version 113 carried the Devin Desktop open target rename
   // and remains part of the protocol lineage.
   it("uses the current host-daemon protocol version", () => {
-    expect(HOST_DAEMON_PROTOCOL_VERSION).toBe(125);
+    expect(HOST_DAEMON_PROTOCOL_VERSION).toBe(126);
   });
 
   it("requires a positive preflight file limit for workspace diff lists", () => {
@@ -1370,7 +1429,8 @@ describe("host-daemon command schemas", () => {
     ).toBe(true);
     expect(
       threadStopCommandSchema.safeParse({ ...base, intent: "pause" }).success,
-    ).toBe(false);  });
+    ).toBe(false);
+  });
 
   it("binds Plan cancellation to a required turn id and typed result", () => {
     expect(

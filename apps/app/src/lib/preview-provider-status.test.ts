@@ -12,6 +12,8 @@ function provider(
   overrides: Partial<EnvironmentPreviewProvider> = {},
 ): EnvironmentPreviewProvider {
   return {
+    branchUrl: null,
+    deploymentUrl: null,
     environment: null,
     framePolicy: "unknown",
     frameReason: null,

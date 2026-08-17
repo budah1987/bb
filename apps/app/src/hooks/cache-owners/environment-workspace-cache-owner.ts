@@ -4,7 +4,10 @@ import {
   environmentQueryKey,
   threadSearchQueryKeyPrefix,
 } from "../queries/query-keys";
-import { invalidateEnvironmentWorkspaceStateQueries } from "./environment-cache-effects";
+import {
+  invalidateEnvironmentPreviewQueries,
+  invalidateEnvironmentWorkspaceStateQueries,
+} from "./environment-cache-effects";
 import {
   applyToCachedThreadListsAndSidebarNavigation,
   type CachedThreadListsAndSidebarNavigationMapper,
@@ -54,6 +57,10 @@ export function applyEnvironmentUpdateResult({
   );
   queryClient.invalidateQueries({ queryKey: threadSearchQueryKeyPrefix() });
   invalidateEnvironmentWorkspaceStateQueries({
+    environmentId: environment.id,
+    queryClient,
+  });
+  invalidateEnvironmentPreviewQueries({
     environmentId: environment.id,
     queryClient,
   });

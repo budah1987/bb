@@ -16,6 +16,7 @@ import { dimInactiveSplitsAtom } from "@/lib/split-layout/atoms";
 import { ThreadTitleMentionResourcesProvider } from "@/components/thread/ThreadTitleMentions";
 import { makeThreadListEntry } from "@/test/fixtures/thread-list-entries";
 import { sdk } from "@/lib/sdk";
+import { getRailVisibleStorageKey } from "@/lib/rail-visibility";
 
 const mocks = vi.hoisted(() => ({
   renameThread: vi.fn(),
@@ -343,9 +344,9 @@ describe("ThreadDetailHeader", () => {
   it("toggles the rail, reflects its visibility, and pairs with the panel toggle", () => {
     // Start hidden explicitly so the assertions below describe the toggle's
     // transition rather than the atom's current default.
-    window.localStorage.setItem("bb.thread.railVisible", "false");
-    // Own store: the visibility atom is module-level, so the default store
-    // would carry this test's toggle into every later render.
+    const railVisibleStorageKey = getRailVisibleStorageKey(THREAD_ID);
+    window.localStorage.setItem(railVisibleStorageKey, "false");
+    // Own store so this test's toggle cannot leak into later renders.
     render(
       <JotaiProvider store={createStore()}>
         <PaneContext.Provider value={PANE_CONTEXT}>
@@ -382,7 +383,7 @@ describe("ThreadDetailHeader", () => {
         .getByRole("button", { name: /^Hide rail/ })
         .getAttribute("aria-pressed"),
     ).toBe("true");
-    expect(window.localStorage.getItem("bb.thread.railVisible")).toBe("true");
+    expect(window.localStorage.getItem(railVisibleStorageKey)).toBe("true");
   });
 
   it("keeps the rail toggle out of the compact drawer layout", () => {

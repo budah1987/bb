@@ -142,6 +142,8 @@ function localProviders(
               ? `https://${tunnelIdentity.label}--${port}.${tunnelIdentity.baseDomain}`
               : null;
           return {
+            branchUrl: null,
+            deploymentUrl: null,
             environment: null,
             framePolicy: "unknown" as const,
             frameReason:
@@ -180,13 +182,17 @@ async function deploymentProvider(
   deployment: GithubDeployment,
 ): Promise<EnvironmentPreviewProvider> {
   const status = deployment.latestStatus;
-  const previewUrl = safeHttpsUrl(status?.environmentUrl);
+  const branchUrl = safeHttpsUrl(status?.branchUrl);
+  const deploymentUrl = safeHttpsUrl(status?.deploymentUrl);
+  const previewUrl = branchUrl ?? deploymentUrl;
   const frame =
     previewUrl === null
       ? { framePolicy: "unknown" as const, frameReason: null }
       : await probePreviewFramePolicy(previewUrl);
   return {
     ...frame,
+    branchUrl,
+    deploymentUrl,
     environment: deployment.environment,
     id: `github:${deployment.environment}`,
     kind: "deployment",
@@ -251,6 +257,8 @@ async function terminalProviders(
       ]);
       const shared = sharedPorts.has(port);
       return {
+        branchUrl: null,
+        deploymentUrl: null,
         environment: null,
         framePolicy: "unknown" as const,
         frameReason: hasActiveBuildError
@@ -284,7 +292,10 @@ async function terminalProviders(
 
 export async function getEnvironmentPreviews(
   deps: AppDeps,
-  args: { target: WorkspaceCommandTarget },
+  args: {
+    githubAccountLogin: string | null;
+    target: WorkspaceCommandTarget;
+  },
 ): Promise<EnvironmentPreviewsResponse> {
   const commandBase = {
     environmentId: args.target.environmentId,
@@ -299,7 +310,11 @@ export async function getEnvironmentPreviews(
     callHostRetryableOnlineRpc(deps, {
       hostId: args.target.hostId,
       timeoutMs: COMMAND_TIMEOUT_MS,
-      command: { ...commandBase, type: "workspace.github_deployments" },
+      command: {
+        ...commandBase,
+        type: "workspace.github_deployments",
+        githubAccountLogin: args.githubAccountLogin,
+      },
     }),
   ]);
   const issues: EnvironmentPreviewsResponse["issues"] = [];

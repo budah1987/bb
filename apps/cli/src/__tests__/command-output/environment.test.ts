@@ -285,6 +285,8 @@ describe("bb environment command output", () => {
         issues: [],
         providers: [
           {
+            branchUrl: "https://preview.example.com",
+            deploymentUrl: "https://preview-abc123.example.com",
             environment: "Preview",
             framePolicy: "allowed",
             frameReason: null,
@@ -305,7 +307,7 @@ describe("bb environment command output", () => {
 
     await runCommand(["environment", "previews", "env-feature"], register);
     expect(collectLogLines(vi.mocked(console.log))).toContain(
-      "Preview\tdeployment\tready\thttps://preview.example.com",
+      "Preview\tdeployment\tready\tbranch https://preview.example.com\tdeployment https://preview-abc123.example.com",
     );
   });
 

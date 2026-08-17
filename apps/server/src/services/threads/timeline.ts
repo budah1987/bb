@@ -6,7 +6,13 @@ import {
   type AcceptedClientRequestContext,
   type ThreadEventWithMeta,
 } from "@bb/thread-view";
-import type { ClientTurnRequestId, Thread, ThreadEventType } from "@bb/domain";
+import {
+  PLUGIN_AGENT_TASK_TYPE,
+  PLUGIN_COMMAND_TASK_TYPE,
+  type ClientTurnRequestId,
+  type Thread,
+  type ThreadEventType,
+} from "@bb/domain";
 import type {
   ThreadConversationOutlineItem,
   ThreadConversationOutlineResponse,
@@ -15,8 +21,10 @@ import type {
   TimelineRow,
   TimelineSystemRow,
   ThreadTimelineResponse,
+  TimelineWorkflowWorkRow,
   TimelineTurnSummaryDetailsResponse,
 } from "@bb/server-contract";
+import type { PluginBackgroundActivityContribution } from "../plugins/plugin-service.js";
 import {
   findStoredTimelineWindowByteBudgetFloor,
   findTimelineWindowBudgetFloorSequence,
@@ -1875,6 +1883,80 @@ export function buildThreadTimeline(
         measureResponseBytes: false,
       }).response,
   );
+}
+
+function pluginBackgroundActivityRow(args: {
+  contribution: PluginBackgroundActivityContribution;
+  maxSeq: number;
+  threadId: string;
+}): TimelineWorkflowWorkRow {
+  const { contribution, maxSeq, threadId } = args;
+  const itemId = `plugin:${encodeURIComponent(contribution.pluginId)}:${encodeURIComponent(contribution.id)}`;
+  return {
+    id: `plugin-background:${itemId}`,
+    threadId,
+    turnId: null,
+    sourceSeqStart: maxSeq,
+    sourceSeqEnd: maxSeq,
+    startedAt: contribution.startedAtMs,
+    createdAt: contribution.startedAtMs,
+    kind: "work",
+    workKind: "workflow",
+    status: "pending",
+    itemId,
+    taskType:
+      contribution.kind === "agent"
+        ? PLUGIN_AGENT_TASK_TYPE
+        : PLUGIN_COMMAND_TASK_TYPE,
+    workflowName: null,
+    description: contribution.title,
+    taskStatus: "running",
+    workflow: null,
+    usage: null,
+    summary: contribution.detail,
+    error: null,
+    completedAt: null,
+  };
+}
+
+/**
+ * Adds ephemeral plugin-owned work to a latest-page timeline response.
+ *
+ * Plugin activity is intentionally merged after the event-backed timeline
+ * cache: it can change without advancing the thread event sequence, so caching
+ * it under `maxSeq` would leave a finished or newly-started task stale until an
+ * unrelated thread event arrived.
+ */
+export function mergePluginBackgroundActivity(
+  response: ThreadTimelineResponse,
+  args: {
+    contributions: readonly PluginBackgroundActivityContribution[];
+    threadId: string;
+  },
+): ThreadTimelineResponse {
+  if (args.contributions.length === 0) {
+    return response;
+  }
+
+  const rowsById = new Map(
+    response.activeBackgroundCommands.map((row) => [row.id, row]),
+  );
+  for (const contribution of args.contributions) {
+    const row = pluginBackgroundActivityRow({
+      contribution,
+      maxSeq: response.maxSeq,
+      threadId: args.threadId,
+    });
+    if (!rowsById.has(row.id)) {
+      rowsById.set(row.id, row);
+    }
+  }
+
+  const activeBackgroundCommands = [...rowsById.values()].sort(
+    (left, right) =>
+      right.startedAt - left.startedAt || left.id.localeCompare(right.id),
+  );
+  return { ...response, activeBackgroundCommands };
 }
 
 /**
