@@ -580,8 +580,15 @@ export function registerEnvironmentCommands(
           console.log("No previews were found.");
         }
         for (const provider of result.providers) {
+          const addresses =
+            provider.kind === "deployment"
+              ? [
+                  `branch ${provider.branchUrl ?? "(none)"}`,
+                  `deployment ${provider.deploymentUrl ?? "(none)"}`,
+                ].join("\t")
+              : (provider.url ?? "(no URL)");
           console.log(
-            `${provider.label}\t${provider.kind}\t${provider.state}\t${provider.url ?? "(no URL)"}`,
+            `${provider.label}\t${provider.kind}\t${provider.state}\t${addresses}`,
           );
         }
         for (const issue of result.issues) {

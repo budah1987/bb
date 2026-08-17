@@ -3,6 +3,7 @@
 import { cleanup, render, screen } from "@testing-library/react";
 import { createStore, Provider } from "jotai";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { getRailVisibleStorageKey } from "@/lib/rail-visibility";
 import { ThreadRail } from "./ThreadRail";
 
 let isCompactViewport = false;
@@ -15,8 +16,8 @@ vi.mock("@/hooks/useStandaloneCompactPwa", () => ({
   useStandaloneCompactPwa: () => isStandaloneCompactPwa,
 }));
 
-// The rail's only content today; its data hooks need a query client it has no
-// business owning in this test.
+// The rail's content owns data hooks that this composition test should not
+// need to provision.
 vi.mock("@/components/notes/NotesPanel", () => ({
   NotesPanel: ({
     enabled,
@@ -31,43 +32,43 @@ vi.mock("@/components/notes/NotesPanel", () => ({
   ),
 }));
 
-vi.mock("./LocalServersSection", () => ({
-  LocalServersSection: ({
+vi.mock("./EnvironmentSection", () => ({
+  EnvironmentSection: ({
     enabled,
     threadId,
   }: {
     enabled: boolean;
     threadId: string;
   }) => (
-    <div data-testid="local-servers-section" data-enabled={enabled}>
+    <div data-testid="environment-section" data-enabled={enabled}>
       {threadId}
     </div>
   ),
 }));
 
-vi.mock("./BranchHealthSection", () => ({
-  BranchHealthSection: ({
+vi.mock("./AgentActivitySection", () => ({
+  AgentActivitySection: ({
     enabled,
     threadId,
   }: {
     enabled: boolean;
     threadId: string;
   }) => (
-    <div data-testid="branch-health-section" data-enabled={enabled}>
+    <div data-testid="agent-activity-section" data-enabled={enabled}>
       {threadId}
     </div>
   ),
 }));
 
-vi.mock("./PreviewSection", () => ({
-  PreviewSection: ({
+vi.mock("./PullRequestSection", () => ({
+  PullRequestSection: ({
     enabled,
     threadId,
   }: {
     enabled: boolean;
     threadId: string;
   }) => (
-    <div data-testid="preview-section" data-enabled={enabled}>
+    <div data-testid="pull-request-section" data-enabled={enabled}>
       {threadId}
     </div>
   ),
@@ -82,20 +83,6 @@ vi.mock("./FeedbackReviewSection", () => ({
     threadId: string;
   }) => (
     <div data-testid="feedback-review-section" data-enabled={enabled}>
-      {threadId}
-    </div>
-  ),
-}));
-
-vi.mock("./ReviewQueueSection", () => ({
-  ReviewQueueSection: ({
-    enabled,
-    threadId,
-  }: {
-    enabled: boolean;
-    threadId: string;
-  }) => (
-    <div data-testid="review-queue-section" data-enabled={enabled}>
       {threadId}
     </div>
   ),
@@ -117,7 +104,7 @@ vi.mock("@/components/plugin/PluginThreadRailSections", () => ({
 
 function renderRail() {
   const store = createStore();
-  window.localStorage.setItem("bb.thread.railVisible", "true");
+  window.localStorage.setItem(getRailVisibleStorageKey("thr_1"), "true");
   return render(
     <Provider store={store}>
       <ThreadRail threadId="thr_1" />
@@ -141,14 +128,14 @@ describe("ThreadRail", () => {
 
     expect(screen.getByRole("complementary", { name: "Rail" })).not.toBeNull();
     expect(screen.getByTestId("notes-panel").textContent).toBe("thr_1");
-    expect(screen.getByTestId("local-servers-section").textContent).toBe(
+    expect(screen.getByTestId("environment-section").textContent).toBe("thr_1");
+    expect(screen.getByTestId("agent-activity-section").textContent).toBe(
       "thr_1",
     );
-    expect(screen.getByTestId("preview-section").textContent).toBe("thr_1");
+    expect(screen.getByTestId("pull-request-section").textContent).toBe(
+      "thr_1",
+    );
     expect(screen.getByTestId("feedback-review-section").textContent).toBe(
-      "thr_1",
-    );
-    expect(screen.getByTestId("review-queue-section").textContent).toBe(
       "thr_1",
     );
     expect(screen.getByTestId("plugin-rail-sections").textContent).toBe(
@@ -156,9 +143,9 @@ describe("ThreadRail", () => {
     );
     for (const testId of [
       "notes-panel",
-      "local-servers-section",
-      "preview-section",
-      "review-queue-section",
+      "environment-section",
+      "agent-activity-section",
+      "pull-request-section",
       "feedback-review-section",
       "plugin-rail-sections",
     ]) {
@@ -177,13 +164,15 @@ describe("ThreadRail", () => {
     expect(container.innerHTML).toBe("");
     // The preference is untouched: the phone must not hide the rail on the
     // desktop that shares this browser profile.
-    expect(window.localStorage.getItem("bb.thread.railVisible")).toBe("true");
+    expect(window.localStorage.getItem(getRailVisibleStorageKey("thr_1"))).toBe(
+      "true",
+    );
   });
 
   it("stays mounted while hidden and pauses child work", () => {
     // Stated, not inherited from the atom's default — this asserts the hidden
     // branch, and must keep asserting it if the default ever flips.
-    window.localStorage.setItem("bb.thread.railVisible", "false");
+    window.localStorage.setItem(getRailVisibleStorageKey("thr_1"), "false");
 
     const { container } = render(
       <Provider store={createStore()}>
@@ -205,9 +194,9 @@ describe("ThreadRail", () => {
     expect(card?.className).toContain("opacity-0");
     for (const testId of [
       "notes-panel",
-      "local-servers-section",
-      "preview-section",
-      "review-queue-section",
+      "environment-section",
+      "agent-activity-section",
+      "pull-request-section",
       "feedback-review-section",
       "plugin-rail-sections",
     ]) {

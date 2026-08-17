@@ -46,11 +46,13 @@ import {
   buildThreadConversationOutline,
   buildThreadTimelineWithProfile,
   buildTimelineTurnSummaryDetails,
+  mergePluginBackgroundActivity,
   THREAD_TIMELINE_DEFAULT_SEGMENT_LIMIT,
   THREAD_TIMELINE_SEGMENT_LIMIT_MAX,
   type ThreadTimelinePageKind,
   type ThreadTimelinePageRequest,
 } from "../../services/threads/timeline.js";
+import type { PluginService } from "../../services/plugins/plugin-service.js";
 import { createSlowThreadTimelineBuildLogger } from "../../services/threads/timeline-build-log.js";
 import {
   buildThreadTimelineCacheKey,
@@ -287,7 +289,11 @@ async function serveThreadWorktreeRawFile(
   }
 }
 
-export function registerThreadDataRoutes(app: Hono, deps: AppDeps): void {
+export function registerThreadDataRoutes(
+  app: Hono,
+  deps: AppDeps,
+  plugins: PluginService,
+): void {
   const { get } = typedRoutes<PublicApiSchema>(app, {
     onValidationError: (msg) => new ApiError(400, "invalid_request", msg),
   });
@@ -346,7 +352,7 @@ export function registerThreadDataRoutes(app: Hono, deps: AppDeps): void {
       summaryOnly,
       includeProviderUnhandledOperations,
     };
-    const full = timelineCache.getOrBuild(
+    const cached = timelineCache.getOrBuild(
       buildThreadTimelineCacheKey({ ...keyArgs, maxSeq }),
       () => {
         const { profile, response } = buildThreadTimelineWithProfile(
@@ -370,6 +376,13 @@ export function registerThreadDataRoutes(app: Hono, deps: AppDeps): void {
         );
       },
     );
+    const full =
+      page.kind === "latest"
+        ? mergePluginBackgroundActivity(cached, {
+            contributions: plugins.listBackgroundActivity(thread.id),
+            threadId: thread.id,
+          })
+        : cached;
 
     // Delta: when the client tells us the revision it currently holds and our
     // last-sent snapshot still matches it exactly, return only the changed rows.

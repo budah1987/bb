@@ -94,78 +94,118 @@ function PreviewToolbar({
   provider: EnvironmentPreviewProvider;
 }) {
   const status = resolvePreviewProviderStatus({ now, provider });
+  const deploymentUrl = provider.deploymentUrl;
   return (
-    <div className="flex min-w-0 items-center gap-2 border-b border-border-hairline px-3 py-2">
-      <Button
-        type="button"
-        size="icon"
-        variant="ghost"
-        aria-label="Reload preview"
-        onClick={onReload}
-      >
-        <Icon name="ArrowReloadHorizontal" aria-hidden className="size-4" />
-      </Button>
-      {/*
-        The address is shown, not offered: a preview points at a URL the
-        environment chose, so editing it here would just be a browser bar
-        without a browser behind it.
-      */}
-      <Input
-        readOnly
-        aria-label="Preview address"
-        value={provider.url ?? ""}
-        placeholder="No preview address yet"
-        className="h-7 min-w-0 flex-1 text-xs"
-      />
-      <span
-        className={cn("shrink-0 text-xs", statusTierClassName(status.tier))}
-      >
-        {status.label}
-      </span>
-      {provider.url === null ? null : (
-        <>
+    <div className="border-b border-border-hairline">
+      <div className="flex min-w-0 items-center gap-2 px-3 py-2">
+        <Button
+          type="button"
+          size="icon"
+          variant="ghost"
+          aria-label="Reload preview"
+          onClick={onReload}
+        >
+          <Icon name="ArrowReloadHorizontal" aria-hidden className="size-4" />
+        </Button>
+        {/*
+          The address is shown, not offered: a preview points at a URL the
+          environment chose, so editing it here would just be a browser bar
+          without a browser behind it.
+        */}
+        <Input
+          readOnly
+          aria-label="Preview address"
+          value={provider.url ?? ""}
+          placeholder="No preview address yet"
+          className="h-7 min-w-0 flex-1 text-xs"
+        />
+        <span
+          className={cn("shrink-0 text-xs", statusTierClassName(status.tier))}
+        >
+          {status.label}
+        </span>
+        {provider.url === null ? null : (
+          <>
+            <Button
+              type="button"
+              size="icon"
+              variant="ghost"
+              aria-label="Copy preview address"
+              onClick={onCopy}
+            >
+              <Icon name="Copy" aria-hidden className="size-4" />
+            </Button>
+            <a
+              href={provider.url}
+              target="_blank"
+              rel="noreferrer noopener"
+              aria-label="Open in browser"
+              className="inline-flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground outline-none hover:bg-state-hover focus-visible:ring-1 focus-visible:ring-ring"
+            >
+              <Icon name="ExternalLink" aria-hidden className="size-4" />
+            </a>
+          </>
+        )}
+        {provider.kind === "local" && provider.port !== null ? (
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            className="h-7 px-2 text-xs active:scale-[0.96]"
+            onClick={provider.shared ? onUnshare : onShare}
+          >
+            {provider.shared ? "Unshare" : "Share"}
+          </Button>
+        ) : null}
+        {provider.source === "github" &&
+        provider.url?.includes(".vercel.app") ? (
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            className="h-7 px-2 text-xs active:scale-[0.96]"
+            onClick={onBypass}
+          >
+            Bypass
+          </Button>
+        ) : null}
+      </div>
+      {provider.branchUrl !== null &&
+      deploymentUrl !== null &&
+      provider.branchUrl !== deploymentUrl ? (
+        <div className="flex min-w-0 items-center gap-2 border-t border-border-hairline px-3 py-1.5">
+          <span className="shrink-0 text-xs text-muted-foreground">
+            Current deployment
+          </span>
+          <Input
+            readOnly
+            aria-label="Current deployment address"
+            value={deploymentUrl}
+            className="h-7 min-w-0 flex-1 text-xs"
+          />
           <Button
             type="button"
             size="icon"
             variant="ghost"
-            aria-label="Copy preview address"
-            onClick={onCopy}
+            aria-label="Copy current deployment address"
+            onClick={() =>
+              void copyToClipboardWithToast(deploymentUrl, {
+                successMessage: "Current deployment URL copied",
+              })
+            }
           >
             <Icon name="Copy" aria-hidden className="size-4" />
           </Button>
           <a
-            href={provider.url}
+            href={deploymentUrl}
             target="_blank"
             rel="noreferrer noopener"
-            aria-label="Open in browser"
+            aria-label="Open current deployment in browser"
             className="inline-flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground outline-none hover:bg-state-hover focus-visible:ring-1 focus-visible:ring-ring"
           >
             <Icon name="ExternalLink" aria-hidden className="size-4" />
           </a>
-        </>
-      )}
-      {provider.kind === "local" && provider.port !== null ? (
-        <Button
-          type="button"
-          size="sm"
-          variant="ghost"
-          className="h-7 px-2 text-xs active:scale-[0.96]"
-          onClick={provider.shared ? onUnshare : onShare}
-        >
-          {provider.shared ? "Unshare" : "Share"}
-        </Button>
-      ) : null}
-      {provider.source === "github" &&
-      provider.url?.includes(".vercel.app") ? (
-        <Button
-          type="button"
-          size="sm"
-          variant="ghost"
-          className="h-7 px-2 text-xs active:scale-[0.96]"
-          onClick={onBypass}
-        >
-          Bypass
-        </Button>
+        </div>
       ) : null}
     </div>
   );
@@ -328,10 +368,7 @@ export function PreviewPanel({
           {resolveUnframedMessage(provider)}
         </PreviewMessage>
       )}
-      <Dialog
-        open={isBypassDialogOpen}
-        onOpenChange={setIsBypassDialogOpen}
-      >
+      <Dialog open={isBypassDialogOpen} onOpenChange={setIsBypassDialogOpen}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Open protected Vercel preview</DialogTitle>

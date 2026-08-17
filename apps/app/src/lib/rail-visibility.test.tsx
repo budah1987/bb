@@ -5,13 +5,15 @@ import { act, renderHook } from "@testing-library/react";
 import { createStore, Provider } from "jotai";
 import type { ReactNode } from "react";
 import {
+  getRailVisibleStorageKey,
   RAIL_MIN_CONTAINER_WIDTH_PX,
   useIsRailVisible,
   useRailAutoHide,
   useToggleRail,
 } from "./rail-visibility";
 
-const RAIL_VISIBLE_STORAGE_KEY = "bb.thread.railVisible";
+const ACTIVE_THREAD_ID = "thr_active";
+const OTHER_THREAD_ID = "thr_other";
 
 let resizeCallbacks: ResizeObserverCallback[] = [];
 
@@ -49,18 +51,48 @@ function emitResize(): void {
  * instead of inheriting the atom's default — these tests are about the
  * transitions, and must not start failing when the default changes.
  */
-function seedRailVisible(visible: boolean): void {
-  window.localStorage.setItem(RAIL_VISIBLE_STORAGE_KEY, String(visible));
+function seedRailVisible(threadId: string, visible: boolean): void {
+  window.localStorage.setItem(
+    getRailVisibleStorageKey(threadId),
+    String(visible),
+  );
 }
 
-function renderRail() {
+function renderRail(threadId = ACTIVE_THREAD_ID) {
   const store = createStore();
   return renderHook(
     () => {
-      useRailAutoHide();
+      useRailAutoHide(threadId);
       return {
-        isRailVisible: useIsRailVisible(),
-        toggleRail: useToggleRail(),
+        isRailVisible: useIsRailVisible(threadId),
+        toggleRail: useToggleRail(threadId),
+      };
+    },
+    {
+      wrapper: ({ children }: { children: ReactNode }) => (
+        <Provider store={store}>{children}</Provider>
+      ),
+    },
+  );
+}
+
+function renderTwoThreads() {
+  const store = createStore();
+  return renderHook(
+    () => {
+      // The active conversation owns the layout observer. The other
+      // conversation still reads and writes its independent preference.
+      useRailAutoHide(ACTIVE_THREAD_ID, true);
+      useRailAutoHide(OTHER_THREAD_ID, false);
+      return {
+        active: {
+          isRailVisible: useIsRailVisible(ACTIVE_THREAD_ID),
+          toggleRail: useToggleRail(ACTIVE_THREAD_ID),
+        },
+        other: {
+          isRailVisible: useIsRailVisible(OTHER_THREAD_ID),
+          toggleRail: useToggleRail(OTHER_THREAD_ID),
+        },
       };
     },
     {
@@ -84,7 +116,7 @@ describe("rail visibility", () => {
   });
 
   it("hides the rail and writes the preference through when the container narrows", () => {
-    seedRailVisible(true);
+    seedRailVisible(ACTIVE_THREAD_ID, true);
     const { result } = renderRail();
     expect(result.current.isRailVisible).toBe(true);
 
@@ -92,11 +124,13 @@ describe("rail visibility", () => {
     emitResize();
 
     expect(result.current.isRailVisible).toBe(false);
-    expect(window.localStorage.getItem(RAIL_VISIBLE_STORAGE_KEY)).toBe("false");
+    expect(
+      window.localStorage.getItem(getRailVisibleStorageKey(ACTIVE_THREAD_ID)),
+    ).toBe("false");
   });
 
   it("never reveals the rail again when the container widens", () => {
-    seedRailVisible(true);
+    seedRailVisible(ACTIVE_THREAD_ID, true);
     const { result } = renderRail();
 
     setContainerWidth(RAIL_MIN_CONTAINER_WIDTH_PX - 1);
@@ -115,10 +149,61 @@ describe("rail visibility", () => {
   });
 
   it("leaves a wide layout's stored preference untouched", () => {
-    seedRailVisible(true);
+    seedRailVisible(ACTIVE_THREAD_ID, true);
     const { result } = renderRail();
     emitResize();
     expect(result.current.isRailVisible).toBe(true);
-    expect(window.localStorage.getItem(RAIL_VISIBLE_STORAGE_KEY)).toBe("true");
+    expect(
+      window.localStorage.getItem(getRailVisibleStorageKey(ACTIVE_THREAD_ID)),
+    ).toBe("true");
+  });
+
+  it("remembers open and closed state independently for each conversation", () => {
+    seedRailVisible(ACTIVE_THREAD_ID, true);
+    seedRailVisible(OTHER_THREAD_ID, false);
+    const { result } = renderTwoThreads();
+
+    expect(result.current.active.isRailVisible).toBe(true);
+    expect(result.current.other.isRailVisible).toBe(false);
+
+    act(() => {
+      result.current.active.toggleRail();
+      result.current.other.toggleRail();
+    });
+
+    expect(result.current.active.isRailVisible).toBe(false);
+    expect(result.current.other.isRailVisible).toBe(true);
+    expect(
+      window.localStorage.getItem(getRailVisibleStorageKey(ACTIVE_THREAD_ID)),
+    ).toBe("false");
+    expect(
+      window.localStorage.getItem(getRailVisibleStorageKey(OTHER_THREAD_ID)),
+    ).toBe("true");
+  });
+
+  it("auto-hides only the active conversation", () => {
+    seedRailVisible(ACTIVE_THREAD_ID, true);
+    seedRailVisible(OTHER_THREAD_ID, true);
+    const { result } = renderTwoThreads();
+
+    setContainerWidth(RAIL_MIN_CONTAINER_WIDTH_PX - 1);
+    emitResize();
+
+    expect(result.current.active.isRailVisible).toBe(false);
+    expect(result.current.other.isRailVisible).toBe(true);
+    expect(
+      window.localStorage.getItem(getRailVisibleStorageKey(ACTIVE_THREAD_ID)),
+    ).toBe("false");
+    expect(
+      window.localStorage.getItem(getRailVisibleStorageKey(OTHER_THREAD_ID)),
+    ).toBe("true");
+  });
+
+  it("uses the old global preference for a conversation not seen before", () => {
+    window.localStorage.setItem("bb.thread.railVisible", "false");
+
+    const { result } = renderRail("thr_legacy_migration");
+
+    expect(result.current.isRailVisible).toBe(false);
   });
 });

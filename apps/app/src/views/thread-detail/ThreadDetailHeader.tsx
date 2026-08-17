@@ -115,8 +115,8 @@ export function ThreadDetailHeader({
   const dimsInactiveSplits = useAtomValue(dimInactiveSplitsAtom);
   const panelShortcut = useAppCommandShortcut("panel.toggle");
   const railShortcut = useAppCommandShortcut("rail.toggle");
-  const isRailVisible = useIsRailVisible();
-  const toggleRail = useToggleRail();
+  const isRailVisible = useIsRailVisible(threadId);
+  const toggleRail = useToggleRail(threadId);
   const usesDesktopChrome = shouldUseMacosDesktopChrome(desktopInfo);
   const headerRef = useRef<HTMLElement>(null!);
   // The title doubles as the pane-reorder drag handle when the layout is split;

@@ -35,6 +35,7 @@ import {
   ThreadRail,
   useThreadRailContentInsetPx,
 } from "@/components/rail/ThreadRail";
+import type { AgentActivityData } from "@/components/rail/AgentActivitySection";
 import { ThreadTimelinePane } from "./ThreadTimelinePane";
 import { PANEL_COLLAPSE_TRANSITION_CLASS } from "@/components/secondary-panel/panelTransitionTokens";
 import { dispatchBrowserViewBoundsSync } from "@/lib/browser-view-bounds-sync";
@@ -71,6 +72,7 @@ type ThreadSecondaryPanelProps = Omit<
 };
 
 interface ThreadDetailSecondaryContentProps {
+  agentActivityData?: AgentActivityData;
   footer: ReactNode;
   header: ReactNode;
   isMetadataLoading: boolean;
@@ -104,6 +106,7 @@ export function ThreadDetailSecondaryContent(
 }
 
 function ThreadDetailSecondaryContentBody({
+  agentActivityData,
   footer,
   header,
   isMetadataLoading,
@@ -139,6 +142,7 @@ function ThreadDetailSecondaryContentBody({
   // secondary panel, or that is a bounded split pane, cannot spare another
   // 312px, so the card floats over it instead.
   const railContentInsetPx = useThreadRailContentInsetPx(
+    stableTimeline.threadId,
     isSecondaryPanelOpen || isBoundedPane ? "floating" : "docked",
   );
   const [isCompactDrawerContentSettled, setIsCompactDrawerContentSettled] =
@@ -473,7 +477,10 @@ function ThreadDetailSecondaryContentBody({
                 }}
               >
                 <ThreadTimelinePane {...stableTimeline} footer={footer} />
-                <ThreadRail threadId={stableTimeline.threadId} />
+                <ThreadRail
+                  agentActivityData={agentActivityData}
+                  threadId={stableTimeline.threadId}
+                />
               </div>
             </div>
           </Panel>

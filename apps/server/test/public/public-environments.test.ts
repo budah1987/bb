@@ -553,6 +553,78 @@ describe("public environments", () => {
     });
   });
 
+  it("uses the environment GitHub account and preserves both deployment URLs", async () => {
+    await withTestHarness(async (harness) => {
+      const fixture = seedThreadFixture(harness, {
+        environment: { githubAccountLogin: "amirghst" },
+        session: { id: "host-deployment-preview" },
+      });
+      const environmentPath = fixture.environment.path;
+      if (environmentPath === null) {
+        throw new Error("Expected a ready environment path");
+      }
+
+      const responsePromise = harness.app.request(
+        `/api/v1/environments/${fixture.environment.id}/previews`,
+      );
+      const dockerCommand = await waitForQueuedCommand(
+        harness,
+        ({ command }) => command.type === "workspace.docker_mounts",
+      );
+      await reportQueuedCommandSuccess(harness, dockerCommand, {
+        containers: [],
+        outcome: "available",
+        workspaceGit: {
+          branch: "draft/auth",
+          commonDir: "/repo/.git",
+          root: environmentPath,
+        },
+      });
+      const githubCommand = await waitForQueuedCommand(
+        harness,
+        ({ command }) => command.type === "workspace.github_deployments",
+      );
+      expect(githubCommand.command).toMatchObject({
+        githubAccountLogin: "amirghst",
+      });
+      await reportQueuedCommandSuccess(harness, githubCommand, {
+        deployments: [
+          {
+            createdAt: "2026-08-17T10:00:00Z",
+            environment: "Preview – web",
+            id: 42,
+            latestStatus: {
+              branchUrl: "https://branch.preview.example.com",
+              createdAt: "2026-08-17T10:01:00Z",
+              deploymentUrl: "https://commit.preview.example.com",
+              logUrl: "https://logs.example.com/42",
+              state: "success",
+              updatedAt: "2026-08-17T10:02:00Z",
+            },
+            ref: "draft/auth",
+            updatedAt: "2026-08-17T10:02:00Z",
+          },
+        ],
+        outcome: "available",
+        ref: "draft/auth",
+        repository: "budah1987/bb",
+      });
+
+      const response = await responsePromise;
+      expect(response.status).toBe(200);
+      await expect(readJson(response)).resolves.toMatchObject({
+        providers: [
+          {
+            branchUrl: "https://branch.preview.example.com/",
+            deploymentUrl: "https://commit.preview.example.com/",
+            id: "github:Preview – web",
+            url: "https://branch.preview.example.com/",
+          },
+        ],
+      });
+    });
+  });
+
   it("forwards Docker control to the environment host", async () => {
     await withTestHarness(async (harness) => {
       const fixture = seedThreadFixture(harness, {

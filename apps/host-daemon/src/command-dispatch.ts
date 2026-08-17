@@ -1003,8 +1003,15 @@ const onlineRpcHandlers: OnlineRpcHandlerMap = {
         message: resolution.failure.message,
       };
     }
+    const shellEnv = providerCliEnvFromShellEnv(
+      options.runtimeManager.getShellEnv(),
+    );
+    const githubEnv = await getGithubAccountEnvironment({
+      env: shellEnv,
+      login: command.githubAccountLogin,
+    });
     return discoverWorkspaceGithubDeployments({
-      env: providerCliEnvFromShellEnv(options.runtimeManager.getShellEnv()),
+      env: githubEnv === undefined ? shellEnv : { ...shellEnv, ...githubEnv },
       workspacePath: command.workspaceContext.workspacePath,
     });
   },

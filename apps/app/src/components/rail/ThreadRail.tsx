@@ -5,11 +5,11 @@ import { PluginThreadRailSections } from "@/components/plugin/PluginThreadRailSe
 import { PANEL_COLLAPSE_TRANSITION_CLASS } from "@/components/secondary-panel/panelTransitionTokens";
 import { useStandaloneCompactPwa } from "@/hooks/useStandaloneCompactPwa";
 import { useIsRailVisible } from "@/lib/rail-visibility";
-import { BranchHealthSection } from "./BranchHealthSection";
-import { LocalServersSection } from "./LocalServersSection";
+import { AgentActivitySection } from "./AgentActivitySection";
+import type { AgentActivityData } from "./AgentActivitySection";
+import { EnvironmentSection } from "./EnvironmentSection";
 import { FeedbackReviewSection } from "./FeedbackReviewSection";
-import { PreviewSection } from "./PreviewSection";
-import { ReviewQueueSection } from "./ReviewQueueSection";
+import { PullRequestSection } from "./PullRequestSection";
 import { RailPanelTitle } from "./RailPanelTitle";
 import { RAIL_SECTION_STACK_CLASS } from "./railStyleTokens";
 
@@ -45,9 +45,10 @@ export type ThreadRailVariant = "docked" | "floating";
  * than threading them through props, so the two can never disagree.
  */
 export function useThreadRailContentInsetPx(
+  threadId: string,
   variant: ThreadRailVariant,
 ): number {
-  const isRailVisible = useIsRailVisible();
+  const isRailVisible = useIsRailVisible(threadId);
   const isCompactViewport = useIsCompactViewport();
   const isStandaloneCompactPwa = useStandaloneCompactPwa();
 
@@ -63,6 +64,7 @@ export function useThreadRailContentInsetPx(
 }
 
 export interface ThreadRailProps {
+  agentActivityData?: AgentActivityData;
   threadId: string;
 }
 
@@ -89,8 +91,8 @@ export interface ThreadRailProps {
  * is a wide-viewport affordance, and in the standalone PWA it would be most of
  * the screen.
  */
-export function ThreadRail({ threadId }: ThreadRailProps) {
-  const isRailVisible = useIsRailVisible();
+export function ThreadRail({ agentActivityData, threadId }: ThreadRailProps) {
+  const isRailVisible = useIsRailVisible(threadId);
   const isCompactViewport = useIsCompactViewport();
   const isStandaloneCompactPwa = useStandaloneCompactPwa();
 
@@ -124,16 +126,22 @@ export function ThreadRail({ threadId }: ThreadRailProps) {
             : "pointer-events-none translate-x-full opacity-0",
         )}
       >
-        <RailContents threadId={threadId} enabled={isRailVisible} />
+        <RailContents
+          agentActivityData={agentActivityData}
+          threadId={threadId}
+          enabled={isRailVisible}
+        />
       </aside>
     </div>
   );
 }
 
 function RailContents({
+  agentActivityData,
   threadId,
   enabled,
 }: {
+  agentActivityData?: AgentActivityData;
   threadId: string;
   enabled: boolean;
 }) {
@@ -142,10 +150,13 @@ function RailContents({
       <div className="flex min-w-0 flex-col px-1.5">
         <RailPanelTitle>Environment</RailPanelTitle>
         <div className={RAIL_SECTION_STACK_CLASS}>
-          <LocalServersSection threadId={threadId} enabled={enabled} />
-          <BranchHealthSection threadId={threadId} enabled={enabled} />
-          <PreviewSection threadId={threadId} enabled={enabled} />
-          <ReviewQueueSection threadId={threadId} enabled={enabled} />
+          <EnvironmentSection threadId={threadId} enabled={enabled} />
+          <AgentActivitySection
+            data={agentActivityData}
+            threadId={threadId}
+            enabled={enabled}
+          />
+          <PullRequestSection threadId={threadId} enabled={enabled} />
           <FeedbackReviewSection threadId={threadId} enabled={enabled} />
           <PluginThreadRailSections threadId={threadId} enabled={enabled} />
         </div>

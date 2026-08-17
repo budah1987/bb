@@ -575,7 +575,7 @@ function ThreadDetailViewInternal(props: ThreadDetailViewInternalProps) {
   const activeFixedSecondaryTabId = activeFixedSecondaryTab?.id ?? null;
   const renderSecondaryPanelAsDrawer = useIsCompactViewport();
   const isStandaloneCompactPwa = useStandaloneCompactPwa();
-  const toggleRail = useToggleRail();
+  const toggleRail = useToggleRail(threadId);
   const secondaryPanelDrawerVisibility =
     useThreadSecondaryPanelDrawerVisibility({
       isCompactViewport: renderSecondaryPanelAsDrawer,
@@ -910,6 +910,15 @@ function ThreadDetailViewInternal(props: ThreadDetailViewInternalProps) {
   } = useThreadTimelineController({
     threadId: threadId ?? "",
   });
+  const agentActivityData = useMemo(
+    () => ({
+      activeBackgroundCommands,
+      isError: Boolean(timelineError),
+      isLoading: timelineLoading,
+      rows: timelineRows,
+    }),
+    [activeBackgroundCommands, timelineError, timelineLoading, timelineRows],
+  );
   const sendMessage = useSendThreadMessage();
   const editMessage = useEditThreadMessage();
   const createQueuedMessage = useCreateThreadQueuedMessage();
@@ -1753,7 +1762,7 @@ function ThreadDetailViewInternal(props: ThreadDetailViewInternalProps) {
     toggleSecondaryPanel();
     return true;
   });
-  useRailAutoHide();
+  useRailAutoHide(threadId, isFocused);
   useAppCommandHandler("rail.toggle", () => {
     if (!isFocused) return false;
     toggleRail();
@@ -3390,6 +3399,7 @@ function ThreadDetailViewInternal(props: ThreadDetailViewInternalProps) {
         }
       >
         <ThreadDetailSecondaryContent
+          agentActivityData={agentActivityData}
           footer={composerFooter}
           header={timelineHeader}
           isMetadataLoading={environmentQuery.isLoading}

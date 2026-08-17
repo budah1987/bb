@@ -3,10 +3,16 @@
  * edge of the thread pane (see `components/rail/ThreadRail.tsx`).
  */
 import { useAtomValue, useSetAtom } from "jotai";
+import { atomFamily } from "jotai-family";
 import { useCallback, useEffect } from "react";
 import { createBooleanPreferenceAtom } from "./browser-storage";
 
-const RAIL_VISIBLE_STORAGE_KEY = "bb.thread.railVisible";
+const RAIL_VISIBLE_STORAGE_KEY_PREFIX = "bb.thread.railVisible";
+const LEGACY_RAIL_VISIBLE_STORAGE_KEY = "bb.thread.railVisible";
+
+export function getRailVisibleStorageKey(threadId: string): string {
+  return `${RAIL_VISIBLE_STORAGE_KEY_PREFIX}.${encodeURIComponent(threadId)}`;
+}
 
 /**
  * Below this container width the rail stops paying for its own space and the
@@ -41,17 +47,26 @@ export const RAIL_MIN_CONTAINER_WIDTH_PX = 1180;
  * viewport too narrow to afford it, `useRailAutoHide` puts it away on first
  * measure and it stays away.
  */
-const railVisibleAtom = createBooleanPreferenceAtom(
-  RAIL_VISIBLE_STORAGE_KEY,
-  true,
-);
-
-export function useIsRailVisible(): boolean {
-  return useAtomValue(railVisibleAtom);
+function legacyRailVisibleDefault(): boolean {
+  if (typeof window === "undefined") return true;
+  return (
+    window.localStorage.getItem(LEGACY_RAIL_VISIBLE_STORAGE_KEY) !== "false"
+  );
 }
 
-export function useToggleRail(): () => void {
-  const setRailVisible = useSetAtom(railVisibleAtom);
+const railVisibleAtomFamily = atomFamily((threadId: string) =>
+  createBooleanPreferenceAtom(
+    getRailVisibleStorageKey(threadId),
+    legacyRailVisibleDefault(),
+  ),
+);
+
+export function useIsRailVisible(threadId: string): boolean {
+  return useAtomValue(railVisibleAtomFamily(threadId));
+}
+
+export function useToggleRail(threadId: string): () => void {
+  const setRailVisible = useSetAtom(railVisibleAtomFamily(threadId));
   return useCallback(() => {
     setRailVisible((current) => !current);
   }, [setRailVisible]);
@@ -63,10 +78,10 @@ export function useToggleRail(): () => void {
  * harmless: every observer computes the same value and the write is a no-op
  * while the rail is already hidden.
  */
-export function useRailAutoHide(): void {
-  const setRailVisible = useSetAtom(railVisibleAtom);
+export function useRailAutoHide(threadId: string, enabled = true): void {
+  const setRailVisible = useSetAtom(railVisibleAtomFamily(threadId));
   useEffect(() => {
-    if (typeof ResizeObserver === "undefined") {
+    if (!enabled || typeof ResizeObserver === "undefined") {
       return;
     }
     const container = document.documentElement;
@@ -80,5 +95,5 @@ export function useRailAutoHide(): void {
     return () => {
       observer.disconnect();
     };
-  }, [setRailVisible]);
+  }, [enabled, setRailVisible]);
 }
