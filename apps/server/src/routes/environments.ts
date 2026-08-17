@@ -3,6 +3,7 @@ import {
   hasBusyThreadInEnvironment,
   recordEnvironmentWorkspaceRename,
   updateEnvironmentMetadata,
+  getProject,
 } from "@bb/db";
 import {
   type GitBranchRefClassification,
@@ -61,7 +62,10 @@ import {
   getEnvironmentPreviews,
 } from "../services/environments/previews.js";
 import { assembleThreadPullRequest } from "../services/environments/pull-request.js";
-import { getGithubAccounts } from "../services/system/github-repositories.js";
+import {
+  getGithubAccounts,
+  getGithubRepositories,
+} from "../services/system/github-repositories.js";
 import {
   requireAvailableWorkspaceDiff,
   requireAvailableWorkspaceStatus,
@@ -74,6 +78,46 @@ import {
 const COMMIT_FALLBACK_MESSAGE = "bb: automated commit";
 const SQUASH_MERGE_FALLBACK_MESSAGE = "bb: squash merge";
 const SIMULATOR_RPC_TIMEOUT_MS = 2 * 60_000;
+
+function githubRepositoryName(remoteUrl: string | null): string | null {
+  if (!remoteUrl) return null;
+  const match = remoteUrl
+    .trim()
+    .match(/github\.com[:/]([^/\s]+)\/([^/\s]+?)(?:\.git)?\/?$/u);
+  return match ? `${match[1]}/${match[2]}` : null;
+}
+
+/**
+ * An unset project/workspace account should use an account that can access the
+ * repository, rather than whichever account happens to be globally active in
+ * gh. Multiple authenticated accounts are common on a shared machine.
+ */
+async function resolveGithubAccountForEnvironment(
+  deps: AppDeps,
+  environment: Environment,
+): Promise<string | null> {
+  if (environment.githubAccountLogin !== null) {
+    return environment.githubAccountLogin;
+  }
+  const project = getProject(deps.db, environment.projectId);
+  const repositoryName = githubRepositoryName(project?.gitRemoteUrl ?? null);
+  if (!repositoryName) return null;
+
+  const catalog = await getGithubRepositories(deps, {
+    hostId: environment.hostId,
+  });
+  const repository = catalog.repositories.find(
+    (candidate) =>
+      candidate.nameWithOwner.toLocaleLowerCase() ===
+      repositoryName.toLocaleLowerCase(),
+  );
+  if (!repository) return null;
+  return (
+    repository.activeAccount ??
+    repository.accessibleBy[0] ??
+    null
+  );
+}
 
 /** Caps for diffs sent to the inference model for commit message generation. */
 const AI_MAX_DIFF_BYTES = 32_000;
@@ -871,12 +915,16 @@ export function registerEnvironmentRoutes(app: Hono, deps: AppDeps): void {
       return context.json({ outcome: "absent" });
     }
     const target = requireWorkspaceCommandTarget(environment);
+    const githubAccountLogin = await resolveGithubAccountForEnvironment(
+      deps,
+      environment,
+    );
     const result = await callHostRetryableOnlineRpc(deps, {
       hostId: target.hostId,
       timeoutMs: COMMAND_TIMEOUT_MS,
       command: {
         type: "workspace.pull_request",
-        githubAccountLogin: environment.githubAccountLogin,
+        githubAccountLogin,
         environmentId: target.environmentId,
         workspaceContext: target.workspaceContext,
       },
