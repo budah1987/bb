@@ -2,7 +2,10 @@ export const COMMAND_TIMEOUT_MS = 30_000;
 export const HEARTBEAT_INTERVAL_MS = 5_000;
 export const LEASE_TIMEOUT_MS = 30_000;
 export const DAEMON_DISCONNECT_GRACE_MS = 5_000;
-export const DAEMON_ACTIVE_WORK_DISCONNECT_GRACE_MS = LEASE_TIMEOUT_MS;
+// Remote Connect and a busy server can take longer than the daemon lease to
+// recover. Keep active provider work alive long enough for the daemon to
+// reconnect instead of turning a transient partition into a failed thread.
+export const DAEMON_ACTIVE_WORK_DISCONNECT_GRACE_MS = 15 * 60_000;
 /**
  * Grace window after the last live thread in a managed environment is archived
  * before its worktree is destroyed. The environment stays `retiring` (revivable
