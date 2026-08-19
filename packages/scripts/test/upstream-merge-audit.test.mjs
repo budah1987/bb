@@ -229,6 +229,30 @@ describe("upstream merge audit", () => {
     });
   });
 
+  it("reads the protocol version after upstream moves it to protocol.ts", () => {
+    const fixture = createFixture({
+      ours: (root) => write(root, "ours.txt", "fork-only\n"),
+      theirs: (root) => {
+        rmSync(
+          join(root, "packages/host-daemon-contract/src/commands.ts"),
+        );
+        write(
+          root,
+          "packages/host-daemon-contract/src/protocol.ts",
+          "export const HOST_DAEMON_PROTOCOL_VERSION = 125 as const;\n",
+        );
+      },
+    });
+    const { report, result } = runAudit(fixture);
+
+    expect(result.status).toBe(0);
+    expect(report.protocol).toMatchObject({
+      currentProtocolVersion: 124,
+      upstreamProtocolVersion: 125,
+      protocolVersionAdvanced: true,
+    });
+  });
+
   it.each([
     ["without a waiver", false, 2, "review-required", "missing"],
     ["with a valid waiver", true, 0, "clean", "applied"],

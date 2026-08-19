@@ -12,7 +12,10 @@ import { createUpstreamMergeGit } from "./lib/upstream-merge-git.mjs";
 
 const scriptPath = fileURLToPath(import.meta.url);
 const defaultRepoRoot = resolve(dirname(scriptPath), "..");
-const protocolPath = "packages/host-daemon-contract/src/commands.ts";
+const protocolPaths = [
+  "packages/host-daemon-contract/src/protocol.ts",
+  "packages/host-daemon-contract/src/commands.ts",
+];
 const packageVersionPaths = [
   "packages/bb-app/package.json",
   "apps/desktop/package.json",
@@ -45,14 +48,20 @@ function readVersion(content, label) {
   return value.version;
 }
 
-function readProtocolVersion(content, ref) {
-  const match = /HOST_DAEMON_PROTOCOL_VERSION\s*=\s*(\d+)/u.exec(content ?? "");
+function readProtocolVersionAt(git, ref) {
+  for (const path of protocolPaths) {
+    const content = git.readFileAt(ref, path);
 
-  if (match === null) {
-    throw new Error(`Unable to read HOST_DAEMON_PROTOCOL_VERSION at ${ref}.`);
+    if (content !== null) {
+      const match = /HOST_DAEMON_PROTOCOL_VERSION\s*=\s*(\d+)/u.exec(content);
+
+      if (match !== null) {
+        return Number(match[1]);
+      }
+    }
   }
 
-  return Number(match[1]);
+  throw new Error(`Unable to read HOST_DAEMON_PROTOCOL_VERSION at ${ref}.`);
 }
 
 function withoutVersion(content, label) {
@@ -266,14 +275,8 @@ export function runUpstreamMergeAudit({
       Array.isArray(waiver.compatibilityTests) ? waiver.compatibilityTests : [],
     )
     .filter((path) => isRealCompatibilityTestFile(repoRoot, path));
-  const currentProtocolVersion = readProtocolVersion(
-    git.readFileAt(headSha, protocolPath),
-    headSha,
-  );
-  const upstreamProtocolVersion = readProtocolVersion(
-    git.readFileAt(upstreamSha, protocolPath),
-    upstreamSha,
-  );
+  const currentProtocolVersion = readProtocolVersionAt(git, headSha);
+  const upstreamProtocolVersion = readProtocolVersionAt(git, upstreamSha);
   const classification = classifyConflicts({
     conflictPaths: merge.conflictPaths,
     protocolVersions: {
