@@ -8,6 +8,7 @@ import {
 } from "../src/release-feed.js";
 
 const desktopRoot = process.cwd();
+const repoRoot = resolve(desktopRoot, "..", "..");
 
 async function listFilesRecursively(directory: string): Promise<string[]> {
   const entries = await readdir(directory, { withFileTypes: true });
@@ -48,6 +49,10 @@ describe("desktop release feed", () => {
       ...(await listFilesRecursively(resolve(desktopRoot, "src"))),
       ...(await listFilesRecursively(resolve(desktopRoot, "scripts"))),
       resolve(desktopRoot, "electron-builder.config.json"),
+      // Release-feed URLs are also echoed into CI job summaries; those must
+      // stay in sync with release-feed.json even though they can't import it.
+      resolve(repoRoot, ".github/workflows/build-desktop.yml"),
+      resolve(repoRoot, ".github/workflows/publish-bb-app.yml"),
     ];
     const matches = [];
 

@@ -65,10 +65,14 @@ function evaluateWaiver({
     waiver.approvedBy.trim().length > 0 &&
     /^\d{4}-\d{2}-\d{2}$/u.test(waiver.approvedAt) &&
     waiver.protocolVersion === currentProtocolVersion;
-  const coversPaths = flaggedPaths.every((path) => waiver.paths.includes(path));
-  const testsExist = waiver.compatibilityTests.every((path) =>
-    existingCompatibilityTests.includes(path),
-  );
+  const coversPaths =
+    structurallyValid &&
+    flaggedPaths.every((path) => waiver.paths.includes(path));
+  const testsExist =
+    structurallyValid &&
+    waiver.compatibilityTests.every((path) =>
+      existingCompatibilityTests.includes(path),
+    );
 
   if (!structurallyValid || !coversPaths || !testsExist) {
     return {
