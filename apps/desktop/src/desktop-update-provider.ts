@@ -2,6 +2,7 @@ import {
   createBbDesktopVersionFeedFileName,
   type BbDesktopVersionFeedPlatform,
 } from "@bb/desktop-contract";
+import { createDesktopUpdateReleaseBaseUrl } from "./release-feed.js";
 
 export type DesktopReleaseChannel = "latest" | "nightly";
 
@@ -24,7 +25,7 @@ export function createDesktopReleaseInfo(
     channel,
     iconFileName: nightly ? "icon-nightly.png" : "icon.png",
     releaseTag,
-    updateReleaseBaseUrl: `https://github.com/get-bb/bb/releases/download/${releaseTag}/`,
+    updateReleaseBaseUrl: createDesktopUpdateReleaseBaseUrl(releaseTag),
   };
 }
 
