@@ -6,6 +6,7 @@ import type {
   SystemExecutionOptionsResponse,
 } from "@bb/server-contract";
 import type {
+  GithubRepositoryHealthResult,
   ProviderCliStatusResponse,
   ProviderUsageResponse,
 } from "@bb/host-daemon-contract";
@@ -22,8 +23,9 @@ import {
 } from "./query-keys";
 import {
   useHostProviderCliStatus,
-  useOnboardingAgents,
   useGithubPullRequests,
+  useGithubRepositoryHealth,
+  useOnboardingAgents,
   useSystemExecutionOptions,
   useSystemUsageLimits,
 } from "./system-queries";
@@ -35,6 +37,7 @@ vi.mock("@/lib/sdk", () => ({
     system: {
       executionOptions: vi.fn(),
       githubPullRequests: vi.fn(),
+      githubRepositoryHealth: vi.fn(),
       onboardingAgents: vi.fn(),
       usageLimits: vi.fn(),
     },
@@ -326,5 +329,56 @@ describe("useGithubPullRequests", () => {
     );
 
     expect(sdk.system.githubPullRequests).not.toHaveBeenCalled();
+  });
+});
+
+describe("useGithubRepositoryHealth", () => {
+  it("hands a cold cached miss to an explicit allow-fetch observer", async () => {
+    const cachedMiss: GithubRepositoryHealthResult = {
+      outcome: "unavailable",
+      host: "github.com",
+      login: "work-account",
+      message: "Repository health has not been loaded yet.",
+    };
+    const available: GithubRepositoryHealthResult = {
+      outcome: "available",
+      host: "github.com",
+      login: "work-account",
+      repositories: [],
+      fetchedAt: "2026-08-20T08:00:00.000Z",
+      rateLimit: { remaining: 4999, resetAt: null },
+    };
+    vi.mocked(sdk.system.githubRepositoryHealth).mockImplementation(
+      async (args) => (args.refresh === "cached" ? cachedMiss : available),
+    );
+    const { wrapper } = createQueryClientTestHarness();
+
+    const { result } = renderHook(
+      () => [
+        useGithubRepositoryHealth({
+          githubAccountLogin: "work-account",
+          hostId: "host-1",
+          refresh: "cached",
+          repositories: ["acme/bb"],
+        }),
+        useGithubRepositoryHealth({
+          githubAccountLogin: "work-account",
+          hostId: "host-1",
+          refresh: "allow-fetch",
+          repositories: ["acme/bb"],
+        }),
+      ],
+      { wrapper },
+    );
+
+    await waitFor(() => {
+      expect(result.current[1]?.data).toEqual(available);
+    });
+    expect(sdk.system.githubRepositoryHealth).toHaveBeenCalledWith(
+      expect.objectContaining({ refresh: "cached" }),
+    );
+    expect(sdk.system.githubRepositoryHealth).toHaveBeenCalledWith(
+      expect.objectContaining({ refresh: "allow-fetch" }),
+    );
   });
 });

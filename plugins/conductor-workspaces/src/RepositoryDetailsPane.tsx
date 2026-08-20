@@ -5,10 +5,10 @@ import {
   useRef,
   useState,
   type KeyboardEvent,
+  type ReactNode,
 } from "react";
 import {
   experimental_useSidebarThreadActions as useSidebarThreadActions,
-  experimental_useSidebarThreadPullRequest as useSidebarThreadPullRequest,
   experimental_useSidebarThreads as useSidebarThreads,
   useRpc,
   type PluginNavPanelProps,
@@ -31,7 +31,12 @@ import { useReconciliation } from "./useReconciliation";
 import type { conductorRpcContract } from "./rpc-contract";
 
 const REPOSITORY_DETAILS_PATH = "repository-details";
-const REPOSITORY_DETAIL_TABS = ["overview", "git", "manager"] as const;
+const REPOSITORY_DETAIL_TABS = [
+  "overview",
+  "git",
+  "github",
+  "manager",
+] as const;
 const MANAGER_REASONING_LEVELS = [
   "none",
   "low",
@@ -115,46 +120,13 @@ function WorkspaceStatus({ workspace }: { workspace: ConductorWorkspace }) {
   );
 }
 
-function PullRequestCell({ workspace }: { workspace: ConductorWorkspace }) {
-  const representative = pickWorkspaceThread(workspace, null);
-  const pullRequestState = useSidebarThreadPullRequest(
-    representative?.id ?? "",
-  );
-  if (!representative || workspace.environmentId === null) {
-    return <span className="text-muted-foreground">Not available</span>;
-  }
-  if (pullRequestState.isLoading) {
-    return <span className="text-muted-foreground">Checking…</span>;
-  }
-  const pullRequest = pullRequestState.pullRequest;
-  if (!pullRequest) {
-    return <span className="text-muted-foreground">No pull request</span>;
-  }
-  return (
-    <a
-      href={pullRequest.url}
-      target="_blank"
-      rel="noreferrer"
-      className="repository-details-pr"
-    >
-      <span>#{pullRequest.number}</span>
-      <span>{pullRequest.state}</span>
-      {pullRequest.attention !== "none" ? (
-        <span>{pullRequest.attention.replaceAll("_", " ")}</span>
-      ) : null}
-    </a>
-  );
-}
-
 function WorkspaceRow({
   workspace,
-  showPullRequest,
   onOpen,
   onUpdateFromMain,
   updateState,
 }: {
   workspace: ConductorWorkspace;
-  showPullRequest: boolean;
   onOpen: () => void;
   onUpdateFromMain?: () => void;
   updateState?: WorkspaceUpdateState;
@@ -181,7 +153,6 @@ function WorkspaceRow({
         </p>
       </div>
       <div className="repository-details-workspace-meta">
-        {showPullRequest ? <PullRequestCell workspace={workspace} /> : null}
         <span className="tabular-nums text-xs text-muted-foreground">
           {workspace.threads.length}{" "}
           {workspace.threads.length === 1 ? "conversation" : "conversations"}
@@ -562,7 +533,20 @@ function ManagerPanel({
   );
 }
 
-export function RepositoryDetailsPane({ subPath }: PluginNavPanelProps) {
+export interface RepositoryDetailsNativeGithubContext {
+  githubAccountLogin: string | null;
+  projectId: string;
+  repositoryName: string | null;
+}
+
+export function RepositoryDetailsPane({
+  subPath,
+  renderNativeGithub,
+}: PluginNavPanelProps & {
+  renderNativeGithub?: (
+    context: RepositoryDetailsNativeGithubContext,
+  ) => ReactNode;
+}) {
   const state = useSidebarThreads();
   const actions = useSidebarThreadActions();
   const rpc = useRpc<typeof conductorRpcContract>();
@@ -768,9 +752,11 @@ export function RepositoryDetailsPane({ subPath }: PluginNavPanelProps) {
           >
             {value === "git"
               ? "Git"
-              : value === "manager"
-                ? "Manager"
-                : "Overview"}
+              : value === "github"
+                ? "GitHub"
+                : value === "manager"
+                  ? "Manager"
+                  : "Overview"}
           </button>
         ))}
       </nav>
@@ -820,7 +806,6 @@ export function RepositoryDetailsPane({ subPath }: PluginNavPanelProps) {
                   <WorkspaceRow
                     key={workspace.key}
                     workspace={workspace}
-                    showPullRequest={false}
                     onOpen={() => openWorkspace(workspace)}
                   />
                 ))
@@ -877,7 +862,6 @@ export function RepositoryDetailsPane({ subPath }: PluginNavPanelProps) {
                   <WorkspaceRow
                     key={workspace.key}
                     workspace={workspace}
-                    showPullRequest
                     onOpen={() => openWorkspace(workspace)}
                     onUpdateFromMain={updateFromMainAction(
                       workspace.environmentId,
@@ -892,6 +876,23 @@ export function RepositoryDetailsPane({ subPath }: PluginNavPanelProps) {
               )}
             </div>
           </section>
+        </div>
+      ) : tab === "github" ? (
+        <div
+          id="repository-details-panel-github"
+          className="repository-details-content"
+          role="tabpanel"
+          aria-labelledby="repository-details-tab-github"
+        >
+          {renderNativeGithub?.({
+            githubAccountLogin: project.githubAccountLogin,
+            projectId: project.id,
+            repositoryName: project.repositoryName,
+          }) ?? (
+            <p className="repository-details-empty">
+              Native GitHub details are unavailable.
+            </p>
+          )}
         </div>
       ) : (
         <ManagerPanel projectId={project.id} onOpenThread={actions.open} />

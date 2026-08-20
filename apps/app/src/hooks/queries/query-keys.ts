@@ -77,6 +77,10 @@ export const SYSTEM_USAGE_LIMITS_QUERY_KEY = "systemUsageLimits";
 export const SYSTEM_GITHUB_ACCOUNTS_QUERY_KEY = "systemGithubAccounts";
 export const SYSTEM_GITHUB_REPOSITORIES_QUERY_KEY = "systemGithubRepositories";
 export const SYSTEM_GITHUB_PULL_REQUESTS_QUERY_KEY = "systemGithubPullRequests";
+export const SYSTEM_GITHUB_REPOSITORY_HEALTH_QUERY_KEY =
+  "systemGithubRepositoryHealth";
+export const SYSTEM_GITHUB_REPOSITORY_ACTIVITY_QUERY_KEY =
+  "systemGithubRepositoryActivity";
 export const ONBOARDING_AGENTS_QUERY_KEY = "onboardingAgents";
 export const ONBOARDING_REPOS_QUERY_KEY = "onboardingRepos";
 export const HOST_PATH_EXISTENCE_QUERY_KEY = "hostPathExistence";
@@ -524,6 +528,23 @@ export type SystemGithubPullRequestsQueryKey = readonly [
   string,
   string | null,
   string | null,
+];
+export type SystemGithubRepositoryHealthQueryKey = readonly [
+  typeof SYSTEM_GITHUB_REPOSITORY_HEALTH_QUERY_KEY,
+  string | null,
+  string,
+  string | null,
+  string,
+];
+export type SystemGithubRepositoryHealthQueryKeyPrefix = readonly [
+  typeof SYSTEM_GITHUB_REPOSITORY_HEALTH_QUERY_KEY,
+];
+export type SystemGithubRepositoryActivityQueryKey = readonly [
+  typeof SYSTEM_GITHUB_REPOSITORY_ACTIVITY_QUERY_KEY,
+  string | null,
+  string,
+  string | null,
+  string,
 ];
 export type OnboardingAgentsQueryKey = readonly [
   typeof ONBOARDING_AGENTS_QUERY_KEY,
@@ -1245,6 +1266,40 @@ export function systemGithubPullRequestsQueryKey(
     repository,
     githubAccountLogin,
     hostId,
+  ];
+}
+
+export function systemGithubRepositoryHealthQueryKey(args: {
+  githubAccountLogin: string | null;
+  githubHost: string;
+  hostId: string | null;
+  repositories: readonly string[];
+}): SystemGithubRepositoryHealthQueryKey {
+  return [
+    SYSTEM_GITHUB_REPOSITORY_HEALTH_QUERY_KEY,
+    args.hostId,
+    args.githubHost.toLocaleLowerCase(),
+    args.githubAccountLogin?.toLocaleLowerCase() ?? null,
+    [...args.repositories].sort().join(","),
+  ];
+}
+
+export function systemGithubRepositoryHealthQueryKeyPrefix(): SystemGithubRepositoryHealthQueryKeyPrefix {
+  return [SYSTEM_GITHUB_REPOSITORY_HEALTH_QUERY_KEY];
+}
+
+export function systemGithubRepositoryActivityQueryKey(args: {
+  githubAccountLogin: string | null;
+  githubHost: string;
+  hostId: string | null;
+  repository: string;
+}): SystemGithubRepositoryActivityQueryKey {
+  return [
+    SYSTEM_GITHUB_REPOSITORY_ACTIVITY_QUERY_KEY,
+    args.hostId,
+    args.githubHost.toLocaleLowerCase(),
+    args.githubAccountLogin?.toLocaleLowerCase() ?? null,
+    args.repository.toLocaleLowerCase(),
   ];
 }
 

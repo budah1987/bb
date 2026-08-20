@@ -241,7 +241,7 @@ describe("ConductorSidebar", () => {
     expect(moveProject).toHaveBeenCalledWith("project-1", "space-planning");
   });
 
-  it("shows live Git and pull request details on workspace cards", async () => {
+  it("shows live local Git details without per-row GitHub reads", async () => {
     renderSlot(
       sidebar,
       {
@@ -256,15 +256,6 @@ describe("ConductorSidebar", () => {
           status: "ready",
           projects: [{ id: "project-1", name: "BB", isPersonal: false }],
           threads: [thread("Repo conversation")],
-        },
-        sidebarPullRequests: {
-          "Repo conversation": {
-            number: 82,
-            title: "Restore workspace Git details",
-            url: "https://github.com/budah1987/bb/pull/82",
-            state: "open",
-            attention: "ready_to_merge",
-          },
         },
         rpc: {
           readWorkspaceGitSummaries: () => ({
@@ -289,12 +280,12 @@ describe("ConductorSidebar", () => {
     );
 
     const card = await screen.findByRole("button", {
-      name: /feature\/sidebar.*↑2.*↓1.*4 changes.*PR #82 ✓/u,
+      name: /feature\/sidebar.*↑2.*↓1.*4 changes/u,
     });
     expect(within(card).getByText("feature/sidebar")).toBeDefined();
     expect(within(card).getByText("↑2 ↓1")).toBeDefined();
     expect(within(card).getByText("4 changes")).toBeDefined();
-    expect(within(card).getByText("PR #82 ✓")).toBeDefined();
+    expect(within(card).queryByText(/PR #82/u)).toBeNull();
     const metadata = card.querySelector(".conductor-workspace-meta");
     expect(metadata).not.toBeNull();
     expect(metadata?.querySelector(".conductor-status-label")).toBeNull();

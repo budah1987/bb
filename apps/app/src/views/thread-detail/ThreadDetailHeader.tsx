@@ -40,6 +40,7 @@ import {
 } from "@/components/ui/context-selection";
 import { usePaneContext } from "./PaneContext";
 import { PaneMaximizeButton } from "./PaneMaximizeButton";
+import { CompactRepositoryHealthControl } from "./CompactRepositoryHealthControl";
 
 const THREAD_HEADER_ACTION_BUTTON_CLASS = cn(
   COARSE_POINTER_TOOLBAR_ACTION_BUTTON_CLASS,
@@ -71,6 +72,7 @@ interface ThreadDetailHeaderProps {
   /** Closes this pane; only provided when the layout is split (>1 pane). */
   onClosePane?: () => void;
   onToggleSecondaryPanel: () => void;
+  onOpenPullRequestPanel?: () => void;
   /** Plugin-contributed thread action buttons (design §4.9); optional. */
   pluginActions?: ReactNode;
   /**
@@ -90,6 +92,7 @@ export function ThreadDetailHeader({
   isSecondaryPanelOpen,
   onClosePane,
   onToggleSecondaryPanel,
+  onOpenPullRequestPanel,
   pluginActions,
   threadContext,
   threadHeaderWorkflowActions,
@@ -356,6 +359,13 @@ export function ThreadDetailHeader({
         className="ml-1 flex items-center gap-0.5"
         data-thread-header-pane-actions=""
       >
+        {renderAsDrawer && onOpenPullRequestPanel ? (
+          <CompactRepositoryHealthControl
+            enabled
+            onOpen={onOpenPullRequestPanel}
+            threadId={threadId}
+          />
+        ) : null}
         {showRailToggle ? (
           <span
             className={cn(

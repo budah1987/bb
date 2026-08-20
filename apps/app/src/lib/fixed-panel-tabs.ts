@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { atom } from "jotai";
-import { useAtomValue, useSetAtom } from "jotai";
+import { useAtomValue, useSetAtom, useStore } from "jotai";
 import { atomWithStorage } from "jotai/utils";
 import { atomFamily } from "jotai-family";
 import { createLocalStorageSyncStorage } from "./browser-storage";
@@ -48,6 +48,10 @@ interface LastFixedPanelTabsTouch {
 }
 
 type FixedPanelSecondaryPanelSetter = (panel: ThreadSecondaryPanel) => void;
+type ThreadFixedPanelSecondaryPanelSetter = (
+  threadId: string,
+  panel: ThreadSecondaryPanel,
+) => void;
 type FixedPanelSecondaryPanelOpener = () => void;
 type FixedPanelSecondaryPanelCloser = () => void;
 type FixedPanelTerminalIdSetter = (terminalId: string | null) => void;
@@ -357,6 +361,48 @@ export function useSetFixedSecondaryPanelTab(
       });
     },
     [updateState],
+  );
+}
+
+/** Opens a fixed secondary tab before cross-thread navigation completes. */
+export function useSetFixedSecondaryPanelTabForThread(): ThreadFixedPanelSecondaryPanelSetter {
+  const store = useStore();
+  const queryClient = useQueryClient();
+  return useCallback(
+    (threadId, panel) => {
+      const stateAtom = getFixedPanelTabsStateAtom(threadId);
+      const now = Date.now();
+      let tabsToPersist: readonly ThreadTab[] | null = null;
+      store.set(stateAtom, (current) => {
+        const tabs = ensureSecondaryPanelTab(current.secondary.tabs, panel);
+        const activeTabId = getSecondaryPanelTabId(panel);
+        const next = touchFixedPanelTabsState(
+          {
+            ...current,
+            secondary: { tabs, activeTabId, isOpen: true },
+          },
+          now,
+        );
+        const syncedTabs = toSyncedThreadTabs(next.secondary.tabs);
+        if (
+          !areThreadTabListsEquivalent(
+            toSyncedThreadTabs(current.secondary.tabs),
+            syncedTabs,
+          )
+        ) {
+          tabsToPersist = syncedTabs;
+        }
+        return next;
+      });
+      if (tabsToPersist !== null) {
+        scheduleThreadTabsPersistence({
+          tabs: tabsToPersist,
+          queryClient,
+          threadId,
+        });
+      }
+    },
+    [queryClient, store],
   );
 }
 

@@ -1180,6 +1180,15 @@
 .conductor-workspace-row [data-signal="failed"] {
   color: var(--destructive);
 }
+.conductor-workspace-row [data-signal="checks_failed"],
+.conductor-workspace-row [data-signal="conflicts"],
+.conductor-workspace-row [data-signal="changes_requested"] {
+  color: var(--destructive);
+}
+.conductor-workspace-row [data-signal="checks_pending"],
+.conductor-workspace-row [data-signal="review_requested"] {
+  color: var(--warning-text);
+}
 .conductor-workspace-row [data-signal="awaiting-reply"] {
   color: var(--conductor-awaiting-reply);
 }

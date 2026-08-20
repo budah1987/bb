@@ -3148,6 +3148,7 @@ function ThreadDetailViewInternal(props: ThreadDetailViewInternalProps) {
         isSecondaryPanelOpen={isSecondaryPanelOpen}
         onClosePane={onRequestClose ?? undefined}
         onToggleSecondaryPanel={toggleSecondaryPanel}
+        onOpenPullRequestPanel={() => openSecondaryPanel("pull-request")}
         pluginActions={
           <PluginThreadHeaderActions
             threadId={thread.id}
