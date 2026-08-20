@@ -134,6 +134,41 @@ export type SystemGithubPullRequestsQuery = z.infer<
   typeof systemGithubPullRequestsQuerySchema
 >;
 
+export const systemGithubRepositoryHealthQuerySchema = z.object({
+  githubAccountLogin: githubAccountLoginSchema,
+  githubHost: z.string().min(1).default("github.com"),
+  hostId: z.string().min(1).optional(),
+  refresh: z.enum(["cached", "allow-fetch"]).default("cached"),
+  repositories: z
+    .string()
+    .min(3)
+    .refine(
+      (value) => {
+        const repositories = value.split(",");
+        return (
+          repositories.length <= 50 &&
+          repositories.every((repository) =>
+            /^[\w.-]+\/[\w.-]+$/u.test(repository),
+          )
+        );
+      },
+      { message: "repositories must be a comma-separated owner/name list" },
+    ),
+});
+export type SystemGithubRepositoryHealthQuery = z.infer<
+  typeof systemGithubRepositoryHealthQuerySchema
+>;
+
+export const systemGithubRepositoryActivityQuerySchema = z.object({
+  githubAccountLogin: githubAccountLoginSchema,
+  githubHost: z.string().min(1).default("github.com"),
+  hostId: z.string().min(1).optional(),
+  repository: z.string().regex(/^[\w.-]+\/[\w.-]+$/u),
+});
+export type SystemGithubRepositoryActivityQuery = z.infer<
+  typeof systemGithubRepositoryActivityQuerySchema
+>;
+
 export interface SystemVoiceTranscriptionForm {
   [key: string]: string | Blob;
 }

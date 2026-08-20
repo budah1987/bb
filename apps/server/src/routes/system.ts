@@ -47,6 +47,8 @@ import { getProviderUsageLimits } from "../services/system/usage-limits.js";
 import {
   getGithubAccounts,
   getGithubPullRequests,
+  getGithubRepositoryHealth,
+  getGithubRepositoryActivity,
   getGithubRepositories,
 } from "../services/system/github-repositories.js";
 import {
@@ -360,6 +362,14 @@ export function registerSystemRoutes(
 
   get(routes.githubPullRequests, async (context, query) =>
     context.json(await getGithubPullRequests(deps, query)),
+  );
+
+  get(routes.githubRepositoryHealth, async (context, query) =>
+    context.json(await getGithubRepositoryHealth(deps, query)),
+  );
+
+  get(routes.githubRepositoryActivity, async (context, query) =>
+    context.json(await getGithubRepositoryActivity(deps, query)),
   );
 
   get(routes.usageLimits, async (context, query) =>

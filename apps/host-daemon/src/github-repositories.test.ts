@@ -6,6 +6,7 @@ import {
   getGithubRepositoryCatalog,
   type GithubCommandRunner,
 } from "./github-repositories.js";
+import type { GithubFetch } from "./github-api.js";
 
 describe("GitHub accounts", () => {
   it("lists authenticated accounts without querying repositories", async () => {
@@ -26,6 +27,14 @@ describe("GitHub accounts", () => {
                 active: false,
                 host: "github.com",
                 login: "budah1987",
+              },
+            ],
+            "github.example.com": [
+              {
+                state: "success",
+                active: true,
+                host: "github.example.com",
+                login: "amirghst",
               },
             ],
           },
@@ -70,38 +79,35 @@ function repositoryPage(
     isPrivate?: boolean;
     updatedAt?: string;
   }>,
-): string {
-  return JSON.stringify([
-    {
-      data: {
-        viewer: {
-          repositories: {
-            nodes: repositories.map((repository) => {
-              const [owner, name] = repository.nameWithOwner.split("/");
-              return {
-                name,
-                nameWithOwner: repository.nameWithOwner,
-                owner: { login: owner },
-                url: `https://github.com/${repository.nameWithOwner}`,
-                isPrivate: repository.isPrivate ?? true,
-                defaultBranchRef: { name: "main" },
-                updatedAt: repository.updatedAt ?? "2026-08-01T00:00:00.000Z",
-              };
-            }),
-            pageInfo: { hasNextPage: false, endCursor: null },
-          },
+): unknown {
+  return {
+    data: {
+      viewer: {
+        repositories: {
+          nodes: repositories.map((repository) => {
+            const [owner, name] = repository.nameWithOwner.split("/");
+            return {
+              name,
+              nameWithOwner: repository.nameWithOwner,
+              owner: { login: owner },
+              url: `https://github.com/${repository.nameWithOwner}`,
+              isPrivate: repository.isPrivate ?? true,
+              defaultBranchRef: { name: "main" },
+              updatedAt: repository.updatedAt ?? "2026-08-01T00:00:00.000Z",
+            };
+          }),
+          pageInfo: { hasNextPage: false, endCursor: null },
         },
       },
     },
-  ]);
+  };
 }
 
 describe("getGithubRepositoryCatalog", () => {
   it("returns repositories visible to any authenticated account", async () => {
-    const calls: Array<{ args: readonly string[]; token: string | undefined }> =
-      [];
-    const run: GithubCommandRunner = async (_file, args, options) => {
-      calls.push({ args, token: options.env.GH_TOKEN });
+    const calls: string[][] = [];
+    const run: GithubCommandRunner = async (_file, args) => {
+      calls.push([...args]);
       if (args[0] === "auth" && args[1] === "status") {
         return {
           stdout: JSON.stringify({
@@ -120,6 +126,14 @@ describe("getGithubRepositoryCatalog", () => {
                   login: "personal-user",
                 },
               ],
+              "github.example.com": [
+                {
+                  state: "success",
+                  active: true,
+                  host: "github.example.com",
+                  login: "work-user",
+                },
+              ],
             },
           }),
           stderr: "",
@@ -132,32 +146,31 @@ describe("getGithubRepositoryCatalog", () => {
           stderr: "",
         };
       }
-      if (args[0] === "api") {
-        return {
-          stdout:
-            options.env.GH_TOKEN === "work-token"
-              ? repositoryPage([
-                  {
-                    nameWithOwner: "shared/console",
-                    updatedAt: "2026-08-05T00:00:00.000Z",
-                  },
-                  { nameWithOwner: "work/private" },
-                ])
-              : repositoryPage([
-                  {
-                    nameWithOwner: "shared/console",
-                    updatedAt: "2026-08-05T00:00:00.000Z",
-                  },
-                  { nameWithOwner: "personal/private" },
-                ]),
-          stderr: "",
-        };
-      }
       throw new Error(`Unexpected command: ${args.join(" ")}`);
+    };
+    const fetch: GithubFetch = async (_input, init) => {
+      const authorization = new Headers(init?.headers).get("authorization");
+      const body =
+        authorization === "Bearer work-token"
+          ? repositoryPage([
+              {
+                nameWithOwner: "shared/console",
+                updatedAt: "2026-08-05T00:00:00.000Z",
+              },
+              { nameWithOwner: "work/private" },
+            ])
+          : repositoryPage([
+              {
+                nameWithOwner: "shared/console",
+                updatedAt: "2026-08-05T00:00:00.000Z",
+              },
+              { nameWithOwner: "personal/private" },
+            ]);
+      return new Response(JSON.stringify(body), { status: 200 });
     };
 
     await expect(
-      getGithubRepositoryCatalog({ env: { PATH: "/bin" }, run }),
+      getGithubRepositoryCatalog({ env: { PATH: "/bin" }, fetch, run }),
     ).resolves.toEqual({
       accounts: [
         { host: "github.com", login: "work-user", active: true },
@@ -200,14 +213,14 @@ describe("getGithubRepositoryCatalog", () => {
       ],
       scope: "union",
     });
-    expect(calls.filter((call) => call.args[0] === "api")).toEqual([
-      expect.objectContaining({ token: "work-token" }),
-      expect.objectContaining({ token: "personal-token" }),
-    ]);
+    expect(calls.filter((args) => args[0] === "api")).toEqual([]);
+    expect(calls.some((args) => args.includes("github.example.com"))).toBe(
+      false,
+    );
   });
 
   it("ignores signed-out accounts and reports a one-account catalog", async () => {
-    const run: GithubCommandRunner = async (_file, args, options) => {
+    const run: GithubCommandRunner = async (_file, args) => {
       if (args[1] === "status") {
         return {
           stdout: JSON.stringify({
@@ -234,16 +247,15 @@ describe("getGithubRepositoryCatalog", () => {
       if (args[1] === "token") {
         return { stdout: "ready-token\n", stderr: "" };
       }
-      if (args[0] === "api" && options.env.GH_TOKEN === "ready-token") {
-        return {
-          stdout: repositoryPage([{ nameWithOwner: "ready/project" }]),
-          stderr: "",
-        };
-      }
       throw new Error(`Unexpected command: ${args.join(" ")}`);
     };
+    const fetch: GithubFetch = async () =>
+      new Response(
+        JSON.stringify(repositoryPage([{ nameWithOwner: "ready/project" }])),
+        { status: 200 },
+      );
 
-    const catalog = await getGithubRepositoryCatalog({ env: {}, run });
+    const catalog = await getGithubRepositoryCatalog({ env: {}, fetch, run });
     expect(catalog.scope).toBe("account");
     expect(catalog.accounts.map((account) => account.login)).toEqual([
       "ready-user",
@@ -254,55 +266,36 @@ describe("getGithubRepositoryCatalog", () => {
 
 describe("getGithubPullRequestCatalog", () => {
   it("uses the explicitly selected account environment and parses pull requests", async () => {
-    const run: GithubCommandRunner = async (_file, args, options) => {
-      if (args[0] === "auth" && args[1] === "status") {
-        return {
-          stdout: JSON.stringify({
-            hosts: {
-              "github.com": [
-                {
-                  state: "success",
-                  active: true,
-                  host: "github.com",
-                  login: "active-user",
-                },
-                {
-                  state: "success",
-                  active: false,
-                  host: "github.com",
-                  login: "selected-user",
-                },
-              ],
-            },
-          }),
-          stderr: "",
-        };
-      }
+    const run: GithubCommandRunner = async (_file, args) => {
       if (args[0] === "auth" && args[1] === "token") {
         expect(args).toContain("selected-user");
         return { stdout: "selected-token\n", stderr: "" };
       }
-      if (args[0] === "pr" && options.env.GH_TOKEN === "selected-token") {
-        expect(args).toContain("shared/console");
-        expect(options.env.GH_HOST).toBe("github.com");
-        return {
-          stdout: JSON.stringify([
-            {
-              number: 17,
-              title: "Improve navigation",
-              url: "https://github.com/shared/console/pull/17",
-              isDraft: false,
-              headRefName: "feature/navigation",
-              headRepository: { nameWithOwner: "active-user/console" },
-              baseRefName: "main",
-              author: { login: "active-user" },
-              updatedAt: "2026-08-05T00:00:00.000Z",
-            },
-          ]),
-          stderr: "",
-        };
-      }
       throw new Error(`Unexpected command: ${args.join(" ")}`);
+    };
+    const fetch: GithubFetch = async (input, init) => {
+      expect(String(input)).toContain("repos/shared/console/pulls");
+      expect(new Headers(init?.headers).get("authorization")).toBe(
+        "Bearer selected-token",
+      );
+      return new Response(
+        JSON.stringify([
+          {
+            number: 17,
+            title: "Improve navigation",
+            html_url: "https://github.com/shared/console/pull/17",
+            draft: false,
+            head: {
+              ref: "feature/navigation",
+              repo: { full_name: "active-user/console" },
+            },
+            base: { ref: "main" },
+            user: { login: "active-user" },
+            updated_at: "2026-08-05T00:00:00.000Z",
+          },
+        ]),
+        { status: 200 },
+      );
     };
 
     await expect(
@@ -314,6 +307,7 @@ describe("getGithubPullRequestCatalog", () => {
         },
         repository: "shared/console",
         githubAccountLogin: "selected-user",
+        fetch,
         run,
       }),
     ).resolves.toEqual({
@@ -336,25 +330,8 @@ describe("getGithubPullRequestCatalog", () => {
   });
 
   it("rejects an account that is not authenticated on the host", async () => {
-    const run: GithubCommandRunner = async (_file, args) => {
-      if (args[0] === "auth" && args[1] === "status") {
-        return {
-          stdout: JSON.stringify({
-            hosts: {
-              "github.com": [
-                {
-                  state: "success",
-                  active: true,
-                  host: "github.com",
-                  login: "active-user",
-                },
-              ],
-            },
-          }),
-          stderr: "",
-        };
-      }
-      throw new Error(`Unexpected command: ${args.join(" ")}`);
+    const run: GithubCommandRunner = async () => {
+      throw new Error("no token");
     };
 
     await expect(

@@ -63,6 +63,8 @@ import {
   getGithubPullRequestCatalog,
   getGithubRepositoryCatalog,
 } from "./github-repositories.js";
+import { getGithubRepositoryHealth } from "./github-repository-health.js";
+import { getGithubRepositoryActivity } from "./github-repository-activity.js";
 import { getProviderUsage } from "./provider-usage.js";
 import {
   getKnownAcpAgentsStatus,
@@ -835,12 +837,30 @@ const onlineRpcHandlers: OnlineRpcHandlerMap = {
   "github.repository_catalog": async (_command, options) =>
     getGithubRepositoryCatalog({
       env: options.runtimeManager.getShellEnv(),
+      ...(options.signal === undefined ? {} : { signal: options.signal }),
     }),
   "github.pull_request_catalog": async (command, options) =>
     getGithubPullRequestCatalog({
       env: options.runtimeManager.getShellEnv(),
       repository: command.repository,
       githubAccountLogin: command.githubAccountLogin,
+      ...(options.signal === undefined ? {} : { signal: options.signal }),
+    }),
+  "github.repository_health": async (command, options) =>
+    getGithubRepositoryHealth({
+      env: options.runtimeManager.getShellEnv(),
+      githubHost: command.githubHost,
+      githubAccountLogin: command.githubAccountLogin,
+      repositories: command.repositories,
+      ...(options.signal === undefined ? {} : { signal: options.signal }),
+    }),
+  "github.repository_activity": async (command, options) =>
+    getGithubRepositoryActivity({
+      env: options.runtimeManager.getShellEnv(),
+      githubHost: command.githubHost,
+      githubAccountLogin: command.githubAccountLogin,
+      repository: command.repository,
+      ...(options.signal === undefined ? {} : { signal: options.signal }),
     }),
   "provider_cli.status": async (_command, options) =>
     getProviderCliStatus({

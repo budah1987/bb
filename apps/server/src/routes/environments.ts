@@ -65,6 +65,7 @@ import { assembleThreadPullRequest } from "../services/environments/pull-request
 import {
   getGithubAccounts,
   getGithubRepositories,
+  invalidateGithubRepositoryHealthCache,
 } from "../services/system/github-repositories.js";
 import {
   requireAvailableWorkspaceDiff,
@@ -85,6 +86,20 @@ function githubRepositoryName(remoteUrl: string | null): string | null {
     .trim()
     .match(/github\.com[:/]([^/\s]+)\/([^/\s]+?)(?:\.git)?\/?$/u);
   return match ? `${match[1]}/${match[2]}` : null;
+}
+
+function invalidateEnvironmentGithubHealth(
+  deps: AppDeps,
+  environment: Environment,
+): void {
+  const project = getProject(deps.db, environment.projectId);
+  const repository = githubRepositoryName(project?.gitRemoteUrl ?? null);
+  if (repository === null) return;
+  invalidateGithubRepositoryHealthCache(deps, {
+    hostId: environment.hostId,
+    login: environment.githubAccountLogin,
+    repository,
+  });
 }
 
 /**
@@ -112,11 +127,7 @@ async function resolveGithubAccountForEnvironment(
       repositoryName.toLocaleLowerCase(),
   );
   if (!repository) return null;
-  return (
-    repository.activeAccount ??
-    repository.accessibleBy[0] ??
-    null
-  );
+  return repository.activeAccount ?? repository.accessibleBy[0] ?? null;
 }
 
 /** Caps for diffs sent to the inference model for commit message generation. */
@@ -1497,6 +1508,7 @@ export function registerEnvironmentRoutes(app: Hono, deps: AppDeps): void {
             },
           }),
         );
+        invalidateEnvironmentGithubHealth(deps, environment);
         return context.json({
           ok: true,
           action: "pull_request_ready",
@@ -1583,6 +1595,7 @@ export function registerEnvironmentRoutes(app: Hono, deps: AppDeps): void {
           }),
         );
         const pullRequest = assembleThreadPullRequest(result.pullRequest);
+        invalidateEnvironmentGithubHealth(deps, environment);
         return context.json({
           ok: true,
           action: "pull_request_create",
@@ -1619,6 +1632,7 @@ export function registerEnvironmentRoutes(app: Hono, deps: AppDeps): void {
             },
           }),
         );
+        invalidateEnvironmentGithubHealth(deps, environment);
         return context.json({
           ok: true,
           action: "pull_request_draft",
@@ -1655,6 +1669,7 @@ export function registerEnvironmentRoutes(app: Hono, deps: AppDeps): void {
             },
           }),
         );
+        invalidateEnvironmentGithubHealth(deps, environment);
         return context.json({
           ok: true,
           action: "pull_request_merge",
@@ -1690,6 +1705,7 @@ export function registerEnvironmentRoutes(app: Hono, deps: AppDeps): void {
             },
           }),
         );
+        invalidateEnvironmentGithubHealth(deps, environment);
         return context.json({
           ok: true,
           action: "pull_request_checks_rerun",

@@ -484,6 +484,8 @@ const hostDaemonOnlineRpcResponseSuccessSchema = z.discriminatedUnion(
     onlineRpcResponseSuccessSchemaFor("github.account_catalog"),
     onlineRpcResponseSuccessSchemaFor("github.repository_catalog"),
     onlineRpcResponseSuccessSchemaFor("github.pull_request_catalog"),
+    onlineRpcResponseSuccessSchemaFor("github.repository_health"),
+    onlineRpcResponseSuccessSchemaFor("github.repository_activity"),
     onlineRpcResponseSuccessSchemaFor("provider_cli.status"),
     onlineRpcResponseSuccessSchemaFor("provider_cli.install"),
     onlineRpcResponseSuccessSchemaFor("provider_auth.status"),

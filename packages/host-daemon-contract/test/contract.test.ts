@@ -470,6 +470,33 @@ const ONLINE_RPC_RESPONSE_RESULT_FIXTURES: OnlineRpcResponseResultFixtures = {
       },
     ],
   },
+  "github.repository_health": {
+    outcome: "available",
+    host: "github.com",
+    login: "octocat",
+    repositories: [
+      {
+        nameWithOwner: "octocat/hello-world",
+        defaultBranch: "main",
+        defaultBranchCheckState: "passing",
+        openPullRequestCount: 1,
+        attention: "none",
+        fetchedAt: "2026-08-02T00:00:00.000Z",
+      },
+    ],
+    fetchedAt: "2026-08-02T00:00:00.000Z",
+    rateLimit: { remaining: 4999, resetAt: null },
+  },
+  "github.repository_activity": {
+    outcome: "available",
+    host: "github.com",
+    login: "octocat",
+    repository: "octocat/hello-world",
+    issues: [],
+    workflowRuns: [],
+    inbox: [],
+    fetchedAt: "2026-08-02T00:00:00.000Z",
+  },
   "provider_cli.status": {
     codex: {
       displayName: "Codex",
@@ -1354,6 +1381,7 @@ describe("host-daemon command schemas", () => {
     ).toBe(false);
   });
 
+  // Version 127 adds the typed, batched native GitHub repository-health wire.
   // Version 126 adds account-scoped deployment discovery and distinct stable
   // branch and immutable deployment URLs to the GitHub deployment wire.
   // Version 125 is the first build carrying both wire surfaces: BBamir's
@@ -1395,7 +1423,7 @@ describe("host-daemon command schemas", () => {
   // mixed version. Version 113 carried the Devin Desktop open target rename
   // and remains part of the protocol lineage.
   it("uses the current host-daemon protocol version", () => {
-    expect(HOST_DAEMON_PROTOCOL_VERSION).toBe(126);
+    expect(HOST_DAEMON_PROTOCOL_VERSION).toBe(127);
   });
 
   it("requires a positive preflight file limit for workspace diff lists", () => {

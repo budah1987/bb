@@ -336,6 +336,15 @@ status|install` to inspect or install provider CLIs on a selected machine.
   with optional `--machine <id-or-name>` to list open pull requests through one
   explicitly selected authenticated account, with their head repository, head
   branch, draft state, and title; use `--json` for the typed catalog.
+- Use `bb project github-repository-health <owner/repo...> --github-account
+<login>` to batch default-branch checks and open-PR attention for up to 50
+  repositories. Add `--cached` for a guaranteed no-I/O read; omit it for an
+  explicit visible/agent-triggered refresh. `--json` preserves typed auth,
+  rate-limit, unavailable, and available outcomes.
+- Use `bb project github-repository-activity <owner/repo> --github-account
+<login>` for a bounded, on-demand list of open issues, recent Actions runs,
+  and unread repository notifications. It performs no background sync; use
+  `--json` when an agent will act on the result.
 - Use `bb project source add <project-id> --machine <id-or-name> --path <path>`
   to register a path on another connected machine. It uses the same selector
   resolution and fallback as project create. Use `--clone` instead of `--path`
@@ -403,7 +412,7 @@ environment pull-request show <id>`. Diff commands require an explicit target
   approval protections. Plan mode remains separate. The product default is
   `auto` when no inherited or project default applies.
 - Subagents inherit the parent's permission mode by default; `--permission-mode
-  full` only takes effect when the parent itself runs full.
+full` only takes effect when the parent itself runs full.
 - Use `--parent-self` inside a thread to parent the new thread to the current
   thread.
 - Use `--parent-thread <thread-id>` to choose another specific parent.

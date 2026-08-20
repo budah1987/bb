@@ -25,6 +25,8 @@ import type {
   DiscoverReposResult,
   GithubAccountCatalog,
   GithubPullRequestCatalog,
+  GithubRepositoryHealthResult,
+  GithubRepositoryActivityResult,
   GithubRepositoryCatalog,
   ProviderUsageResponse,
 } from "@bb/host-daemon-contract";
@@ -192,6 +194,8 @@ import type {
   OnboardingTelemetryEvent,
   SystemGithubAccountsQuery,
   SystemGithubPullRequestsQuery,
+  SystemGithubRepositoryHealthQuery,
+  SystemGithubRepositoryActivityQuery,
   SystemGithubRepositoriesQuery,
   SystemOnboardingReposQuery,
   SystemUsageLimitsQuery,
@@ -364,6 +368,8 @@ import {
   systemExecutionOptionsQuerySchema,
   systemGithubAccountsQuerySchema,
   systemGithubPullRequestsQuerySchema,
+  systemGithubRepositoryHealthQuerySchema,
+  systemGithubRepositoryActivityQuerySchema,
   systemGithubRepositoriesQuerySchema,
   systemProvidersQuerySchema,
   onboardingTelemetryEventSchema,
@@ -1858,6 +1864,24 @@ export const publicApiRoutes = {
         systemGithubPullRequestsQuerySchema,
       ),
       response: jsonResponse<GithubPullRequestCatalog>(),
+    }),
+    githubRepositoryHealth: defineRoute({
+      path: "/system/github/repository-health",
+      method: "get",
+      request: optionalQueryRequest<
+        EmptyInput,
+        SystemGithubRepositoryHealthQuery
+      >(systemGithubRepositoryHealthQuerySchema),
+      response: jsonResponse<GithubRepositoryHealthResult>(),
+    }),
+    githubRepositoryActivity: defineRoute({
+      path: "/system/github/repository-activity",
+      method: "get",
+      request: optionalQueryRequest<
+        EmptyInput,
+        SystemGithubRepositoryActivityQuery
+      >(systemGithubRepositoryActivityQuerySchema),
+      response: jsonResponse<GithubRepositoryActivityResult>(),
     }),
     usageLimits: defineRoute({
       path: "/system/usage-limits",
