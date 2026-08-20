@@ -408,24 +408,25 @@ export function useGithubRepositoryHealth(args: UseGithubRepositoryHealthArgs) {
     staleTime: (current) =>
       current.state.data?.outcome === "unavailable" ? 0 : 60_000,
   });
+  const { data, isFetching, refetch } = query;
   useEffect(() => {
     const isCachedMiss =
-      query.data?.outcome === "unavailable" &&
-      query.data.message === GITHUB_REPOSITORY_HEALTH_CACHE_MISS_MESSAGE;
+      data?.outcome === "unavailable" &&
+      data.message === GITHUB_REPOSITORY_HEALTH_CACHE_MISS_MESSAGE;
     if (!isCachedMiss) {
       explicitMissRefetchStarted.current = false;
       return;
     }
     if (
       args.refresh !== "allow-fetch" ||
-      query.isFetching ||
+      isFetching ||
       explicitMissRefetchStarted.current
     ) {
       return;
     }
     explicitMissRefetchStarted.current = true;
-    void query.refetch();
-  }, [args.refresh, query.data, query.isFetching, query.refetch]);
+    void refetch();
+  }, [args.refresh, data, isFetching, refetch]);
   return query;
 }
 
