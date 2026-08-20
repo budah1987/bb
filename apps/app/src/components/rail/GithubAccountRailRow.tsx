@@ -17,13 +17,17 @@ export function GithubAccountRailRow({
   accounts,
   disabled,
   isLoading,
+  onOpenChange,
   onChange,
+  open,
   value,
 }: {
   accounts: readonly GithubAccount[];
   disabled: boolean;
   isLoading: boolean;
   onChange: (login: string) => void;
+  onOpenChange?: (open: boolean) => void;
+  open?: boolean;
   value: string | null;
 }) {
   const label = isLoading
@@ -33,7 +37,7 @@ export function GithubAccountRailRow({
       : "No GitHub account";
 
   return (
-    <DropdownMenu>
+    <DropdownMenu open={open} onOpenChange={onOpenChange}>
       <DropdownMenuTrigger asChild>
         <button
           type="button"

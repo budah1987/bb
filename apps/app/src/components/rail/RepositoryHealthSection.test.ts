@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { EnvironmentStatusResponse } from "@bb/server-contract";
-import { summarizeBranchHealth } from "./BranchHealthSection";
+import { summarizeRepositoryHealth } from "./RepositoryHealthSection";
 
 function availableStatus(
   overrides: {
@@ -41,10 +41,10 @@ function availableStatus(
   };
 }
 
-describe("summarizeBranchHealth", () => {
+describe("summarizeRepositoryHealth", () => {
   it("reports a clean current branch as healthy", () => {
     expect(
-      summarizeBranchHealth({
+      summarizeRepositoryHealth({
         isLoading: false,
         previews: { issues: [], providers: [] },
         pullRequest: { outcome: "absent" },
@@ -55,7 +55,7 @@ describe("summarizeBranchHealth", () => {
 
   it("reports local changes and an outdated branch as in progress", () => {
     expect(
-      summarizeBranchHealth({
+      summarizeRepositoryHealth({
         isLoading: false,
         previews: { issues: [], providers: [] },
         pullRequest: { outcome: "absent" },
@@ -69,7 +69,7 @@ describe("summarizeBranchHealth", () => {
 
   it("gives a failed deployment the highest priority", () => {
     expect(
-      summarizeBranchHealth({
+      summarizeRepositoryHealth({
         isLoading: false,
         previews: {
           issues: [],
@@ -97,5 +97,37 @@ describe("summarizeBranchHealth", () => {
         status: availableStatus(),
       }),
     ).toEqual({ label: "Needs attention", tier: "destructive" });
+  });
+
+  it("keeps authentication and rate limits consistent across responsive surfaces", () => {
+    const common = {
+      isLoading: false,
+      previews: { issues: [], providers: [] },
+      pullRequest: { outcome: "absent" } as const,
+      status: availableStatus(),
+    };
+    expect(
+      summarizeRepositoryHealth({
+        ...common,
+        repositoryHealth: {
+          outcome: "authentication_required",
+          host: "github.com",
+          login: "amir",
+          message: "Sign in required",
+        },
+      }),
+    ).toEqual({ label: "Sign in", tier: "destructive" });
+    expect(
+      summarizeRepositoryHealth({
+        ...common,
+        repositoryHealth: {
+          outcome: "rate_limited",
+          host: "github.com",
+          login: "amir",
+          message: "Limit reached",
+          retryAt: "2026-08-20T08:00:00.000Z",
+        },
+      }),
+    ).toEqual({ label: "Limited", tier: "warning" });
   });
 });

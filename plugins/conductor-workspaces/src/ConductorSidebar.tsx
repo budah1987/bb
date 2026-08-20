@@ -27,7 +27,6 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import {
   experimental_useSidebarThreadActions as useSidebarThreadActions,
-  experimental_useSidebarThreadPullRequest as useSidebarThreadPullRequest,
   experimental_useSidebarThreads as useSidebarThreads,
   useBbNavigate,
   useRpc,
@@ -666,6 +665,38 @@ function SignalStatus({
   );
 }
 
+export type ConductorGithubAttention =
+  | "checks_failed"
+  | "conflicts"
+  | "changes_requested"
+  | "checks_pending"
+  | "review_requested";
+
+function GithubAttentionStatus({
+  attention,
+}: {
+  attention: ConductorGithubAttention | null;
+}) {
+  if (attention === null) return null;
+  const label = {
+    checks_failed: "Checks failed",
+    conflicts: "Conflicts",
+    changes_requested: "Changes requested",
+    checks_pending: "Checks pending",
+    review_requested: "Review requested",
+  }[attention];
+  return (
+    <span
+      className="conductor-status-label"
+      data-github-attention=""
+      data-signal={attention}
+      title="Open pull request workflow"
+    >
+      {label}
+    </span>
+  );
+}
+
 function SectionHeader({
   title,
   meta,
@@ -743,11 +774,13 @@ function WorkspaceRow({
   jumpShortcut,
   showJumpShortcut,
   onOpen,
+  onOpenGithubAttention,
   onCreateConversation,
   onRequestArchive,
   onRequestRename,
   onSetRead,
   onSetFocused,
+  githubAttention,
 }: {
   workspace: ConductorWorkspace;
   gitSummary: WorkspaceGitSummary | null;
@@ -760,15 +793,15 @@ function WorkspaceRow({
   jumpShortcut: { ariaKeyshortcuts: string; label: string } | null;
   showJumpShortcut: boolean;
   onOpen: (threadId: string, options?: { split?: boolean }) => void;
+  onOpenGithubAttention: (threadId: string) => void;
   onCreateConversation: (workspace: ConductorWorkspace) => void;
   onRequestArchive: (workspace: ConductorWorkspace) => void;
   onRequestRename: (workspace: ConductorWorkspace, scope: RenameScope) => void;
   onSetRead: (workspace: ConductorWorkspace, read: boolean) => void;
   onSetFocused: (workspace: ConductorWorkspace, focused: boolean) => void;
+  githubAttention: ConductorGithubAttention | null;
 }) {
   const target = pickWorkspaceThread(workspace, activeThreadId);
-  const pullRequestState = useSidebarThreadPullRequest(target?.id ?? "");
-  const pullRequest = pullRequestState.pullRequest;
   const branchLabel =
     workspace.branchName ??
     `${workspace.threads.length} conversation${workspace.threads.length === 1 ? "" : "s"}`;
@@ -813,7 +846,17 @@ function WorkspaceRow({
       data-active={isActive || undefined}
       aria-current={isActive ? "page" : undefined}
       aria-keyshortcuts={jumpShortcut?.ariaKeyshortcuts}
-      onClick={() => target && onOpen(target.id)}
+      onClick={(event) => {
+        if (!target) return;
+        if (
+          event.target instanceof Element &&
+          event.target.closest("[data-github-attention]")
+        ) {
+          onOpenGithubAttention(target.id);
+          return;
+        }
+        onOpen(target.id);
+      }}
       {...attributes}
       {...(listeners ?? {})}
     >
@@ -827,9 +870,10 @@ function WorkspaceRow({
           branchLabel={branchLabel}
           signal={signal}
           summary={gitSummary}
-          pullRequest={pullRequest}
+          pullRequest={null}
         />
       </span>
+      <GithubAttentionStatus attention={githubAttention} />
       {showJumpShortcut && jumpShortcut ? (
         <kbd
           aria-hidden
@@ -920,16 +964,6 @@ function WorkspaceRow({
                   Rename folder…
                 </ContextMenuItem>
               </>
-            ) : null}
-            {pullRequest ? (
-              <ContextMenuItem
-                onSelect={() =>
-                  window.open(pullRequest.url, "_blank", "noopener,noreferrer")
-                }
-              >
-                <Icon name="GitPullRequest" aria-hidden />
-                Open pull request
-              </ContextMenuItem>
             ) : null}
             <ContextMenuSeparator />
             <ContextMenuItem
@@ -1041,6 +1075,7 @@ function ProjectSection({
   onCreate,
   onCreateConversation,
   onOpen,
+  onOpenGithubAttention,
   onRequestArchive,
   onRequestRename,
   onSetRead,
@@ -1051,6 +1086,7 @@ function ProjectSection({
   onRequestGithubCatalog,
   onSetGithubAccount,
   sidebarSpaces,
+  githubAttention,
 }: {
   project: ConductorProject;
   gitSummaries: ReadonlyMap<string, WorkspaceGitSummary>;
@@ -1073,6 +1109,7 @@ function ProjectSection({
   onCreate: () => void;
   onCreateConversation: (workspace: ConductorWorkspace) => void;
   onOpen: (threadId: string, options?: { split?: boolean }) => void;
+  onOpenGithubAttention: (threadId: string) => void;
   onRequestArchive: (workspace: ConductorWorkspace) => void;
   onRequestRename: (workspace: ConductorWorkspace, scope: RenameScope) => void;
   onSetRead: (workspace: ConductorWorkspace, read: boolean) => void;
@@ -1083,6 +1120,7 @@ function ProjectSection({
   onRequestGithubCatalog: () => void;
   onSetGithubAccount: (accountLogin: string | null) => void;
   sidebarSpaces: SidebarSpaces | null;
+  githubAttention: ConductorGithubAttention | null;
 }) {
   const {
     attributes,
@@ -1255,10 +1293,12 @@ function ProjectSection({
                 showJumpShortcut={showJumpShortcuts}
                 onCreateConversation={onCreateConversation}
                 onOpen={onOpen}
+                onOpenGithubAttention={onOpenGithubAttention}
                 onRequestArchive={onRequestArchive}
                 onRequestRename={onRequestRename}
                 onSetRead={onSetRead}
                 onSetFocused={onSetFocused}
+                githubAttention={githubAttention}
               />
             ))}
           </div>
@@ -1405,10 +1445,12 @@ function FocusSection({
   onToggle,
   onCreateConversation,
   onOpen,
+  onOpenGithubAttention,
   onRequestArchive,
   onRequestRename,
   onSetRead,
   onSetFocused,
+  githubAttentionByProjectId,
 }: {
   workspaces: readonly ConductorWorkspace[];
   gitSummaries: ReadonlyMap<string, WorkspaceGitSummary>;
@@ -1423,10 +1465,14 @@ function FocusSection({
   onToggle: () => void;
   onCreateConversation: (workspace: ConductorWorkspace) => void;
   onOpen: (threadId: string, options?: { split?: boolean }) => void;
+  onOpenGithubAttention: (threadId: string) => void;
   onRequestArchive: (workspace: ConductorWorkspace) => void;
   onRequestRename: (workspace: ConductorWorkspace, scope: RenameScope) => void;
   onSetRead: (workspace: ConductorWorkspace, read: boolean) => void;
   onSetFocused: (workspace: ConductorWorkspace, focused: boolean) => void;
+  githubAttentionByProjectId: Readonly<
+    Record<string, ConductorGithubAttention | undefined>
+  >;
 }) {
   if (workspaces.length === 0) return null;
 
@@ -1471,10 +1517,16 @@ function FocusSection({
                 showJumpShortcut={showJumpShortcuts}
                 onCreateConversation={onCreateConversation}
                 onOpen={onOpen}
+                onOpenGithubAttention={onOpenGithubAttention}
                 onRequestArchive={onRequestArchive}
                 onRequestRename={onRequestRename}
                 onSetRead={onSetRead}
                 onSetFocused={onSetFocused}
+                githubAttention={
+                  githubAttentionByProjectId[
+                    workspace.threads[0]?.projectId ?? ""
+                  ] ?? null
+                }
               />
             ))}
           </div>
@@ -1490,7 +1542,14 @@ export function ConductorSidebar({
   isCompactViewport,
   onNavigate,
   searchQuery,
-}: PluginThreadListProps) {
+  githubAttentionByProjectId = {},
+  onOpenGithubAttention,
+}: PluginThreadListProps & {
+  githubAttentionByProjectId?: Readonly<
+    Record<string, ConductorGithubAttention | undefined>
+  >;
+  onOpenGithubAttention?: (threadId: string) => void;
+}) {
   const state = useSidebarThreads();
   const actions = useSidebarThreadActions();
   const navigate = useBbNavigate();
@@ -1851,6 +1910,11 @@ export function ConductorSidebar({
     onNavigate();
   }
 
+  function openGithubAttention(threadId: string) {
+    onOpenGithubAttention?.(threadId);
+    openThread(threadId);
+  }
+
   function createWorkspaceConversation(workspace: ConductorWorkspace) {
     if (!workspace.environmentId) return;
     const target = pickWorkspaceThread(workspace, activeThreadId);
@@ -2136,6 +2200,7 @@ export function ConductorSidebar({
             onToggle={() => toggleSection("focus")}
             onCreateConversation={createWorkspaceConversation}
             onOpen={openThread}
+            onOpenGithubAttention={openGithubAttention}
             onRequestArchive={(workspace) => {
               void requestArchive(workspace);
             }}
@@ -2144,6 +2209,7 @@ export function ConductorSidebar({
             }}
             onSetRead={setWorkspaceRead}
             onSetFocused={setWorkspaceFocused}
+            githubAttentionByProjectId={githubAttentionByProjectId}
           />
           <SortableContext
             items={projects.map((project) => project.id)}
@@ -2189,6 +2255,7 @@ export function ConductorSidebar({
                   }}
                   onCreateConversation={createWorkspaceConversation}
                   onOpen={openThread}
+                  onOpenGithubAttention={openGithubAttention}
                   onRequestArchive={(workspace) => {
                     void requestArchive(workspace);
                   }}
@@ -2209,6 +2276,9 @@ export function ConductorSidebar({
                     requestSetGithubAccount(project, accountLogin)
                   }
                   sidebarSpaces={sidebarSpaces ?? null}
+                  githubAttention={
+                    githubAttentionByProjectId[project.id] ?? null
+                  }
                 />
               );
             })}

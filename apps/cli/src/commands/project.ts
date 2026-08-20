@@ -69,9 +69,19 @@ interface GithubRepositoryCommandOptions {
   json?: boolean;
 }
 
-interface GithubPullRequestCommandOptions
-  extends GithubRepositoryCommandOptions {
+interface GithubPullRequestCommandOptions extends GithubRepositoryCommandOptions {
   githubAccount: string;
+}
+
+interface GithubRepositoryHealthCommandOptions extends GithubRepositoryCommandOptions {
+  cached?: boolean;
+  githubAccount: string;
+  githubHost?: string;
+}
+
+interface GithubRepositoryActivityCommandOptions extends GithubRepositoryCommandOptions {
+  githubAccount: string;
+  githubHost?: string;
 }
 
 function addProjectWorkspaceRoutingOptions(command: Command): Command {
@@ -582,6 +592,115 @@ export function registerProjectCommands(
             console.log(
               `#${pullRequest.number}\t${pullRequest.isDraft ? "draft" : "open"}\t${pullRequest.headRepository}:${pullRequest.headBranch}\t${pullRequest.title}`,
             );
+          }
+        },
+      ),
+    );
+
+  project
+    .command("github-repository-health <repositories...>")
+    .description("Read checks and pull-request attention for repositories")
+    .requiredOption(
+      "--github-account <login>",
+      "Authenticated GitHub account to use",
+    )
+    .option("--github-host <hostname>", "GitHub hostname", "github.com")
+    .option("--cached", "Read cached health without contacting GitHub")
+    .option("--machine <id-or-name>", "Machine whose GitHub account to use")
+    .option("--host <id-or-name>", "Alias for --machine")
+    .option("--json", "Print machine-readable JSON output")
+    .action(
+      action(
+        async (
+          repositories: string[],
+          opts: GithubRepositoryHealthCommandOptions,
+        ) => {
+          const target = resolveMachineTargetOption(opts);
+          const hostId =
+            target === undefined
+              ? undefined
+              : await resolveMachineHostId({
+                  serverUrl: getUrl(),
+                  target,
+                });
+          const result = await createCliBbSdk(
+            getUrl(),
+          ).system.githubRepositoryHealth({
+            repositories,
+            githubAccountLogin: opts.githubAccount,
+            githubHost: opts.githubHost ?? "github.com",
+            refresh: opts.cached ? "cached" : "allow-fetch",
+            ...(hostId === undefined ? {} : { hostId }),
+          });
+          if (outputJson(opts, result)) return;
+          if (result.outcome !== "available") {
+            const retry =
+              result.outcome === "rate_limited"
+                ? ` Retry at ${result.retryAt}.`
+                : "";
+            console.log(`${result.message}${retry}`);
+            return;
+          }
+          for (const repository of result.repositories) {
+            console.log(
+              `${repository.nameWithOwner}\t${repository.attention}\tdefault:${repository.defaultBranchCheckState}\t${repository.openPullRequestCount} open PRs`,
+            );
+          }
+        },
+      ),
+    );
+
+  project
+    .command("github-repository-activity <repository>")
+    .description("List repository issues, Actions runs, and inbox items")
+    .requiredOption(
+      "--github-account <login>",
+      "Authenticated GitHub account to use",
+    )
+    .option("--github-host <hostname>", "GitHub hostname", "github.com")
+    .option("--machine <id-or-name>", "Machine whose GitHub account to use")
+    .option("--host <id-or-name>", "Alias for --machine")
+    .option("--json", "Print machine-readable JSON output")
+    .action(
+      action(
+        async (
+          repository: string,
+          opts: GithubRepositoryActivityCommandOptions,
+        ) => {
+          const target = resolveMachineTargetOption(opts);
+          const hostId =
+            target === undefined
+              ? undefined
+              : await resolveMachineHostId({
+                  serverUrl: getUrl(),
+                  target,
+                });
+          const result = await createCliBbSdk(
+            getUrl(),
+          ).system.githubRepositoryActivity({
+            repository,
+            githubAccountLogin: opts.githubAccount,
+            githubHost: opts.githubHost ?? "github.com",
+            ...(hostId === undefined ? {} : { hostId }),
+          });
+          if (outputJson(opts, result)) return;
+          if (result.outcome !== "available") {
+            console.log(result.message);
+            return;
+          }
+          console.log(`Issues (${result.issues.length})`);
+          for (const issue of result.issues) {
+            console.log(`#${issue.number}\t${issue.title}`);
+          }
+          console.log(`Actions (${result.workflowRuns.length})`);
+          for (const run of result.workflowRuns) {
+            console.log(
+              `${run.name}\t${run.conclusion ?? run.status}\t${run.branch ?? "—"}`,
+            );
+          }
+          console.log(`Inbox (${result.inbox.length})`);
+          for (const item of result.inbox) {
+            console.log(`${item.reason}\t${item.title}`);
           }
         },
       ),

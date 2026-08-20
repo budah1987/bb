@@ -1,4 +1,3 @@
-import { execFile } from "node:child_process";
 import type {
   GithubAccount,
   GithubAccountCatalog,
@@ -7,10 +6,23 @@ import type {
   GithubRepository,
   GithubRepositoryCatalog,
 } from "@bb/host-daemon-contract";
+import {
+  createGithubApiClient,
+  defaultGithubApiClient,
+  type GithubApiClient,
+  type GithubCommandRunner,
+  type GithubFetch,
+} from "./github-api.js";
 
 const GITHUB_HOST = "github.com";
-const COMMAND_TIMEOUT_MS = 30_000;
-const MAX_BUFFER_BYTES = 32 * 1024 * 1024;
+
+function githubDotComAccounts(
+  accounts: readonly GithubAccount[],
+): readonly GithubAccount[] {
+  return accounts.filter(
+    (account) => account.host.toLocaleLowerCase() === GITHUB_HOST,
+  );
+}
 
 const REPOSITORY_QUERY = `
   query($endCursor: String) {
@@ -36,28 +48,6 @@ const REPOSITORY_QUERY = `
   }
 `;
 
-interface CommandResult {
-  stdout: string;
-  stderr: string;
-}
-
-export type GithubCommandRunner = (
-  file: string,
-  args: readonly string[],
-  options: { env: NodeJS.ProcessEnv; timeoutMs: number },
-) => Promise<CommandResult>;
-
-interface GithubAuthStatusRow {
-  active?: unknown;
-  host?: unknown;
-  login?: unknown;
-  state?: unknown;
-}
-
-interface GithubAuthStatusPayload {
-  hosts?: unknown;
-}
-
 interface GithubRepositoryNode {
   defaultBranchRef?: unknown;
   isPrivate?: unknown;
@@ -68,16 +58,15 @@ interface GithubRepositoryNode {
   url?: unknown;
 }
 
-interface GithubPullRequestRow {
-  author?: unknown;
-  baseRefName?: unknown;
-  headRefName?: unknown;
-  headRepository?: unknown;
-  isDraft?: unknown;
+interface GithubRestPullRequestRow {
+  base?: unknown;
+  draft?: unknown;
+  head?: unknown;
+  html_url?: unknown;
   number?: unknown;
   title?: unknown;
-  updatedAt?: unknown;
-  url?: unknown;
+  updated_at?: unknown;
+  user?: unknown;
 }
 
 interface RepositoryAccumulator {
@@ -85,96 +74,50 @@ interface RepositoryAccumulator {
   accountLogins: Set<string>;
 }
 
-function runCommand(
-  file: string,
-  args: readonly string[],
-  options: { env: NodeJS.ProcessEnv; timeoutMs: number },
-): Promise<CommandResult> {
-  return new Promise((resolve, reject) => {
-    execFile(
-      file,
-      [...args],
-      {
-        env: options.env,
-        timeout: options.timeoutMs,
-        maxBuffer: MAX_BUFFER_BYTES,
-      },
-      (error, stdout, stderr) => {
-        if (!error) {
-          resolve({ stdout, stderr });
-          return;
-        }
-        reject(
-          new Error(
-            `${file} ${args.slice(0, 3).join(" ")} failed: ${stderr.trim() || error.message}`,
-          ),
-        );
-      },
-    );
-  });
-}
+export type { GithubCommandRunner } from "./github-api.js";
 
-function parseAccounts(raw: string): GithubAccount[] {
-  const parsed = JSON.parse(raw) as GithubAuthStatusPayload;
-  if (
-    typeof parsed.hosts !== "object" ||
-    parsed.hosts === null ||
-    Array.isArray(parsed.hosts)
-  ) {
-    throw new Error("GitHub CLI returned malformed authentication status");
+function resolveClient(args: {
+  client?: GithubApiClient;
+  fetch?: GithubFetch;
+  run?: GithubCommandRunner;
+}): GithubApiClient {
+  if (args.client) return args.client;
+  if (args.fetch || args.run) {
+    return createGithubApiClient({
+      ...(args.fetch === undefined ? {} : { fetch: args.fetch }),
+      ...(args.run === undefined ? {} : { run: args.run }),
+    });
   }
-  const rows = (parsed.hosts as Record<string, unknown>)[GITHUB_HOST];
-  if (!Array.isArray(rows)) return [];
-  return rows.flatMap((value): GithubAccount[] => {
-    if (typeof value !== "object" || value === null || Array.isArray(value)) {
-      return [];
-    }
-    const row = value as GithubAuthStatusRow;
-    if (
-      row.state !== "success" ||
-      typeof row.host !== "string" ||
-      typeof row.login !== "string" ||
-      typeof row.active !== "boolean"
-    ) {
-      return [];
-    }
-    return [{ host: row.host, login: row.login, active: row.active }];
-  });
-}
-
-async function listGithubAccounts(args: {
-  env: NodeJS.ProcessEnv;
-  ghPath: string;
-  run: GithubCommandRunner;
-}): Promise<GithubAccount[]> {
-  const status = await args.run(
-    args.ghPath,
-    ["auth", "status", "--json", "hosts"],
-    { env: args.env, timeoutMs: COMMAND_TIMEOUT_MS },
-  );
-  return parseAccounts(status.stdout);
+  return defaultGithubApiClient;
 }
 
 export async function getGithubAccountCatalog(args: {
+  client?: GithubApiClient;
   env: NodeJS.ProcessEnv;
+  fetch?: GithubFetch;
   ghPath?: string;
   run?: GithubCommandRunner;
 }): Promise<GithubAccountCatalog> {
-  const accounts = await listGithubAccounts({
-    env: args.env,
-    ghPath: args.ghPath ?? "gh",
-    run: args.run ?? runCommand,
-  });
+  const client = resolveClient(args);
+  const accounts = githubDotComAccounts(
+    await client.accounts({
+      env: args.env,
+      forceRefresh: true,
+      ...(args.ghPath === undefined ? {} : { ghPath: args.ghPath }),
+    }),
+  );
   if (accounts.length === 0) {
     throw new Error(
       "No authenticated github.com account was found. Run `gh auth login` first.",
     );
   }
-  return { accounts };
+  return { accounts: [...accounts] };
 }
 
 export async function getGithubAccountEnvironment(args: {
+  client?: GithubApiClient;
   env: NodeJS.ProcessEnv;
+  fetch?: GithubFetch;
   login: string | null;
   ghPath?: string;
   run?: GithubCommandRunner;
@@ -185,11 +128,10 @@ export async function getGithubAccountEnvironment(args: {
     host: GITHUB_HOST,
     login: args.login,
   };
-  const token = await tokenForAccount({
+  const token = await resolveClient(args).token({
     account,
     env: args.env,
-    ghPath: args.ghPath ?? "gh",
-    run: args.run ?? runCommand,
+    ...(args.ghPath === undefined ? {} : { ghPath: args.ghPath }),
   });
   return { GH_HOST: account.host, GH_TOKEN: token };
 }
@@ -231,134 +173,128 @@ function parseRepositoryNode(
   };
 }
 
-function parseRepositoryPages(
-  raw: string,
-): Array<Omit<GithubRepository, "accessibleBy" | "activeAccount">> {
-  const parsed: unknown = JSON.parse(raw);
-  if (!Array.isArray(parsed)) {
-    throw new Error("GitHub CLI returned malformed repository pages");
-  }
+function parseRepositoryPage(value: unknown): {
+  endCursor: string | null;
+  hasNextPage: boolean;
+  repositories: Array<Omit<GithubRepository, "accessibleBy" | "activeAccount">>;
+} {
   const repositories: Array<
     Omit<GithubRepository, "accessibleBy" | "activeAccount">
   > = [];
-  for (const page of parsed) {
-    if (typeof page !== "object" || page === null || Array.isArray(page)) {
-      continue;
-    }
-    const data = (page as Record<string, unknown>).data;
-    if (typeof data !== "object" || data === null || Array.isArray(data)) {
-      continue;
-    }
-    const viewer = (data as Record<string, unknown>).viewer;
-    if (
-      typeof viewer !== "object" ||
-      viewer === null ||
-      Array.isArray(viewer)
-    ) {
-      continue;
-    }
-    const connection = (viewer as Record<string, unknown>).repositories;
-    if (
-      typeof connection !== "object" ||
-      connection === null ||
-      Array.isArray(connection)
-    ) {
-      continue;
-    }
-    const nodes = (connection as Record<string, unknown>).nodes;
-    if (!Array.isArray(nodes)) continue;
-    for (const node of nodes) {
-      const repository = parseRepositoryNode(node);
-      if (repository) repositories.push(repository);
-    }
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    throw new Error("GitHub returned a malformed repository page");
   }
-  return repositories;
+  const data = (value as Record<string, unknown>).data;
+  if (typeof data !== "object" || data === null || Array.isArray(data)) {
+    throw new Error("GitHub returned a malformed repository page");
+  }
+  const viewer = (data as Record<string, unknown>).viewer;
+  if (typeof viewer !== "object" || viewer === null || Array.isArray(viewer)) {
+    throw new Error("GitHub returned a malformed repository viewer");
+  }
+  const connection = (viewer as Record<string, unknown>).repositories;
+  if (
+    typeof connection !== "object" ||
+    connection === null ||
+    Array.isArray(connection)
+  ) {
+    throw new Error("GitHub returned a malformed repository connection");
+  }
+  const connectionRecord = connection as Record<string, unknown>;
+  if (!Array.isArray(connectionRecord.nodes)) {
+    throw new Error("GitHub returned malformed repository nodes");
+  }
+  for (const node of connectionRecord.nodes) {
+    const repository = parseRepositoryNode(node);
+    if (repository) repositories.push(repository);
+  }
+  const pageInfo = connectionRecord.pageInfo;
+  if (
+    typeof pageInfo !== "object" ||
+    pageInfo === null ||
+    Array.isArray(pageInfo)
+  ) {
+    throw new Error("GitHub returned malformed repository pagination");
+  }
+  const pageInfoRecord = pageInfo as Record<string, unknown>;
+  if (typeof pageInfoRecord.hasNextPage !== "boolean") {
+    throw new Error("GitHub returned malformed repository pagination");
+  }
+  const endCursor =
+    typeof pageInfoRecord.endCursor === "string"
+      ? pageInfoRecord.endCursor
+      : null;
+  if (pageInfoRecord.hasNextPage && endCursor === null) {
+    throw new Error("GitHub returned no cursor for the next repository page");
+  }
+  return {
+    repositories,
+    hasNextPage: pageInfoRecord.hasNextPage,
+    endCursor,
+  };
 }
 
 async function repositoriesForAccount(args: {
   account: GithubAccount;
+  client: GithubApiClient;
   env: NodeJS.ProcessEnv;
-  ghPath: string;
-  run: GithubCommandRunner;
+  ghPath?: string;
+  signal?: AbortSignal;
 }): Promise<Array<Omit<GithubRepository, "accessibleBy" | "activeAccount">>> {
-  const token = await tokenForAccount(args);
-  const result = await args.run(
-    args.ghPath,
-    [
-      "api",
-      "graphql",
-      "--paginate",
-      "--slurp",
-      "-f",
-      `query=${REPOSITORY_QUERY}`,
-    ],
-    {
-      env: {
-        ...args.env,
-        GH_HOST: args.account.host,
-        GH_TOKEN: token,
-      },
-      timeoutMs: COMMAND_TIMEOUT_MS,
-    },
-  );
-  return parseRepositoryPages(result.stdout);
+  const repositories: Array<
+    Omit<GithubRepository, "accessibleBy" | "activeAccount">
+  > = [];
+  let endCursor: string | null = null;
+  do {
+    const payload = await args.client.graphql({
+      account: args.account,
+      env: args.env,
+      query: REPOSITORY_QUERY,
+      variables: { endCursor },
+      ...(args.ghPath === undefined ? {} : { ghPath: args.ghPath }),
+      ...(args.signal === undefined ? {} : { signal: args.signal }),
+    });
+    const page = parseRepositoryPage(payload);
+    repositories.push(...page.repositories);
+    endCursor = page.hasNextPage ? page.endCursor : null;
+  } while (endCursor !== null);
+  return repositories;
 }
 
-async function tokenForAccount(args: {
-  account: GithubAccount;
-  env: NodeJS.ProcessEnv;
-  ghPath: string;
-  run: GithubCommandRunner;
-}): Promise<string> {
-  const tokenResult = await args.run(
-    args.ghPath,
-    [
-      "auth",
-      "token",
-      "--hostname",
-      args.account.host,
-      "--user",
-      args.account.login,
-    ],
-    { env: args.env, timeoutMs: COMMAND_TIMEOUT_MS },
-  );
-  const token = tokenResult.stdout.trim();
-  if (!token) {
-    throw new Error(`GitHub CLI returned no token for @${args.account.login}`);
+function parsePullRequests(value: unknown): GithubPullRequest[] {
+  if (!Array.isArray(value)) {
+    throw new Error("GitHub returned malformed pull requests");
   }
-  return token;
-}
-
-function parsePullRequests(raw: string): GithubPullRequest[] {
-  const parsed: unknown = JSON.parse(raw);
-  if (!Array.isArray(parsed)) {
-    throw new Error("GitHub CLI returned malformed pull requests");
-  }
-  return parsed.flatMap((value): GithubPullRequest[] => {
-    if (typeof value !== "object" || value === null || Array.isArray(value)) {
+  return value.flatMap((item): GithubPullRequest[] => {
+    if (typeof item !== "object" || item === null || Array.isArray(item)) {
       return [];
     }
-    const row = value as GithubPullRequestRow;
-    const author = optionalNestedString(row.author, "login");
-    const headRepository = optionalNestedString(
-      row.headRepository,
-      "nameWithOwner",
-    );
+    const row = item as GithubRestPullRequestRow;
+    const author = optionalNestedString(row.user, "login");
+    const headBranch = optionalNestedString(row.head, "ref");
+    const headRepository =
+      typeof row.head === "object" &&
+      row.head !== null &&
+      !Array.isArray(row.head)
+        ? optionalNestedString(
+            (row.head as Record<string, unknown>).repo,
+            "full_name",
+          )
+        : null;
+    const baseBranch = optionalNestedString(row.base, "ref");
     if (
       typeof row.number !== "number" ||
       !Number.isInteger(row.number) ||
       row.number <= 0 ||
       typeof row.title !== "string" ||
       row.title.length === 0 ||
-      typeof row.url !== "string" ||
-      typeof row.isDraft !== "boolean" ||
-      typeof row.headRefName !== "string" ||
-      row.headRefName.length === 0 ||
+      typeof row.html_url !== "string" ||
+      typeof row.draft !== "boolean" ||
+      headBranch === null ||
       headRepository === null ||
-      typeof row.baseRefName !== "string" ||
-      row.baseRefName.length === 0 ||
+      baseBranch === null ||
       author === null ||
-      typeof row.updatedAt !== "string"
+      typeof row.updated_at !== "string"
     ) {
       return [];
     }
@@ -366,77 +302,79 @@ function parsePullRequests(raw: string): GithubPullRequest[] {
       {
         number: row.number,
         title: row.title,
-        url: row.url,
-        isDraft: row.isDraft,
-        headBranch: row.headRefName,
+        url: row.html_url,
+        isDraft: row.draft,
+        headBranch,
         headRepository,
-        baseBranch: row.baseRefName,
+        baseBranch,
         author,
-        updatedAt: row.updatedAt,
+        updatedAt: row.updated_at,
       },
     ];
   });
 }
 
 export async function getGithubPullRequestCatalog(args: {
+  client?: GithubApiClient;
   env: NodeJS.ProcessEnv;
+  fetch?: GithubFetch;
   repository: string;
   githubAccountLogin: string;
   ghPath?: string;
   run?: GithubCommandRunner;
+  signal?: AbortSignal;
 }): Promise<GithubPullRequestCatalog> {
-  const run = args.run ?? runCommand;
-  const ghPath = args.ghPath ?? "gh";
-  const accounts = await listGithubAccounts({ env: args.env, ghPath, run });
-  const account = accounts.find(
-    (candidate) =>
-      candidate.login.toLocaleLowerCase() ===
-      args.githubAccountLogin.toLocaleLowerCase(),
-  );
-  if (!account) {
+  const account: GithubAccount = {
+    active: false,
+    host: GITHUB_HOST,
+    login: args.githubAccountLogin,
+  };
+  const [owner, repository] = args.repository.split("/");
+  if (!owner || !repository || args.repository.split("/").length !== 2) {
+    throw new Error(`Invalid GitHub repository: ${args.repository}`);
+  }
+  const client = resolveClient(args);
+  try {
+    await client.token({
+      account,
+      env: args.env,
+      ...(args.ghPath === undefined ? {} : { ghPath: args.ghPath }),
+    });
+  } catch (error) {
     throw new Error(
       `GitHub account @${args.githubAccountLogin} is not authenticated on this machine. Run \`gh auth login\` for that account first.`,
+      { cause: error },
     );
   }
-  const token = await tokenForAccount({ account, env: args.env, ghPath, run });
-  const result = await run(
-    ghPath,
-    [
-      "pr",
-      "list",
-      "--repo",
-      args.repository,
-      "--state",
-      "open",
-      "--limit",
-      "100",
-      "--json",
-      "number,title,url,isDraft,headRefName,headRepository,baseRefName,author,updatedAt",
-    ],
-    {
-      env: {
-        ...args.env,
-        GH_HOST: account.host,
-        GH_TOKEN: token,
-      },
-      timeoutMs: COMMAND_TIMEOUT_MS,
-    },
-  );
+  const payload = await client.requestJson({
+    account,
+    env: args.env,
+    path: `repos/${encodeURIComponent(owner)}/${encodeURIComponent(repository)}/pulls?state=open&per_page=100`,
+    ...(args.ghPath === undefined ? {} : { ghPath: args.ghPath }),
+    ...(args.signal === undefined ? {} : { signal: args.signal }),
+  });
   return {
     repository: args.repository,
     account: account.login,
-    pullRequests: parsePullRequests(result.stdout),
+    pullRequests: parsePullRequests(payload),
   };
 }
 
 export async function getGithubRepositoryCatalog(args: {
+  client?: GithubApiClient;
   env: NodeJS.ProcessEnv;
+  fetch?: GithubFetch;
   ghPath?: string;
   run?: GithubCommandRunner;
+  signal?: AbortSignal;
 }): Promise<GithubRepositoryCatalog> {
-  const run = args.run ?? runCommand;
-  const ghPath = args.ghPath ?? "gh";
-  const accounts = await listGithubAccounts({ env: args.env, ghPath, run });
+  const client = resolveClient(args);
+  const accounts = githubDotComAccounts(
+    await client.accounts({
+      env: args.env,
+      ...(args.ghPath === undefined ? {} : { ghPath: args.ghPath }),
+    }),
+  );
   if (accounts.length === 0) {
     throw new Error(
       "No authenticated github.com account was found. Run `gh auth login` first.",
@@ -448,9 +386,10 @@ export async function getGithubRepositoryCatalog(args: {
       account,
       repositories: await repositoriesForAccount({
         account,
+        client,
         env: args.env,
-        ghPath,
-        run,
+        ...(args.ghPath === undefined ? {} : { ghPath: args.ghPath }),
+        ...(args.signal === undefined ? {} : { signal: args.signal }),
       }),
     })),
   );
@@ -494,7 +433,7 @@ export async function getGithubRepositoryCatalog(args: {
     });
 
   return {
-    accounts,
+    accounts: [...accounts],
     repositories,
     scope: accounts.length > 1 ? "union" : "account",
   };

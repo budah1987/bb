@@ -60,15 +60,15 @@ vi.mock("./AgentActivitySection", () => ({
   ),
 }));
 
-vi.mock("./PullRequestSection", () => ({
-  PullRequestSection: ({
+vi.mock("./RepositoryHealthSection", () => ({
+  RepositoryHealthSection: ({
     enabled,
     threadId,
   }: {
     enabled: boolean;
     threadId: string;
   }) => (
-    <div data-testid="pull-request-section" data-enabled={enabled}>
+    <div data-testid="repository-health-section" data-enabled={enabled}>
       {threadId}
     </div>
   ),
@@ -132,7 +132,7 @@ describe("ThreadRail", () => {
     expect(screen.getByTestId("agent-activity-section").textContent).toBe(
       "thr_1",
     );
-    expect(screen.getByTestId("pull-request-section").textContent).toBe(
+    expect(screen.getByTestId("repository-health-section").textContent).toBe(
       "thr_1",
     );
     expect(screen.getByTestId("feedback-review-section").textContent).toBe(
@@ -145,7 +145,7 @@ describe("ThreadRail", () => {
       "notes-panel",
       "environment-section",
       "agent-activity-section",
-      "pull-request-section",
+      "repository-health-section",
       "feedback-review-section",
       "plugin-rail-sections",
     ]) {
@@ -196,7 +196,7 @@ describe("ThreadRail", () => {
       "notes-panel",
       "environment-section",
       "agent-activity-section",
-      "pull-request-section",
+      "repository-health-section",
       "feedback-review-section",
       "plugin-rail-sections",
     ]) {

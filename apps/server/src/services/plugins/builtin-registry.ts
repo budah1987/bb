@@ -154,7 +154,9 @@ export const OFFICIAL_PLUGINS = [
   {
     name: "github",
     pluginId: "github",
-    defaultEnabled: true,
+    // BBamir ships the native, cache-bounded GitHub data plane. Keep the
+    // generic sync plugin opt-in so both implementations never poll together.
+    defaultEnabled: false,
     category: "Developer tools",
   },
   {

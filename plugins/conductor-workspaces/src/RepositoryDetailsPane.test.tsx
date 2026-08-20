@@ -205,21 +205,12 @@ describe("RepositoryDetailsPane", () => {
     });
   });
 
-  it("shows live Git remote, branch, account, and pull request state", async () => {
+  it("shows live Git state and delegates GitHub reads to the native tab", async () => {
     renderSlot(
       detailsPanel,
       { subPath: "project-1" },
       {
         sidebarThreads: sidebarState,
-        sidebarPullRequests: {
-          "Review conversation": {
-            number: 42,
-            title: "Review repository details",
-            url: "https://github.com/get-bb/bb/pull/42",
-            state: "open",
-            attention: "review_requested",
-          },
-        },
         rpc: reconciliationRpc,
       },
     );
@@ -228,9 +219,12 @@ describe("RepositoryDetailsPane", () => {
     expect(screen.getByRole("link", { name: "get-bb/bb" })).toBeDefined();
     expect(screen.getByText("@amir")).toBeDefined();
     expect(screen.getByText("review/details")).toBeDefined();
+    expect(screen.queryByRole("link", { name: /#42/u })).toBeNull();
+    fireEvent.click(screen.getByRole("tab", { name: "GitHub" }));
     expect(
-      screen.getByRole("link", { name: /#42openreview requested/u }),
+      screen.getByText("Native GitHub details are unavailable."),
     ).toBeDefined();
+    fireEvent.click(screen.getByRole("tab", { name: "Git" }));
     fireEvent.click(
       screen.getAllByRole("button", { name: "Update from main" })[0]!,
     );

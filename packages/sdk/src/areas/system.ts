@@ -7,6 +7,8 @@ import type {
   DiscoverReposResult,
   GithubAccountCatalog,
   GithubPullRequestCatalog,
+  GithubRepositoryHealthResult,
+  GithubRepositoryActivityResult,
   GithubRepositoryCatalog,
   ProviderUsageResponse,
 } from "@bb/host-daemon-contract";
@@ -58,6 +60,23 @@ export interface SystemGithubPullRequestsArgs extends SystemGithubPullRequestsQu
   signal?: AbortSignal;
 }
 
+export interface SystemGithubRepositoryHealthArgs {
+  githubAccountLogin: string;
+  githubHost?: string;
+  hostId?: string;
+  refresh: "cached" | "allow-fetch";
+  repositories: readonly string[];
+  signal?: AbortSignal;
+}
+
+export interface SystemGithubRepositoryActivityArgs {
+  githubAccountLogin: string;
+  githubHost?: string;
+  hostId?: string;
+  repository: string;
+  signal?: AbortSignal;
+}
+
 export interface SystemVersionArgs {
   force?: boolean;
   signal?: AbortSignal;
@@ -89,6 +108,9 @@ export type SystemUsageLimitsResult = ProviderUsageResponse;
 export type SystemGithubAccountsResult = GithubAccountCatalog;
 export type SystemGithubRepositoriesResult = GithubRepositoryCatalog;
 export type SystemGithubPullRequestsResult = GithubPullRequestCatalog;
+export type SystemGithubRepositoryHealthResult = GithubRepositoryHealthResult;
+export type SystemGithubRepositoryActivityResult =
+  GithubRepositoryActivityResult;
 export interface SystemOnboardingArgs extends SystemProvidersQuery {
   signal?: AbortSignal;
 }
@@ -153,6 +175,14 @@ export interface SystemArea {
   githubPullRequests(
     args: SystemGithubPullRequestsArgs,
   ): Promise<SystemGithubPullRequestsResult>;
+  /** Cached or explicitly fetched health for a bounded repository batch. */
+  githubRepositoryHealth(
+    args: SystemGithubRepositoryHealthArgs,
+  ): Promise<SystemGithubRepositoryHealthResult>;
+  /** On-demand issues, Actions runs, and notification inbox for a repository. */
+  githubRepositoryActivity(
+    args: SystemGithubRepositoryActivityArgs,
+  ): Promise<SystemGithubRepositoryActivityResult>;
   usageLimits(args?: SystemUsageLimitsArgs): Promise<SystemUsageLimitsResult>;
   version(args?: SystemVersionArgs): Promise<SystemVersionResult>;
 }
@@ -301,6 +331,42 @@ export function createSystemArea(args: CreateSdkAreaArgs): SystemArea {
               repository: input.repository,
               githubAccountLogin: input.githubAccountLogin,
               hostId: input.hostId,
+            },
+          },
+          ...signalRequestArgs(input.signal),
+        ),
+      );
+    },
+    async githubRepositoryHealth(input) {
+      if (input.repositories.length === 0 || input.repositories.length > 50) {
+        throw new Error(
+          "Repository health requires between 1 and 50 repositories",
+        );
+      }
+      return transport.readJson(
+        transport.api.v1.system.github["repository-health"].$get(
+          {
+            query: {
+              githubAccountLogin: input.githubAccountLogin,
+              githubHost: input.githubHost ?? "github.com",
+              hostId: input.hostId,
+              refresh: input.refresh,
+              repositories: input.repositories.join(","),
+            },
+          },
+          ...signalRequestArgs(input.signal),
+        ),
+      );
+    },
+    async githubRepositoryActivity(input) {
+      return transport.readJson(
+        transport.api.v1.system.github["repository-activity"].$get(
+          {
+            query: {
+              githubAccountLogin: input.githubAccountLogin,
+              githubHost: input.githubHost ?? "github.com",
+              hostId: input.hostId,
+              repository: input.repository,
             },
           },
           ...signalRequestArgs(input.signal),

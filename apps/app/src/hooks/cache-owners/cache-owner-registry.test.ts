@@ -100,6 +100,7 @@ const CACHE_OWNER_QUERY_KEY_IMPORTS: CacheOwnerQueryKeyImportRegistry = {
     "environmentWorkspaceFilesQueryKeyPrefix",
     "environmentWorkStatusQueryKeyPrefix",
     "systemExecutionOptionsEnvironmentQueryKeyPrefix",
+    "systemGithubRepositoryHealthQueryKeyPrefix",
   ],
   "hooks/cache-owners/environment-diff-patch-cache-owner.ts": [
     "environmentDiffPatchQueryKey",

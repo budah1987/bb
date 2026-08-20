@@ -44,7 +44,7 @@ import {
 
 // Version 126 scopes deployment discovery to the environment's GitHub account
 // and carries distinct stable-branch and immutable-deployment preview URLs.
-export const HOST_DAEMON_PROTOCOL_VERSION = 126 as const;
+export const HOST_DAEMON_PROTOCOL_VERSION = 127 as const;
 export const githubAccountLoginSchema = z.string().trim().min(1).max(255);
 
 export {
@@ -2080,6 +2080,144 @@ export type GithubPullRequestCatalog = z.infer<
   typeof githubPullRequestCatalogSchema
 >;
 
+export const githubRepositoryHealthRecordSchema = z
+  .object({
+    nameWithOwner: z.string().regex(/^[\w.-]+\/[\w.-]+$/u),
+    defaultBranch: gitBranchNameSchema.nullable(),
+    defaultBranchCheckState: z.enum(["passing", "failing", "pending", "none"]),
+    openPullRequestCount: z.number().int().nonnegative(),
+    attention: z.enum([
+      "none",
+      "checks_failed",
+      "conflicts",
+      "changes_requested",
+      "checks_pending",
+      "review_requested",
+    ]),
+    fetchedAt: z.string().datetime(),
+  })
+  .strict();
+export type GithubRepositoryHealthRecord = z.infer<
+  typeof githubRepositoryHealthRecordSchema
+>;
+
+const githubRepositoryHealthFailureBaseSchema = z.object({
+  host: z.string().min(1),
+  login: githubAccountLoginSchema,
+  message: z.string().min(1),
+});
+
+export const githubRepositoryHealthResultSchema = z.discriminatedUnion(
+  "outcome",
+  [
+    z
+      .object({
+        outcome: z.literal("available"),
+        host: z.string().min(1),
+        login: githubAccountLoginSchema,
+        repositories: z.array(githubRepositoryHealthRecordSchema),
+        fetchedAt: z.string().datetime(),
+        rateLimit: z
+          .object({
+            remaining: z.number().int().nonnegative().nullable(),
+            resetAt: z.string().datetime().nullable(),
+          })
+          .strict(),
+      })
+      .strict(),
+    githubRepositoryHealthFailureBaseSchema
+      .extend({ outcome: z.literal("authentication_required") })
+      .strict(),
+    githubRepositoryHealthFailureBaseSchema
+      .extend({
+        outcome: z.literal("rate_limited"),
+        retryAt: z.string().datetime(),
+      })
+      .strict(),
+    githubRepositoryHealthFailureBaseSchema
+      .extend({ outcome: z.literal("unavailable") })
+      .strict(),
+  ],
+);
+export type GithubRepositoryHealthResult = z.infer<
+  typeof githubRepositoryHealthResultSchema
+>;
+
+export const githubIssueSummarySchema = z
+  .object({
+    number: z.number().int().positive(),
+    title: z.string().min(1),
+    url: z.string().url(),
+    author: z.string().min(1).nullable(),
+    labels: z.array(z.string().min(1)),
+    updatedAt: z.string().datetime(),
+  })
+  .strict();
+export type GithubIssueSummary = z.infer<typeof githubIssueSummarySchema>;
+
+export const githubWorkflowRunSummarySchema = z
+  .object({
+    id: z.number().int().positive(),
+    name: z.string().min(1),
+    url: z.string().url(),
+    branch: z.string().min(1).nullable(),
+    event: z.string().min(1),
+    status: z.string().min(1),
+    conclusion: z.string().min(1).nullable(),
+    updatedAt: z.string().datetime(),
+  })
+  .strict();
+export type GithubWorkflowRunSummary = z.infer<
+  typeof githubWorkflowRunSummarySchema
+>;
+
+export const githubInboxItemSchema = z
+  .object({
+    id: z.string().min(1),
+    repository: z.string().regex(/^[\w.-]+\/[\w.-]+$/u),
+    reason: z.string().min(1),
+    title: z.string().min(1),
+    subjectType: z.string().min(1),
+    unread: z.boolean(),
+    updatedAt: z.string().datetime(),
+    url: z.string().url().nullable(),
+  })
+  .strict();
+export type GithubInboxItem = z.infer<typeof githubInboxItemSchema>;
+
+export const githubRepositoryActivityResultSchema = z.discriminatedUnion(
+  "outcome",
+  [
+    z
+      .object({
+        outcome: z.literal("available"),
+        host: z.string().min(1),
+        login: githubAccountLoginSchema,
+        repository: z.string().regex(/^[\w.-]+\/[\w.-]+$/u),
+        issues: z.array(githubIssueSummarySchema),
+        workflowRuns: z.array(githubWorkflowRunSummarySchema),
+        inbox: z.array(githubInboxItemSchema),
+        fetchedAt: z.string().datetime(),
+      })
+      .strict(),
+    githubRepositoryHealthFailureBaseSchema
+      .extend({ outcome: z.literal("authentication_required") })
+      .strict(),
+    githubRepositoryHealthFailureBaseSchema
+      .extend({
+        outcome: z.literal("rate_limited"),
+        retryAt: z.string().datetime(),
+      })
+      .strict(),
+    githubRepositoryHealthFailureBaseSchema
+      .extend({ outcome: z.literal("unavailable") })
+      .strict(),
+  ],
+);
+export type GithubRepositoryActivityResult = z.infer<
+  typeof githubRepositoryActivityResultSchema
+>;
+
 const githubRepositoryCatalogCommandSchema = z
   .object({ type: z.literal("github.repository_catalog") })
   .strict();
@@ -2093,6 +2231,27 @@ const githubPullRequestCatalogCommandSchema = z
     type: z.literal("github.pull_request_catalog"),
     repository: z.string().regex(/^[\w.-]+\/[\w.-]+$/u),
     githubAccountLogin: githubAccountLoginSchema,
+  })
+  .strict();
+
+const githubRepositoryHealthCommandSchema = z
+  .object({
+    type: z.literal("github.repository_health"),
+    githubHost: z.string().min(1),
+    githubAccountLogin: githubAccountLoginSchema,
+    repositories: z
+      .array(z.string().regex(/^[\w.-]+\/[\w.-]+$/u))
+      .min(1)
+      .max(50),
+  })
+  .strict();
+
+const githubRepositoryActivityCommandSchema = z
+  .object({
+    type: z.literal("github.repository_activity"),
+    githubHost: z.string().min(1),
+    githubAccountLogin: githubAccountLoginSchema,
+    repository: z.string().regex(/^[\w.-]+\/[\w.-]+$/u),
   })
   .strict();
 
@@ -2765,6 +2924,24 @@ export const hostDaemonCommandRegistry = {
     type: "github.pull_request_catalog",
     schema: githubPullRequestCatalogCommandSchema,
     resultSchema: githubPullRequestCatalogSchema,
+    transport: "onlineRpc",
+    retryable: true,
+    flushEventsBeforeResult: false,
+    envLane: null,
+  }),
+  "github.repository_health": defineHostDaemonCommandDescriptor({
+    type: "github.repository_health",
+    schema: githubRepositoryHealthCommandSchema,
+    resultSchema: githubRepositoryHealthResultSchema,
+    transport: "onlineRpc",
+    retryable: true,
+    flushEventsBeforeResult: false,
+    envLane: null,
+  }),
+  "github.repository_activity": defineHostDaemonCommandDescriptor({
+    type: "github.repository_activity",
+    schema: githubRepositoryActivityCommandSchema,
+    resultSchema: githubRepositoryActivityResultSchema,
     transport: "onlineRpc",
     retryable: true,
     flushEventsBeforeResult: false,

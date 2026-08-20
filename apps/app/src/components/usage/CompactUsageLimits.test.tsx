@@ -218,6 +218,12 @@ describe("SidebarUsageLimitsContent", () => {
     expect(screen.getByTestId("sidebar-usage-limits").className).toContain(
       "order-[-1]",
     );
+    expect(screen.getByTestId("sidebar-usage-limits").className).not.toContain(
+      "max-md:hidden",
+    );
+    expect(screen.getByTestId("sidebar-usage-limits").className).not.toContain(
+      "pointer-coarse:hidden",
+    );
     const trigger = screen.getByRole("button", { name: /Expand details/u });
     expect(trigger.querySelector("svg")).not.toBeNull();
     fireEvent.click(trigger);

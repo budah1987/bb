@@ -1,3 +1,4 @@
+import { useEffect, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
   listBuiltInAgentProviderInfos,
@@ -15,6 +16,8 @@ import type {
   DiscoverReposResult,
   GithubAccountCatalog,
   GithubPullRequestCatalog,
+  GithubRepositoryHealthResult,
+  GithubRepositoryActivityResult,
   GithubRepositoryCatalog,
   ProviderCliStatusResponse,
 } from "@bb/host-daemon-contract";
@@ -36,6 +39,8 @@ import {
   systemGithubAccountsQueryKey,
   systemGithubRepositoriesQueryKey,
   systemGithubPullRequestsQueryKey,
+  systemGithubRepositoryHealthQueryKey,
+  systemGithubRepositoryActivityQueryKey,
   systemUsageLimitsQueryKey,
   systemVersionQueryKey,
 } from "./query-keys";
@@ -353,5 +358,114 @@ export function useGithubPullRequests(args: UseGithubPullRequestsArgs) {
       args.repository.length > 0 &&
       args.githubAccountLogin !== null,
     staleTime: 30_000,
+  });
+}
+
+export interface UseGithubRepositoryHealthArgs extends QueryOptions {
+  githubAccountLogin: string | null;
+  githubHost?: string;
+  hostId?: string;
+  refresh: "cached" | "allow-fetch";
+  repositories: readonly string[];
+}
+
+const GITHUB_REPOSITORY_HEALTH_CACHE_MISS_MESSAGE =
+  "Repository health has not been loaded yet.";
+
+/**
+ * Shared native health read. It never interval-polls; callers must opt into
+ * host/GitHub work with `allow-fetch` and visibility-gate that choice.
+ */
+export function useGithubRepositoryHealth(args: UseGithubRepositoryHealthArgs) {
+  const githubHost = args.githubHost ?? "github.com";
+  const hostId = args.hostId ?? null;
+  const explicitMissRefetchStarted = useRef(false);
+  const query = useQuery<GithubRepositoryHealthResult>({
+    queryKey: systemGithubRepositoryHealthQueryKey({
+      githubAccountLogin: args.githubAccountLogin,
+      githubHost,
+      hostId,
+      repositories: args.repositories,
+    }),
+    queryFn: ({ signal }) =>
+      sdk.system.githubRepositoryHealth({
+        githubAccountLogin: requireEnabledQueryArg({
+          value: args.githubAccountLogin,
+          hookName: "useGithubRepositoryHealth",
+          argName: "githubAccountLogin",
+        }),
+        githubHost,
+        repositories: args.repositories,
+        refresh: args.refresh,
+        ...(args.hostId === undefined ? {} : { hostId: args.hostId }),
+        signal,
+      }),
+    enabled:
+      (args.enabled ?? true) &&
+      args.githubAccountLogin !== null &&
+      args.repositories.length > 0 &&
+      args.repositories.length <= 50,
+    staleTime: (current) =>
+      current.state.data?.outcome === "unavailable" ? 0 : 60_000,
+  });
+  const { data, isFetching, refetch } = query;
+  useEffect(() => {
+    const isCachedMiss =
+      data?.outcome === "unavailable" &&
+      data.message === GITHUB_REPOSITORY_HEALTH_CACHE_MISS_MESSAGE;
+    if (!isCachedMiss) {
+      explicitMissRefetchStarted.current = false;
+      return;
+    }
+    if (
+      args.refresh !== "allow-fetch" ||
+      isFetching ||
+      explicitMissRefetchStarted.current
+    ) {
+      return;
+    }
+    explicitMissRefetchStarted.current = true;
+    void refetch();
+  }, [args.refresh, data, isFetching, refetch]);
+  return query;
+}
+
+export interface UseGithubRepositoryActivityArgs extends QueryOptions {
+  githubAccountLogin: string | null;
+  githubHost?: string;
+  hostId?: string;
+  repository: string;
+}
+
+/** On-demand only: no interval, focus polling, or persistent-nav owner. */
+export function useGithubRepositoryActivity(
+  args: UseGithubRepositoryActivityArgs,
+) {
+  const githubHost = args.githubHost ?? "github.com";
+  const hostId = args.hostId ?? null;
+  return useQuery<GithubRepositoryActivityResult>({
+    queryKey: systemGithubRepositoryActivityQueryKey({
+      githubAccountLogin: args.githubAccountLogin,
+      githubHost,
+      hostId,
+      repository: args.repository,
+    }),
+    queryFn: ({ signal }) =>
+      sdk.system.githubRepositoryActivity({
+        githubAccountLogin: requireEnabledQueryArg({
+          value: args.githubAccountLogin,
+          hookName: "useGithubRepositoryActivity",
+          argName: "githubAccountLogin",
+        }),
+        githubHost,
+        repository: args.repository,
+        ...(args.hostId === undefined ? {} : { hostId: args.hostId }),
+        signal,
+      }),
+    enabled:
+      (args.enabled ?? true) &&
+      args.githubAccountLogin !== null &&
+      args.repository.length > 0,
+    staleTime: 60_000,
   });
 }

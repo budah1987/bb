@@ -11,6 +11,7 @@ import {
   environmentPreviewsQueryKey,
   environmentWorkspaceFilesQueryKeyPrefix,
   environmentWorkStatusQueryKeyPrefix,
+  systemGithubRepositoryHealthQueryKeyPrefix,
   systemExecutionOptionsEnvironmentQueryKeyPrefix,
 } from "../queries/query-keys";
 import type {
@@ -65,6 +66,14 @@ export function invalidateEnvironmentActionQueries({
   // The patch cache is observer-less; invalidation never refetches it, so evict
   // it after an environment action so fresh patches are re-requested.
   removeEnvironmentDiffPatchQueries({ environmentId, queryClient });
+}
+
+export function invalidateGithubRepositoryHealthQueries({
+  queryClient,
+}: Pick<EnvironmentArg, "queryClient">): void {
+  queryClient.invalidateQueries({
+    queryKey: systemGithubRepositoryHealthQueryKeyPrefix(),
+  });
 }
 
 export function invalidateEnvironmentWorkspaceStateQueries({

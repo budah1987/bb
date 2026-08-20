@@ -9,7 +9,7 @@ import { AgentActivitySection } from "./AgentActivitySection";
 import type { AgentActivityData } from "./AgentActivitySection";
 import { EnvironmentSection } from "./EnvironmentSection";
 import { FeedbackReviewSection } from "./FeedbackReviewSection";
-import { PullRequestSection } from "./PullRequestSection";
+import { RepositoryHealthSection } from "./RepositoryHealthSection";
 import { RailPanelTitle } from "./RailPanelTitle";
 import { RAIL_SECTION_STACK_CLASS } from "./railStyleTokens";
 
@@ -156,7 +156,7 @@ function RailContents({
             threadId={threadId}
             enabled={enabled}
           />
-          <PullRequestSection threadId={threadId} enabled={enabled} />
+          <RepositoryHealthSection threadId={threadId} enabled={enabled} />
           <FeedbackReviewSection threadId={threadId} enabled={enabled} />
           <PluginThreadRailSections threadId={threadId} enabled={enabled} />
         </div>

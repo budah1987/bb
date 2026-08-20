@@ -63,6 +63,17 @@ Discovery:
     --github-account <login>                  Authenticated account to use
     --machine <id-or-name>                   Machine whose GitHub account to use
     --host <id-or-name>                      Alias for --machine
+  bb project github-repository-health <owner/repo...>
+                                              Read checks and PR attention
+    --github-account <login>                  Authenticated account to use
+    --cached                                  Never contact GitHub
+    --machine <id-or-name>                   Machine whose GitHub account to use
+    --host <id-or-name>                      Alias for --machine
+  bb project github-repository-activity <owner/repo>
+                                              Issues, Actions, and inbox
+    --github-account <login>                  Authenticated account to use
+    --machine <id-or-name>                   Machine whose GitHub account to use
+    --host <id-or-name>                      Alias for --machine
   bb project branches <id> --host <id>   List branches for a machine source
   bb project paths <id>                   Search workspace paths
   bb project files <id>                   List workspace files
@@ -86,6 +97,13 @@ Discovery:
   Pull-request discovery requires --github-account, scopes the operation to
   that authenticated account, and returns the PR head repository and branch so
   agents can reproduce the selected starting point.
+  Repository health batches up to 50 repositories, reports default-branch
+  checks and the highest-priority open-PR attention state, and returns typed
+  sign-in, rate-limit, and availability outcomes. Pass --cached from persistent
+  or background navigation so it cannot start host or GitHub work.
+  Repository activity is an on-demand bounded read of open issues, recent
+  Actions runs, and unread notifications for one repository. It never creates
+  a background inbox or synchronization loop.
   The project GitHub account is a repository default inherited by new
   workspaces; an explicit workspace account still takes precedence.
 

@@ -9,6 +9,7 @@ import { sdk } from "@/lib/sdk";
 import type { RequestEnvironmentActionMutationRequest } from "./mutation-request-types";
 import {
   invalidateEnvironmentActionQueries,
+  invalidateGithubRepositoryHealthQueries,
   invalidateEnvironmentPreviewQueries,
 } from "../cache-owners/environment-cache-effects";
 import { applyEnvironmentUpdateResult } from "../cache-owners/environment-workspace-cache-owner";
@@ -97,6 +98,9 @@ export function useRequestEnvironmentAction() {
         environmentId: variables.id,
         queryClient,
       });
+      if (variables.action.startsWith("pull_request_")) {
+        invalidateGithubRepositoryHealthQueries({ queryClient });
+      }
     },
   });
 }
