@@ -312,6 +312,28 @@ describe("ThreadDetailHeader", () => {
     expect(onSelect).toHaveBeenCalledOnce();
   });
 
+  it("moves the workflow action out of the header when the wide rail is visible", () => {
+    window.localStorage.setItem(getRailVisibleStorageKey(THREAD_ID), "true");
+
+    render(
+      <PaneContext.Provider value={PANE_CONTEXT}>
+        <ThreadDetailHeader
+          actionsMenu={null}
+          childPillLabel={null}
+          isSecondaryPanelOpen={false}
+          onToggleSecondaryPanel={vi.fn()}
+          threadHeaderWorkflowActions={[
+            { kind: "commit", label: "Commit", onSelect: vi.fn() },
+          ]}
+          threadId={THREAD_ID}
+          threadTitle="GitHub workflow"
+        />
+      </PaneContext.Provider>,
+    );
+
+    expect(screen.queryByRole("button", { name: "Commit" })).toBeNull();
+  });
+
   it("disables merge while GitHub reports a blocking state", () => {
     render(
       <PaneContext.Provider value={PANE_CONTEXT}>

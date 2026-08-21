@@ -3026,6 +3026,7 @@ function ThreadDetailViewInternal(props: ThreadDetailViewInternalProps) {
         case "commit":
           return [
             {
+              kind: "commit",
               label: "Commit",
               onSelect: () => {
                 if (commitHeaderAction) {
@@ -3040,6 +3041,7 @@ function ThreadDetailViewInternal(props: ThreadDetailViewInternalProps) {
           return [
             {
               disabled: requestEnvironmentAction.isPending,
+              kind: "create_pull_request",
               label: "Create PR",
               onSelect: () => setIsPullRequestCreateDialogOpen(true),
               tooltip: requestEnvironmentAction.isPending
@@ -3063,6 +3065,7 @@ function ThreadDetailViewInternal(props: ThreadDetailViewInternalProps) {
             ] as const
           ).map(({ label, method }) => ({
             disabled,
+            kind: "merge_pull_request" as const,
             label,
             onSelect: () => void handlePullRequestMerge(method),
             tooltip,
@@ -3401,6 +3404,8 @@ function ThreadDetailViewInternal(props: ThreadDetailViewInternalProps) {
       >
         <ThreadDetailSecondaryContent
           agentActivityData={agentActivityData}
+          railWorkflowActions={threadHeaderWorkflowActions}
+          onRailReviewChanges={openSecondaryPanelDiffPanel}
           footer={composerFooter}
           header={timelineHeader}
           isMetadataLoading={environmentQuery.isLoading}
