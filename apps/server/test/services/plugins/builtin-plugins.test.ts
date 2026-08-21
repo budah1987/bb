@@ -15,6 +15,7 @@ import {
   createConnection,
   getInstalledPluginRegistration,
   migrate,
+  upsertInstalledPlugin,
   type DbConnection,
 } from "@bb/db";
 import { PLUGIN_SDK_MAJOR, PLUGIN_SDK_VERSION } from "@bb/domain";
@@ -216,6 +217,7 @@ describe("builtin plugin reconciliation", () => {
       ["provider-retry", "ArrowReloadHorizontal"],
       ["secrets", "Lock"],
       ["side-chat", "SideChat"],
+      ["usage", "ChartColumn"],
       ["workflows", "Workflow"],
     ]);
 
@@ -264,6 +266,49 @@ describe("builtin plugin reconciliation", () => {
         normalizationVersion: 1,
       },
     );
+  });
+
+  it("replaces the legacy Usage git plugin with the built-in while preserving enablement", async () => {
+    const legacyCommit = "0123456789abcdef0123456789abcdef01234567";
+    upsertInstalledPlugin(db, {
+      id: "usage",
+      source: "git:https://github.com/MayankBansal12/bb-plugin-usage.git@main",
+      provenance: { kind: "direct" },
+      sourceIntent: {
+        kind: "git",
+        url: "https://github.com/MayankBansal12/bb-plugin-usage.git",
+        subdirectory: null,
+        selector: { kind: "ref", ref: "main", refKind: "branch" },
+      },
+      exactResolution: { kind: "git", commit: legacyCommit },
+      updateState: {
+        lastCheckAt: null,
+        availableCompatibleVersion: null,
+        newestIncompatibleVersion: null,
+        statusDetail: null,
+      },
+      activeArtifactId: null,
+      rootDir: fixtureRoot,
+      version: "0.2.0",
+      enabled: false,
+    });
+
+    service = createService({
+      db,
+      dataDir: join(workDir, "data"),
+      builtinName: "usage",
+      pluginId: "usage",
+      rootDir: resolveBuiltinPluginRootPath("usage"),
+    });
+    await service.start();
+
+    expect(getInstalledPluginRegistration(db, "usage")).toMatchObject({
+      source: "builtin:usage",
+      sourceKind: "builtin",
+      sourceBuiltinName: "usage",
+      provenance: "builtin",
+      enabled: false,
+    });
   });
 
   it("marks a persisted builtin as orphaned after it leaves the registry", async () => {

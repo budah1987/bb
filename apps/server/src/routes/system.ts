@@ -44,6 +44,7 @@ import {
   recordOnboardingEvent,
 } from "../services/system/onboarding.js";
 import { getProviderUsageLimits } from "../services/system/usage-limits.js";
+import { getExperimentalOpenCodeUsageHistory } from "../services/system/opencode-usage.js";
 import {
   getGithubAccounts,
   getGithubPullRequests,
@@ -374,6 +375,10 @@ export function registerSystemRoutes(
 
   get(routes.usageLimits, async (context, query) =>
     context.json(await getProviderUsageLimits(deps, query)),
+  );
+
+  get(routes.experimentalOpenCodeUsageHistory, async (context, query) =>
+    context.json(await getExperimentalOpenCodeUsageHistory(deps, query)),
   );
 
   get(routes.executionOptions, async (context, query) =>

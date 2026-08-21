@@ -116,6 +116,12 @@ export const BUILTIN_PLUGINS = [
     category: "Context & knowledge",
   },
   {
+    name: "usage",
+    pluginId: "usage",
+    defaultEnabled: true,
+    category: "Developer tools",
+  },
+  {
     name: "provider-retry",
     pluginId: "provider-retry",
     defaultEnabled: false,

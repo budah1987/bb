@@ -612,6 +612,16 @@ For review or fix pipelines, get the environment ID from
   optimistically clearing its banner. Use `bb thread clear-goal <id>` to clear
   a Codex thread's durable active Goal. Both wait for provider confirmation.
 
+## Usage
+
+- The builtin `usage` plugin collects coding-agent token metadata and estimated
+  API cost across connected machines. It automatically replaces the legacy
+  Usage git plugin while keeping its collected data and enabled state.
+- Use `bb usage summary [--days <1-365>] [--machine <host-id>] [--json]` for
+  a compact agent-readable report. Open the Usage panel for filtered per-model
+  detail and provider subscription windows. OpenCode history is read through a
+  fixed read-only SQLite daemon operation, never a terminal command.
+
 ## Memory
 
 - Memory is an opt-in official plugin bundled with the app. Install it with

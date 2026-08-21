@@ -1,4 +1,5 @@
 import { useCallback, useMemo, useState } from "react";
+import type { EnvironmentPreviewProvider } from "@bb/server-contract";
 import { Button } from "@bb/shared-ui/button";
 import { cn } from "@bb/shared-ui/lib/utils";
 import { appToast } from "@/components/ui/app-toast";
@@ -26,6 +27,7 @@ import {
   summarizeRepositoryHealth,
 } from "@/lib/repository-health-summary";
 import { useSetThreadSecondaryPanelSelection } from "@/views/thread-detail/threadSecondaryPanelSelection";
+import { useOpenFixedBrowserPanel } from "@/lib/fixed-panel-tabs";
 import { RailRow } from "./RailRow";
 import { RailSection } from "./RailSection";
 import { GithubAccountRailRow } from "./GithubAccountRailRow";
@@ -37,6 +39,17 @@ export { summarizeRepositoryHealth } from "@/lib/repository-health-summary";
 export interface RepositoryHealthSectionProps {
   enabled?: boolean;
   threadId: string;
+}
+
+export function getOpenableDeployment(
+  providers: readonly EnvironmentPreviewProvider[] | undefined,
+): (EnvironmentPreviewProvider & { url: string }) | null {
+  return (
+    providers?.find(
+      (provider): provider is EnvironmentPreviewProvider & { url: string } =>
+        provider.kind === "deployment" && provider.url !== null,
+    ) ?? null
+  );
 }
 
 export function RepositoryHealthSection({
@@ -130,6 +143,7 @@ export function RepositoryHealthSection({
   const deployments = previewsQuery.data?.providers.filter(
     (provider) => provider.kind === "deployment",
   );
+  const openableDeployment = getOpenableDeployment(deployments);
   const deploymentLabel = deployments?.some(
     (provider) => provider.state === "failed",
   )
@@ -149,6 +163,14 @@ export function RepositoryHealthSection({
     threadId,
     threadId,
   );
+  const openBrowserPanel = useOpenFixedBrowserPanel(threadId, threadId);
+  const handleDeploymentOpen = useCallback(() => {
+    if (openableDeployment === null) return;
+    openBrowserPanel({
+      environmentId: environmentId ?? null,
+      url: openableDeployment.url,
+    });
+  }, [environmentId, openBrowserPanel, openableDeployment]);
   const handleGithubAccountChange = useCallback(
     async (login: string) => {
       if (!environmentId || environment?.githubAccountLogin === login) return;
@@ -340,6 +362,10 @@ export function RepositoryHealthSection({
           <RailRow
             icon="Globe"
             label="Deployments"
+            onSelect={
+              openableDeployment === null ? undefined : handleDeploymentOpen
+            }
+            showsChevron={openableDeployment !== null}
             trailing={deploymentLabel}
           />
         </div>

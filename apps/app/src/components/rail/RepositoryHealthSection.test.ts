@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import type { EnvironmentStatusResponse } from "@bb/server-contract";
-import { summarizeRepositoryHealth } from "./RepositoryHealthSection";
+import {
+  getOpenableDeployment,
+  summarizeRepositoryHealth,
+} from "./RepositoryHealthSection";
 
 function availableStatus(
   overrides: {
@@ -129,5 +132,30 @@ describe("summarizeRepositoryHealth", () => {
         },
       }),
     ).toEqual({ label: "Limited", tier: "warning" });
+  });
+});
+
+describe("getOpenableDeployment", () => {
+  it("returns the deployment URL that can open in the browser panel", () => {
+    const deployment = {
+      branchUrl: "https://feature.example.test",
+      deploymentUrl: "https://commit.example.test",
+      environment: "preview",
+      framePolicy: "allowed",
+      frameReason: null,
+      id: "github:preview",
+      kind: "deployment",
+      label: "Vercel",
+      logUrl: null,
+      port: null,
+      shared: true,
+      source: "github",
+      state: "ready",
+      updatedAt: null,
+      url: "https://feature.example.test",
+    } as const;
+
+    expect(getOpenableDeployment([deployment])).toBe(deployment);
+    expect(getOpenableDeployment([{ ...deployment, url: null }])).toBeNull();
   });
 });

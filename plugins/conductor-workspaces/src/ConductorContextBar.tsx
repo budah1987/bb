@@ -106,6 +106,7 @@ function ConductorWorkspaceContextBar({
   const cycleThreadIdRef = useRef(activeThreadId);
   const closeInFlightRef = useRef(false);
   const closingTabIdsRef = useRef(new Set<string>());
+  const migratingLegacyClosedTabIdsRef = useRef(new Set<string>());
   const [tabRailWidth, setTabRailWidth] = useState<number | null>(null);
   const [, setTabRevision] = useState(0);
   const [renameThread, setRenameThread] = useState<PluginSidebarThread | null>(
@@ -229,11 +230,41 @@ function ConductorWorkspaceContextBar({
   }, [activeThreadId]);
 
   useEffect(() => {
-    if (!workspace || persistedClosedTabIds.length === closedTabIds.length) {
-      return;
+    if (!workspace) return;
+
+    const workspaceThreadIds = new Set(
+      workspace.threads.map((thread) => thread.id),
+    );
+    const legacyClosedThreadIds = closedTabIds.filter((id) =>
+      workspaceThreadIds.has(id),
+    );
+
+    // Before conversation-tab close became a server archive, Conductor hid
+    // tabs in device-local storage. Those old rows make desktop and PWA render
+    // different tab strips forever. Convert each still-active legacy row into
+    // the archive action used by current clients; archived/stale ids and a
+    // directly reopened active tab can be removed from local storage.
+    if (
+      persistedClosedTabIds.length !== legacyClosedThreadIds.length ||
+      persistedClosedTabIds.some(
+        (id, index) => id !== legacyClosedThreadIds[index],
+      )
+    ) {
+      saveClosedTabIds(workspace.key, legacyClosedThreadIds);
     }
-    saveClosedTabIds(workspace.key, closedTabIds);
-  }, [closedTabIds, persistedClosedTabIds.length, workspace]);
+
+    for (const threadId of legacyClosedThreadIds) {
+      if (migratingLegacyClosedTabIdsRef.current.has(threadId)) continue;
+      migratingLegacyClosedTabIdsRef.current.add(threadId);
+      actions.archive(threadId);
+    }
+
+    for (const threadId of migratingLegacyClosedTabIdsRef.current) {
+      if (!workspaceThreadIds.has(threadId)) {
+        migratingLegacyClosedTabIdsRef.current.delete(threadId);
+      }
+    }
+  }, [actions, closedTabIds, persistedClosedTabIds, workspace]);
 
   const closeFocusedConversation = useCallback((): boolean => {
     if (!workspace) return false;

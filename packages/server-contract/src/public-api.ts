@@ -28,6 +28,7 @@ import type {
   GithubRepositoryHealthResult,
   GithubRepositoryActivityResult,
   GithubRepositoryCatalog,
+  OpenCodeUsageReadResult,
   ProviderUsageResponse,
 } from "@bb/host-daemon-contract";
 import {
@@ -198,6 +199,7 @@ import type {
   SystemGithubRepositoryActivityQuery,
   SystemGithubRepositoriesQuery,
   SystemOnboardingReposQuery,
+  SystemExperimentalOpenCodeUsageHistoryQuery,
   SystemUsageLimitsQuery,
   SystemVersionQuery,
   SystemVersionResponse,
@@ -374,6 +376,7 @@ import {
   systemProvidersQuerySchema,
   onboardingTelemetryEventSchema,
   systemOnboardingReposQuerySchema,
+  systemExperimentalOpenCodeUsageHistoryQuerySchema,
   systemUsageLimitsQuerySchema,
   systemVersionQuerySchema,
   threadEventWaitQuerySchema,
@@ -1890,6 +1893,15 @@ export const publicApiRoutes = {
         systemUsageLimitsQuerySchema,
       ),
       response: jsonResponse<ProviderUsageResponse>(),
+    }),
+    experimentalOpenCodeUsageHistory: defineRoute({
+      path: "/system/experimental-opencode-usage-history",
+      method: "get",
+      request: queryRequest<
+        EmptyInput,
+        SystemExperimentalOpenCodeUsageHistoryQuery
+      >(systemExperimentalOpenCodeUsageHistoryQuerySchema),
+      response: jsonResponse<OpenCodeUsageReadResult>(),
     }),
     voiceTranscription: defineRoute({
       path: "/system/voice-transcription",

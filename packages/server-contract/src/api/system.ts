@@ -109,6 +109,21 @@ export type SystemUsageLimitsQuery = z.infer<
   typeof systemUsageLimitsQuerySchema
 >;
 
+/**
+ * Reads fixed, aggregate OpenCode usage data from a connected host. The
+ * database path is a host-local setting; the server owns the retention window
+ * and the daemon owns the read-only SQLite operation.
+ */
+export const systemExperimentalOpenCodeUsageHistoryQuerySchema = z
+  .object({
+    hostId: z.string().min(1),
+    databasePath: z.string().min(1).max(4096),
+  })
+  .strict();
+export type SystemExperimentalOpenCodeUsageHistoryQuery = z.infer<
+  typeof systemExperimentalOpenCodeUsageHistoryQuerySchema
+>;
+
 /** Omission reads GitHub credentials from the primary machine. */
 export const systemGithubAccountsQuerySchema = z.object({
   hostId: z.string().min(1).optional(),

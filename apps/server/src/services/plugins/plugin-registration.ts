@@ -49,6 +49,11 @@ import {
   type PluginResolvedUpdateVersion,
 } from "./update-resolver.js";
 
+const LEGACY_USAGE_PLUGIN_GIT_URLS = new Set([
+  "https://github.com/MayankBansal12/bb-plugin-usage",
+  "https://github.com/MayankBansal12/bb-plugin-usage.git",
+]);
+
 export interface PluginRegistrationContext {
   deps: PluginServiceDeps;
   bundledPlugins: readonly BundledPluginRegistration[];
@@ -102,6 +107,20 @@ export function createPluginRegistration(context: PluginRegistrationContext) {
       newestIncompatibleVersion: null,
       statusDetail: null,
     } as const;
+  }
+
+  function isLegacyUsagePlugin(
+    row: InstalledPluginRow,
+    bundled: BundledPluginRegistration,
+    manifest: PluginManifest,
+  ): boolean {
+    return bundled.name === "usage" &&
+      manifest.id === "usage" &&
+      row.id === "usage" &&
+      row.sourceKind === "git" &&
+      row.sourceGitUrl !== null &&
+      LEGACY_USAGE_PLUGIN_GIT_URLS.has(row.sourceGitUrl) &&
+      row.sourceGitSubdirectory === null;
   }
 
   function rowMatchesInstallSource(
@@ -574,11 +593,14 @@ export function createPluginRegistration(context: PluginRegistrationContext) {
       const sameBundledSource =
         existing?.sourceKind === "builtin" &&
         existing.sourceBuiltinName === bundled.name;
+      const replaceLegacyUsage =
+        existing !== undefined && isLegacyUsagePlugin(existing, bundled, manifest);
       const existingSourceIsMissing =
         existing !== undefined && !existsSync(existing.rootDir);
       if (
         existing !== undefined &&
         !sameBundledSource &&
+        !replaceLegacyUsage &&
         !existingSourceIsMissing &&
         !rowMatchesInstallSource(existing, provenance, {
           kind: "builtin",

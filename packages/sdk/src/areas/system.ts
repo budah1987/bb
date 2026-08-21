@@ -10,6 +10,7 @@ import type {
   GithubRepositoryHealthResult,
   GithubRepositoryActivityResult,
   GithubRepositoryCatalog,
+  OpenCodeUsageReadResult,
   ProviderUsageResponse,
 } from "@bb/host-daemon-contract";
 import type {
@@ -28,6 +29,7 @@ import type {
   SystemGithubRepositoriesQuery,
   SystemProvidersQuery,
   SystemOnboardingReposQuery,
+  SystemExperimentalOpenCodeUsageHistoryQuery,
   SystemUsageLimitsQuery,
   SystemVersionQuery,
   SystemVersionResponse,
@@ -49,6 +51,11 @@ export interface SystemExecutionOptionsArgs extends SystemExecutionOptionsQuery 
 }
 
 export interface SystemUsageLimitsArgs extends SystemUsageLimitsQuery {
+  signal?: AbortSignal;
+}
+
+export interface SystemExperimentalOpenCodeUsageHistoryArgs
+  extends SystemExperimentalOpenCodeUsageHistoryQuery {
   signal?: AbortSignal;
 }
 
@@ -105,6 +112,8 @@ export type SystemUpdateExperimentsResult = Experiments;
 export type SystemUpdateGeneralSettingsResult = AppSettings;
 export type SystemUpdateKeyboardSettingsResult = AppKeybindingOverrides;
 export type SystemUsageLimitsResult = ProviderUsageResponse;
+export type SystemExperimentalOpenCodeUsageHistoryResult =
+  OpenCodeUsageReadResult;
 export type SystemGithubAccountsResult = GithubAccountCatalog;
 export type SystemGithubRepositoriesResult = GithubRepositoryCatalog;
 export type SystemGithubPullRequestsResult = GithubPullRequestCatalog;
@@ -184,6 +193,13 @@ export interface SystemArea {
     args: SystemGithubRepositoryActivityArgs,
   ): Promise<SystemGithubRepositoryActivityResult>;
   usageLimits(args?: SystemUsageLimitsArgs): Promise<SystemUsageLimitsResult>;
+  /**
+   * Experimental fixed aggregate read of OpenCode usage history. This is a
+   * non-PTY host operation; it does not execute a shell command.
+   */
+  experimental_openCodeUsageHistory(
+    args: SystemExperimentalOpenCodeUsageHistoryArgs,
+  ): Promise<SystemExperimentalOpenCodeUsageHistoryResult>;
   version(args?: SystemVersionArgs): Promise<SystemVersionResult>;
 }
 
@@ -377,6 +393,19 @@ export function createSystemArea(args: CreateSdkAreaArgs): SystemArea {
       return transport.readJson(
         transport.api.v1.system["usage-limits"].$get(
           { query: { hostId: input.hostId } },
+          ...signalRequestArgs(input.signal),
+        ),
+      );
+    },
+    async experimental_openCodeUsageHistory(input) {
+      return transport.readJson(
+        transport.api.v1.system["experimental-opencode-usage-history"].$get(
+          {
+            query: {
+              hostId: input.hostId,
+              databasePath: input.databasePath,
+            },
+          },
           ...signalRequestArgs(input.signal),
         ),
       );

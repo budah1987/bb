@@ -211,6 +211,7 @@ export type DisabledThreadListQueryKey = readonly [
 ];
 export type ThreadQueryKeyPrefix = readonly [typeof THREAD_QUERY_KEY];
 export type ThreadQueryKey = readonly [typeof THREAD_QUERY_KEY, string];
+export type ThreadTabsQueryKeyPrefix = readonly [typeof THREAD_TABS_QUERY_KEY];
 export type ThreadTabsQueryKey = readonly [
   typeof THREAD_TABS_QUERY_KEY,
   string,
@@ -778,6 +779,10 @@ export function threadQueryKey(threadId: string): ThreadQueryKey {
 
 export function threadTabsQueryKey(threadId: string): ThreadTabsQueryKey {
   return [THREAD_TABS_QUERY_KEY, threadId];
+}
+
+export function allThreadTabsQueryKeyPrefix(): ThreadTabsQueryKeyPrefix {
+  return [THREAD_TABS_QUERY_KEY];
 }
 
 export function threadNotesQueryKey(threadId: string): ThreadNotesQueryKey {

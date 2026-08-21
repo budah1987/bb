@@ -433,6 +433,23 @@ const ONLINE_RPC_RESPONSE_RESULT_FIXTURES: OnlineRpcResponseResultFixtures = {
     claudeCode: { status: "unauthenticated" },
     cursor: { status: "not_installed" },
   },
+  "usage.opencode.read": {
+    status: "ready",
+    truncated: false,
+    records: [
+      {
+        day: "2026-08-20",
+        modelProviderId: "anthropic",
+        model: "claude-sonnet-5",
+        loggedCostUsd: 0.0125,
+        inputTokens: 100,
+        cachedInputTokens: 60,
+        cacheWriteTokens: 5,
+        outputTokens: 15,
+        reasoningTokens: 5,
+      },
+    ],
+  },
   "github.account_catalog": {
     accounts: [{ host: "github.com", login: "octocat", active: true }],
   },
@@ -1381,6 +1398,7 @@ describe("host-daemon command schemas", () => {
     ).toBe(false);
   });
 
+  // Version 128 adds the non-PTY OpenCode usage-history wire.
   // Version 127 adds the typed, batched native GitHub repository-health wire.
   // Version 126 adds account-scoped deployment discovery and distinct stable
   // branch and immutable deployment URLs to the GitHub deployment wire.
@@ -1423,7 +1441,7 @@ describe("host-daemon command schemas", () => {
   // mixed version. Version 113 carried the Devin Desktop open target rename
   // and remains part of the protocol lineage.
   it("uses the current host-daemon protocol version", () => {
-    expect(HOST_DAEMON_PROTOCOL_VERSION).toBe(127);
+    expect(HOST_DAEMON_PROTOCOL_VERSION).toBe(128);
   });
 
   it("requires a positive preflight file limit for workspace diff lists", () => {

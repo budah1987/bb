@@ -42,9 +42,12 @@ import {
   providerCliStatusResponseSchema,
 } from "./local.js";
 
+// Version 128 adds the typed OpenCode usage-history read. Older daemons do
+// not have the non-PTY SQLite reader, so the server must update them before it
+// asks for usage history.
 // Version 126 scopes deployment discovery to the environment's GitHub account
 // and carries distinct stable-branch and immutable-deployment preview URLs.
-export const HOST_DAEMON_PROTOCOL_VERSION = 127 as const;
+export const HOST_DAEMON_PROTOCOL_VERSION = 128 as const;
 export const githubAccountLoginSchema = z.string().trim().min(1).max(255);
 
 export {
@@ -2014,6 +2017,55 @@ const providerUsageCommandSchema = z
   .object({ type: z.literal("provider.usage") })
   .strict();
 
+/** One day/provider/model aggregate from OpenCode's local message database. */
+export const openCodeUsageRecordSchema = z
+  .object({
+    day: z.string().regex(/^\d{4}-\d{2}-\d{2}$/u),
+    modelProviderId: z.string().min(1),
+    model: z.string().min(1),
+    loggedCostUsd: z.number().finite().nonnegative(),
+    inputTokens: z.number().int().nonnegative(),
+    cachedInputTokens: z.number().int().nonnegative(),
+    cacheWriteTokens: z.number().int().nonnegative(),
+    outputTokens: z.number().int().nonnegative(),
+    reasoningTokens: z.number().int().nonnegative(),
+  })
+  .strict();
+export type OpenCodeUsageRecord = z.infer<typeof openCodeUsageRecordSchema>;
+
+/**
+ * The daemon reads OpenCode's SQLite database with a fixed aggregate query.
+ * This deliberately accepts neither SQL nor a command string: usage history
+ * must never need a terminal/PTY or a shell.
+ */
+const openCodeUsageReadCommandSchema = z
+  .object({
+    type: z.literal("usage.opencode.read"),
+    databasePath: z.string().min(1).max(4096),
+    sinceUnixMilliseconds: z.number().int().nonnegative(),
+  })
+  .strict();
+
+export const openCodeUsageReadResultSchema = z.discriminatedUnion("status", [
+  z.object({ status: z.literal("missing") }).strict(),
+  z
+    .object({
+      status: z.literal("ready"),
+      records: z.array(openCodeUsageRecordSchema).max(5_000),
+      truncated: z.boolean(),
+    })
+    .strict(),
+  z
+    .object({
+      status: z.literal("unavailable"),
+      message: z.string().min(1).max(1_024),
+    })
+    .strict(),
+]);
+export type OpenCodeUsageReadResult = z.infer<
+  typeof openCodeUsageReadResultSchema
+>;
+
 export const githubAccountSchema = z
   .object({
     host: z.string().min(1),
@@ -2897,6 +2949,15 @@ export const hostDaemonCommandRegistry = {
     type: "provider.usage",
     schema: providerUsageCommandSchema,
     resultSchema: providerUsageResponseSchema,
+    transport: "onlineRpc",
+    retryable: true,
+    flushEventsBeforeResult: false,
+    envLane: null,
+  }),
+  "usage.opencode.read": defineHostDaemonCommandDescriptor({
+    type: "usage.opencode.read",
+    schema: openCodeUsageReadCommandSchema,
+    resultSchema: openCodeUsageReadResultSchema,
     transport: "onlineRpc",
     retryable: true,
     flushEventsBeforeResult: false,

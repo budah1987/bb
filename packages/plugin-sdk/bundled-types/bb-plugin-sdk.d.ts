@@ -337,8 +337,8 @@ declare const providerPendingInteractionSchema: z$1.ZodObject<{
     id: z$1.ZodString;
     threadId: z$1.ZodString;
     status: z$1.ZodEnum<{
-        interrupted: "interrupted";
         pending: "pending";
+        interrupted: "interrupted";
         resolving: "resolving";
         resolved: "resolved";
     }>;
@@ -480,8 +480,8 @@ declare const pluginPendingInteractionSchema: z$1.ZodObject<{
     id: z$1.ZodString;
     threadId: z$1.ZodString;
     status: z$1.ZodEnum<{
-        interrupted: "interrupted";
         pending: "pending";
+        interrupted: "interrupted";
         resolving: "resolving";
         resolved: "resolved";
     }>;
@@ -733,8 +733,8 @@ declare const threadEventSchema: z$1.ZodPipe<z$1.ZodUnknown, z$1.ZodUnion<readon
     providerThreadId: z$1.ZodString;
     objective: z$1.ZodString;
     status: z$1.ZodEnum<{
-        active: "active";
         paused: "paused";
+        active: "active";
         budgetLimited: "budgetLimited";
         complete: "complete";
     }>;
@@ -778,10 +778,10 @@ declare const threadEventSchema: z$1.ZodPipe<z$1.ZodUnknown, z$1.ZodUnion<readon
         command: z$1.ZodString;
         cwd: z$1.ZodString;
         status: z$1.ZodEnum<{
+            pending: "pending";
             completed: "completed";
             failed: "failed";
             interrupted: "interrupted";
-            pending: "pending";
         }>;
         approvalStatus: z$1.ZodNullable<z$1.ZodEnum<{
             waiting_for_approval: "waiting_for_approval";
@@ -825,10 +825,10 @@ declare const threadEventSchema: z$1.ZodPipe<z$1.ZodUnknown, z$1.ZodUnion<readon
             diff: z$1.ZodOptional<z$1.ZodString>;
         }, z$1.core.$strip>>;
         status: z$1.ZodEnum<{
+            pending: "pending";
             completed: "completed";
             failed: "failed";
             interrupted: "interrupted";
-            pending: "pending";
         }>;
         approvalStatus: z$1.ZodNullable<z$1.ZodEnum<{
             waiting_for_approval: "waiting_for_approval";
@@ -865,10 +865,10 @@ declare const threadEventSchema: z$1.ZodPipe<z$1.ZodUnknown, z$1.ZodUnion<readon
             completed: z$1.ZodString;
         }, z$1.core.$strip>>;
         status: z$1.ZodEnum<{
+            pending: "pending";
             completed: "completed";
             failed: "failed";
             interrupted: "interrupted";
-            pending: "pending";
         }>;
         result: z$1.ZodOptional<z$1.ZodUnknown>;
         error: z$1.ZodOptional<z$1.ZodString>;
@@ -915,17 +915,17 @@ declare const threadEventSchema: z$1.ZodPipe<z$1.ZodUnknown, z$1.ZodUnion<readon
         taskType: z$1.ZodString;
         description: z$1.ZodString;
         status: z$1.ZodEnum<{
+            pending: "pending";
             completed: "completed";
             failed: "failed";
             interrupted: "interrupted";
-            pending: "pending";
         }>;
         taskStatus: z$1.ZodEnum<{
-            completed: "completed";
-            failed: "failed";
-            paused: "paused";
             pending: "pending";
             running: "running";
+            paused: "paused";
+            completed: "completed";
+            failed: "failed";
             killed: "killed";
             stopped: "stopped";
         }>;
@@ -941,8 +941,8 @@ declare const threadEventSchema: z$1.ZodPipe<z$1.ZodUnknown, z$1.ZodUnion<readon
                 index: z$1.ZodNumber;
                 label: z$1.ZodString;
                 state: z$1.ZodEnum<{
-                    failed: "failed";
                     running: "running";
+                    failed: "failed";
                     queued: "queued";
                     done: "done";
                     skipped: "skipped";
@@ -1010,10 +1010,10 @@ declare const threadEventSchema: z$1.ZodPipe<z$1.ZodUnknown, z$1.ZodUnion<readon
         command: z$1.ZodString;
         cwd: z$1.ZodString;
         status: z$1.ZodEnum<{
+            pending: "pending";
             completed: "completed";
             failed: "failed";
             interrupted: "interrupted";
-            pending: "pending";
         }>;
         approvalStatus: z$1.ZodNullable<z$1.ZodEnum<{
             waiting_for_approval: "waiting_for_approval";
@@ -1057,10 +1057,10 @@ declare const threadEventSchema: z$1.ZodPipe<z$1.ZodUnknown, z$1.ZodUnion<readon
             diff: z$1.ZodOptional<z$1.ZodString>;
         }, z$1.core.$strip>>;
         status: z$1.ZodEnum<{
+            pending: "pending";
             completed: "completed";
             failed: "failed";
             interrupted: "interrupted";
-            pending: "pending";
         }>;
         approvalStatus: z$1.ZodNullable<z$1.ZodEnum<{
             waiting_for_approval: "waiting_for_approval";
@@ -1097,10 +1097,10 @@ declare const threadEventSchema: z$1.ZodPipe<z$1.ZodUnknown, z$1.ZodUnion<readon
             completed: z$1.ZodString;
         }, z$1.core.$strip>>;
         status: z$1.ZodEnum<{
+            pending: "pending";
             completed: "completed";
             failed: "failed";
             interrupted: "interrupted";
-            pending: "pending";
         }>;
         result: z$1.ZodOptional<z$1.ZodUnknown>;
         error: z$1.ZodOptional<z$1.ZodString>;
@@ -1147,17 +1147,17 @@ declare const threadEventSchema: z$1.ZodPipe<z$1.ZodUnknown, z$1.ZodUnion<readon
         taskType: z$1.ZodString;
         description: z$1.ZodString;
         status: z$1.ZodEnum<{
+            pending: "pending";
             completed: "completed";
             failed: "failed";
             interrupted: "interrupted";
-            pending: "pending";
         }>;
         taskStatus: z$1.ZodEnum<{
-            completed: "completed";
-            failed: "failed";
-            paused: "paused";
             pending: "pending";
             running: "running";
+            paused: "paused";
+            completed: "completed";
+            failed: "failed";
             killed: "killed";
             stopped: "stopped";
         }>;
@@ -1173,8 +1173,8 @@ declare const threadEventSchema: z$1.ZodPipe<z$1.ZodUnknown, z$1.ZodUnion<readon
                 index: z$1.ZodNumber;
                 label: z$1.ZodString;
                 state: z$1.ZodEnum<{
-                    failed: "failed";
                     running: "running";
+                    failed: "failed";
                     queued: "queued";
                     done: "done";
                     skipped: "skipped";
@@ -1276,17 +1276,17 @@ declare const threadEventSchema: z$1.ZodPipe<z$1.ZodUnknown, z$1.ZodUnion<readon
         taskType: z$1.ZodString;
         description: z$1.ZodString;
         status: z$1.ZodEnum<{
+            pending: "pending";
             completed: "completed";
             failed: "failed";
             interrupted: "interrupted";
-            pending: "pending";
         }>;
         taskStatus: z$1.ZodEnum<{
-            completed: "completed";
-            failed: "failed";
-            paused: "paused";
             pending: "pending";
             running: "running";
+            paused: "paused";
+            completed: "completed";
+            failed: "failed";
             killed: "killed";
             stopped: "stopped";
         }>;
@@ -1302,8 +1302,8 @@ declare const threadEventSchema: z$1.ZodPipe<z$1.ZodUnknown, z$1.ZodUnion<readon
                 index: z$1.ZodNumber;
                 label: z$1.ZodString;
                 state: z$1.ZodEnum<{
-                    failed: "failed";
                     running: "running";
+                    failed: "failed";
                     queued: "queued";
                     done: "done";
                     skipped: "skipped";
@@ -1348,17 +1348,17 @@ declare const threadEventSchema: z$1.ZodPipe<z$1.ZodUnknown, z$1.ZodUnion<readon
         taskType: z$1.ZodString;
         description: z$1.ZodString;
         status: z$1.ZodEnum<{
+            pending: "pending";
             completed: "completed";
             failed: "failed";
             interrupted: "interrupted";
-            pending: "pending";
         }>;
         taskStatus: z$1.ZodEnum<{
-            completed: "completed";
-            failed: "failed";
-            paused: "paused";
             pending: "pending";
             running: "running";
+            paused: "paused";
+            completed: "completed";
+            failed: "failed";
             killed: "killed";
             stopped: "stopped";
         }>;
@@ -1374,8 +1374,8 @@ declare const threadEventSchema: z$1.ZodPipe<z$1.ZodUnknown, z$1.ZodUnion<readon
                 index: z$1.ZodNumber;
                 label: z$1.ZodString;
                 state: z$1.ZodEnum<{
-                    failed: "failed";
                     running: "running";
+                    failed: "failed";
                     queued: "queued";
                     done: "done";
                     skipped: "skipped";
@@ -1447,10 +1447,10 @@ declare const threadEventSchema: z$1.ZodPipe<z$1.ZodUnknown, z$1.ZodUnion<readon
     plan: z$1.ZodArray<z$1.ZodObject<{
         step: z$1.ZodString;
         status: z$1.ZodOptional<z$1.ZodEnum<{
+            pending: "pending";
             completed: "completed";
             failed: "failed";
             active: "active";
-            pending: "pending";
         }>>;
     }, z$1.core.$strip>>;
     explanation: z$1.ZodOptional<z$1.ZodString>;
@@ -1898,8 +1898,8 @@ declare const threadEventSchema: z$1.ZodPipe<z$1.ZodUnknown, z$1.ZodUnion<readon
     providerId: z$1.ZodString;
     providerRequestId: z$1.ZodString;
     status: z$1.ZodEnum<{
-        interrupted: "interrupted";
         pending: "pending";
+        interrupted: "interrupted";
         resolving: "resolving";
         resolved: "resolved";
     }>;
@@ -1950,8 +1950,8 @@ declare const threadEventSchema: z$1.ZodPipe<z$1.ZodUnknown, z$1.ZodUnion<readon
     providerId: z$1.ZodString;
     providerRequestId: z$1.ZodString;
     status: z$1.ZodEnum<{
-        interrupted: "interrupted";
         pending: "pending";
+        interrupted: "interrupted";
         resolving: "resolving";
         resolved: "resolved";
     }>;
@@ -2128,8 +2128,8 @@ declare const threadTimelinePendingTodosSchema: z$1.ZodObject<{
         id: z$1.ZodString;
         text: z$1.ZodString;
         status: z$1.ZodEnum<{
-            completed: "completed";
             pending: "pending";
+            completed: "completed";
             in_progress: "in_progress";
         }>;
     }, z$1.core.$strip>>;
@@ -3426,8 +3426,8 @@ declare const environmentDiffFileResponseSchema: z$1.ZodObject<{
     path: z$1.ZodString;
     content: z$1.ZodString;
     contentEncoding: z$1.ZodEnum<{
-        base64: "base64";
         utf8: "utf8";
+        base64: "base64";
     }>;
     mimeType: z$1.ZodOptional<z$1.ZodString>;
     sizeBytes: z$1.ZodNumber;
@@ -4078,6 +4078,27 @@ declare const providerUsageResponseSchema: z$1.ZodObject<{
     }, z$1.core.$strip>], "status">;
 }, z$1.core.$strip>;
 type ProviderUsageResponse = z$1.infer<typeof providerUsageResponseSchema>;
+declare const openCodeUsageReadResultSchema: z$1.ZodDiscriminatedUnion<[z$1.ZodObject<{
+    status: z$1.ZodLiteral<"missing">;
+}, z$1.core.$strict>, z$1.ZodObject<{
+    status: z$1.ZodLiteral<"ready">;
+    records: z$1.ZodArray<z$1.ZodObject<{
+        day: z$1.ZodString;
+        modelProviderId: z$1.ZodString;
+        model: z$1.ZodString;
+        loggedCostUsd: z$1.ZodNumber;
+        inputTokens: z$1.ZodNumber;
+        cachedInputTokens: z$1.ZodNumber;
+        cacheWriteTokens: z$1.ZodNumber;
+        outputTokens: z$1.ZodNumber;
+        reasoningTokens: z$1.ZodNumber;
+    }, z$1.core.$strict>>;
+    truncated: z$1.ZodBoolean;
+}, z$1.core.$strict>, z$1.ZodObject<{
+    status: z$1.ZodLiteral<"unavailable">;
+    message: z$1.ZodString;
+}, z$1.core.$strict>], "status">;
+type OpenCodeUsageReadResult = z$1.infer<typeof openCodeUsageReadResultSchema>;
 declare const githubAccountCatalogSchema: z$1.ZodObject<{
     accounts: z$1.ZodArray<z$1.ZodObject<{
         host: z$1.ZodString;
@@ -6476,9 +6497,9 @@ declare const hostDaemonCommandRegistry: {
         selectedBranch: z$1.ZodNullable<z$1.ZodObject<{
             name: z$1.ZodString;
             kind: z$1.ZodEnum<{
+                missing: "missing";
                 local: "local";
                 remote: "remote";
-                missing: "missing";
             }>;
         }, z$1.core.$strip>>;
     }, z$1.core.$strip>, "onlineRpc", true>;
@@ -6805,6 +6826,30 @@ declare const hostDaemonCommandRegistry: {
             accountEmail: z$1.ZodDefault<z$1.ZodNullable<z$1.ZodString>>;
         }, z$1.core.$strip>], "status">;
     }, z$1.core.$strip>, "onlineRpc", true>;
+    "usage.opencode.read": HostDaemonCommandDescriptor<"usage.opencode.read", z$1.ZodObject<{
+        type: z$1.ZodLiteral<"usage.opencode.read">;
+        databasePath: z$1.ZodString;
+        sinceUnixMilliseconds: z$1.ZodNumber;
+    }, z$1.core.$strict>, z$1.ZodDiscriminatedUnion<[z$1.ZodObject<{
+        status: z$1.ZodLiteral<"missing">;
+    }, z$1.core.$strict>, z$1.ZodObject<{
+        status: z$1.ZodLiteral<"ready">;
+        records: z$1.ZodArray<z$1.ZodObject<{
+            day: z$1.ZodString;
+            modelProviderId: z$1.ZodString;
+            model: z$1.ZodString;
+            loggedCostUsd: z$1.ZodNumber;
+            inputTokens: z$1.ZodNumber;
+            cachedInputTokens: z$1.ZodNumber;
+            cacheWriteTokens: z$1.ZodNumber;
+            outputTokens: z$1.ZodNumber;
+            reasoningTokens: z$1.ZodNumber;
+        }, z$1.core.$strict>>;
+        truncated: z$1.ZodBoolean;
+    }, z$1.core.$strict>, z$1.ZodObject<{
+        status: z$1.ZodLiteral<"unavailable">;
+        message: z$1.ZodString;
+    }, z$1.core.$strict>], "status">, "onlineRpc", true>;
     "github.repository_catalog": HostDaemonCommandDescriptor<"github.repository_catalog", z$1.ZodObject<{
         type: z$1.ZodLiteral<"github.repository_catalog">;
     }, z$1.core.$strict>, z$1.ZodObject<{
@@ -8704,6 +8749,16 @@ declare const systemUsageLimitsQuerySchema: z$1.ZodObject<{
     hostId: z$1.ZodOptional<z$1.ZodString>;
 }, z$1.core.$strip>;
 type SystemUsageLimitsQuery = z$1.infer<typeof systemUsageLimitsQuerySchema>;
+/**
+ * Reads fixed, aggregate OpenCode usage data from a connected host. The
+ * database path is a host-local setting; the server owns the retention window
+ * and the daemon owns the read-only SQLite operation.
+ */
+declare const systemExperimentalOpenCodeUsageHistoryQuerySchema: z$1.ZodObject<{
+    hostId: z$1.ZodString;
+    databasePath: z$1.ZodString;
+}, z$1.core.$strict>;
+type SystemExperimentalOpenCodeUsageHistoryQuery = z$1.infer<typeof systemExperimentalOpenCodeUsageHistoryQuerySchema>;
 /** Omission reads GitHub credentials from the primary machine. */
 declare const systemGithubAccountsQuerySchema: z$1.ZodObject<{
     hostId: z$1.ZodOptional<z$1.ZodString>;
@@ -14986,6 +15041,9 @@ interface SystemExecutionOptionsArgs extends SystemExecutionOptionsQuery {
 interface SystemUsageLimitsArgs extends SystemUsageLimitsQuery {
     signal?: AbortSignal;
 }
+interface SystemExperimentalOpenCodeUsageHistoryArgs extends SystemExperimentalOpenCodeUsageHistoryQuery {
+    signal?: AbortSignal;
+}
 interface SystemGithubRepositoriesArgs extends SystemGithubRepositoriesQuery {
     signal?: AbortSignal;
 }
@@ -15033,6 +15091,7 @@ type SystemUpdateExperimentsResult = Experiments;
 type SystemUpdateGeneralSettingsResult = AppSettings;
 type SystemUpdateKeyboardSettingsResult = AppKeybindingOverrides;
 type SystemUsageLimitsResult = ProviderUsageResponse;
+type SystemExperimentalOpenCodeUsageHistoryResult = OpenCodeUsageReadResult;
 type SystemGithubAccountsResult = GithubAccountCatalog;
 type SystemGithubRepositoriesResult = GithubRepositoryCatalog;
 type SystemGithubPullRequestsResult = GithubPullRequestCatalog;
@@ -15086,6 +15145,11 @@ interface SystemArea {
     /** On-demand issues, Actions runs, and notification inbox for a repository. */
     githubRepositoryActivity(args: SystemGithubRepositoryActivityArgs): Promise<SystemGithubRepositoryActivityResult>;
     usageLimits(args?: SystemUsageLimitsArgs): Promise<SystemUsageLimitsResult>;
+    /**
+     * Experimental fixed aggregate read of OpenCode usage history. This is a
+     * non-PTY host operation; it does not execute a shell command.
+     */
+    experimental_openCodeUsageHistory(args: SystemExperimentalOpenCodeUsageHistoryArgs): Promise<SystemExperimentalOpenCodeUsageHistoryResult>;
     version(args?: SystemVersionArgs): Promise<SystemVersionResult>;
 }
 

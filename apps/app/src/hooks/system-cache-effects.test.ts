@@ -20,6 +20,7 @@ import {
   threadQueryKey,
   threadQueuedMessagesQueryKey,
   threadSearchQueryKey,
+  threadTabsQueryKey,
   threadTimelineQueryKey,
 } from "./queries/query-keys";
 import {
@@ -97,6 +98,7 @@ describe("system cache effects", () => {
   it("invalidates canonical active thread caches after reconnect", () => {
     const queryClient = createCacheEffectQueryClient();
     const threadKey = threadQueryKey("thread-1");
+    const threadTabsKey = threadTabsQueryKey("thread-1");
     const threadBootstrapKey = threadDetailBootstrapQueryKey("thread-1");
     const timelineKey = threadTimelineQueryKey("thread-1");
     const conversationOutlineKey =
@@ -125,6 +127,7 @@ describe("system cache effects", () => {
     });
     const sidebarNavigationKey = sidebarNavigationQueryKey();
     queryClient.setQueryData(threadKey, { id: "thread-1" });
+    queryClient.setQueryData(threadTabsKey, { revision: 1, tabs: [] });
     queryClient.setQueryData(threadBootstrapKey, { id: "thread-1" });
     queryClient.setQueryData(timelineKey, { rows: [] });
     queryClient.setQueryData(conversationOutlineKey, { items: [] });
@@ -156,6 +159,7 @@ describe("system cache effects", () => {
     invalidateRealtimeQueriesAfterServerReconnect({ queryClient });
 
     expect(queryClient.getQueryState(threadKey)?.isInvalidated).toBe(true);
+    expect(queryClient.getQueryState(threadTabsKey)?.isInvalidated).toBe(true);
     expect(queryClient.getQueryState(threadBootstrapKey)?.isInvalidated).toBe(
       true,
     );
@@ -216,6 +220,7 @@ describe("system cache effects", () => {
     queryClient.mount();
     const activeThreadQueries = [
       observeIdleQuery(queryClient, threadQueryKey("thread-1")),
+      observeIdleQuery(queryClient, threadTabsQueryKey("thread-1")),
       observeIdleQuery(queryClient, threadDetailBootstrapQueryKey("thread-1")),
       observeIdleQuery(
         queryClient,

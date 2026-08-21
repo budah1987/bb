@@ -5,6 +5,20 @@ entry here (see [AGENTS.md](../AGENTS.md), "Plugin API"). Dropping the prefix
 is the deliberate stabilization step: audit the entry, rename project-wide,
 and delete the entry in the same change.
 
+## `bb.sdk.system.experimental_openCodeUsageHistory(args)`
+
+Reads bounded daily aggregates from OpenCode's local SQLite message database
+on one explicit host. The daemon owns a fixed read-only query and returns raw
+usage facts; the server fixes the retention window. It never invokes a shell
+or allocates a terminal/PTY.
+
+Before stabilization, audit:
+
+- whether this should become a provider-neutral history-read surface;
+- host-file permission and path-selection policy for third-party plugins;
+- result-size, retention, and query-time budgets as OpenCode databases grow;
+- compatibility with OpenCode schema changes and user-configured locations.
+
 ## `bb.agents.experimental_configureClaudeCodeSession(provider)`
 
 Lets a plugin set Claude Code's native `autoCompactEnabled` and

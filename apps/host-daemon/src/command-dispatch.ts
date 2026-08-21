@@ -66,6 +66,7 @@ import {
 import { getGithubRepositoryHealth } from "./github-repository-health.js";
 import { getGithubRepositoryActivity } from "./github-repository-activity.js";
 import { getProviderUsage } from "./provider-usage.js";
+import { readOpenCodeUsage } from "./command-handlers/opencode-usage.js";
 import {
   getKnownAcpAgentsStatus,
   getProviderCliStatus,
@@ -830,6 +831,7 @@ const onlineRpcHandlers: OnlineRpcHandlerMap = {
       env: providerCliEnvFromShellEnv(options.runtimeManager.getShellEnv()),
     }),
   "provider.usage": async () => getProviderUsage(),
+  "usage.opencode.read": readOpenCodeUsage,
   "github.account_catalog": async (_command, options) =>
     getGithubAccountCatalog({
       env: options.runtimeManager.getShellEnv(),

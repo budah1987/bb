@@ -35,6 +35,15 @@ setting defaults to `6 hours`; choose `24 hours` or `No limit` from the plugin
 detail page, or configure it with
 `bb plugin config provider-retry set maximumWait <value>`.
 
+The builtin Usage plugin collects coding-agent token metadata and estimated API
+cost across connected machines. It migrates the previous Usage git plugin
+automatically, preserving its collected data and enabled state. It reads
+OpenCode history through BB's fixed read-only SQLite operation, never a shell
+terminal. Open the Usage panel for filters, model detail, and provider windows,
+or ask an agent for a concise summary:
+
+  bb usage summary [--days <1-365>] [--machine <host-id>] [--json]
+
 The builtin Workflows plugin runs durable provider-independent JavaScript
 orchestration. It is disabled on fresh installations; enable `workflows` under
 Extensions → Plugins or run `bb plugin enable workflows` before using:

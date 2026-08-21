@@ -1,5 +1,5 @@
 import { eq } from "drizzle-orm";
-import type { DbConnection } from "../connection.js";
+import type { DbConnection, DbQueryConnection } from "../connection.js";
 import { threadTabs } from "../schema.js";
 
 export interface StoredThreadTabs {
@@ -25,6 +25,33 @@ export function getStoredThreadTabs(
       .where(eq(threadTabs.threadId, threadId))
       .get() ?? null
   );
+}
+
+/**
+ * Replace a thread's durable tab list while the caller already owns its write
+ * transaction. Archiving leaves a newer empty revision behind so a client with
+ * old local tabs reconciles to empty instead of treating this as first use.
+ */
+export function clearStoredThreadTabs(
+  db: DbQueryConnection,
+  threadId: string,
+): StoredThreadTabs {
+  const current = db
+    .select({ revision: threadTabs.revision })
+    .from(threadTabs)
+    .where(eq(threadTabs.threadId, threadId))
+    .get();
+  const revision = (current?.revision ?? 0) + 1;
+  const tabsJson = "[]";
+  const updatedAt = Date.now();
+  db.insert(threadTabs)
+    .values({ revision, tabsJson, threadId, updatedAt })
+    .onConflictDoUpdate({
+      target: threadTabs.threadId,
+      set: { revision, tabsJson, updatedAt },
+    })
+    .run();
+  return { revision, tabsJson };
 }
 
 export function replaceStoredThreadTabs(

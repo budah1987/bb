@@ -1,15 +1,12 @@
 import {
   archiveThread,
+  clearStoredThreadTabs,
   listUnarchivedAssignedChildThreads,
   type DbNotifier,
   type DbTransaction,
   updateThread,
 } from "@bb/db";
-import type {
-  PromptInput,
-  SystemMessageSubject,
-  Thread,
-} from "@bb/domain";
+import type { PromptInput, SystemMessageSubject, Thread } from "@bb/domain";
 import { renderTemplate } from "@bb/templates";
 import type { LoggedPendingInteractionWorkSessionDeps } from "../../types.js";
 import { NotificationBuffer } from "../lib/notification-buffer.js";
@@ -197,6 +194,9 @@ export function archiveThreadAndReleaseChildren(
       if (!archivedThread) {
         return null;
       }
+
+      clearStoredThreadTabs(tx, archivedThread.id);
+      notificationBuffer.notifyThread(archivedThread.id, ["tabs-changed"]);
 
       releaseUnarchivedChildrenFromArchivedThreadInTransaction(
         {

@@ -201,7 +201,11 @@ export {
   setAppKeybindingOverrides,
   setAppSettings,
 } from "./app-settings.js";
-export { getStoredThreadTabs, replaceStoredThreadTabs } from "./thread-tabs.js";
+export {
+  clearStoredThreadTabs,
+  getStoredThreadTabs,
+  replaceStoredThreadTabs,
+} from "./thread-tabs.js";
 export type {
   ReplaceThreadTabsResult,
   StoredThreadTabs,
