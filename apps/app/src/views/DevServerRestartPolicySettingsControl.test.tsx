@@ -19,7 +19,7 @@ describe("DevServerRestartPolicySettingsControl", () => {
 
     fireEvent.click(
       screen.getByRole("switch", {
-        name: "Keep named dev servers running",
+        name: "Keep dev servers running",
       }),
     );
 
@@ -36,12 +36,12 @@ describe("DevServerRestartPolicySettingsControl", () => {
     );
 
     const control = screen.getByRole("switch", {
-      name: "Keep named dev servers running",
+      name: "Keep dev servers running",
     });
     expect(control.className).toContain("after:-inset-y-3");
     expect(
       screen.getByText(
-        "Restores supervised named servers after exits and bb restarts. Off disarms current servers; on applies to new servers.",
+        "Restores declared dev servers after exits and bb restarts. One-shot commands stay stopped unless explicitly supervised.",
       ),
     ).not.toBeNull();
   });

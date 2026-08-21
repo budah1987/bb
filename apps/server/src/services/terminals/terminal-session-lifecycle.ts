@@ -636,13 +636,7 @@ export class TerminalSessionLifecycle {
     if (launchTarget.kind === "environment") {
       this.assertWorkspaceTerminalBudget(launchTarget.environmentId);
     }
-    const start = args.payload.start ?? DEFAULT_TERMINAL_START;
-    const isNamedCommand =
-      start.mode === "command" && args.payload.title !== undefined;
-    const restartPolicy = isNamedCommand
-      ? (args.payload.restartPolicy ??
-        getAppSettings(this.options.db).devServerRestartPolicy)
-      : "never";
+    const restartPolicy = this.resolveTerminalRestartPolicy(args.payload);
     const supervision =
       restartPolicy === "until_stopped"
         ? { attempt: 0, id: randomUUID() }
@@ -664,6 +658,22 @@ export class TerminalSessionLifecycle {
       }
       throw error;
     }
+  }
+
+  private resolveTerminalRestartPolicy(
+    payload: TerminalCreatePayload,
+  ): "never" | "until_stopped" {
+    const start = payload.start ?? DEFAULT_TERMINAL_START;
+    const isNamedCommand =
+      start.mode === "command" && payload.title !== undefined;
+    if (!isNamedCommand) return "never";
+    if (payload.restartPolicy !== undefined) return payload.restartPolicy;
+
+    // A named command commonly represents a one-off task. Only a declared
+    // dev server inherits the user's restart preference; callers can opt any
+    // other command into supervision explicitly.
+    if (payload.devServerPort === undefined) return "never";
+    return getAppSettings(this.options.db).devServerRestartPolicy;
   }
 
   private countExistingSessionsForTarget(target: TerminalCreateTarget): number {
@@ -728,10 +738,7 @@ export class TerminalSessionLifecycle {
     const start = args.payload.start ?? DEFAULT_TERMINAL_START;
     const isNamedCommand =
       start.mode === "command" && args.payload.title !== undefined;
-    const restartPolicy = isNamedCommand
-      ? (args.payload.restartPolicy ??
-        getAppSettings(this.options.db).devServerRestartPolicy)
-      : "never";
+    const restartPolicy = this.resolveTerminalRestartPolicy(args.payload);
     const startingSession = this.options.db.transaction((tx) => {
       if (args.supervision !== undefined) {
         setTerminalSupervisionDesired(tx, {

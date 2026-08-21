@@ -573,7 +573,7 @@ const UNHANDLED_PROVIDER_EVENTS_SETTING_LABEL =
 const CAFFEINATE_SETTING_LABEL = "Caffeinate";
 const STEER_ACTIVE_THREAD_ON_ENTER_SETTING_LABEL =
   "Steer running threads on Enter";
-const KEEP_DEV_SERVERS_RUNNING_SETTING_LABEL = "Keep named dev servers running";
+const KEEP_DEV_SERVERS_RUNNING_SETTING_LABEL = "Keep dev servers running";
 
 export function DevServerRestartPolicySettingsControl({
   disabled,
@@ -587,7 +587,7 @@ export function DevServerRestartPolicySettingsControl({
   return (
     <SettingsWithControl
       label={KEEP_DEV_SERVERS_RUNNING_SETTING_LABEL}
-      description="Restores supervised named servers after exits and bb restarts. Off disarms current servers; on applies to new servers."
+      description="Restores declared dev servers after exits and bb restarts. One-shot commands stay stopped unless explicitly supervised."
     >
       <Switch
         checked={policy === "until_stopped"}

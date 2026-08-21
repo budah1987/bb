@@ -98,9 +98,10 @@ Magic Keyboard.
   bb settings reload
 
 `devServerRestartPolicy` accepts `until-stopped` or `never`. The default is
-`until-stopped`, which restores named dev-server commands after exits and bb
-restarts. Turning it off leaves running commands active, but prevents their
-next restore. Turning it on again applies to newly created named commands.
+`until-stopped` for named commands that declare a dev-server port. Other named
+commands default to `never` unless they explicitly select `until-stopped`.
+Turning the setting off leaves running commands active, but prevents their next
+restore. Turning it on again applies to newly created declared dev servers.
 
 `bb settings replay-onboarding` enables the `newOnboarding` experiment and
 clears `onboardingCompletedAt`. The first-run setup guide then shows again on
