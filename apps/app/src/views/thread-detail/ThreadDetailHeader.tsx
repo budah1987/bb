@@ -34,6 +34,7 @@ import { ThreadTitleMentions } from "@/components/thread/ThreadTitleMentions";
 import { SecondaryPanelHostLayoutContext } from "@/components/secondary-panel/SecondaryPanelHostLayoutContext";
 import { CHROME_SUBTLE_ICON_BUTTON_FOREGROUND_CLASS } from "@/components/ui/chromeStyleTokens";
 import { dimInactiveSplitsAtom } from "@/lib/split-layout/atoms";
+import type { ThreadWorkflowAction } from "@/lib/thread-workflow-action";
 import {
   CONTEXT_INACTIVE_TEXT_CLASS,
   CONTEXT_SELECTION_SURFACE_CLASS,
@@ -48,12 +49,7 @@ const THREAD_HEADER_ACTION_BUTTON_CLASS = cn(
 );
 const NARROW_SPLIT_HEADER_MAX_WIDTH = 560;
 
-export interface ThreadHeaderWorkflowAction {
-  disabled?: boolean;
-  label: string;
-  onSelect: () => void;
-  tooltip?: string;
-}
+export type ThreadHeaderWorkflowAction = ThreadWorkflowAction;
 
 interface ThreadHeaderContext {
   branchName?: string;
@@ -100,7 +96,6 @@ export function ThreadDetailHeader({
   threadTitle,
   workspaceOpenButton,
 }: ThreadDetailHeaderProps) {
-  const [primaryAction, ...secondaryActions] = threadHeaderWorkflowActions;
   const { renameThread } = useThreadActions();
   const handleRename = useCallback(
     (nextTitle: string) => {
@@ -142,6 +137,14 @@ export function ThreadDetailHeader({
     measuredPaneWidth < NARROW_SPLIT_HEADER_MAX_WIDTH;
   const usesResponsiveActionMenu =
     renderAsDrawer || usesResponsiveActionOverflow;
+  const hasRailWorkflowAction = threadHeaderWorkflowActions.some(
+    (action) => action.kind !== undefined,
+  );
+  const headerWorkflowActions =
+    isRailVisible && !renderAsDrawer && hasRailWorkflowAction
+      ? []
+      : threadHeaderWorkflowActions;
+  const [primaryAction, ...secondaryActions] = headerWorkflowActions;
   useLayoutEffect(() => {
     if (!isSplitPaneHeader) {
       return;
