@@ -7,6 +7,7 @@ import { appToast } from "@/components/ui/app-toast";
 import { useRequestEnvironmentAction } from "@/hooks/mutations/environment-mutations";
 import { useSendThreadMessage } from "@/hooks/mutations/thread-runtime-mutations";
 import { getMutationErrorMessage } from "@/lib/mutation-errors";
+import { RailSection } from "./RailSection";
 
 const CHECK_REFRESH_INTERVAL_MS = 3_000;
 const CHECK_REFRESH_TIMEOUT_MS = 60_000;
@@ -91,6 +92,7 @@ export function PullRequestChecksRail({
 }) {
   const requestAction = useRequestEnvironmentAction();
   const sendMessage = useSendThreadMessage();
+  const [isExpanded, setIsExpanded] = useState(true);
   const [rerunningNames, setRerunningNames] = useState<ReadonlySet<string>>(
     () => new Set(),
   );
@@ -216,117 +218,131 @@ export function PullRequestChecksRail({
 
   if (pullRequest.checks.items.length === 0) {
     return (
-      <p className="px-2 py-1 text-xs text-muted-foreground">
-        No checks configured.
-      </p>
+      <RailSection
+        isExpanded={isExpanded}
+        label="Checks"
+        onToggle={() => setIsExpanded((current) => !current)}
+        trailing={
+          <span className="text-xs tabular-nums text-muted-foreground">
+            0 of 0 complete
+          </span>
+        }
+      >
+        <p className="px-2 py-1 text-xs text-muted-foreground">
+          No checks configured.
+        </p>
+      </RailSection>
     );
   }
 
   return (
-    <div className="flex min-w-0 flex-col gap-1 py-1">
-      <div className="flex items-center gap-2 px-2">
-        <span className="min-w-0 flex-1 text-xs font-medium text-foreground">
-          Checks
-        </span>
+    <RailSection
+      isExpanded={isExpanded}
+      label="Checks"
+      onToggle={() => setIsExpanded((current) => !current)}
+      trailing={
         <span className="text-xs tabular-nums text-muted-foreground">
           {completedCount} of {pullRequest.checks.totalCount} complete
         </span>
-      </div>
-      <div
-        role="progressbar"
-        aria-label="Pull request checks"
-        aria-valuemin={0}
-        aria-valuemax={pullRequest.checks.totalCount}
-        aria-valuenow={completedCount}
-        className="mx-2 h-1 overflow-hidden rounded-full bg-border-hairline"
-      >
+      }
+    >
+      <div className="flex min-w-0 flex-col gap-1 py-1">
         <div
-          className="h-full origin-left rounded-full bg-foreground/55 transition-transform duration-300 ease-[var(--resize-ease)] motion-reduce:transition-none"
-          style={{ transform: `scaleX(${progress})` }}
-        />
-      </div>
-      {rerunnableFailedChecks.length > 1 ? (
-        <div className="flex justify-end px-1 py-0.5">
-          <Button
-            type="button"
-            size="sm"
-            variant="ghost"
-            className="min-h-9 px-2 text-xs"
-            disabled={requestAction.isPending}
-            onClick={() => void rerun({ scope: "failed" })}
-          >
-            Re-run all failed
-          </Button>
+          role="progressbar"
+          aria-label="Pull request checks"
+          aria-valuemin={0}
+          aria-valuemax={pullRequest.checks.totalCount}
+          aria-valuenow={completedCount}
+          className="mx-2 h-1 overflow-hidden rounded-full bg-border-hairline"
+        >
+          <div
+            className="h-full origin-left rounded-full bg-foreground/55 transition-transform duration-300 ease-[var(--resize-ease)] motion-reduce:transition-none"
+            style={{ transform: `scaleX(${progress})` }}
+          />
         </div>
-      ) : null}
-      <ul
-        className="flex min-w-0 flex-col"
-        aria-label="Pull request check results"
-      >
-        {pullRequest.checks.items.map((check, index) => {
-          const display = checkDisplay(check, rerunningNames.has(check.name));
-          const failed = isFailedPullRequestCheck(check);
-          return (
-            <li
-              key={`${check.name}:${index}`}
-              className="flex min-w-0 flex-col gap-1.5 rounded-md px-2 py-1.5 hover:bg-state-hover"
+        {rerunnableFailedChecks.length > 1 ? (
+          <div className="flex justify-end px-1 py-0.5">
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              className="min-h-9 px-2 text-xs"
+              disabled={requestAction.isPending}
+              onClick={() => void rerun({ scope: "failed" })}
             >
-              <div className="flex min-w-0 items-center gap-2">
-                <Icon
-                  name={display.icon}
-                  className={cn("size-3.5", display.className)}
-                  aria-hidden
-                />
-                <span
-                  className="min-w-0 flex-1 truncate text-xs text-foreground"
-                  title={check.name}
-                >
-                  {check.name}
-                </span>
-                <span
-                  className={cn(
-                    "text-xs",
-                    display.className.replace("animate-spin ", ""),
-                  )}
-                >
-                  {display.label}
-                </span>
-              </div>
-              {failed ? (
-                <div className="flex justify-end gap-1 pl-5">
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="ghost"
-                    className="min-h-9 px-2 text-xs"
-                    disabled={sendMessage.isPending}
-                    onClick={() => void triage(check)}
+              Re-run all failed
+            </Button>
+          </div>
+        ) : null}
+        <ul
+          className="flex min-w-0 flex-col"
+          aria-label="Pull request check results"
+        >
+          {pullRequest.checks.items.map((check, index) => {
+            const display = checkDisplay(check, rerunningNames.has(check.name));
+            const failed = isFailedPullRequestCheck(check);
+            return (
+              <li
+                key={`${check.name}:${index}`}
+                className="flex min-w-0 flex-col gap-1.5 rounded-md px-2 py-1.5 hover:bg-state-hover"
+              >
+                <div className="flex min-w-0 items-center gap-2">
+                  <Icon
+                    name={display.icon}
+                    className={cn("size-3.5", display.className)}
+                    aria-hidden
+                  />
+                  <span
+                    className="min-w-0 flex-1 truncate text-xs text-foreground"
+                    title={check.name}
                   >
-                    Triage
-                  </Button>
-                  {isRerunnablePullRequestCheck(check) ? (
+                    {check.name}
+                  </span>
+                  <span
+                    className={cn(
+                      "text-xs",
+                      display.className.replace("animate-spin ", ""),
+                    )}
+                  >
+                    {display.label}
+                  </span>
+                </div>
+                {failed ? (
+                  <div className="flex justify-end gap-1 pl-5">
                     <Button
                       type="button"
                       size="sm"
                       variant="ghost"
                       className="min-h-9 px-2 text-xs"
-                      disabled={
-                        requestAction.isPending ||
-                        rerunningNames.has(check.name)
-                      }
-                      onClick={() =>
-                        void rerun({ scope: "check", checkName: check.name })
-                      }
+                      disabled={sendMessage.isPending}
+                      onClick={() => void triage(check)}
                     >
-                      Re-run
+                      Triage
                     </Button>
-                  ) : null}
-                </div>
-              ) : null}
-            </li>
-          );
-        })}
-      </ul>
-    </div>
+                    {isRerunnablePullRequestCheck(check) ? (
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="ghost"
+                        className="min-h-9 px-2 text-xs"
+                        disabled={
+                          requestAction.isPending ||
+                          rerunningNames.has(check.name)
+                        }
+                        onClick={() =>
+                          void rerun({ scope: "check", checkName: check.name })
+                        }
+                      >
+                        Re-run
+                      </Button>
+                    ) : null}
+                  </div>
+                ) : null}
+              </li>
+            );
+          })}
+        </ul>
+      </div>
+    </RailSection>
   );
 }

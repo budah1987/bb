@@ -8,6 +8,7 @@ import { createLocalStorageSyncStorage } from "./browser-storage";
 import { useThreadTabs } from "@/hooks/queries/thread-tabs-query";
 import {
   EMPTY_FIXED_PANEL_TABS_STATE,
+  createBrowserFixedPanelTab,
   createGitDiffFixedPanelTab,
   createLocalServersFixedPanelTab,
   createPreviewFixedPanelTab,
@@ -65,6 +66,13 @@ export interface OpenFixedPreviewPanelArgs {
 }
 
 type FixedPanelPreviewOpener = (args: OpenFixedPreviewPanelArgs) => void;
+
+export interface OpenFixedBrowserPanelArgs {
+  environmentId: string | null;
+  url: string;
+}
+
+type FixedPanelBrowserOpener = (args: OpenFixedBrowserPanelArgs) => void;
 
 function hasThreadId(threadId: string | null | undefined): threadId is string {
   return threadId !== null && threadId !== undefined && threadId.length > 0;
@@ -535,6 +543,39 @@ export function useOpenFixedPreviewPanel(
         ) {
           return current;
         }
+        return {
+          ...current,
+          secondary: {
+            tabs,
+            activeTabId: tab.id,
+            isOpen: true,
+          },
+        };
+      });
+    },
+    [updateState],
+  );
+}
+
+/** Opens a URL in a fresh bbamir browser tab in the right panel. */
+export function useOpenFixedBrowserPanel(
+  panelStateId: FixedPanelTabsPanelStateId,
+  syncThreadId: FixedPanelTabsSyncThreadId,
+): FixedPanelBrowserOpener {
+  const updateState = useUpdateFixedPanelTabsState(panelStateId, syncThreadId);
+  return useCallback(
+    ({ environmentId, url }: OpenFixedBrowserPanelArgs) => {
+      updateState((current) => {
+        const tab = createBrowserFixedPanelTab({ environmentId, url });
+        const newTabIndex = current.secondary.tabs.findIndex(
+          (candidate) => candidate.kind === "new-tab",
+        );
+        const tabs =
+          newTabIndex === -1
+            ? [...current.secondary.tabs, tab]
+            : current.secondary.tabs.map((candidate, index) =>
+                index === newTabIndex ? tab : candidate,
+              );
         return {
           ...current,
           secondary: {

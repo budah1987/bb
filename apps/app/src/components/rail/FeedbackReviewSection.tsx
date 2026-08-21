@@ -398,6 +398,19 @@ export function FeedbackReviewSection({
                     >
                       <Icon name="Check" className="size-3.5" />
                     </button>
+                    <button
+                      type="button"
+                      aria-label={`Delete annotation ${index + 1}`}
+                      onClick={() => {
+                        annotations.removeDraft(draft.id);
+                        if (lastResolvedDraft?.id === draft.id) {
+                          setLastResolvedDraft(null);
+                        }
+                      }}
+                      className="flex size-10 shrink-0 items-center justify-center rounded-md text-muted-foreground opacity-0 transition-[scale,opacity,color] duration-150 ease-out hover:text-destructive active:scale-[0.96] focus-visible:opacity-100 group-hover:opacity-100 motion-reduce:transition-none"
+                    >
+                      <Icon name="Trash2" className="size-3.5" aria-hidden />
+                    </button>
                   </div>
                 );
               })}
