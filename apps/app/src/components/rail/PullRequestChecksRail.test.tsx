@@ -110,6 +110,24 @@ describe("pull request check helpers", () => {
 });
 
 describe("PullRequestChecksRail", () => {
+  it("collapses and expands the checks list", () => {
+    render(
+      <PullRequestChecksRail
+        environmentId="env_1"
+        onRefresh={vi.fn().mockResolvedValue(undefined)}
+        pullRequest={pullRequest}
+        threadId="thr_1"
+      />,
+    );
+
+    const trigger = screen.getByRole("button", { name: /Checks/ });
+    expect(trigger.getAttribute("aria-expanded")).toBe("true");
+    fireEvent.click(trigger);
+    expect(trigger.getAttribute("aria-expanded")).toBe("false");
+    fireEvent.click(trigger);
+    expect(trigger.getAttribute("aria-expanded")).toBe("true");
+  });
+
   it("shows progress and retries one failed check", async () => {
     const onRefresh = vi.fn().mockResolvedValue(undefined);
     render(
