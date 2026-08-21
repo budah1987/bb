@@ -164,14 +164,15 @@ defaults to off: Enter queues and Command+Enter steers. When enabled, Enter
 steers and Command+Enter queues. Set it with
 `bb settings general steerActiveThreadOnEnter <true|false>`.
 
-The "Keep named dev servers running" toggle in Settings → General controls
-named command terminals. It defaults to on, so bb restores a command after an
-unexpected exit, app restart, or host daemon restart. Restore failures retry
-after 1, 2, 5, 10, and then 30 seconds. An explicit Stop action prevents
-another restore. Turning the toggle off keeps running commands active, but it
-disarms their saved restore intent. Turning it on again applies only to newly
-created named commands. Ordinary shell terminals never restart automatically.
-Set the policy with
+The "Keep dev servers running" toggle in Settings → General controls the
+default for named command terminals that declare a dev-server port. It defaults
+to on, so bb restores those commands after an unexpected exit, app restart, or
+host daemon restart. One-shot named commands default to `never`; pass an
+explicit `until-stopped` restart policy to supervise a server that has no port.
+Restore failures retry after 1, 2, 5, 10, and then 30 seconds. An explicit Stop
+action prevents another restore. Turning the toggle off keeps running commands
+active, but disarms their saved restore intent. Turning it on again applies only
+to newly created declared dev servers. Set the policy with
 `bb settings general devServerRestartPolicy <until-stopped|never>`.
 
 Outside an open typeahead menu, Shift+Enter inserts a newline. In zen mode,

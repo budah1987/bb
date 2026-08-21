@@ -128,7 +128,7 @@ export function registerTerminalCommands(
       )
       .option(
         "--restart-policy <policy>",
-        "Named command restart policy: never or until-stopped",
+        "Command restart policy: never or until-stopped (defaults to never)",
       )
       .option("--attach", "Attach after creating")
       .option("--json", "Print machine-readable JSON output"),

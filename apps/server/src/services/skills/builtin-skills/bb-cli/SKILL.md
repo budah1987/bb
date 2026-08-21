@@ -121,10 +121,10 @@ message agents, or inspect projects, providers, and environments.
   keyboard keeps Return as a newline; iPadOS WebKit preserves the Enter
   shortcuts for a connected Magic Keyboard. Update the preference with
   `bb settings general steerActiveThreadOnEnter <true|false>`.
-- The `devServerRestartPolicy` General preference defaults to `until_stopped`.
-  It restores named command terminals after exits, app restarts, or host daemon
-  restarts until the user stops them. Turning it off disarms existing restore
-  intent without stopping running commands. Turning it on applies to new named
+- The `devServerRestartPolicy` General preference defaults to `until_stopped`
+  for named commands that declare a dev-server port. Other named commands
+  default to `never` unless they explicitly select `until_stopped`. Turning the
+  preference off disarms existing restore intent without stopping running
   commands. Update it with
   `bb settings general devServerRestartPolicy <until-stopped|never>`.
 - Settings → Keyboard records server-backed per-command shortcut overrides.
@@ -562,9 +562,9 @@ For review or fix pipelines, get the environment ID from
   Add `--cwd <path>` only to a machine scope. Machine targets resolve to an
   explicit host ID; terminal commands never silently fall back to primary.
 - Start a server with
-  `bb terminal create --thread <thread-id> --title "pnpm dev" --command "pnpm dev"`.
-  Named commands use the saved `devServerRestartPolicy`, which defaults to
-  `until_stopped`. Override it with `--restart-policy never` when needed.
+  `bb terminal create --thread <thread-id> --title "pnpm dev" --command "pnpm dev" --restart-policy until-stopped`.
+  Named commands default to `never`; a command with `--dev-server-port` instead
+  uses the saved `devServerRestartPolicy`.
 - All existing-session operations need only the terminal ID. Use
   `bb terminal wait <terminal-id> --contains "Local:" --timeout 120` to wait
   for readiness from new output. Pass `--from-start` only when matching existing

@@ -5,10 +5,10 @@ every window and client sees the same value.
 
 ## Dev servers
 
-- `devServerRestartPolicy` defaults to `until_stopped`. Named command terminals
-  restart after exits, app restarts, or daemon restarts until the user stops
-  them. Turning it off disarms existing restore intent without stopping running
-  commands. Turning it on applies to newly created named commands.
+- `devServerRestartPolicy` defaults to `until_stopped` for named commands that
+  declare a dev-server port. Other named command terminals default to `never`
+  unless they explicitly choose `until_stopped`. Turning the preference off
+  disarms existing restore intent without stopping running commands.
 - Set it with
   `bb settings general devServerRestartPolicy <until-stopped|never>`.
 - Ordinary shell terminals never restart automatically.

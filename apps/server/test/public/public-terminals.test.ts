@@ -798,7 +798,7 @@ describe("public terminal routes", () => {
     });
   });
 
-  it("opens a command terminal with thread context for the daemon", async () => {
+  it("does not supervise an unmarked command terminal", async () => {
     const fixture = await createTerminalRouteFixture();
     harnesses.push(fixture.harness);
 
@@ -832,13 +832,51 @@ describe("public terminal routes", () => {
     acknowledgeTerminalOpen(fixture, openMessage);
     const response = await responsePromise;
     expect(response.status).toBe(201);
-    expect(terminalSessionSchema.parse(await readJson(response))).toMatchObject(
-      {
-        launchCommand: "pnpm dev",
-        restartPolicy: "until_stopped",
+    const created = terminalSessionSchema.parse(await readJson(response));
+    expect(created).toMatchObject({
+      launchCommand: "pnpm dev",
+      restartPolicy: "never",
+      title: "Web dev server",
+    });
+    expect(
+      getTerminalSession(fixture.harness.db, { terminalId: created.id }),
+    ).toMatchObject({ supervisionDesired: false });
+  });
+
+  it("applies the dev-server restart preference to a declared port", async () => {
+    const fixture = await createTerminalRouteFixture();
+    harnesses.push(fixture.harness);
+
+    const responsePromise = fixture.harness.app.request("/api/v1/terminals", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        cols: 100,
+        devServerPort: 4321,
+        rows: 30,
+        start: { mode: "command", command: "pnpm dev" },
+        target: { kind: "thread", threadId: fixture.thread.id },
         title: "Web dev server",
-      },
-    );
+      }),
+    });
+    const openMessage = await waitForDaemonMessage(fixture.socket);
+    if (openMessage.type !== "terminal.open") {
+      throw new Error(`Expected terminal.open, received ${openMessage.type}`);
+    }
+    acknowledgeTerminalOpen(fixture, openMessage);
+
+    const response = await responsePromise;
+    expect(response.status).toBe(201);
+    const created = terminalSessionSchema.parse(await readJson(response));
+    expect(created).toMatchObject({
+      devServerPort: 4321,
+      launchCommand: "pnpm dev",
+      restartPolicy: "until_stopped",
+      title: "Web dev server",
+    });
+    expect(
+      getTerminalSession(fixture.harness.db, { terminalId: created.id }),
+    ).toMatchObject({ supervisionDesired: true });
   });
 
   it("sends input to a running terminal over the daemon session", async () => {

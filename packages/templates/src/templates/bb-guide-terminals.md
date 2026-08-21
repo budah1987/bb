@@ -65,10 +65,11 @@ For a dev server, prefer:
 Do not run long-lived servers as one-off foreground commands when the user will
 need to inspect logs, refresh the page, or stop the process later.
 
-Named command terminals use the app setting `devServerRestartPolicy` when
-`--restart-policy` is omitted. Its default is `until_stopped`, so bb restores
-the command after an unexpected exit, app restart, or daemon restart. Failed
-restores retry with a bounded delay. `bb terminal stop` prevents another
-restore. Turning the app setting off disarms existing saved restore intent,
-while leaving running commands active. Ordinary shell terminals never restart
-automatically.
+Named command terminals default to `never` when `--restart-policy` is omitted.
+Only commands that declare `--dev-server-port` inherit the app setting
+`devServerRestartPolicy`; use `--restart-policy until-stopped` to explicitly
+supervise a server without a declared port. bb restores supervised commands
+after an unexpected exit, app restart, or daemon restart. Failed restores retry
+with a bounded delay. `bb terminal stop` prevents another restore. Turning the
+app setting off disarms existing saved restore intent while leaving running
+commands active. Ordinary shell terminals never restart automatically.
