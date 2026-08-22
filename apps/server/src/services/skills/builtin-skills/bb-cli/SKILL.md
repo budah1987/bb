@@ -273,11 +273,14 @@ isolated|reuse`, or anchor with `--source-seq-end`. Permission mode inherits
   `bb connect servers` lists every bb on the paired account (handle,
   name, url, live) so callers can discover siblings; `--json` includes
   `selfHandle` for deduping this server. When you start a local server the user
-  should open remotely, expose the port and give them the share URL. Remote
+  should open remotely, expose the port and give them the share URL. Native
+  mobile clients enroll with `bb connect machine-code` or Settings → Remote
+  access → Add mobile device. The ordinary `<handle>.getbb.app` URL is protected
+  by the owner's browser session and is not a mobile Direct URL. Remote
   access is owned by the builtin `connect` plugin: `bb plugin disable connect`
   cuts it off entirely; with bb connect still enabled, `bb plugin enable
-  connect` restores the command. Plugins → Connect shows the current URL, QR
-  code, shared ports, re-pair form, and disconnect control.
+  connect` restores the command. Plugins → Connect shows the current URL,
+  mobile enrollment code, shared ports, re-pair form, and disconnect control.
 - Add remote execution machines from Settings → Machines. Its one-line
   installer stores the bb connect machine credential locally and configures
   both the daemon protocol and agent-launched `bb` CLI to traverse the account

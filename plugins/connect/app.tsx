@@ -9,6 +9,11 @@
 // with a transient receipt.
 import { useCallback, useEffect, useRef, useState } from "react";
 import { definePluginApp, useRealtime, useRpc } from "@get-bb/plugin-sdk/app";
+import {
+  encodeMobilePairingPayload,
+  mobilePairingPayload,
+  type MobilePairingPayload,
+} from "@bb/connect-client";
 import type { connectRpcContract } from "./src/rpc.js";
 import QRCode from "qrcode";
 import { Button } from "@bb/shared-ui/button";
@@ -248,7 +253,15 @@ function StepNumber({ value }: { value: number }) {
   );
 }
 
-function QrCodeImage({ value }: { value: string }) {
+function QrCodeImage({
+  value,
+  alt,
+  className,
+}: {
+  value: string;
+  alt?: string;
+  className?: string;
+}) {
   const [dataUrl, setDataUrl] = useState<string | null>(null);
   useEffect(() => {
     let cancelled = false;
@@ -268,8 +281,11 @@ function QrCodeImage({ value }: { value: string }) {
   return (
     <img
       src={dataUrl}
-      alt={`QR code for ${value}`}
-      className="size-32 rounded-md border border-border bg-white p-1.5"
+      alt={alt ?? `QR code for ${value}`}
+      className={cn(
+        "size-32 rounded-md border border-border bg-white p-1.5",
+        className,
+      )}
     />
   );
 }
@@ -358,7 +374,7 @@ function UrlHero({ url, showOpen }: { url: string; showOpen: boolean }) {
   );
 }
 
-function QuietCopyButton({ url, label }: { url: string; label: string }) {
+function QuietCopyButton({ text, label }: { text: string; label: string }) {
   const [copied, setCopied] = useState(false);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(
@@ -368,7 +384,7 @@ function QuietCopyButton({ url, label }: { url: string; label: string }) {
     [],
   );
   const copy = useCallback(() => {
-    navigator.clipboard.writeText(url).then(
+    navigator.clipboard.writeText(text).then(
       () => {
         setCopied(true);
         if (timerRef.current !== null) clearTimeout(timerRef.current);
@@ -378,7 +394,7 @@ function QuietCopyButton({ url, label }: { url: string; label: string }) {
         // Quiet copy has no inline hint; leave the label unchanged.
       },
     );
-  }, [url]);
+  }, [text]);
   return (
     <Button
       type="button"
@@ -495,6 +511,214 @@ function PairForm({
           </a>
           {copy.tail}
         </div>
+      ) : null}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Add mobile device: mint a one-time machine code for the native app.
+// ---------------------------------------------------------------------------
+
+type MachineCodeErrorCode = "machine_limit" | "network" | "not_paired";
+
+function toMachineCodeErrorCode(error: unknown): MachineCodeErrorCode {
+  const message = errorText(error);
+  if (message === "machine_limit" || message === "not_paired") return message;
+  return "network";
+}
+
+function formatCountdown(remainingMs: number): string {
+  const totalSeconds = Math.max(0, Math.floor(remainingMs / 1000));
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return `${minutes}:${seconds.toString().padStart(2, "0")}`;
+}
+
+function useCountdown(expiresAt: number | null): number | null {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (expiresAt === null) return;
+    const interval = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(interval);
+  }, [expiresAt]);
+  return expiresAt === null ? null : expiresAt - now;
+}
+
+function MobilePairingCard({
+  payload,
+  dashboardHost,
+  minting,
+  onRenew,
+}: {
+  payload: MobilePairingPayload;
+  dashboardHost: string;
+  minting: boolean;
+  onRenew: () => void;
+}) {
+  const remainingMs = useCountdown(payload.expiresAt);
+  const expired = remainingMs !== null && remainingMs <= 0;
+  const qrText = encodeMobilePairingPayload(payload);
+  return (
+    <div className="flex flex-col gap-3 rounded-md border border-border bg-surface-recessed/50 px-3 py-3 sm:flex-row sm:items-start">
+      <div className={cn("shrink-0", expired && "opacity-40 saturate-0")}>
+        <QrCodeImage
+          value={qrText}
+          alt="QR code to pair the bb mobile app"
+          className="size-40"
+        />
+      </div>
+      <div className="min-w-0 flex-1 space-y-2">
+        <p className="text-sm">
+          Scan this with the bb mobile app, or enter the code by hand.
+        </p>
+        <div className="flex max-w-xs items-center gap-1 rounded-lg border border-border bg-surface-recessed py-1 pl-3.5 pr-1">
+          <span
+            className={cn(
+              "min-w-0 flex-1 truncate font-mono text-sm font-medium tracking-widest",
+              expired
+                ? "text-muted-foreground line-through"
+                : "text-foreground",
+            )}
+            aria-label="Mobile pairing code"
+          >
+            {payload.code}
+          </span>
+          {expired ? null : (
+            <QuietCopyButton text={payload.code} label="Copy pairing code" />
+          )}
+        </div>
+        <div className="flex items-center gap-2 text-xs text-subtle-foreground">
+          {expired ? (
+            <>
+              <span>Code expired</span>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="text-muted-foreground"
+                disabled={minting}
+                onClick={onRenew}
+              >
+                {minting ? (
+                  <Icon name="Spinner" className="size-4 animate-spin" />
+                ) : null}
+                Generate a new code
+              </Button>
+            </>
+          ) : remainingMs !== null ? (
+            <span className="tabular-nums">
+              Code expires in {formatCountdown(remainingMs)}
+            </span>
+          ) : null}
+        </div>
+        <p className="text-xs text-subtle-foreground/75">
+          The code works once. Your phone gets its own credential on your{" "}
+          {dashboardHost} account, where you can revoke it later. Same thing
+          from a terminal:{" "}
+          <span className="font-mono">bb connect machine-code</span>.
+        </p>
+      </div>
+    </div>
+  );
+}
+
+function AddMobileDeviceSection({ dashboardUrl }: { dashboardUrl: string }) {
+  const rpc = useRpc<typeof connectRpcContract>();
+  const [payload, setPayload] = useState<MobilePairingPayload | null>(null);
+  const [minting, setMinting] = useState(false);
+  const [errorCode, setErrorCode] = useState<MachineCodeErrorCode | null>(null);
+  const dashboardHost = hostOf(dashboardUrl);
+
+  const mint = useCallback(() => {
+    if (minting) return;
+    setMinting(true);
+    setErrorCode(null);
+    rpc.call("createMachineCode").then(
+      (result) => {
+        setMinting(false);
+        setPayload(mobilePairingPayload(result));
+      },
+      (rpcError: unknown) => {
+        setMinting(false);
+        setPayload(null);
+        setErrorCode(toMachineCodeErrorCode(rpcError));
+      },
+    );
+  }, [minting, rpc]);
+
+  return (
+    <div className="space-y-2.5 border-t border-border-seam pt-4">
+      <div className="flex items-center">
+        <h3 className="text-[11px] font-semibold uppercase tracking-wide text-subtle-foreground">
+          Mobile app
+        </h3>
+        <span className="flex-1" />
+        {payload === null ? (
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="text-muted-foreground"
+            disabled={minting}
+            onClick={mint}
+          >
+            {minting ? (
+              <Icon name="Spinner" className="size-3.5 animate-spin" />
+            ) : (
+              <Icon name="Plus" className="size-3.5" />
+            )}
+            Add mobile device
+          </Button>
+        ) : (
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="text-muted-foreground"
+            onClick={() => {
+              setPayload(null);
+              setErrorCode(null);
+            }}
+          >
+            Done
+          </Button>
+        )}
+      </div>
+
+      {payload !== null ? (
+        <MobilePairingCard
+          key={payload.code}
+          payload={payload}
+          dashboardHost={dashboardHost}
+          minting={minting}
+          onRenew={mint}
+        />
+      ) : (
+        <p className="text-xs text-subtle-foreground/75">
+          Pair the bb mobile app with this bb using a one-time code.
+        </p>
+      )}
+
+      {errorCode === "machine_limit" ? (
+        <div className="max-w-md rounded-md border border-surface-destructive-border bg-surface-destructive px-3 py-2 text-xs text-destructive-text">
+          Your {dashboardHost} account has reached its machine limit.{" "}
+          <a
+            href={dashboardUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="font-semibold underline underline-offset-2"
+          >
+            Revoke a device you no longer use
+          </a>{" "}
+          in the dashboard, then try again.
+        </div>
+      ) : errorCode !== null ? (
+        <p className="text-xs text-destructive-text">
+          {errorCode === "not_paired"
+            ? "This bb is no longer paired — re-pair, then try again."
+            : "Couldn't reach the Connect service to create a code — check your connection, then try again."}
+        </p>
       ) : null}
     </div>
   );
@@ -653,7 +877,7 @@ function SharedPortsSection({
                             {hostOf(share.url)}
                           </a>
                           <QuietCopyButton
-                            url={share.url}
+                            text={share.url}
                             label={`Copy share URL for port ${share.port}`}
                           />
                         </>
@@ -872,7 +1096,6 @@ function ConnectedContent({
   const [disconnecting, setDisconnecting] = useState(false);
   const [disconnectError, setDisconnectError] = useState<string | null>(null);
   const [repairOpen, setRepairOpen] = useState(false);
-  const [qrOpen, setQrOpen] = useState(false);
 
   const disconnect = useCallback(() => {
     setDisconnecting(true);
@@ -918,27 +1141,6 @@ function ConnectedContent({
 
       {status.url !== null ? <UrlHero url={status.url} showOpen /> : null}
 
-      {status.url !== null ? (
-        <div className="space-y-2">
-          <div className="flex items-center gap-2">
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              className="text-muted-foreground"
-              onClick={() => setQrOpen((open) => !open)}
-            >
-              <Icon name="GridView" className="size-3.5" />
-              Show QR for phone
-            </Button>
-            <span className="text-xs text-muted-foreground">
-              scan to open on another device
-            </span>
-          </div>
-          {qrOpen ? <QrCodeImage value={status.url} /> : null}
-        </div>
-      ) : null}
-
       {repairOpen ? (
         <div className="space-y-2 rounded-md border border-border bg-surface-recessed/50 px-3 py-3">
           <p className="text-xs text-muted-foreground">
@@ -948,6 +1150,8 @@ function ConnectedContent({
           <PairForm dashboardUrl={status.dashboardUrl} onPaired={onChanged} />
         </div>
       ) : null}
+
+      <AddMobileDeviceSection dashboardUrl={status.dashboardUrl} />
 
       <SharedPortsSection shares={status.shares} dimmed={false} />
 

@@ -163,6 +163,35 @@ describe("connect settings section", () => {
     await slot.findByText(/2 viewing remotely/);
   });
 
+  it("mints an enrollment QR instead of encoding the protected server URL", async () => {
+    const expiresAt = Date.now() + 600_000;
+    const slot = renderSlot(
+      app.settingsSections[0]!,
+      {},
+      {
+        rpc: {
+          status: () => connected(),
+          createMachineCode: () => ({
+            code: "K7QP-2M4X",
+            expiresAt,
+            serverUrl: "https://workstation.getbb.app",
+          }),
+        },
+      },
+    );
+
+    await slot.findByText("Connected");
+    expect(slot.queryByText("Show QR for phone")).toBeNull();
+    fireEvent.click(slot.getByRole("button", { name: "Add mobile device" }));
+
+    await slot.findByText("K7QP-2M4X");
+    slot.getByRole("button", { name: "Copy pairing code" });
+    const qr = await slot.findByRole("img", {
+      name: "QR code to pair the bb mobile app",
+    });
+    expect(qr.getAttribute("src")?.startsWith("data:image/png")).toBe(true);
+  });
+
   it("reconnecting shows the amber state with the human transport error", async () => {
     const slot = renderSlot(
       app.settingsSections[0]!,

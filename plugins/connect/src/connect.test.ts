@@ -2479,6 +2479,45 @@ describe("connect CLI", () => {
     expect(result.stderr).toContain("not connected to getbb.app");
   });
 
+  it("machine-code mints a native-app enrollment payload", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url.includes("/api/connect/redeem")) {
+          return new Response(
+            JSON.stringify({ credential: "bbcred_live", handle: "sawyer" }),
+          );
+        }
+        if (url.includes("/api/connect/machine-code")) {
+          return new Response(
+            JSON.stringify({
+              code: "K7QP-2M4X",
+              expiresInMs: 600_000,
+              serverUrl: "https://sawyer.getbb.app",
+            }),
+          );
+        }
+        return new Response("not found", { status: 404 });
+      }),
+    );
+    const { harness } = await loadCli();
+    await harness.runCli([
+      "--code",
+      "ABCD",
+      "--server",
+      "https://sawyer.getbb.app",
+    ]);
+
+    const result = await harness.runCli(["machine-code", "--json"]);
+    expect(result.exitCode).toBe(0);
+    expect(JSON.parse(result.stdout)).toMatchObject({
+      code: "K7QP-2M4X",
+      serverUrl: "https://sawyer.getbb.app",
+      apex: "https://getbb.app",
+    });
+  });
+
   it("servers lists account servers as a table or json", async () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);

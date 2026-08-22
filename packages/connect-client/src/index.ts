@@ -27,3 +27,9 @@ export {
   redeemMachineCredential,
   type ConnectMachineRedeemErrorCode,
 } from "./redeem-machine.js";
+export {
+  encodeMobilePairingPayload,
+  mobilePairingPayload,
+  parseMobilePairingPayload,
+  type MobilePairingPayload,
+} from "./mobile-pairing.js";
