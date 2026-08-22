@@ -40,6 +40,7 @@ import { ThreadTimelinePane } from "./ThreadTimelinePane";
 import { PANEL_COLLAPSE_TRANSITION_CLASS } from "@/components/secondary-panel/panelTransitionTokens";
 import { dispatchBrowserViewBoundsSync } from "@/lib/browser-view-bounds-sync";
 import { getConversationViewTransitionName } from "@/lib/conversation-view-transition";
+import type { ThreadWorkflowAction } from "@/lib/thread-workflow-action";
 import {
   usePaneContext,
   usePaneSecondaryPanelRegistration,
@@ -73,6 +74,8 @@ type ThreadSecondaryPanelProps = Omit<
 
 interface ThreadDetailSecondaryContentProps {
   agentActivityData?: AgentActivityData;
+  onRailReviewChanges?: () => void;
+  railWorkflowActions?: readonly ThreadWorkflowAction[];
   footer: ReactNode;
   header: ReactNode;
   isMetadataLoading: boolean;
@@ -107,6 +110,8 @@ export function ThreadDetailSecondaryContent(
 
 function ThreadDetailSecondaryContentBody({
   agentActivityData,
+  onRailReviewChanges,
+  railWorkflowActions = [],
   footer,
   header,
   isMetadataLoading,
@@ -479,7 +484,9 @@ function ThreadDetailSecondaryContentBody({
                 <ThreadTimelinePane {...stableTimeline} footer={footer} />
                 <ThreadRail
                   agentActivityData={agentActivityData}
+                  onReviewChanges={onRailReviewChanges}
                   threadId={stableTimeline.threadId}
+                  workflowActions={railWorkflowActions}
                 />
               </div>
             </div>

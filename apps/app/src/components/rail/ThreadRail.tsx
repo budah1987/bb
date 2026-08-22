@@ -5,6 +5,7 @@ import { PluginThreadRailSections } from "@/components/plugin/PluginThreadRailSe
 import { PANEL_COLLAPSE_TRANSITION_CLASS } from "@/components/secondary-panel/panelTransitionTokens";
 import { useStandaloneCompactPwa } from "@/hooks/useStandaloneCompactPwa";
 import { useIsRailVisible } from "@/lib/rail-visibility";
+import type { ThreadWorkflowAction } from "@/lib/thread-workflow-action";
 import { AgentActivitySection } from "./AgentActivitySection";
 import type { AgentActivityData } from "./AgentActivitySection";
 import { EnvironmentSection } from "./EnvironmentSection";
@@ -65,7 +66,9 @@ export function useThreadRailContentInsetPx(
 
 export interface ThreadRailProps {
   agentActivityData?: AgentActivityData;
+  onReviewChanges?: () => void;
   threadId: string;
+  workflowActions?: readonly ThreadWorkflowAction[];
 }
 
 /**
@@ -91,7 +94,12 @@ export interface ThreadRailProps {
  * is a wide-viewport affordance, and in the standalone PWA it would be most of
  * the screen.
  */
-export function ThreadRail({ agentActivityData, threadId }: ThreadRailProps) {
+export function ThreadRail({
+  agentActivityData,
+  onReviewChanges,
+  threadId,
+  workflowActions = [],
+}: ThreadRailProps) {
   const isRailVisible = useIsRailVisible(threadId);
   const isCompactViewport = useIsCompactViewport();
   const isStandaloneCompactPwa = useStandaloneCompactPwa();
@@ -128,8 +136,10 @@ export function ThreadRail({ agentActivityData, threadId }: ThreadRailProps) {
       >
         <RailContents
           agentActivityData={agentActivityData}
+          onReviewChanges={onReviewChanges}
           threadId={threadId}
           enabled={isRailVisible}
+          workflowActions={workflowActions}
         />
       </aside>
     </div>
@@ -138,12 +148,16 @@ export function ThreadRail({ agentActivityData, threadId }: ThreadRailProps) {
 
 function RailContents({
   agentActivityData,
+  onReviewChanges,
   threadId,
   enabled,
+  workflowActions,
 }: {
   agentActivityData?: AgentActivityData;
+  onReviewChanges?: () => void;
   threadId: string;
   enabled: boolean;
+  workflowActions: readonly ThreadWorkflowAction[];
 }) {
   return (
     <div className="min-h-0 flex-1 overflow-y-auto py-1">
@@ -156,7 +170,12 @@ function RailContents({
             threadId={threadId}
             enabled={enabled}
           />
-          <RepositoryHealthSection threadId={threadId} enabled={enabled} />
+          <RepositoryHealthSection
+            threadId={threadId}
+            enabled={enabled}
+            onReviewChanges={onReviewChanges}
+            workflowActions={workflowActions}
+          />
           <FeedbackReviewSection threadId={threadId} enabled={enabled} />
           <PluginThreadRailSections threadId={threadId} enabled={enabled} />
         </div>

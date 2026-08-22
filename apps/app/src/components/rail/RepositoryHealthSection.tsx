@@ -28,17 +28,29 @@ import {
 } from "@/lib/repository-health-summary";
 import { useSetThreadSecondaryPanelSelection } from "@/views/thread-detail/threadSecondaryPanelSelection";
 import { useOpenFixedBrowserPanel } from "@/lib/fixed-panel-tabs";
+import type { ThreadWorkflowAction } from "@/lib/thread-workflow-action";
 import { RailRow } from "./RailRow";
 import { RailSection } from "./RailSection";
 import { GithubAccountRailRow } from "./GithubAccountRailRow";
 import { PullRequestChecksRail } from "./PullRequestChecksRail";
+import { ShipWorkflowActions } from "./ShipWorkflowActions";
 import { RAIL_BODY_TEXT_CLASS, RAIL_PROSE_CLASS } from "./railStyleTokens";
 
 export { summarizeRepositoryHealth } from "@/lib/repository-health-summary";
 
 export interface RepositoryHealthSectionProps {
   enabled?: boolean;
+  onReviewChanges?: () => void;
   threadId: string;
+  workflowActions?: readonly ThreadWorkflowAction[];
+}
+
+export function getCreatePullRequestAction(
+  actions: readonly ThreadWorkflowAction[],
+): ThreadWorkflowAction | null {
+  return (
+    actions.find((action) => action.kind === "create_pull_request") ?? null
+  );
 }
 
 export function getOpenableDeployment(
@@ -54,7 +66,9 @@ export function getOpenableDeployment(
 
 export function RepositoryHealthSection({
   enabled = true,
+  onReviewChanges,
   threadId,
+  workflowActions = [],
 }: RepositoryHealthSectionProps) {
   const [isExpanded, setIsExpanded] = useState(true);
   const [accountPickerOpen, setAccountPickerOpen] = useState(false);
@@ -144,6 +158,7 @@ export function RepositoryHealthSection({
     (provider) => provider.kind === "deployment",
   );
   const openableDeployment = getOpenableDeployment(deployments);
+  const createPullRequestAction = getCreatePullRequestAction(workflowActions);
   const deploymentLabel = deployments?.some(
     (provider) => provider.state === "failed",
   )
@@ -197,7 +212,7 @@ export function RepositoryHealthSection({
   return (
     <RailSection
       isExpanded={isExpanded}
-      label="Repository Health"
+      label="Ship"
       onToggle={() => setIsExpanded((current) => !current)}
       trailing={
         <span
@@ -241,8 +256,23 @@ export function RepositoryHealthSection({
           <RailRow
             icon="GitBranch"
             label={workspace.branch.currentBranch ?? "Detached checkout"}
+          />
+          <RailRow
+            icon="FileDiff"
+            label="Changes"
+            onSelect={
+              workspace.workingTree.hasUncommittedChanges
+                ? onReviewChanges
+                : undefined
+            }
+            showsChevron={
+              workspace.workingTree.hasUncommittedChanges &&
+              onReviewChanges !== undefined
+            }
             trailing={
-              workspace.workingTree.hasUncommittedChanges ? "Changes" : "Clean"
+              workspace.workingTree.hasUncommittedChanges
+                ? `${workspace.workingTree.files.length} ${workspace.workingTree.files.length === 1 ? "file" : "files"}`
+                : "Clean"
             }
           />
           <GithubAccountRailRow
@@ -267,7 +297,10 @@ export function RepositoryHealthSection({
             <RailRow
               icon="GitPullRequestArrow"
               label="Pull request"
-              trailing="None"
+              disabled={createPullRequestAction?.disabled}
+              onSelect={createPullRequestAction?.onSelect}
+              showsChevron={createPullRequestAction !== null}
+              trailing={createPullRequestAction === null ? "None" : "Create"}
             />
           ) : (
             <>
@@ -368,6 +401,7 @@ export function RepositoryHealthSection({
             showsChevron={openableDeployment !== null}
             trailing={deploymentLabel}
           />
+          <ShipWorkflowActions actions={workflowActions} />
         </div>
       )}
     </RailSection>

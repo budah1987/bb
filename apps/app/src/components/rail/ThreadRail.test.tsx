@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
 
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { createStore, Provider } from "jotai";
+import type { ComponentProps } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { getRailVisibleStorageKey } from "@/lib/rail-visibility";
 import { ThreadRail } from "./ThreadRail";
@@ -63,13 +64,25 @@ vi.mock("./AgentActivitySection", () => ({
 vi.mock("./RepositoryHealthSection", () => ({
   RepositoryHealthSection: ({
     enabled,
+    onReviewChanges,
     threadId,
+    workflowActions = [],
   }: {
     enabled: boolean;
+    onReviewChanges?: () => void;
     threadId: string;
+    workflowActions?: Array<{ label: string; onSelect: () => void }>;
   }) => (
     <div data-testid="repository-health-section" data-enabled={enabled}>
       {threadId}
+      {onReviewChanges ? (
+        <button onClick={onReviewChanges}>Review changes</button>
+      ) : null}
+      {workflowActions.map((action) => (
+        <button key={action.label} onClick={action.onSelect}>
+          {action.label}
+        </button>
+      ))}
     </div>
   ),
 }));
@@ -102,12 +115,17 @@ vi.mock("@/components/plugin/PluginThreadRailSections", () => ({
   ),
 }));
 
-function renderRail() {
+function renderRail(
+  props: Pick<
+    ComponentProps<typeof ThreadRail>,
+    "onReviewChanges" | "workflowActions"
+  > = {},
+) {
   const store = createStore();
   window.localStorage.setItem(getRailVisibleStorageKey("thr_1"), "true");
   return render(
     <Provider store={store}>
-      <ThreadRail threadId="thr_1" />
+      <ThreadRail threadId="thr_1" {...props} />
     </Provider>,
   );
 }
@@ -123,6 +141,23 @@ afterEach(() => {
 });
 
 describe("ThreadRail", () => {
+  it("passes shipping actions into repository health", () => {
+    const onCommit = vi.fn();
+    const onReviewChanges = vi.fn();
+    renderRail({
+      onReviewChanges,
+      workflowActions: [
+        { kind: "commit", label: "Commit", onSelect: onCommit },
+      ],
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Review changes" }));
+    fireEvent.click(screen.getByRole("button", { name: "Commit" }));
+
+    expect(onReviewChanges).toHaveBeenCalledOnce();
+    expect(onCommit).toHaveBeenCalledOnce();
+  });
+
   it("renders notes at the pane edge when visible on a wide surface", () => {
     renderRail();
 

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { EnvironmentStatusResponse } from "@bb/server-contract";
 import {
+  getCreatePullRequestAction,
   getOpenableDeployment,
   summarizeRepositoryHealth,
 } from "./RepositoryHealthSection";
@@ -157,5 +158,27 @@ describe("getOpenableDeployment", () => {
 
     expect(getOpenableDeployment([deployment])).toBe(deployment);
     expect(getOpenableDeployment([{ ...deployment, url: null }])).toBeNull();
+  });
+});
+
+describe("getCreatePullRequestAction", () => {
+  it("finds the action that issues a pull request", () => {
+    const create = {
+      kind: "create_pull_request",
+      label: "Create PR",
+      onSelect: () => undefined,
+    } as const;
+
+    expect(
+      getCreatePullRequestAction([
+        { kind: "commit", label: "Commit", onSelect: () => undefined },
+        create,
+      ]),
+    ).toBe(create);
+    expect(
+      getCreatePullRequestAction([
+        { kind: "commit", label: "Commit", onSelect: () => undefined },
+      ]),
+    ).toBeNull();
   });
 });
