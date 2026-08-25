@@ -279,6 +279,7 @@ function dropLatestPerformanceSchema(db: DbConnection): void {
     DROP INDEX IF EXISTS threads_sidebar_active_idx;
     DROP INDEX IF EXISTS threads_sidebar_unread_idx;
     DROP INDEX IF EXISTS events_daemon_event_id_idx;
+    DROP INDEX IF EXISTS events_tool_call_parent_lookup_idx;
   `);
   dropColumnIfPresent(db, "events", "daemon_event_id");
 }
@@ -3967,6 +3968,7 @@ describe("migrate", () => {
         "events_thread_turn_type_item_sequence_idx",
         "events_thread_type_item_kind_sequence_idx",
         "events_thread_type_sequence_idx",
+        "events_tool_call_parent_lookup_idx",
       ]);
 
       const migrationCreatedAts = db.$client
