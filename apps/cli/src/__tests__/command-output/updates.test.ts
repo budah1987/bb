@@ -210,6 +210,12 @@ describe("bb updates command output", () => {
       },
     });
     expect(request.json.input[0]?.text).toContain("Never edit, reset, clean");
+    expect(request.json.input[0]?.text).toContain(
+      "node scripts/upstream-merge-audit.mjs",
+    );
+    expect(request.json.input[0]?.text).toContain(
+      "Prefer narrow release-tag backports",
+    );
     expect(collectLogPayloads(vi.mocked(console.log))).toContain(
       "BBamir update workspace created: thread-bbamir-update",
     );
