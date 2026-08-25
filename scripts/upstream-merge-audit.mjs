@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
-import { dirname, resolve } from "node:path";
+import { readFileSync, statSync, writeFileSync } from "node:fs";
+import { dirname, isAbsolute, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   classifyConflicts,
@@ -156,6 +156,39 @@ function readWaivers(repoRoot) {
   return value.waivers;
 }
 
+// A waiver's `compatibilityTests` entries must name an actual, checked-in
+// test file inside the repo — not a directory, not `.`, and not a path that
+// escapes repoRoot via `..`. This is a security-relevant check: an entry
+// that only needs to `existsSync` (as this used to) can be satisfied by any
+// existing path, silently defeating the protocol-version review it exists
+// to require.
+const compatibilityTestFilePattern = /\.test\.(?:ts|tsx|mjs|js)$/u;
+
+function isRealCompatibilityTestFile(repoRoot, candidatePath) {
+  if (typeof candidatePath !== "string" || candidatePath.trim() === "") {
+    return false;
+  }
+  if (isAbsolute(candidatePath) || candidatePath.split(sep).includes("..")) {
+    return false;
+  }
+  if (!compatibilityTestFilePattern.test(candidatePath)) {
+    return false;
+  }
+
+  const resolvedPath = resolve(repoRoot, candidatePath);
+  const relativeToRoot = relative(repoRoot, resolvedPath);
+
+  if (relativeToRoot.startsWith("..") || isAbsolute(relativeToRoot)) {
+    return false;
+  }
+
+  try {
+    return statSync(resolvedPath).isFile();
+  } catch {
+    return false;
+  }
+}
+
 export function renderAuditMarkdown(report) {
   const lines = [
     "# Upstream merge audit",
@@ -232,7 +265,7 @@ export function runUpstreamMergeAudit({
     .flatMap((waiver) =>
       Array.isArray(waiver.compatibilityTests) ? waiver.compatibilityTests : [],
     )
-    .filter((path) => existsSync(resolve(repoRoot, path)));
+    .filter((path) => isRealCompatibilityTestFile(repoRoot, path));
   const currentProtocolVersion = readProtocolVersion(
     git.readFileAt(headSha, protocolPath),
     headSha,

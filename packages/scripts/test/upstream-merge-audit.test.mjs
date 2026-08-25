@@ -280,4 +280,50 @@ describe("upstream merge audit", () => {
       });
     },
   );
+
+  it.each([
+    ["a directory instead of a file", "."],
+    ["a non-test file", "package.json"],
+    ["a path escaping the repo root", "../outside.test.ts"],
+    ["a non-string entry", 42],
+  ])(
+    "rejects a waiver whose compatibility test is %s",
+    (_label, compatibilityTest) => {
+      const path = "apps/server/src/internal/session.ts";
+      const fixture = createFixture({
+        base: (root) => write(root, path, "export const value = 'base';\n"),
+        ours: (root, upstreamSha) => {
+          write(
+            root,
+            "scripts/upstream-audit/protocol-waivers.json",
+            `${JSON.stringify(
+              {
+                schemaVersion: 1,
+                waivers: [
+                  {
+                    upstreamSha,
+                    paths: [path],
+                    rationale: "Fixture attempts to spoof a compatibility test.",
+                    compatibilityTests: [compatibilityTest],
+                    approvedBy: "fixture@example.com",
+                    approvedAt: "2026-08-18",
+                    protocolVersion: 124,
+                  },
+                ],
+              },
+              null,
+              2,
+            )}\n`,
+          );
+        },
+        theirs: (root) =>
+          write(root, path, "export const value = 'upstream';\n"),
+      });
+      const { report, result } = runAudit(fixture);
+
+      expect(result.status).toBe(2);
+      expect(report.decision).toBe("review-required");
+      expect(report.protocol.waiver.state).toBe("invalid");
+    },
+  );
 });
