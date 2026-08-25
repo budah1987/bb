@@ -13,13 +13,14 @@ export function parseSemver(version) {
     return null;
   }
 
-  const [, major, minor, patch, prerelease] = match;
+  const [, major, minor, patch, prerelease, build] = match;
 
   return {
     major: BigInt(major),
     minor: BigInt(minor),
     patch: BigInt(patch),
     prerelease: prerelease === undefined ? [] : prerelease.split("."),
+    build: build === undefined ? [] : build.split("."),
     version,
   };
 }
@@ -149,6 +150,76 @@ export function deriveVersion(currentVersion, bumpType) {
   }
 
   throw new Error(`Unsupported bump flag: ${bumpType}`);
+}
+
+export function deriveForkVersion({
+  upstreamCore,
+  currentVersions,
+  forkTag = "bbamir",
+}) {
+  const upstream = parseSemver(upstreamCore);
+
+  if (
+    upstream === null ||
+    upstream.prerelease.length > 0 ||
+    upstream.build.length > 0
+  ) {
+    throw new Error(
+      `Fork upstream version must be a core X.Y.Z version, got ${upstreamCore}.`,
+    );
+  }
+  if (!Array.isArray(currentVersions) || currentVersions.length === 0) {
+    throw new Error(
+      "Fork version derivation requires current package versions.",
+    );
+  }
+  if (!/^[0-9A-Za-z-]+$/u.test(forkTag)) {
+    throw new Error(`Invalid fork tag: ${forkTag}`);
+  }
+
+  const parsedCurrentVersions = currentVersions.map((version) => {
+    const parsed = parseSemver(version);
+
+    if (parsed === null) {
+      throw new Error(`Invalid current version: ${version}`);
+    }
+
+    return parsed;
+  });
+  const maxCurrentCore = parsedCurrentVersions.reduce((maximum, current) =>
+    compareCoreVersions(current, maximum) > 0 ? current : maximum,
+  );
+
+  if (compareCoreVersions(upstream, maxCurrentCore) < 0) {
+    throw new Error(
+      `Fork upstream core ${upstreamCore} must not be lower than current max core ${maxCurrentCore.major}.${maxCurrentCore.minor}.${maxCurrentCore.patch}.`,
+    );
+  }
+
+  let maxForkNumber = 0n;
+
+  for (const current of parsedCurrentVersions) {
+    if (compareCoreVersions(current, upstream) !== 0) {
+      continue;
+    }
+
+    const [tag, number, ...rest] = current.prerelease;
+
+    if (
+      tag === forkTag &&
+      number !== undefined &&
+      rest.length === 0 &&
+      numericIdentifierPattern.test(number)
+    ) {
+      const forkNumber = BigInt(number);
+
+      if (forkNumber > maxForkNumber) {
+        maxForkNumber = forkNumber;
+      }
+    }
+  }
+
+  return `${upstreamCore}-${forkTag}.${maxForkNumber + 1n}`;
 }
 
 /**
