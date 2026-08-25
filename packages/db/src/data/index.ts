@@ -689,6 +689,7 @@ export type {
   DatabaseCompactionStats,
   DatabaseFreelistStats,
   DatabaseIncrementalVacuumDecisionArgs,
+  IncrementalVacuumResult,
   DatabaseMaintenanceActivity,
   DropDeferredLegacyTablesResult,
   RunIncrementalVacuumArgs,

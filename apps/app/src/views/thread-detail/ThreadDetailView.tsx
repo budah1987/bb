@@ -82,7 +82,7 @@ import {
 } from "../../hooks/queries/thread-queries";
 import { isTransientReadError } from "@/hooks/queries/query-helpers";
 import { useProjectDisplayName } from "@/hooks/queries/sidebar-navigation-query";
-import { usePromptDraftStorage } from "@/hooks/usePromptDraftStorage";
+import { getPromptDraftAccessor } from "@/hooks/usePromptDraftStorage";
 import { subscribeComposerFocusRequests } from "@/lib/composer-focus-requests";
 import { ThreadGitActionDialog } from "@/components/dialogs/ThreadGitActionDialog";
 import { PostMergeArchiveDialog } from "@/components/dialogs/PostMergeArchiveDialog";
@@ -1096,11 +1096,19 @@ function ThreadDetailViewInternal(props: ThreadDetailViewInternalProps) {
   // localStorage-backed draft — the quoted text is appended to the draft as a
   // `> ` blockquote block and renders inline in the composer immediately, with
   // no duplicated draft state.
-  const selectionPromptDraft = usePromptDraftStorage({
-    kind: "thread",
-    projectId: thread?.projectId ?? projectId ?? "",
-    threadId: thread?.id ?? "",
-  });
+  // This view only needs draft actions at event time. Subscribing to the draft
+  // here made every composer write re-render the surrounding thread tree.
+  const selectionPromptDraftProjectId = thread?.projectId ?? projectId ?? "";
+  const selectionPromptDraftThreadId = thread?.id ?? "";
+  const selectionPromptDraft = useMemo(
+    () =>
+      getPromptDraftAccessor({
+        kind: "thread",
+        projectId: selectionPromptDraftProjectId,
+        threadId: selectionPromptDraftThreadId,
+      }),
+    [selectionPromptDraftProjectId, selectionPromptDraftThreadId],
+  );
   const addQuoteToComposer = selectionPromptDraft.addQuote;
   // Desktop quote actions keep their existing focus handoff. Mobile web does
   // not focus inputs programmatically; see PromptBoxInternal.

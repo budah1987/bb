@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 
 import type { PromptTextMention } from "@bb/domain";
+import { EditorView } from "@tiptap/pm/view";
 import {
   createRef,
   useLayoutEffect,
@@ -2175,6 +2176,29 @@ describe("PromptBoxInternal compact layout", () => {
     expect(document.activeElement).toBe(editor);
   });
 
+  it("keeps DOM focus through submit when TipTap focus state is stale", async () => {
+    render(
+      <PromptBoxInternal
+        {...createPromptBoxProps({ value: "Send this follow-up" })}
+      />,
+    );
+
+    await waitForPromptFocus();
+    const editor = getPromptEditorElement();
+    const submit = screen.getByRole("button", { name: "Submit (Enter)" });
+
+    // TipTap derives isFocused from focus and blur events. Model the iOS
+    // window where its blur event has arrived but the contenteditable still
+    // owns native focus and therefore still controls the software keyboard.
+    editor.dispatchEvent(new FocusEvent("blur"));
+    expect(document.activeElement).toBe(editor);
+
+    expect(
+      fireEvent.pointerDown(submit, { button: 0, pointerType: "touch" }),
+    ).toBe(false);
+    expect(document.activeElement).toBe(editor);
+  });
+
   it("blurs the editor after a pointer submit when requested", async () => {
     const onSubmit = vi.fn();
     render(
@@ -2925,6 +2949,53 @@ describe("PromptBoxInternal mention triggers", () => {
 });
 
 describe("PromptBoxInternal prompt actions", () => {
+  it("keeps the custom caret reveal for composer-handled text pastes", async () => {
+    const { changes, promptBoxRef } = renderPromptBox("");
+
+    await focusPromptEnd(promptBoxRef);
+    await act(
+      () =>
+        new Promise<void>((resolve) => requestAnimationFrame(() => resolve())),
+    );
+
+    const scrollContainer = document.querySelector(
+      "[data-promptbox-editor-scroll]",
+    );
+    if (!(scrollContainer instanceof HTMLElement)) {
+      throw new Error("Prompt editor scroll container was not rendered");
+    }
+    const scrollRectSpy = vi
+      .spyOn(scrollContainer, "getBoundingClientRect")
+      .mockReturnValue(new DOMRect(0, 0, 320, 100));
+    const coordsAtPosSpy = vi
+      .spyOn(EditorView.prototype, "coordsAtPos")
+      .mockReturnValue({
+        left: 0,
+        right: 0,
+        top: 120,
+        bottom: 136,
+      });
+
+    try {
+      pastePlainText("first line\nsecond line");
+
+      await waitFor(() =>
+        expect(latestValue(changes)).toBe("first line\nsecond line"),
+      );
+      await act(
+        () =>
+          new Promise<void>((resolve) =>
+            requestAnimationFrame(() => resolve()),
+          ),
+      );
+
+      expect(coordsAtPosSpy).toHaveBeenCalled();
+    } finally {
+      coordsAtPosSpy.mockRestore();
+      scrollRectSpy.mockRestore();
+    }
+  });
+
   it("preserves blockquote structure when pasting copied blockquote html", async () => {
     const { changes, promptBoxRef } = renderPromptBox("");
 

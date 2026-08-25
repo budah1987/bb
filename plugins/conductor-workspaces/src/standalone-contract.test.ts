@@ -1,5 +1,5 @@
 import { readFileSync, readdirSync } from "node:fs";
-import { dirname, join, relative } from "node:path";
+import { dirname, join, relative, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
@@ -42,5 +42,38 @@ describe("portable plugin runtime contract", () => {
         "../../vitest.shared",
       );
     }
+  });
+
+  it("keeps the BBamir host capability boundary explicit", () => {
+    const capabilities = new Set<string>();
+
+    for (const file of sourceFiles(pluginRoot)) {
+      if (file.includes(`${sep}types${sep}`) || /\.test\.[jt]sx?$/.test(file)) {
+        continue;
+      }
+      const source = readFileSync(file, "utf8");
+      for (const match of source.matchAll(/\bexperimental_[A-Za-z0-9_]+\b/gu)) {
+        capabilities.add(match[0]);
+      }
+    }
+
+    expect([...capabilities].sort()).toEqual([
+      "experimental_canOpenForkDraft",
+      "experimental_closePane",
+      "experimental_contextBar",
+      "experimental_fallbackThreadId",
+      "experimental_gitRemoteUrl",
+      "experimental_githubAccountLogin",
+      "experimental_newThreadContextBar",
+      "experimental_newThreadEmptyState",
+      "experimental_openForkDraft",
+      "experimental_registerCloseHandler",
+      "experimental_sameEnvironment",
+      "experimental_spaces",
+      "experimental_startGithubWorkflow",
+      "experimental_threadList",
+      "experimental_useSidebarThreadActions",
+      "experimental_useSidebarThreads",
+    ]);
   });
 });

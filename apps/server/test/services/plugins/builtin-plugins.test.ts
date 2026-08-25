@@ -25,6 +25,7 @@ import {
   type PluginService,
 } from "../../../src/services/plugins/plugin-service.js";
 import { readPluginManifest } from "../../../src/services/plugins/manifest.js";
+import { isPluginSdkRangeSatisfied } from "../../../src/services/plugins/sdk-compat.js";
 import {
   BUILTIN_PLUGIN_NAMES,
   BUILTIN_PLUGINS,
@@ -228,6 +229,32 @@ describe("builtin plugin reconciliation", () => {
       );
       expect(manifest.branding.icon, builtin.name).toBe(
         expectedIcons.get(builtin.name),
+      );
+    }
+  });
+
+  it("keeps every BBamir product plugin on a compatible SDK contract", async () => {
+    const bbamirPluginNames = [
+      "attention",
+      "claude-auto-compact",
+      "conductor-workspaces",
+      "design-canvas",
+      "ingestion-desk",
+      "md-editor",
+      "t3sidebar",
+      "usage",
+    ];
+
+    for (const name of bbamirPluginNames) {
+      const manifest = await readPluginManifest(
+        resolveBuiltinPluginRootPath(name),
+      );
+      const sdkRange = manifest.bbPluginSdkRange;
+      if (sdkRange === undefined) {
+        throw new Error(`${name} must declare engines.bbPluginSdk`);
+      }
+      expect(isPluginSdkRangeSatisfied(sdkRange), `${name}: ${sdkRange}`).toBe(
+        true,
       );
     }
   });

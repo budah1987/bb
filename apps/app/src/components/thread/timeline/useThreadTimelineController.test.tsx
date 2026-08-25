@@ -37,10 +37,12 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
-function makeTimelineResponse(args: {
-  olderCursor?: ThreadTimelineResponse["timelinePage"]["olderCursor"];
-  rows?: ThreadTimelineResponse["rows"];
-} = {}): ThreadTimelineResponse {
+function makeTimelineResponse(
+  args: {
+    olderCursor?: ThreadTimelineResponse["timelinePage"]["olderCursor"];
+    rows?: ThreadTimelineResponse["rows"];
+  } = {},
+): ThreadTimelineResponse {
   const olderCursor = args.olderCursor ?? null;
   return {
     rows: args.rows ?? [],
@@ -97,6 +99,7 @@ describe("mergeLatestTimelineRows", () => {
 
     const merged = mergeLatestTimelineRows({
       latestRows: [serverRow],
+      latestWindowStartSequence: 0,
       loadedRows: [optimistic],
     });
 
@@ -111,6 +114,7 @@ describe("mergeLatestTimelineRows", () => {
 
     const merged = mergeLatestTimelineRows({
       latestRows: [newer],
+      latestWindowStartSequence: 5,
       loadedRows: [older],
     });
 
@@ -124,6 +128,7 @@ describe("mergeLatestTimelineRows", () => {
 
     const merged = mergeLatestTimelineRows({
       latestRows: [optimistic],
+      latestWindowStartSequence: 0,
       loadedRows: [optimistic],
     });
 
