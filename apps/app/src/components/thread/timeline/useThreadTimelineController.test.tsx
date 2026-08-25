@@ -37,10 +37,12 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
-function makeTimelineResponse(args: {
-  olderCursor?: ThreadTimelineResponse["timelinePage"]["olderCursor"];
-  rows?: ThreadTimelineResponse["rows"];
-} = {}): ThreadTimelineResponse {
+function makeTimelineResponse(
+  args: {
+    olderCursor?: ThreadTimelineResponse["timelinePage"]["olderCursor"];
+    rows?: ThreadTimelineResponse["rows"];
+  } = {},
+): ThreadTimelineResponse {
   const olderCursor = args.olderCursor ?? null;
   return {
     rows: args.rows ?? [],

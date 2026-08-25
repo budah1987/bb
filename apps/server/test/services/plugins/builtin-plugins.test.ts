@@ -253,10 +253,9 @@ describe("builtin plugin reconciliation", () => {
       if (sdkRange === undefined) {
         throw new Error(`${name} must declare engines.bbPluginSdk`);
       }
-      expect(
-        isPluginSdkRangeSatisfied(sdkRange),
-        `${name}: ${sdkRange}`,
-      ).toBe(true);
+      expect(isPluginSdkRangeSatisfied(sdkRange), `${name}: ${sdkRange}`).toBe(
+        true,
+      );
     }
   });
 

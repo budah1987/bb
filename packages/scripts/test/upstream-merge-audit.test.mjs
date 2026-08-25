@@ -233,9 +233,7 @@ describe("upstream merge audit", () => {
     const fixture = createFixture({
       ours: (root) => write(root, "ours.txt", "fork-only\n"),
       theirs: (root) => {
-        rmSync(
-          join(root, "packages/host-daemon-contract/src/commands.ts"),
-        );
+        rmSync(join(root, "packages/host-daemon-contract/src/commands.ts"));
         write(
           root,
           "packages/host-daemon-contract/src/protocol.ts",
@@ -327,7 +325,8 @@ describe("upstream merge audit", () => {
                   {
                     upstreamSha,
                     paths: [path],
-                    rationale: "Fixture attempts to spoof a compatibility test.",
+                    rationale:
+                      "Fixture attempts to spoof a compatibility test.",
                     compatibilityTests: [compatibilityTest],
                     approvedBy: "fixture@example.com",
                     approvedAt: "2026-08-18",
