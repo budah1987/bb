@@ -46,7 +46,8 @@ describe("TabPill", () => {
       name: "Show thread info panel",
     });
     expect(tab.getAttribute("aria-pressed")).toBe("true");
-    expect(tab.parentElement?.classList).toContain("bg-state-active");
+    expect(tab.parentElement?.classList).toContain("bg-state-hover");
+    expect(tab.parentElement?.className).toContain("--border-hairline");
     expect(screen.getByText("Info").classList).toContain("sr-only");
   });
 
@@ -64,6 +65,6 @@ describe("TabPill", () => {
 
     const shell = screen.getByRole("button", { name: "Browser" }).parentElement;
     expect(shell?.classList).toContain("after:h-0.5");
-    expect(shell?.classList).not.toContain("bg-state-active");
+    expect(shell?.classList).not.toContain("bg-state-hover");
   });
 });

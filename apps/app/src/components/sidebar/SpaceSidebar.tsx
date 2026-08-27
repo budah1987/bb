@@ -59,8 +59,7 @@ export function SpaceIconGlyph({ icon }: { icon: SpaceIcon }) {
 
 export function getSpaceSidebarStyle(color: SpaceColor): CSSProperties {
   return {
-    "--space-accent": `color-mix(in oklch, ${SPACE_COLOR_CSS[color]} 15%, var(--canvas))`,
-    "--space-border": `color-mix(in oklch, ${SPACE_COLOR_CSS[color]} 22%, var(--canvas))`,
+    "--space-accent": SPACE_COLOR_CSS[color],
   } as CSSProperties;
 }
 
@@ -81,7 +80,7 @@ export function SpaceDock({
 
   return (
     <div
-      className="flex shrink-0 items-center gap-1 overflow-x-auto border-t border-sidebar-border/70 bg-sidebar-accent/15 px-2 py-1.5 group-data-[collapsible=icon]:hidden"
+      className="flex shrink-0 items-center gap-0.5 overflow-x-auto border-t border-sidebar-border/50 bg-sidebar px-2 py-1 group-data-[collapsible=icon]:hidden"
       aria-label="Spaces"
     >
       {spaces.map((space, index) => (
@@ -92,10 +91,11 @@ export function SpaceDock({
               size="icon"
               variant="ghost"
               className={cn(
-                "h-8 shrink-0 items-center rounded-md text-muted-foreground transition-[background-color,color,box-shadow]",
+                "relative h-7 shrink-0 items-center rounded-sm text-muted-foreground transition-[background-color,color]",
                 space.id === activeSpaceId &&
-                  "w-auto max-w-40 justify-start gap-2 bg-[var(--space-accent)] px-2 text-sidebar-foreground shadow-[inset_0_0_0_1px_var(--space-border),0_1px_1px_color-mix(in_oklch,var(--ink)_6%,transparent)]",
-                space.id !== activeSpaceId && "size-8 justify-center px-0",
+                  "w-auto max-w-40 justify-start gap-1.5 bg-sidebar-accent/60 px-2 text-sidebar-foreground after:absolute after:inset-x-2 after:bottom-0 after:h-px after:bg-[var(--space-accent)]",
+                space.id !== activeSpaceId &&
+                  "size-7 justify-center px-0 hover:bg-sidebar-accent/40",
               )}
               aria-label={`${space.name}, Space ${index + 1}`}
               aria-pressed={space.id === activeSpaceId}
@@ -133,9 +133,9 @@ export function SpaceDock({
         size="icon"
         variant="ghost"
         className={cn(
-          "h-8 shrink-0 items-center rounded-md text-muted-foreground",
+          "h-7 shrink-0 items-center rounded-sm text-muted-foreground hover:bg-sidebar-accent/40",
           activeSpace
-            ? "size-8 justify-center px-0"
+            ? "size-7 justify-center px-0"
             : "w-full justify-start gap-2 px-2",
         )}
         aria-label="Create Space"

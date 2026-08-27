@@ -34,8 +34,8 @@ describe("SpaceDock", () => {
 
     expect(style["--sidebar"]).toBeUndefined();
     expect(style["--sidebar-accent"]).toBeUndefined();
-    expect(style["--space-accent"]).toContain("var(--pr-merged)");
-    expect(style["--space-border"]).toContain("var(--pr-merged)");
+    expect(style["--space-accent"]).toBe("var(--pr-merged)");
+    expect(style["--space-border"]).toBeUndefined();
   });
 
   it("names the active Space and keeps every Space selectable", () => {
@@ -60,7 +60,7 @@ describe("SpaceDock", () => {
     });
     expect(activeSpace.getAttribute("aria-pressed")).toBe("true");
     expect(activeSpace.className).toContain("w-auto");
-    expect(inactiveSpace.className).toContain("size-8");
+    expect(inactiveSpace.className).toContain("size-7");
     expect(inactiveSpace.querySelector("span")?.className).toContain(
       "place-items-center",
     );
