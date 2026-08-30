@@ -16,6 +16,7 @@ import {
   resolveWorkspaceSwipeTarget,
   shouldIgnoreWorkspaceSwipeTarget,
   WORKSPACE_SWIPE_COMMAND_CENTER_RATIO,
+  WORKSPACE_SWIPE_INTENT_PX,
   WORKSPACE_SWIPE_SETTLE_EASING,
   WORKSPACE_SWIPE_SETTLE_MS,
   type WorkspaceSwipeDirection,
@@ -584,6 +585,12 @@ export function CompactWorkspaceSwipeHost({
       const deltaY = moveEvent.clientY - session.startY;
 
       if (!session.isDragging) {
+        // The app-level compact navigation gesture owns every rightward swipe:
+        // it opens Recent, or the sidebar when Recent is already visible.
+        if (deltaX >= WORKSPACE_SWIPE_INTENT_PX) {
+          finish(false);
+          return;
+        }
         if (abandonsWorkspaceSwipe(deltaX, deltaY)) {
           finish(false);
           return;

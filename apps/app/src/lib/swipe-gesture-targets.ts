@@ -1,8 +1,8 @@
 /**
- * Shared arbitration for horizontal touch gestures (the sidebar's edge swipe
- * and the compact workspace swipe). Both must yield to the same things — a
- * horizontal scroller under the finger, and an expanded text selection the user
- * is still adjusting — so the predicates live once, here.
+ * Shared arbitration for horizontal touch gestures (the app-level compact
+ * navigation swipe and the workspace swipe). Both must yield to the same things
+ * — a horizontal scroller under the finger, and an expanded text selection the
+ * user is still adjusting — so the predicates live once, here.
  */
 
 function isHorizontallyScrollableElement(element: Element): boolean {
