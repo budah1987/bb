@@ -1986,6 +1986,32 @@ function finishTurn(
   });
 }
 
+async function recoverSessionAfterPromptFailure(
+  session: AcpThreadSession,
+): Promise<string | undefined> {
+  const providerThreadId = session.providerThreadId;
+  session.stopping = true;
+  dropQueuedTurnInputs(
+    session,
+    "ACP session recovery discarded the queued steer",
+  );
+  cancelPendingPermissions(session);
+  session.connection.kill();
+  removeSession(session);
+  await releaseCursorMcpApproval(session);
+
+  try {
+    await startAgentSession({
+      kind: "resume",
+      params: session.construction,
+      resumeProviderThreadId: providerThreadId,
+    });
+    return undefined;
+  } catch (error) {
+    return error instanceof Error ? error.message : String(error);
+  }
+}
+
 function runTurn(
   session: AcpThreadSession,
   firstInput: AcpPendingTurnInput,
@@ -2031,10 +2057,24 @@ function runTurn(
         );
         session.cancelRequested = false;
         if (!session.stopping && !session.connection.exited) {
-          emitSessionError(
-            session,
-            error instanceof Error ? error.message : String(error),
-          );
+          const promptError =
+            error instanceof Error ? error.message : String(error);
+          emitForSession(session, "error", {
+            threadId: session.bbThreadId,
+            message: promptError,
+          });
+          session.activePromptKind = null;
+          const recoveryError = await recoverSessionAfterPromptFailure(session);
+          sendNotification(BRIDGE_NOTIFICATION_METHODS.error, {
+            threadId: session.bbThreadId,
+            ...(session.providerThreadId !== ""
+              ? { providerThreadId: session.providerThreadId }
+              : {}),
+            message: recoveryError
+              ? `${promptError} (ACP session recovery failed: ${recoveryError})`
+              : promptError,
+          });
+          return;
         }
         session.activePromptKind = null;
         return;
@@ -2095,11 +2135,22 @@ function startCompaction(
               },
       );
     })
-    .catch((error: unknown) => {
+    .catch(async (error: unknown) => {
+      const promptError =
+        error instanceof Error ? error.message : String(error);
       finish({
         status: "failed",
-        error: error instanceof Error ? error.message : String(error),
+        error: promptError,
       });
+      if (!session.stopping && !session.connection.exited) {
+        const recoveryError = await recoverSessionAfterPromptFailure(session);
+        if (recoveryError !== undefined) {
+          sendNotification(BRIDGE_NOTIFICATION_METHODS.error, {
+            threadId: session.bbThreadId,
+            message: `${promptError} (ACP session recovery failed: ${recoveryError})`,
+          });
+        }
+      }
     });
 }
 

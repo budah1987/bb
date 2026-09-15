@@ -1561,6 +1561,53 @@ describe("acp bridge", () => {
     expect(agentMessageTexts()).toContain("echo:hello there");
   });
 
+  it("recovers the ACP session after an in-protocol prompt failure", async () => {
+    const promptErrorOnceFile = join(workspaceDir, "prompt-error-once");
+    const launchLog = join(workspaceDir, "agent-launches.log");
+    const { bbThreadId, providerThreadId } = await startThread({
+      envVars: {
+        FAKE_ACP_LAUNCH_LOG: launchLog,
+        FAKE_ACP_LOAD_SESSION: "1",
+        FAKE_ACP_PROMPT_ERROR_ONCE_FILE: promptErrorOnceFile,
+      },
+    });
+
+    const failedTurnId = sendTurnRequest("turn/start", providerThreadId, {
+      input: [{ type: "text", text: "fail once", mentions: [] }],
+    });
+    expect((await waitForResponse(failedTurnId)).error).toBeUndefined();
+    const promptError = await waitFor(
+      () => notifications("error").at(-1),
+      "prompt error notification",
+    );
+    expect(promptError.params).toMatchObject({
+      threadId: bbThreadId,
+      providerThreadId,
+      message: "Fake prompt failure",
+    });
+    expect(notifications("thread/identity")).toHaveLength(2);
+    expect(notifications("thread/identity").at(-1)?.params).toEqual({
+      threadId: bbThreadId,
+      providerThreadId,
+      sessionRestorable: true,
+    });
+
+    const recoveredTurnId = sendTurnRequest("turn/start", providerThreadId, {
+      input: [{ type: "text", text: "after recovery", mentions: [] }],
+    });
+    expect((await waitForResponse(recoveredTurnId)).error).toBeUndefined();
+    await waitFor(
+      () =>
+        threadEventsOfType("turn/completed").length >= 2
+          ? threadEventsOfType("turn/completed").at(-1)
+          : undefined,
+      "recovered turn completion",
+    );
+
+    expect(agentMessageTexts()).toContain("echo:after recovery");
+    expect(readFileSync(launchLog, "utf8").trim().split("\n")).toHaveLength(2);
+  });
+
   it("rebuilds the agent with environment from a later turn", async () => {
     const envVars = { FAKE_ACP_LOAD_SESSION: "1", FAKE_ACP_PROMPT_ERROR: "1" };
     const { providerThreadId } = await startThread({ envVars });

@@ -63,12 +63,15 @@
  *                              count model-discovery spawns in cache/TTL tests)
  * - FAKE_ACP_PROMPT_LOG      → append one JSON-encoded prompt text per request
  * - FAKE_ACP_PROMPT_ERROR=1  → reject every session/prompt request
+ * - FAKE_ACP_PROMPT_ERROR_ONCE_FILE
+ *                            → reject the first session/prompt request across
+ *                              agent process restarts
  * - FAKE_ACP_COMPACT_STOP_REASON
  *                            → stop reason returned for /compact
  */
 
 import { createInterface } from "node:readline";
-import { appendFileSync, renameSync, writeFileSync } from "node:fs";
+import { appendFileSync, existsSync, renameSync, writeFileSync } from "node:fs";
 
 const failLoad = process.env.FAKE_ACP_FAIL_LOAD === "1";
 const loadSession = process.env.FAKE_ACP_LOAD_SESSION === "1" || failLoad;
@@ -422,7 +425,14 @@ async function handlePrompt(message) {
     );
   }
 
-  if (process.env.FAKE_ACP_PROMPT_ERROR === "1") {
+  const promptErrorOnceFile = process.env.FAKE_ACP_PROMPT_ERROR_ONCE_FILE;
+  const shouldFailPrompt =
+    process.env.FAKE_ACP_PROMPT_ERROR === "1" ||
+    (promptErrorOnceFile !== undefined && !existsSync(promptErrorOnceFile));
+  if (shouldFailPrompt) {
+    if (promptErrorOnceFile !== undefined) {
+      writeFileSync(promptErrorOnceFile, "failed\n");
+    }
     activePromptId = null;
     send({
       jsonrpc: "2.0",
