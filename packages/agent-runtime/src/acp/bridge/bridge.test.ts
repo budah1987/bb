@@ -303,6 +303,28 @@ afterEach(async () => {
 });
 
 describe("acp bridge", () => {
+  it("surfaces ACP response details when session startup fails", async () => {
+    const id = sendRequest("thread/start", {
+      threadId: "startup-error-thread",
+      cwd: workspaceDir,
+      agent: {
+        command: process.execPath,
+        args: [FAKE_AGENT_PATH],
+      },
+      envVars: {
+        FAKE_ACP_SESSION_NEW_ERROR_DETAIL:
+          "reui: Authentication required. Sign in with ReUI.",
+      },
+      permissionMode: "full",
+      permissionEscalation: null,
+      workspaceWriteRoots: [workspaceDir],
+    });
+
+    expect((await waitForResponse(id)).error?.message).toBe(
+      "Internal error: reui: Authentication required. Sign in with ReUI.",
+    );
+  });
+
   it("answers initialize and lists grouped models without spawning an agent", async () => {
     const initializeId = sendRequest("initialize", {
       clientInfo: { name: "bb", version: "1.0.0" },
@@ -1180,6 +1202,47 @@ describe("acp bridge", () => {
     });
     expect(notifications("acp/turn/started")).toHaveLength(1);
     expect(agentMessageTexts()).toContain("echo:hello there");
+  });
+
+  it("recovers the ACP session after an in-protocol prompt failure", async () => {
+    const promptErrorOnceFile = join(workspaceDir, "prompt-error-once");
+    const launchLog = join(workspaceDir, "agent-launches.log");
+    const { bbThreadId, providerThreadId } = await startThread({
+      envVars: {
+        FAKE_ACP_LAUNCH_LOG: launchLog,
+        FAKE_ACP_LOAD_SESSION: "1",
+        FAKE_ACP_PROMPT_ERROR_ONCE_FILE: promptErrorOnceFile,
+      },
+    });
+
+    const failedTurnId = sendRequest("turn/start", {
+      threadId: providerThreadId,
+      input: [{ type: "text", text: "fail once", mentions: [] }],
+    });
+    await waitForResponse(failedTurnId);
+    const promptError = await waitFor(
+      () => notifications("error").at(-1),
+      "prompt error notification",
+    );
+    expect(promptError.params).toEqual({
+      threadId: bbThreadId,
+      message: "Fake prompt failure",
+    });
+    expect(notifications("thread/identity")).toHaveLength(2);
+    expect(notifications("thread/identity").at(-1)?.params).toEqual({
+      threadId: bbThreadId,
+      providerThreadId,
+    });
+
+    const recoveredTurnId = sendRequest("turn/start", {
+      threadId: providerThreadId,
+      input: [{ type: "text", text: "after recovery", mentions: [] }],
+    });
+    await waitForResponse(recoveredTurnId);
+    await waitForTurnCompleted();
+
+    expect(agentMessageTexts()).toContain("echo:after recovery");
+    expect(readFileSync(launchLog, "utf8").trim().split("\n")).toHaveLength(2);
   });
 
   it("runs manual compaction as a provider-local maintenance prompt", async () => {

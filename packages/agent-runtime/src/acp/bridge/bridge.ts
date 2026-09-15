@@ -131,6 +131,8 @@ interface AcpThreadSession {
   policy: AcpSessionPolicy;
   cwd: string;
   pendingInstructions: string | undefined;
+  /** Launch policy retained so an in-protocol prompt failure can be recovered. */
+  resumeParams: AcpBridgeThreadStartParams;
   activePromptKind: "turn" | "compaction" | null;
   queuedInputs: PromptInput[][];
   /** True while a session/prompt request is outstanding. */
@@ -1426,6 +1428,7 @@ async function startAgentSession(
   request: AcpSessionStartParams,
 ): Promise<AcpThreadSession> {
   const params = request.params;
+  const resumeParams: AcpBridgeThreadStartParams = params;
   const bbThreadId = params.threadId;
 
   const existing = sessionsByBbThreadId.get(bbThreadId);
@@ -1487,6 +1490,7 @@ async function startAgentSession(
     },
     cwd: params.cwd,
     pendingInstructions: params.instructions,
+    resumeParams,
     activePromptKind: null,
     queuedInputs: [],
     promptRequestPending: false,
@@ -1715,6 +1719,27 @@ function finishTurn(
   });
 }
 
+async function recoverSessionAfterPromptFailure(
+  session: AcpThreadSession,
+): Promise<string | null> {
+  const providerThreadId = session.providerThreadId;
+  session.stopping = true;
+  session.queuedInputs = [];
+  cancelPendingPermissions(session);
+  session.connection.kill();
+  removeSession(session);
+
+  try {
+    await startAgentSession({
+      kind: "resume",
+      params: { ...session.resumeParams, providerThreadId },
+    });
+    return null;
+  } catch (error) {
+    return error instanceof Error ? error.message : String(error);
+  }
+}
+
 function runTurn(session: AcpThreadSession, firstInput: PromptInput[]): void {
   session.activePromptKind = "turn";
   sendNotification(ACP_TURN_STARTED_METHOD, { threadId: session.bbThreadId });
@@ -1754,9 +1779,14 @@ function runTurn(session: AcpThreadSession, firstInput: PromptInput[]): void {
         // An exited agent already produced an error notification from the
         // connection's exit handler; only report in-protocol prompt failures.
         if (!session.stopping && !session.connection.exited) {
+          const recoveryError = await recoverSessionAfterPromptFailure(session);
+          const promptError =
+            error instanceof Error ? error.message : String(error);
           sendNotification("error", {
             threadId: session.bbThreadId,
-            message: error instanceof Error ? error.message : String(error),
+            message: recoveryError
+              ? `${promptError} (ACP session recovery failed: ${recoveryError})`
+              : promptError,
           });
         }
         return;
@@ -1813,11 +1843,15 @@ function startCompaction(session: AcpThreadSession): void {
       });
     })
     .catch((error: unknown) => {
-      const message = error instanceof Error ? error.message : String(error);
-      sendNotification(ACP_COMPACTION_COMPLETED_METHOD, {
-        threadId: session.bbThreadId,
-        status: "failed",
-        error: message,
+      return recoverSessionAfterPromptFailure(session).then((recoveryError) => {
+        const message = error instanceof Error ? error.message : String(error);
+        sendNotification(ACP_COMPACTION_COMPLETED_METHOD, {
+          threadId: session.bbThreadId,
+          status: "failed",
+          error: recoveryError
+            ? `${message} (ACP session recovery failed: ${recoveryError})`
+            : message,
+        });
       });
     })
     .finally(() => {

@@ -37,12 +37,14 @@
  *                              count model-discovery spawns in cache/TTL tests)
  * - FAKE_ACP_PROMPT_LOG      → append one JSON-encoded prompt text per request
  * - FAKE_ACP_PROMPT_ERROR=1  → reject every session/prompt request
+ * - FAKE_ACP_PROMPT_ERROR_ONCE_FILE
+ *                            → reject once across agent restarts
  * - FAKE_ACP_COMPACT_STOP_REASON
  *                            → stop reason returned for /compact
  */
 
 import { createInterface } from "node:readline";
-import { appendFileSync, writeFileSync } from "node:fs";
+import { appendFileSync, existsSync, writeFileSync } from "node:fs";
 
 const failLoad = process.env.FAKE_ACP_FAIL_LOAD === "1";
 const loadSession = process.env.FAKE_ACP_LOAD_SESSION === "1" || failLoad;
@@ -242,7 +244,13 @@ async function handlePrompt(message) {
     );
   }
 
-  if (process.env.FAKE_ACP_PROMPT_ERROR === "1") {
+  const promptErrorOnceFile = process.env.FAKE_ACP_PROMPT_ERROR_ONCE_FILE;
+  const shouldFailPromptOnce =
+    promptErrorOnceFile !== undefined && !existsSync(promptErrorOnceFile);
+  if (shouldFailPromptOnce) {
+    writeFileSync(promptErrorOnceFile, "failed\n");
+  }
+  if (process.env.FAKE_ACP_PROMPT_ERROR === "1" || shouldFailPromptOnce) {
     activePromptId = null;
     send({
       jsonrpc: "2.0",
@@ -395,6 +403,18 @@ async function handleMessage(message) {
     }
     case "session/new":
       if (!requireAuthenticated(message)) {
+        return;
+      }
+      if (process.env.FAKE_ACP_SESSION_NEW_ERROR_DETAIL) {
+        send({
+          jsonrpc: "2.0",
+          id: message.id,
+          error: {
+            code: -32603,
+            message: "Internal error",
+            data: { details: process.env.FAKE_ACP_SESSION_NEW_ERROR_DETAIL },
+          },
+        });
         return;
       }
       activeSessionId = sessionId;

@@ -57,6 +57,27 @@ export class AcpAgentExitedError extends Error {
   }
 }
 
+export class AcpAgentResponseError extends Error {
+  readonly code: number | undefined;
+  readonly data: unknown;
+
+  constructor(args: { code?: number; message?: string; data?: unknown }) {
+    const detail =
+      typeof args.data === "object" &&
+      args.data !== null &&
+      "details" in args.data &&
+      typeof args.data.details === "string"
+        ? args.data.details
+        : undefined;
+    const message =
+      args.message ?? `ACP agent returned error code ${args.code ?? "unknown"}`;
+    super(detail && detail !== message ? `${message}: ${detail}` : message);
+    this.name = "AcpAgentResponseError";
+    this.code = args.code;
+    this.data = args.data;
+  }
+}
+
 interface PendingAgentRequest {
   resolve(value: unknown): void;
   reject(error: Error): void;
@@ -66,7 +87,7 @@ interface ParsedAgentMessage {
   id?: string | number;
   method?: string;
   result?: unknown;
-  error?: { code?: number; message?: string };
+  error?: { code?: number; message?: string; data?: unknown };
   params?: unknown;
 }
 
@@ -139,12 +160,7 @@ export function createAcpAgentConnection(
         }
         pending.delete(numericId);
         if (message.error) {
-          request.reject(
-            new Error(
-              message.error.message ??
-                `ACP agent returned error code ${message.error.code ?? "unknown"}`,
-            ),
-          );
+          request.reject(new AcpAgentResponseError(message.error));
         } else {
           request.resolve(message.result);
         }
