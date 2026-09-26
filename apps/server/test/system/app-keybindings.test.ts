@@ -84,7 +84,10 @@ describe("app keybindings", () => {
         commandPair(paneCommand, THREAD_JUMP_APP_COMMAND_IDS[index]),
     );
     const allowedCollisions = DEFAULT_KEYBINDING_CLIENTS.flatMap((client) =>
-      intentionalCommandPairs.map((pair) => `${client.name}:${pair}`),
+      [
+        ...intentionalCommandPairs,
+        commandPair("composer.focus", "thread.copyPullRequestUrl"),
+      ].map((pair) => `${client.name}:${pair}`),
     );
     expect([...actualCollisions].sort()).toEqual(allowedCollisions.sort());
   });

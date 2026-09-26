@@ -301,6 +301,7 @@ import { useAppCommandHandler } from "@/components/commands/AppCommandProvider";
 import { DefaultPaneContextProvider, usePaneContext } from "./PaneContext";
 import { ThreadArchiveCommandHandler } from "./ThreadArchiveCommandHandler";
 import { ThreadRenameCommandHandler } from "./ThreadRenameCommandHandler";
+import { ThreadCopyPullRequestUrlCommandHandler } from "./ThreadCopyPullRequestUrlCommandHandler";
 
 const SimulatorTabContent = lazy(() =>
   import("@/components/secondary-panel/SimulatorTabContent").then((module) => ({
@@ -3646,6 +3647,7 @@ function ThreadDetailViewInternal(props: ThreadDetailViewInternalProps) {
     <>
       <ThreadArchiveCommandHandler thread={thread} />
       <ThreadRenameCommandHandler thread={thread} />
+      <ThreadCopyPullRequestUrlCommandHandler url={pullRequest?.url ?? null} />
       <PluginThreadPanelNavigationProvider
         openThreadPanel={handleOpenTimelinePluginPanel}
       >

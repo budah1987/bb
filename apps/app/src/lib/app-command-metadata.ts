@@ -56,6 +56,11 @@ export const APP_COMMAND_GROUPS: readonly AppCommandGroup[] = [
         "Archive the focused thread.",
       ),
       command(
+        "thread.copyPullRequestUrl",
+        "Copy pull request URL",
+        "Copy the focused thread’s pull request URL when available.",
+      ),
+      command(
         "thread.previous",
         "Previous thread",
         "Open the previous visible sidebar thread.",
