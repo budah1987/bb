@@ -161,7 +161,7 @@ Linux gets both update paths, but they are not equivalent:
   install and reports that a newer release exists.
 - Self-installing auto-update runs only inside an AppImage whose directory the
   app can write to. electron-updater detects the AppImage through the `APPIMAGE`
-  environment variable, and its install step unlinks the running file *before*
+  environment variable, and its install step unlinks the running file _before_
   moving the replacement in — so a read-only directory would delete the app and
   leave nothing behind. Both the startup check and the install handler verify
   write and search access on the parent directory first.
@@ -190,6 +190,8 @@ node scripts/bump-version.mjs <new-version>
 
 Then commit and ship through the normal `sawyer-next` → `main` flow. You can also
 use `--patch`, `--minor`, or `--major` instead of an explicit version.
+For an upstream core release, use `--fork-version X.Y.Z` to derive the next
+`X.Y.Z-bbamir.N` version from the two locked package manifests.
 
 CI enforces this lockstep. Direct edits that leave
 `packages/bb-app/package.json` and `apps/desktop/package.json` with different
@@ -198,6 +200,9 @@ release; use `scripts/bump-version.mjs` so both files move together.
 
 The desktop release tag uses the locked version: `desktop-v<version>` for
 immutable releases and `desktop-latest` for the moving pointer.
+`scripts/run-electron-builder.mjs` derives and injects the authoritative
+publish URL from `release-feed.json`; the base electron-builder config is not a
+standalone publish configuration.
 
 `build-desktop.yml` builds macOS and Linux in parallel jobs, then publishes
 both from one job. The moving release resets all of its assets on each publish,
@@ -205,10 +210,10 @@ so a single publisher is what keeps one platform from deleting the other's
 binaries. Each platform has its own update feed file inside the same release
 tag:
 
-| Platform | Artifacts               | electron-updater metadata | Version feed                 |
-| -------- | ----------------------- | ------------------------- | ---------------------------- |
-| macOS    | `.dmg`, `.zip` (arm64)  | `latest-mac.yml`          | `desktop-version.json`       |
-| Linux    | `.AppImage` (x64)       | `latest-linux.yml`        | `desktop-version-linux.json` |
+| Platform | Artifacts              | electron-updater metadata | Version feed                 |
+| -------- | ---------------------- | ------------------------- | ---------------------------- |
+| macOS    | `.dmg`, `.zip` (arm64) | `latest-mac.yml`          | `desktop-version.json`       |
+| Linux    | `.AppImage` (x64)      | `latest-linux.yml`        | `desktop-version-linux.json` |
 
 macOS keeps the unsuffixed feed name because released macOS builds already
 request it. Linux artifacts are unsigned; only the macOS binaries wait on the
@@ -238,7 +243,7 @@ The nightly desktop is a separate installation:
 - icon: `assets/icon-nightly.icns` and `assets/icon-nightly.png`
 
 Download it from
-[`desktop-nightly`](https://github.com/get-bb/bb/releases/tag/desktop-nightly)
+[`desktop-nightly`](https://github.com/budah1987/bb/releases/tag/desktop-nightly)
 or run the CLI build with:
 
 ```bash

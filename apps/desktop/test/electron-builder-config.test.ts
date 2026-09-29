@@ -92,7 +92,7 @@ const electronBuilderFilePatternSchema = z.union([
   electronBuilderFileSetSchema,
 ]);
 
-const electronBuilderConfigSchema = z
+const electronBuilderBaseConfigSchema = z
   .object({
     afterPack: z.string().min(1),
     asarUnpack: z.array(z.string().min(1)),
@@ -108,17 +108,20 @@ const electronBuilderConfigSchema = z
     appId: z.string().min(1),
     artifactName: z.string().min(1),
     productName: z.string().min(1),
-    publish: z.tuple([
-      z
-        .object({
-          channel: z.enum(["latest", "nightly"]),
-          provider: z.literal("generic"),
-          url: z.string().min(1),
-        })
-        .passthrough(),
-    ]),
   })
   .passthrough();
+
+const electronBuilderConfigSchema = electronBuilderBaseConfigSchema.extend({
+  publish: z.tuple([
+    z
+      .object({
+        channel: z.enum(["latest", "nightly"]),
+        provider: z.literal("generic"),
+        url: z.string().min(1),
+      })
+      .passthrough(),
+  ]),
+});
 
 const desktopPackageJsonSchema = z
   .object({
@@ -295,7 +298,9 @@ describe("electron-builder signing config", () => {
       resolve(desktopPackageRoot, "electron-builder.config.json"),
       "utf8",
     );
-    const config = electronBuilderConfigSchema.parse(JSON.parse(configText));
+    const config = electronBuilderBaseConfigSchema.parse(
+      JSON.parse(configText),
+    );
 
     expect(config.asarUnpack).toContain("dist/bb-app-bridge.mjs");
     expect(config.asarUnpack).not.toContain("dist/bb-app-bridge.js");
@@ -306,7 +311,9 @@ describe("electron-builder signing config", () => {
       resolve(desktopPackageRoot, "electron-builder.config.json"),
       "utf8",
     );
-    const config = electronBuilderConfigSchema.parse(JSON.parse(configText));
+    const config = electronBuilderBaseConfigSchema.parse(
+      JSON.parse(configText),
+    );
     const hookPath = "scripts/prepare-native-modules.cjs";
 
     expect(config.afterPack).toBe(hookPath);
@@ -381,7 +388,9 @@ describe("electron-builder signing config", () => {
       resolve(desktopPackageRoot, "electron-builder.config.json"),
       "utf8",
     );
-    const config = electronBuilderConfigSchema.parse(JSON.parse(configText));
+    const config = electronBuilderBaseConfigSchema.parse(
+      JSON.parse(configText),
+    );
 
     expect(config.npmRebuild).toBe(false);
   });
@@ -391,7 +400,9 @@ describe("electron-builder signing config", () => {
       resolve(desktopPackageRoot, "electron-builder.config.json"),
       "utf8",
     );
-    const config = electronBuilderConfigSchema.parse(JSON.parse(configText));
+    const config = electronBuilderBaseConfigSchema.parse(
+      JSON.parse(configText),
+    );
 
     expect(config.files).toContain("!**/*.map");
   });
@@ -401,7 +412,9 @@ describe("electron-builder signing config", () => {
       resolve(desktopPackageRoot, "electron-builder.config.json"),
       "utf8",
     );
-    const config = electronBuilderConfigSchema.parse(JSON.parse(configText));
+    const config = electronBuilderBaseConfigSchema.parse(
+      JSON.parse(configText),
+    );
 
     // electron-builder prunes *.d.ts while collecting node_modules. The
     // scaffold source is user-editable template content, so copy that subtree
@@ -474,7 +487,9 @@ describe("electron-builder signing config", () => {
       resolve(desktopPackageRoot, "electron-builder.config.json"),
       "utf8",
     );
-    const config = electronBuilderConfigSchema.parse(JSON.parse(configText));
+    const config = electronBuilderBaseConfigSchema.parse(
+      JSON.parse(configText),
+    );
 
     expect(config.mac.entitlements).toBe("build/entitlements.mac.plist");
     expect(config.mac.entitlementsInherit).toBe(
@@ -496,7 +511,9 @@ describe("electron-builder signing config", () => {
       resolve(desktopPackageRoot, "electron-builder.config.json"),
       "utf8",
     );
-    const config = electronBuilderConfigSchema.parse(JSON.parse(configText));
+    const config = electronBuilderBaseConfigSchema.parse(
+      JSON.parse(configText),
+    );
 
     expect(config.mac.target).toEqual([
       { arch: ["arm64"], target: "dmg" },
@@ -509,7 +526,9 @@ describe("electron-builder signing config", () => {
       resolve(desktopPackageRoot, "electron-builder.config.json"),
       "utf8",
     );
-    const config = electronBuilderConfigSchema.parse(JSON.parse(configText));
+    const config = electronBuilderBaseConfigSchema.parse(
+      JSON.parse(configText),
+    );
 
     expect(config.linux).toMatchObject({
       category: "Development",
@@ -526,7 +545,9 @@ describe("electron-builder signing config", () => {
       resolve(desktopPackageRoot, "electron-builder.config.json"),
       "utf8",
     );
-    const config = electronBuilderConfigSchema.parse(JSON.parse(configText));
+    const config = electronBuilderBaseConfigSchema.parse(
+      JSON.parse(configText),
+    );
     const entitlementPaths = [
       config.mac.entitlements,
       config.mac.entitlementsInherit,
@@ -542,16 +563,18 @@ describe("electron-builder signing config", () => {
     }
   });
 
-  it("keeps the updater provider pointed at desktop-latest release assets", async () => {
+  it("injects the updater provider into the resolved build config", async () => {
     const configText = await readFile(
       resolve(desktopPackageRoot, "electron-builder.config.json"),
       "utf8",
     );
-    const config = electronBuilderConfigSchema.parse(JSON.parse(configText));
+    const baseConfig = JSON.parse(configText) as Record<string, unknown>;
+    const { config } = await readResolvedConfig({});
 
+    expect(baseConfig).not.toHaveProperty("publish");
     expect(config.publish[0]).toMatchObject(DESKTOP_AUTO_UPDATE_FEED_CONFIG);
     expect(DESKTOP_AUTO_UPDATE_FEED_CONFIG.url).toBe(
-      "https://github.com/get-bb/bb/releases/download/desktop-latest/",
+      "https://github.com/budah1987/bb/releases/download/desktop-latest/",
     );
   });
 

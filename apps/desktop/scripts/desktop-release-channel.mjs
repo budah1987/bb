@@ -1,3 +1,5 @@
+export { createDesktopUpdateReleaseBaseUrl } from "./release-feed.mjs";
+
 export const DESKTOP_RELEASE_CHANNEL_ENV_NAME = "BB_DESKTOP_RELEASE_CHANNEL";
 
 export function resolveDesktopReleaseChannel(env) {
@@ -59,8 +61,4 @@ export function createDesktopReleaseConfig(channel) {
       macos: "latest-mac.yml",
     },
   };
-}
-
-export function createDesktopUpdateReleaseBaseUrl(releaseTag) {
-  return `https://github.com/get-bb/bb/releases/download/${releaseTag}/`;
 }

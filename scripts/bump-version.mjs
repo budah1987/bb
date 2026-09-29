@@ -2,11 +2,16 @@ import { randomUUID } from "node:crypto";
 import { readFile, rename, unlink, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { compareSemver, resolveVersionArgument } from "./lib/semver.mjs";
+import {
+  compareSemver,
+  deriveForkVersion,
+  parseSemver,
+  resolveVersionArgument,
+} from "./lib/semver.mjs";
 
 const scriptPath = fileURLToPath(import.meta.url);
 const USAGE =
-  "Usage: node scripts/bump-version.mjs <new-version>|--patch|--minor|--major";
+  "Usage: node scripts/bump-version.mjs <new-version>|--patch|--minor|--major|--fork-version <X.Y.Z>";
 const defaultRepoRoot = resolve(dirname(scriptPath), "..");
 const packageTargets = [
   {
@@ -135,7 +140,9 @@ export async function bumpVersion(options) {
   const log = options.log;
   const fileSystem = options.fileSystem ?? defaultFileSystem;
 
-  if (args.length !== 1) {
+  const forkMode = args[0] === "--fork-version";
+
+  if ((!forkMode && args.length !== 1) || (forkMode && args.length !== 2)) {
     throw new Error(USAGE);
   }
 
@@ -145,13 +152,33 @@ export async function bumpVersion(options) {
     ),
   );
   const maxCurrentVersion = findMaxCurrentVersion(packageReads);
-  const newVersion = resolveVersionArgument({
-    argument: args[0],
-    currentVersion: maxCurrentVersion,
-    usage: USAGE,
-  });
+  const newVersion = forkMode
+    ? deriveForkVersion({
+        currentVersions: packageReads.map(
+          (packageRead) => packageRead.packageJson.version,
+        ),
+        upstreamCore: args[1],
+      })
+    : resolveVersionArgument({
+        argument: args[0],
+        currentVersion: maxCurrentVersion,
+        usage: USAGE,
+      });
+  const newParsed = parseSemver(newVersion);
+  const maxCurrentParsed = parseSemver(maxCurrentVersion);
+  const equalCoreStableFork =
+    forkMode &&
+    newParsed !== null &&
+    maxCurrentParsed !== null &&
+    newParsed.major === maxCurrentParsed.major &&
+    newParsed.minor === maxCurrentParsed.minor &&
+    newParsed.patch === maxCurrentParsed.patch &&
+    maxCurrentParsed.prerelease.length === 0;
 
-  if (compareSemver(newVersion, maxCurrentVersion) <= 0) {
+  if (
+    compareSemver(newVersion, maxCurrentVersion) <= 0 &&
+    !equalCoreStableFork
+  ) {
     throw new Error(
       `New version ${newVersion} must be greater than current max ${maxCurrentVersion} across ${createPackageVersionSummary(packageReads)}.`,
     );
@@ -167,7 +194,9 @@ export async function bumpVersion(options) {
   }));
 
   await writePackageTargetsAtomically({ fileSystem, updates });
-  log(`Bumped: bb-app + @bb/desktop → ${newVersion}`);
+  log(
+    `${forkMode ? "Forked" : "Bumped"}: bb-app + @bb/desktop → ${newVersion}`,
+  );
 }
 
 async function main() {

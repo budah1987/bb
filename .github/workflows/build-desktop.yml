@@ -374,6 +374,6 @@ jobs:
             echo "- prerelease version: ${IS_PRERELEASE}"
             echo "- stable release publication requested and allowed: ${SHOULD_PUBLISH}"
             echo "- macOS release binary upload enabled: ${PUBLISH_MACOS_BINARIES}"
-            echo "- macOS feed URL: https://github.com/get-bb/bb/releases/download/desktop-latest/desktop-version.json"
-            echo "- Linux feed URL: https://github.com/get-bb/bb/releases/download/desktop-latest/desktop-version-linux.json"
+            echo "- macOS feed URL: https://github.com/budah1987/bb/releases/download/desktop-latest/desktop-version.json"
+            echo "- Linux feed URL: https://github.com/budah1987/bb/releases/download/desktop-latest/desktop-version-linux.json"
           } >> "$GITHUB_STEP_SUMMARY"
