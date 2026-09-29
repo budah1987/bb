@@ -38,6 +38,10 @@ import {
   type ForkThreadCreateSeed,
 } from "./fork-thread-request";
 import { getThreadDisplayTitle } from "./thread-title";
+import {
+  buildChildThreadComposeState,
+  canStartChildThread,
+} from "./child-thread-compose";
 import { sdk } from "./sdk";
 import { threadDefaultExecutionOptionsQueryKey } from "@/hooks/queries/query-keys";
 
@@ -188,7 +192,16 @@ export function useSidebarThreadActions(): PluginSidebarThreadActions {
         navigate(getThreadRoutePath({ projectId, threadId }));
       },
       openNewThread(options) {
-        const projectId = options?.projectId;
+        const parentEntry =
+          options?.experimental_parentThreadId === undefined
+            ? undefined
+            : entriesById.get(options.experimental_parentThreadId);
+        const childParent =
+          parentEntry !== undefined && canStartChildThread(parentEntry)
+            ? parentEntry
+            : undefined;
+        // A child must live in its parent's project.
+        const projectId = childParent?.projectId ?? options?.projectId;
         if (projectId !== undefined) {
           // The compose screen reads its project from this stored selection,
           // and the personal project has no route of its own — without this a
@@ -218,13 +231,17 @@ export function useSidebarThreadActions(): PluginSidebarThreadActions {
         const state =
           options?.focusPrompt ||
           options?.experimental_startGithubWorkflow ||
-          sameEnvironmentState !== null
+          sameEnvironmentState !== null ||
+          childParent !== undefined
             ? {
                 ...(options?.focusPrompt ? { focusPrompt: true } : {}),
                 ...(options?.experimental_startGithubWorkflow
                   ? { startGithubWorkflow: true }
                   : {}),
                 ...(sameEnvironmentState ?? {}),
+                ...(childParent !== undefined
+                  ? buildChildThreadComposeState(childParent)
+                  : {}),
               }
             : undefined;
         navigate(

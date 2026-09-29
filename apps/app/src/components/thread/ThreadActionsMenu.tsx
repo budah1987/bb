@@ -27,6 +27,8 @@ import { useIsCompactViewport } from "@bb/shared-ui/hooks/use-compact-viewport";
 import { cn } from "@bb/shared-ui/lib/utils";
 import { getThreadReadToggleAction } from "@/components/sidebar/threadReadState";
 import { useSpaceActions } from "@/components/sidebar/SpaceActionsContext";
+import { useOpenNewChildThread } from "@/hooks/useOpenNewChildThread";
+import { canStartChildThread } from "@/lib/child-thread-compose";
 import { useThreadActions } from "./ThreadActionsProvider";
 
 interface ThreadActionsMenuBaseProps {
@@ -219,6 +221,7 @@ function ThreadActionsMenuItems({
     toggleRead,
     unarchiveThread,
   } = useThreadActions();
+  const openNewChildThread = useOpenNewChildThread();
   const isCompactViewport = useIsCompactViewport();
   const isDrawer = surface === "dropdown" && isCompactViewport;
   const showSeparators = !isDrawer;
@@ -249,20 +252,29 @@ function ThreadActionsMenuItems({
         </>
       ) : null}
       {onOpenInSplit ? (
-        <>
-          <ThreadActionMenuItem
-            surface={surface}
-            icon="Columns2"
-            onSelect={() => {
-              onOpenInSplit();
-            }}
-          >
-            Open in split
-          </ThreadActionMenuItem>
-          {showSeparators ? (
-            <ThreadActionMenuSeparator surface={surface} />
-          ) : null}
-        </>
+        <ThreadActionMenuItem
+          surface={surface}
+          icon="Columns2"
+          onSelect={() => {
+            onOpenInSplit();
+          }}
+        >
+          Open in split
+        </ThreadActionMenuItem>
+      ) : null}
+      {canStartChildThread(thread) ? (
+        <ThreadActionMenuItem
+          surface={surface}
+          icon="CornerDownRight"
+          onSelect={() => {
+            openNewChildThread(thread);
+          }}
+        >
+          New child thread
+        </ThreadActionMenuItem>
+      ) : null}
+      {(onOpenInSplit || canStartChildThread(thread)) && showSeparators ? (
+        <ThreadActionMenuSeparator surface={surface} />
       ) : null}
       {/* Quick status toggles. */}
       <ThreadActionMenuItem

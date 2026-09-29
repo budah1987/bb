@@ -657,6 +657,13 @@ export interface PluginSidebarThreadActions {
     };
     /** Open bb's GitHub branch / pull-request workflow chooser. */
     experimental_startGithubWorkflow?: boolean;
+    /**
+     * Create the thread as a child of this thread. The composer shows the
+     * parent and switches to its project; the user can still remove it.
+     * Unknown or archived thread ids are ignored. Experimental: see
+     * docs/api_to_audit.md.
+     */
+    experimental_parentThreadId?: string;
   }): void;
   /**
    * Whether this thread can open as a temporary fork draft. The host requires

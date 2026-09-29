@@ -106,6 +106,19 @@ allowing custom sidebars to offer the same repository `+` interaction.
 Before stabilization, audit whether workflow launch should become a general
 typed new-thread intent and whether non-GitHub providers need the same surface.
 
+## `PluginSidebarThreadActions.openNewThread({ experimental_parentThreadId })`
+
+Opens the new-thread composer with a thread preselected as the parent, so a
+custom sidebar can offer the same "New child thread" action as bb's thread
+menu. The host switches the composer to the parent's project, shows a
+removable "Child of …" pill, and sends `parentThreadId` on create. Unknown or
+archived ids are ignored.
+
+Before stabilization, audit whether this should become part of a general typed
+new-thread intent with `experimental_startGithubWorkflow`, and whether the
+composer should expose hierarchy-depth errors before submit instead of relying
+on the server's rejection.
+
 ## `bb.agents.registerTool({ experimental_statusLabels })`
 
 **What it does.** Lets a native plugin tool supply one short label while it is
