@@ -1,0 +1,313 @@
+name: Upstream Candidate
+
+on:
+  schedule:
+    - cron: "0 9 * * *"
+  workflow_dispatch:
+    inputs:
+      upstream_ref:
+        description: Upstream ref to merge
+        required: true
+        type: string
+        default: main
+
+env:
+  PRIMARY_NODE_VERSION: 22.x
+  PNPM_VERSION: 9.15.0
+  UPSTREAM_REMOTE: https://github.com/get-bb/bb.git
+
+permissions:
+  contents: read
+
+concurrency:
+  group: upstream-candidate-${{ inputs.upstream_ref || 'main' }}
+  cancel-in-progress: false
+
+jobs:
+  audit:
+    name: Audit and build candidate
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+    outputs:
+      decision: ${{ steps.audit.outputs.decision }}
+      candidate_sha: ${{ steps.candidate.outputs.candidate_sha }}
+      upstream_sha: ${{ steps.fetch.outputs.upstream_sha }}
+      base_sha: ${{ steps.fetch.outputs.base_sha }}
+      merge_base_sha: ${{ steps.audit.outputs.merge_base_sha }}
+      branch: ${{ steps.candidate.outputs.branch }}
+      checks: ${{ steps.check_result.outputs.result }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: bbamir/main
+          fetch-depth: 0
+          persist-credentials: false
+
+      - id: fetch
+        name: Fetch immutable upstream commit
+        env:
+          UPSTREAM_REF: ${{ inputs.upstream_ref || 'main' }}
+        run: |
+          set -euo pipefail
+          git remote add upstream "$UPSTREAM_REMOTE"
+          git fetch --no-tags upstream "$UPSTREAM_REF"
+          {
+            echo "upstream_sha=$(git rev-parse FETCH_HEAD)"
+            echo "base_sha=$(git rev-parse HEAD)"
+          } >> "$GITHUB_OUTPUT"
+
+      - id: audit
+        name: Audit merge without changing the worktree
+        env:
+          UPSTREAM_SHA: ${{ steps.fetch.outputs.upstream_sha }}
+        run: |
+          set +e
+          node scripts/upstream-merge-audit.mjs \
+            --upstream-ref "$UPSTREAM_SHA" \
+            --json audit.json \
+            --markdown audit.md
+          code=$?
+          set -e
+          case "$code" in
+            0|2) ;;
+            *) exit "$code" ;;
+          esac
+          node -e '
+            const report = require("./audit.json");
+            const output = process.env.GITHUB_OUTPUT;
+            require("node:fs").appendFileSync(
+              output,
+              `decision=${report.decision}\nmerge_base_sha=${report.refs.mergeBaseSha}\n`,
+            );
+          '
+
+      - id: prepare
+        name: Prepare candidate merge
+        env:
+          DECISION: ${{ steps.audit.outputs.decision }}
+          UPSTREAM_SHA: ${{ steps.fetch.outputs.upstream_sha }}
+        run: |
+          set -euo pipefail
+          branch="candidate/upstream-${UPSTREAM_SHA:0:12}"
+          git config user.email "actions@github.com"
+          git config user.name "github-actions[bot]"
+
+          if [ "$DECISION" != "review-required" ]; then
+            set +e
+            git merge --no-ff --no-commit "$UPSTREAM_SHA"
+            merge_code=$?
+            set -e
+
+            if [ "$merge_code" -ne 0 ]; then
+              node -e '
+                const report = require("./audit.json");
+                for (const conflict of report.conflicts) {
+                  if (!["generated", "version"].includes(conflict.class)) process.exit(1);
+                  process.stdout.write(`${conflict.path}\0`);
+                }
+              ' > mechanical-paths
+              while IFS= read -r -d '' path; do
+                git checkout --ours -- "$path"
+                git add -- "$path"
+              done < mechanical-paths
+              test -z "$(git diff --name-only --diff-filter=U)"
+              rm mechanical-paths
+            fi
+          fi
+
+          echo "branch=$branch" >> "$GITHUB_OUTPUT"
+
+      - if: ${{ steps.audit.outputs.decision != 'review-required' }}
+        uses: ./.github/actions/setup-workspace
+        with:
+          node-version: ${{ env.PRIMARY_NODE_VERSION }}
+          pnpm-version: ${{ env.PNPM_VERSION }}
+          cache-prefix: upstream-candidate
+
+      - id: candidate
+        name: Finalize candidate handoff ref
+        env:
+          BASE_SHA: ${{ steps.fetch.outputs.base_sha }}
+          BRANCH: ${{ steps.prepare.outputs.branch }}
+          DECISION: ${{ steps.audit.outputs.decision }}
+          UPSTREAM_SHA: ${{ steps.fetch.outputs.upstream_sha }}
+        run: |
+          set -euo pipefail
+          if [ "$DECISION" = "review-required" ]; then
+            candidate_sha="$UPSTREAM_SHA"
+          else
+            pnpm exec turbo run build --filter=@get-bb/plugin-sdk
+            node packages/templates/scripts/generate-templates.mjs
+            upstream_core="$(node -e 'process.stdout.write(require("./audit.json").versionFields.upstreamCore)')"
+            node scripts/bump-version.mjs --fork-version "$upstream_core"
+            git add -A
+            git reset -- audit.json audit.md
+            git commit --no-verify -m "Merge upstream ${UPSTREAM_SHA}"
+            candidate_sha="$(git rev-parse HEAD)"
+          fi
+
+          git branch --force candidate-handoff "$candidate_sha"
+          git branch --force audit-base "$BASE_SHA"
+          {
+            echo "candidate_sha=$candidate_sha"
+            echo "branch=$BRANCH"
+          } >> "$GITHUB_OUTPUT"
+
+      - id: checks
+        name: Build, typecheck, and test candidate
+        if: ${{ steps.audit.outputs.decision != 'review-required' }}
+        continue-on-error: true
+        run: pnpm exec turbo run build typecheck test --output-logs=new-only
+
+      - id: check_result
+        name: Record check result
+        env:
+          CHECK_OUTCOME: ${{ steps.checks.outcome }}
+        run: echo "result=$CHECK_OUTCOME" >> "$GITHUB_OUTPUT"
+
+      - name: Create validated handoff files
+        env:
+          BASE_SHA: ${{ steps.fetch.outputs.base_sha }}
+          BRANCH: ${{ steps.candidate.outputs.branch }}
+          CANDIDATE_SHA: ${{ steps.candidate.outputs.candidate_sha }}
+          DECISION: ${{ steps.audit.outputs.decision }}
+          MERGE_BASE_SHA: ${{ steps.audit.outputs.merge_base_sha }}
+          UPSTREAM_SHA: ${{ steps.fetch.outputs.upstream_sha }}
+        run: |
+          set -euo pipefail
+          git bundle create candidate.bundle \
+            refs/heads/candidate-handoff refs/heads/audit-base
+          {
+            echo "base_sha=$BASE_SHA"
+            echo "branch=$BRANCH"
+            echo "candidate_sha=$CANDIDATE_SHA"
+            echo "decision=$DECISION"
+            echo "merge_base_sha=$MERGE_BASE_SHA"
+            echo "upstream_sha=$UPSTREAM_SHA"
+          } > shas.env
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: upstream-candidate
+          path: |
+            candidate.bundle
+            audit.json
+            audit.md
+            shas.env
+          retention-days: 7
+
+  publish:
+    name: Push branch and upsert PR
+    needs: audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: bbamir/main
+          fetch-depth: 1
+
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: upstream-candidate
+          path: handoff
+
+      - name: Validate bundle and recorded SHAs
+        env:
+          BASE_SHA: ${{ needs.audit.outputs.base_sha }}
+          BRANCH: ${{ needs.audit.outputs.branch }}
+          CANDIDATE_SHA: ${{ needs.audit.outputs.candidate_sha }}
+          DECISION: ${{ needs.audit.outputs.decision }}
+          MERGE_BASE_SHA: ${{ needs.audit.outputs.merge_base_sha }}
+          UPSTREAM_SHA: ${{ needs.audit.outputs.upstream_sha }}
+        run: |
+          set -euo pipefail
+          {
+            echo "base_sha=$BASE_SHA"
+            echo "branch=$BRANCH"
+            echo "candidate_sha=$CANDIDATE_SHA"
+            echo "decision=$DECISION"
+            echo "merge_base_sha=$MERGE_BASE_SHA"
+            echo "upstream_sha=$UPSTREAM_SHA"
+          } > expected-shas.env
+          cmp handoff/shas.env expected-shas.env
+
+          git fetch handoff/candidate.bundle \
+            refs/heads/candidate-handoff:refs/candidate/incoming \
+            refs/heads/audit-base:refs/candidate/base
+          got="$(git rev-parse refs/candidate/incoming)"
+          test "$got" = "$CANDIDATE_SHA"
+          test "$(git rev-parse refs/candidate/base)" = "$BASE_SHA"
+          git merge-base --is-ancestor "$MERGE_BASE_SHA" "$BASE_SHA"
+          git merge-base --is-ancestor "$MERGE_BASE_SHA" "$UPSTREAM_SHA"
+          git merge-base --is-ancestor "$MERGE_BASE_SHA" "$got"
+
+          if [ "$DECISION" = "review-required" ]; then
+            test "$got" = "$UPSTREAM_SHA"
+          else
+            git merge-base --is-ancestor "$BASE_SHA" "$got"
+            git merge-base --is-ancestor "$UPSTREAM_SHA" "$got"
+          fi
+
+      - name: Push deterministic candidate branch
+        env:
+          BRANCH: ${{ needs.audit.outputs.branch }}
+        run: |
+          set -euo pipefail
+          expected="$(git ls-remote --heads origin "refs/heads/$BRANCH" | cut -f1)"
+          git push \
+            --force-with-lease="refs/heads/${BRANCH}:${expected}" \
+            origin \
+            "refs/candidate/incoming:refs/heads/$BRANCH"
+
+      - name: Build PR body
+        env:
+          CHECKS: ${{ needs.audit.outputs.checks }}
+        run: |
+          set -euo pipefail
+          cp handoff/audit.md pr-body.md
+          if [ "$CHECKS" = "failure" ]; then
+            printf '\nCandidate checks failed; this PR requires review.\n' >> pr-body.md
+          fi
+          printf '\n> AGENT GENERATED: by GPT-5.6 Sol\n' >> pr-body.md
+
+      - name: Upsert pull request
+        env:
+          BRANCH: ${{ needs.audit.outputs.branch }}
+          CHECKS: ${{ needs.audit.outputs.checks }}
+          DECISION: ${{ needs.audit.outputs.decision }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          draft=false
+          if [ "$DECISION" = "review-required" ] || [ "$CHECKS" = "failure" ]; then
+            draft=true
+          fi
+
+          existing="$(gh pr list --head "$BRANCH" --state open --json number,isDraft --jq '.[0] // empty')"
+          if [ -n "$existing" ]; then
+            number="$(printf '%s' "$existing" | jq -r .number)"
+            is_draft="$(printf '%s' "$existing" | jq -r .isDraft)"
+            gh pr edit "$number" --body-file pr-body.md
+            if [ "$draft" = true ] && [ "$is_draft" = false ]; then
+              gh pr ready "$number" --undo
+            elif [ "$draft" = false ] && [ "$is_draft" = true ]; then
+              gh pr ready "$number"
+            fi
+          else
+            create_args=(
+              --base bbamir/main
+              --head "$BRANCH"
+              --title "Upstream candidate $BRANCH"
+              --body-file pr-body.md
+            )
+            if [ "$draft" = true ]; then
+              create_args+=(--draft)
+            fi
+            gh pr create "${create_args[@]}"
+          fi
