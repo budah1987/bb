@@ -1,5 +1,4 @@
 import { COARSE_POINTER_DOT_SIZE_CLASS } from "@bb/shared-ui/coarse-pointer-sizing";
-import { CONTEXT_SELECTION_SURFACE_CLASS } from "@/components/ui/context-selection";
 
 export type SidebarUnreadDotTone = "default" | "error";
 
@@ -68,7 +67,7 @@ export const SIDEBAR_ROW_STATIC_STATE_CLASS =
   "text-sidebar-foreground/85 dark:text-sidebar-foreground";
 
 export const SIDEBAR_ROW_SELECTED_STATE_CLASS =
-  `${CONTEXT_SELECTION_SURFACE_CLASS} bb-sidebar-selected-row text-sidebar-foreground`;
+  "bg-sidebar-accent/70 bb-sidebar-selected-row text-sidebar-foreground";
 
 /**
  * A quieter marker for a thread that is open in an unfocused split pane.

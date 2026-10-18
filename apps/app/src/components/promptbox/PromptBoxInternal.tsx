@@ -408,6 +408,8 @@ export interface PromptBoxInternalProps {
   zenMode?: PromptBoxZenModeConfig;
   /** Optional one-line presentation for unfocused mobile follow-up composers. */
   compact?: PromptBoxCompactConfig;
+  /** Desktop reading layout; retains plugin actions and the editor instance. */
+  resting?: boolean;
   /** Compact placeholder used when a follow-up composer is narrowed by its container. */
   containerCompactPlaceholder?: string;
   /**
@@ -1156,6 +1158,7 @@ export function PromptBoxInternal({
   suppressPluginComposerCustomizations = false,
   zenMode = {},
   compact,
+  resting = false,
   containerCompactPlaceholder,
   heightAnimationKey,
   history,
@@ -1419,6 +1422,15 @@ export function PromptBoxInternal({
   const showZenLayout = isZenMode;
   const showCompactLayout =
     compact?.isCompact === true && !showVoiceActionGroup && !isZenMode;
+  const showRestingLayout =
+    resting &&
+    !showVoiceActionGroup &&
+    !isZenMode &&
+    attachments.length === 0 &&
+    !isAttaching &&
+    !attachmentError &&
+    !localAttachmentError &&
+    activeTrigger === null;
   const effectivePlaceholder = showCompactLayout
     ? (compact.placeholder ?? placeholder)
     : placeholder;
@@ -1427,11 +1439,12 @@ export function PromptBoxInternal({
   const composerInputLocked = useComposerInputLock(
     pluginComposerHost?.textEffectKey ?? null,
   );
-  const composerLayout = showCompactLayout
-    ? "compact"
-    : showZenLayout
-      ? "zen"
-      : "expanded";
+  const composerLayout =
+    showCompactLayout || showRestingLayout
+      ? "compact"
+      : showZenLayout
+        ? "zen"
+        : "expanded";
   const localComposerView = usePluginComposerViewModel({
     scope: pluginComposerHost?.scope ?? {
       kind: "new-thread",
@@ -1825,7 +1838,12 @@ export function PromptBoxInternal({
               promptEditorContentFromValue(pastedValue, {
                 richTextMarkdown: richTextEditing,
               }).content ?? [];
-            currentEditor?.chain().focus().insertContent(pastedContent).run();
+            currentEditor
+              ?.chain()
+              .focus()
+              .insertContent(pastedContent)
+              .setMeta("uiEvent", "paste")
+              .run();
             if (currentEditor && !currentEditor.isDestroyed) {
               const nextValue = trimTrailingPromptNewlines(
                 promptEditorValueFromDoc(currentEditor.state.doc),
@@ -1849,6 +1867,7 @@ export function PromptBoxInternal({
             ?.chain()
             .focus()
             .insertContent(promptEditorInlineContentFromValue(pastedValue))
+            .setMeta("uiEvent", "paste")
             .run();
           return true;
         },
@@ -1860,17 +1879,28 @@ export function PromptBoxInternal({
           mentions: mentionRanges,
         });
       },
-      onSelectionUpdate({ editor: updatedEditor }) {
+      onSelectionUpdate({ editor: updatedEditor, transaction }) {
+        // A typing transaction changes both the document and the selection, so
+        // TipTap emits selectionUpdate immediately before update. Let onUpdate
+        // handle that transaction once. The browser already reveals the caret
+        // for native contenteditable edits; measuring it here with coordsAtPos
+        // forces layout on every keystroke.
+        if (transaction.docChanged) return;
         syncTriggerStateRef.current(updatedEditor);
         scheduleRevealEditorSelection();
       },
-      onUpdate({ editor: updatedEditor }) {
+      onUpdate({ editor: updatedEditor, transaction }) {
         if (skipEditorChangeRef.current) return;
         const nextValue = promptEditorValueFromDoc(updatedEditor.state.doc);
         editorValueKeyRef.current = promptEditorValueKey(nextValue);
         onChangeRef.current(nextValue.text, nextValue.mentions);
         syncTriggerStateRef.current(updatedEditor);
-        scheduleRevealEditorSelection();
+        // Native typing already asks ProseMirror to scroll the selection into
+        // view. Clipboard and drop transactions still need the prompt's custom
+        // scroll-container reveal that originally fixed multiline paste.
+        if (transaction.getMeta("uiEvent") !== undefined) {
+          scheduleRevealEditorSelection();
+        }
       },
       // Rebuild the editor when the rich-text preference toggles so the schema
       // and input rules switch. The editor is otherwise created once; its
@@ -2694,18 +2724,22 @@ export function PromptBoxInternal({
     (event: ReactPointerEvent<HTMLButtonElement>) => {
       if (event.button !== 0) return;
       const currentEditor = editorRef.current;
+      const editorElement = currentEditor?.view.dom;
+      const activeElement = editorElement?.ownerDocument.activeElement;
       if (
         !currentEditor ||
         currentEditor.isDestroyed ||
-        !currentEditor.isFocused
+        !editorElement?.contains(activeElement ?? null)
       ) {
         return;
       }
 
       // Focus transfer happens before click. On iOS, moving focus from the
       // editor to this button begins keyboard dismissal and resizes the app
-      // shell before the form can submit. Keep the editor focused; the click
-      // still owns the commit, while genuine outside focus dismisses normally.
+      // shell before the form can submit. Use the DOM's focus state here rather
+      // than TipTap's event-derived isFocused flag, which can briefly lag the
+      // browser. Keep the editor focused; the click still owns the commit,
+      // while genuine outside focus dismisses normally.
       event.preventDefault();
     },
     [],
@@ -3117,6 +3151,7 @@ export function PromptBoxInternal({
       ref={formRef}
       data-promptbox=""
       data-promptbox-compact={showCompactLayout ? "" : undefined}
+      data-promptbox-resting={showRestingLayout ? "" : undefined}
       data-promptbox-zen={showZenLayout ? "" : undefined}
       data-promptbox-voice-active={showVoiceActionGroup ? "" : undefined}
       onSubmit={handleSubmit}

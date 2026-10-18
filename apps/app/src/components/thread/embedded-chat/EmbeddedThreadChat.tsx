@@ -279,6 +279,7 @@ function EmbeddedThreadChatHostedFooter({
         key={threadId}
         scrollBehavior="bottom-anchor"
         scrollAnchorThreadId={threadId}
+        floatingFooter
         shellClassName="!mx-0 !mt-0 md:!mx-0 md:!mt-0"
         contentClassName="gap-2 pt-4"
         footerClassName="chat-prompt-box"
@@ -754,12 +755,13 @@ function EmbeddedThreadChatWithComposer({
     void handleSaveInlineQueuedMessage();
   }, [handleSaveInlineQueuedMessage]);
 
+  const addQuoteToPromptDraft = promptDraft.addQuote;
   const handleAddToChat = useCallback<ThreadTimelineAddToChatHandler>(
     (text, attachments) => {
-      promptDraft.addQuote(text, attachments);
+      addQuoteToPromptDraft(text, attachments);
       setComposerFocusNonce((nonce) => nonce + 1);
     },
-    [promptDraft],
+    [addQuoteToPromptDraft],
   );
 
   // ---- Plugin composer host --------------------------------------------------

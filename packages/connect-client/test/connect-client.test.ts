@@ -4,7 +4,10 @@ import {
   ConnectMachineRedeemError,
   connectPublicProtocol,
   deriveConnectBaseUrl,
+  encodeMobilePairingPayload,
   listAccountServers,
+  mobilePairingPayload,
+  parseMobilePairingPayload,
   redeemMachineCredential,
   serverUrlForHandle,
 } from "../src/index.js";
@@ -29,6 +32,22 @@ describe("connect URL helpers", () => {
     );
     expect(connectPublicProtocol("bb.localhost:42745")).toBe("http:");
     expect(connectPublicProtocol("getbb.app")).toBe("https:");
+  });
+});
+
+describe("mobile pairing payload", () => {
+  it("round-trips the machine code and derives the connect apex", () => {
+    const payload = mobilePairingPayload({
+      code: "K7QP-2M4X",
+      serverUrl: "https://laptop.getbb.app",
+      expiresAt: 1_700_000_600_000,
+    });
+
+    expect(payload.apex).toBe("https://getbb.app");
+    expect(
+      parseMobilePairingPayload(encodeMobilePairingPayload(payload)),
+    ).toEqual(payload);
+    expect(parseMobilePairingPayload("https://laptop.getbb.app")).toBeNull();
   });
 });
 

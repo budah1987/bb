@@ -2523,7 +2523,7 @@ describe("SplitThreadArea", () => {
       return screen.getByTestId("location").textContent;
     }
 
-    it("moves to the right tab on a short right swipe, wrapping", async () => {
+    it("yields every rightward swipe to app-level Recent navigation", async () => {
       const store = renderSplitArea({
         path: threadPath("thr-b"),
         layout: twoPaneLayout("pane-2"),
@@ -2534,17 +2534,13 @@ describe("SplitThreadArea", () => {
       dragTo(900, { from: 500 });
       firePointer(window, "pointerup", 900);
 
-      await waitFor(() => expect(locationPath()).toBe(threadPath("thr-a")));
-      // Non-destructive: focus moved, both panes kept their content.
-      expect(storedSplitLayout(store).focusedPaneId).toBe("pane-1");
+      expect(previewSurface()).toBeNull();
+      expect(locationPath()).toBe(threadPath("thr-b"));
+      expect(storedSplitLayout(store).focusedPaneId).toBe("pane-2");
       expect(paneContents(store)).toEqual([
         threadContent("thr-a"),
         threadContent("thr-b"),
       ]);
-      expect(screen.getByTestId("workspace-swipe-position").textContent).toBe(
-        "Workspace 1 of 2",
-      );
-      // Exactly one surface survives the settle.
       expect(
         document.querySelectorAll("[data-workspace-swipe-surface]"),
       ).toHaveLength(1);
@@ -2763,7 +2759,7 @@ describe("SplitThreadArea", () => {
       );
     });
 
-    it("cannot reach the Command Center on a fast short right fling", async () => {
+    it("does not reinterpret a fast rightward fling as workspace navigation", async () => {
       renderSplitArea({
         path: threadPath("thr-b"),
         layout: twoPaneLayout("pane-2"),
@@ -2782,8 +2778,8 @@ describe("SplitThreadArea", () => {
       firePointer(window, "pointermove", 340);
       firePointer(window, "pointerup", 340);
 
-      // Velocity completed the pane change; it never promotes to "/".
-      await waitFor(() => expect(locationPath()).toBe(threadPath("thr-a")));
+      expect(locationPath()).toBe(threadPath("thr-b"));
+      expect(previewSurface()).toBeNull();
       expect(screen.getByTestId("command-center-state").textContent).toBe(
         "none",
       );
@@ -2813,7 +2809,8 @@ describe("SplitThreadArea", () => {
       await waitFor(() => expect(previewSurface()).toBeNull());
       expect(locationPath()).toBe(threadPath("thr-b"));
 
-      // The same distance released immediately still commits.
+      // The same distance released immediately still belongs to the app-level
+      // Recent gesture, not the workspace.
       firePointer(surface, "pointerdown", 100);
       nowMs += 8;
       firePointer(window, "pointermove", 140);
@@ -2821,10 +2818,11 @@ describe("SplitThreadArea", () => {
       firePointer(window, "pointermove", 254);
       firePointer(window, "pointerup", 254);
 
-      await waitFor(() => expect(locationPath()).toBe(threadPath("thr-a")));
+      expect(locationPath()).toBe(threadPath("thr-b"));
+      expect(previewSurface()).toBeNull();
     });
 
-    it("opens the Command Center past the long-swipe threshold and keeps the whole layout", async () => {
+    it("leaves long rightward swipes to app-level Recent navigation", async () => {
       const store = renderSplitArea({
         path: threadPath("thr-b"),
         layout: twoPaneLayout("pane-2"),
@@ -2833,28 +2831,16 @@ describe("SplitThreadArea", () => {
       await screen.findByTestId("workspace-swipe-position");
 
       dragTo(900, { from: 100 });
-
-      // The travelling surface is the recognizable shell, not the real page.
-      const preview = previewSurface();
-      expect(preview?.textContent).toContain("Recent");
-      expect(preview?.querySelector('[data-testid="root-compose-view"]')).toBe(
-        null,
-      );
-
       firePointer(window, "pointerup", 900);
 
-      await waitFor(() => expect(locationPath()).toBe("/"));
-      expect(screen.getByTestId("command-center-state").textContent).toBe(
-        `${threadPath("thr-b")}|pane-2`,
-      );
+      expect(previewSurface()).toBeNull();
+      expect(locationPath()).toBe(threadPath("thr-b"));
+      expect(screen.getByTestId("command-center-state").textContent).toBe("none");
       expect(paneContents(store)).toEqual([
         threadContent("thr-a"),
         threadContent("thr-b"),
       ]);
       expect(storedSplitLayout(store).focusedPaneId).toBe("pane-2");
-      expect(screen.getByTestId("workspace-swipe-position").textContent).toBe(
-        "Command Center",
-      );
     });
 
     it("pops history on a left swipe out of the Command Center", async () => {
@@ -2888,7 +2874,7 @@ describe("SplitThreadArea", () => {
       });
       await screen.findByTestId("workspace-swipe-position");
 
-      dragTo(700, { from: 500 });
+      dragTo(300, { from: 500 });
 
       const preview = previewSurface();
       expect(preview?.getAttribute("aria-hidden")).toBe("true");
@@ -2900,9 +2886,9 @@ describe("SplitThreadArea", () => {
           "input, textarea, button, a[href], [tabindex]",
         ),
       ).toHaveLength(0);
-      expect(swipeSurface().style.transform).toBe("translate3d(200px, 0, 0)");
+      expect(swipeSurface().style.transform).toBe("translate3d(-200px, 0, 0)");
 
-      firePointer(window, "pointercancel", 700);
+      firePointer(window, "pointercancel", 300);
 
       await waitFor(() => expect(previewSurface()).toBeNull());
       expect(locationPath()).toBe(threadPath("thr-b"));
@@ -2927,7 +2913,7 @@ describe("SplitThreadArea", () => {
       expect(locationPath()).toBe(threadPath("thr-b"));
     });
 
-    it("opens the Command Center from a long leading-edge swipe", async () => {
+    it("reserves the leading edge for global sidebar navigation", async () => {
       renderSplitArea({
         path: threadPath("thr-b"),
         layout: twoPaneLayout("pane-2"),
@@ -2938,10 +2924,8 @@ describe("SplitThreadArea", () => {
       dragTo(900, { from: 12 });
       firePointer(window, "pointerup", 900);
 
-      await waitFor(() => expect(locationPath()).toBe("/"));
-      expect(screen.getByTestId("command-center-state").textContent).toBe(
-        `${threadPath("thr-b")}|pane-2`,
-      );
+      expect(previewSurface()).toBeNull();
+      expect(locationPath()).toBe(threadPath("thr-b"));
     });
 
     it("keeps horizontal gesture ownership while a text editor is focused", async () => {
@@ -2980,13 +2964,13 @@ describe("SplitThreadArea", () => {
       });
       await screen.findByTestId("workspace-swipe-position");
 
-      dragTo(900, { from: 500 });
+      dragTo(100, { from: 500 });
 
       // Nothing travels; the incoming shell states itself quietly instead.
       expect(swipeSurface().style.transform).toBe("");
       expect(previewSurface()?.style.opacity).not.toBe("");
 
-      firePointer(window, "pointerup", 900);
+      firePointer(window, "pointerup", 100);
 
       await waitFor(() => expect(locationPath()).toBe(threadPath("thr-a")));
       expect(storedSplitLayout(store).focusedPaneId).toBe("pane-1");
@@ -3089,7 +3073,7 @@ describe("SplitThreadArea", () => {
       });
       await screen.findByTestId("workspace-swipe-position");
 
-      dragTo(900, { from: 500 });
+      dragTo(100, { from: 500 });
       // A second touch lands and lifts elsewhere; it owns neither the drag nor
       // its outcome.
       firePointer(window, "pointerup", 120, 300, 2);
@@ -3099,7 +3083,7 @@ describe("SplitThreadArea", () => {
       expect(locationPath()).toBe(threadPath("thr-b"));
 
       // The tracked finger still commits normally.
-      firePointer(window, "pointerup", 900);
+      firePointer(window, "pointerup", 100);
       await waitFor(() => expect(locationPath()).toBe(threadPath("thr-a")));
     });
 
@@ -3150,7 +3134,7 @@ describe("SplitThreadArea", () => {
         },
       });
 
-      dragTo(900, { from: 500 });
+      dragTo(100, { from: 500 });
       expect(previewSurface()).not.toBeNull();
 
       // A sidebar pick, deep link, or agent open lands mid-gesture.
@@ -3160,7 +3144,7 @@ describe("SplitThreadArea", () => {
       await waitFor(() => expect(locationPath()).toBe(threadPath("thr-c")));
       expect(previewSurface()).toBeNull();
 
-      firePointer(window, "pointerup", 900);
+      firePointer(window, "pointerup", 100);
 
       // The release cannot commit a destination chosen for the old surface.
       await waitFor(() => expect(locationPath()).toBe(threadPath("thr-c")));

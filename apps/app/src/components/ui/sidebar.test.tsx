@@ -3,7 +3,9 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { renderToString } from "react-dom/server";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { MemoryRouter, useLocation } from "react-router-dom";
 import { CompactViewportOverrideProvider } from "@bb/shared-ui/hooks/use-compact-viewport";
+import { STANDALONE_DISPLAY_MODE_QUERY } from "@/hooks/useStandaloneCompactPwa";
 import {
   Sidebar,
   SidebarInset,
@@ -46,18 +48,56 @@ function fireTouch(
   fireEvent(target, event);
 }
 
-function renderMobileSidebarHarness() {
+function LocationProbe() {
+  const location = useLocation();
+  return <output data-testid="location-path">{location.pathname}</output>;
+}
+
+function renderMobileSidebarHarness(initialPath = "/") {
   render(
-    <CompactViewportOverrideProvider isCompactViewport>
-      <SidebarProvider>
-        <SidebarTrigger />
-        <Sidebar>Sidebar content</Sidebar>
-        <SidebarInset>
-          <div>Selectable message prose</div>
-        </SidebarInset>
-      </SidebarProvider>
-    </CompactViewportOverrideProvider>,
+    <MemoryRouter initialEntries={[initialPath]}>
+      <CompactViewportOverrideProvider isCompactViewport>
+        <SidebarProvider>
+          <SidebarTrigger />
+          <Sidebar>Sidebar content</Sidebar>
+          <SidebarInset>
+            <div>Selectable message prose</div>
+            <LocationProbe />
+          </SidebarInset>
+        </SidebarProvider>
+      </CompactViewportOverrideProvider>
+    </MemoryRouter>,
   );
+}
+
+function fireWindowPointer(
+  type: "pointermove" | "pointerup" | "pointercancel",
+  clientX: number,
+  clientY: number,
+) {
+  const event = new Event(type, { bubbles: true, cancelable: true });
+  Object.defineProperties(event, {
+    button: { value: 0 },
+    clientX: { value: clientX },
+    clientY: { value: clientY },
+    pointerId: { value: 1 },
+    pointerType: { value: "touch" },
+  });
+  fireEvent(window, event);
+  return event;
+}
+
+function stubStandaloneDisplayMode() {
+  vi.stubGlobal("matchMedia", (query: string) => ({
+    matches: query === STANDALONE_DISPLAY_MODE_QUERY,
+    media: query,
+    onchange: null,
+    addListener: () => {},
+    removeListener: () => {},
+    addEventListener: () => {},
+    removeEventListener: () => {},
+    dispatchEvent: () => false,
+  }));
 }
 
 function OptionalSidebarProbe() {
@@ -149,5 +189,46 @@ describe("mobile sidebar access", () => {
     const panel = document.querySelector('[data-sidebar="panel"]');
     expect(panel).not.toBeNull();
     expect(panel?.getAttribute("data-vaul-drawer-direction")).toBe("left");
+  });
+
+  it("opens from a rightward swipe anywhere on Recent in the standalone app", () => {
+    stubStandaloneDisplayMode();
+    renderMobileSidebarHarness();
+    const prose = screen.getByText("Selectable message prose");
+
+    fireEvent.pointerDown(prose, {
+      button: 0,
+      clientX: 120,
+      clientY: 160,
+      pointerId: 1,
+      pointerType: "touch",
+    });
+    const move = fireWindowPointer("pointermove", 190, 162);
+
+    expect(move.defaultPrevented).toBe(true);
+    expect(document.querySelector('[data-sidebar="panel"]')).toBeNull();
+
+    fireWindowPointer("pointerup", 190, 162);
+
+    expect(document.querySelector('[data-sidebar="panel"]')).not.toBeNull();
+  });
+
+  it("always routes a rightward swipe to Recent instead of browser history", () => {
+    stubStandaloneDisplayMode();
+    renderMobileSidebarHarness("/projects/project-a/threads/thread-a");
+    const prose = screen.getByText("Selectable message prose");
+
+    fireEvent.pointerDown(prose, {
+      button: 0,
+      clientX: 80,
+      clientY: 160,
+      pointerId: 1,
+      pointerType: "touch",
+    });
+    fireWindowPointer("pointermove", 150, 162);
+    fireWindowPointer("pointerup", 150, 162);
+
+    expect(screen.getByTestId("location-path").textContent).toBe("/");
+    expect(document.querySelector('[data-sidebar="panel"]')).toBeNull();
   });
 });

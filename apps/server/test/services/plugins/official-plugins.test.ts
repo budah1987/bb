@@ -105,6 +105,7 @@ describe("official plugin registry invariants", () => {
       "side-chat": "Agent interaction",
       tasks: "Workflow management",
       t3sidebar: "Interface",
+      usage: "Developer tools",
       workflows: "Workflow management",
     };
 

@@ -1,3 +1,4 @@
+import { archiveThread } from "@bb/db";
 import { threadTabsResponseSchema, type ThreadTab } from "@bb/server-contract";
 import { describe, expect, it, vi } from "vitest";
 import { readJson } from "../helpers/json.js";
@@ -144,6 +145,75 @@ describe("public thread tabs", () => {
       expect(duplicateResponse.status).toBe(400);
 
       expect((await getTabs(harness, "thr_missing")).status).toBe(404);
+    });
+  });
+
+  it("clears synced tabs when a thread is archived", async () => {
+    await withTestHarness(async (harness) => {
+      const { thread } = seedThreadFixture(harness);
+      const notifyThread = vi.spyOn(harness.hub, "notifyThread");
+
+      expect(
+        (
+          await putTabs(harness, thread.id, {
+            expectedRevision: 0,
+            tabs: ALL_TAB_KINDS,
+          })
+        ).status,
+      ).toBe(200);
+      notifyThread.mockClear();
+
+      const archiveResponse = await harness.app.request(
+        `/api/v1/threads/${thread.id}/archive`,
+        { method: "POST" },
+      );
+      expect(archiveResponse.status).toBe(200);
+      expect(notifyThread).toHaveBeenCalledWith(
+        thread.id,
+        ["archived-changed"],
+        { projectId: thread.projectId },
+      );
+      expect(notifyThread).toHaveBeenCalledWith(
+        thread.id,
+        ["tabs-changed"],
+        undefined,
+      );
+
+      const tabsResponse = await getTabs(harness, thread.id);
+      expect(
+        threadTabsResponseSchema.parse(await readJson(tabsResponse)),
+      ).toEqual({ revision: 2, tabs: [] });
+
+      const staleWriteResponse = await putTabs(harness, thread.id, {
+        expectedRevision: 2,
+        tabs: ALL_TAB_KINDS,
+      });
+      expect(staleWriteResponse.status).toBe(409);
+      expect(await readJson(staleWriteResponse)).toMatchObject({
+        code: "thread_not_writable",
+        details: { reason: "archived" },
+      });
+    });
+  });
+
+  it("hides tabs left by older archive operations", async () => {
+    await withTestHarness(async (harness) => {
+      const { thread } = seedThreadFixture(harness);
+      expect(
+        (
+          await putTabs(harness, thread.id, {
+            expectedRevision: 0,
+            tabs: ALL_TAB_KINDS,
+          })
+        ).status,
+      ).toBe(200);
+
+      archiveThread(harness.db, harness.hub, thread.id);
+
+      const tabsResponse = await getTabs(harness, thread.id);
+      expect(
+        threadTabsResponseSchema.parse(await readJson(tabsResponse)),
+      ).toEqual({ revision: 1, tabs: [] });
     });
   });
 });

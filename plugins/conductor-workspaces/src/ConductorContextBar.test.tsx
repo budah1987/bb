@@ -409,6 +409,55 @@ describe("ConductorContextBar compact layout", () => {
     );
   });
 
+  it("migrates legacy device-local closed tabs to server archives", async () => {
+    window.localStorage.setItem(
+      "bb.conductor.closed-tabs.v1",
+      JSON.stringify({
+        "project-1:environment-1": ["thread-1", "thread-2", "stale-thread"],
+      }),
+    );
+    const rendered = renderSlot(
+      contextBar,
+      {
+        threadId: "thread-2",
+        projectId: "project-1",
+        environmentId: "environment-1",
+        isCompactViewport: false,
+      },
+      {
+        sidebarThreads: {
+          status: "ready",
+          threads: [thread(1), thread(2)],
+          projects: [{ id: "project-1", name: "BB", isPersonal: false }],
+        },
+        rpc: {
+          readReconciliation: () => ({
+            legacyWorkspaces: [],
+            recordedSignature: null,
+          }),
+        },
+      },
+    );
+
+    await waitFor(() => {
+      expect(rendered.sidebarActionCalls).toContainEqual({
+        method: "archive",
+        threadId: "thread-1",
+      });
+    });
+    expect(rendered.sidebarActionCalls).not.toContainEqual({
+      method: "archive",
+      threadId: "thread-2",
+    });
+    expect(
+      JSON.parse(
+        window.localStorage.getItem("bb.conductor.closed-tabs.v1") ?? "{}",
+      ),
+    ).toEqual({
+      "project-1:environment-1": ["thread-1"],
+    });
+  });
+
   it("opens a complete conversation as a temporary fork tab", async () => {
     const rendered = renderSlot(
       contextBar,

@@ -5,7 +5,8 @@
   "type": "module",
   "description": "Edit Markdown files inside BB with preview and source modes.",
   "engines": {
-    "bb": ">=0.36"
+    "bb": ">=0.36",
+    "bbPluginSdk": ">=0.4.7"
   },
   "bb": {
     "name": "Markdown Editor",

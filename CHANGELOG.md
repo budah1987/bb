@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.38.0-bbamir.2
+
+This BBamir release adopts selected, independently tested improvements from
+bb 0.39 while preserving the BBamir shell and built-in plugin workflows.
+
+- The first tap on the mobile follow-up composer submits reliably.
+- Prompt typing and long live timelines avoid unnecessary rendering work.
+- Blink no longer restyles the whole page for `group-has` selectors during
+  streaming updates.
+- Live timeline windows retain accepted steers and rows across pagination.
+- Event lookups, background-task aggregation, and incremental database vacuum
+  avoid the slow scans that contributed to Connect and PWA stalls.
+- Upstream intake now starts with a read-only, fail-closed audit, and BBamir's
+  product plugins have explicit SDK and Conductor capability gates.
+
 ## 0.38.0
 
 This release adds the Extensions Page, community plugins, shareable plugin marketplaces, and a Linux desktop app.

@@ -19,6 +19,7 @@ export interface PageShellBaseProps {
 
 export interface PageShellProps extends PageShellBaseProps {
   scrollBehavior?: PageShellScrollBehavior;
+  floatingFooter?: boolean;
   // Only meaningful with `scrollBehavior="bottom-anchor"`: persists and restores
   // the timeline scroll position per thread so switching away and back doesn't
   // snap to the bottom.
@@ -28,6 +29,7 @@ export interface PageShellProps extends PageShellBaseProps {
 interface FooterRenderOptions {
   maxWidthClassName: string;
   footerClassName?: string;
+  floatingFooter: boolean;
 }
 
 const SHELL_BLEED_CLASS =
@@ -36,17 +38,22 @@ const DEFAULT_MAX_WIDTH_CLASS = "max-w-[760px]";
 
 function renderStaticFooter(
   footer: ReactNode,
-  { maxWidthClassName, footerClassName }: FooterRenderOptions,
+  { maxWidthClassName, footerClassName, floatingFooter }: FooterRenderOptions,
 ) {
   if (!footer) return null;
   return (
-    <div className="relative shrink-0 bg-background">
-      <OverflowFade placement="above" tone="background" />
+    <div
+      className={cn("relative shrink-0", !floatingFooter && "bg-background")}
+    >
+      {!floatingFooter ? (
+        <OverflowFade placement="above" tone="background" />
+      ) : null}
       <div
         className={cn(
           "mx-auto w-full px-4 pb-4",
           maxWidthClassName,
           footerClassName,
+          floatingFooter && "pointer-events-auto",
         )}
       >
         {footer}
@@ -66,10 +73,12 @@ export function PageShell({
   maxWidthClassName = DEFAULT_MAX_WIDTH_CLASS,
   scrollBehavior = "static",
   scrollAnchorThreadId,
+  floatingFooter = false,
 }: PageShellProps) {
   const staticFooter = renderStaticFooter(footer, {
     maxWidthClassName,
     footerClassName,
+    floatingFooter,
   });
 
   if (scrollBehavior === "bottom-anchor") {
@@ -82,6 +91,7 @@ export function PageShell({
           footer={staticFooter}
           scrollOverlay={scrollOverlay}
           scrollAnchorThreadId={scrollAnchorThreadId}
+          floatingFooter={floatingFooter}
         >
           {children}
         </BottomAnchoredScrollBody>

@@ -201,6 +201,7 @@ Remote access (bb connect):
   bb connect unexpose <port> [--host <name-or-id>]  Stop sharing on that host
   bb connect shares [--host <name-or-id>]           List that host's shares
   bb connect servers                      List every bb on this account (handle, url, live)
+  bb connect machine-code                 Mint a one-time code for the bb mobile app
 
   Port sharing works from threads on any enrolled host. In a thread,
   `bb connect expose <port>` resolves the thread environment's host; outside a
@@ -215,7 +216,11 @@ Remote access (bb connect):
   `bb connect status` shows all shares with host + URL. `shares --json` returns
   the resolved `host` and rows with `hostId`, `hostName`, `port`, and `url`.
 
+  The native mobile app cannot use the owner-session-gated URL as a Direct URL.
+  Run `bb connect machine-code` or choose Settings → Remote access → Add mobile
+  device, then enter or scan that one-time enrollment code in the app.
+
   Remote access is owned by the builtin "connect" plugin (Plugins → connect
-  shows the URL, QR code, and shared ports). Disabling the plugin
+  shows the URL, mobile enrollment code, and shared ports). Disabling the plugin
   (`bb plugin disable connect`) cuts off all remote access; re-enable with
   `bb plugin enable connect`.

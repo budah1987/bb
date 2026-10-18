@@ -881,6 +881,32 @@ describe("@bb/sdk", () => {
     ]);
   });
 
+  it("reads OpenCode aggregates through the non-PTY usage endpoint", async () => {
+    const result = { status: "missing" as const };
+    const queue = createFetchQueue([{ body: result }]);
+    const sdk = createBbSdk({
+      transport: createHttpTransport({
+        baseUrl: "http://bb.test",
+        fetch: queue.fetch,
+        runtime: "node",
+      }),
+    });
+
+    await expect(
+      sdk.system.experimental_openCodeUsageHistory({
+        hostId: "host_remote",
+        databasePath: "/Users/amir/.local/share/opencode/opencode.db",
+      }),
+    ).resolves.toEqual(result);
+    expect(queue.requests).toEqual([
+      {
+        bodyText: undefined,
+        method: "GET",
+        url: "http://bb.test/api/v1/system/experimental-opencode-usage-history?hostId=host_remote&databasePath=%2FUsers%2Famir%2F.local%2Fshare%2Fopencode%2Fopencode.db",
+      },
+    ]);
+  });
+
   it("lists GitHub accounts from an explicit machine", async () => {
     const catalog = {
       accounts: [

@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 
 import type { PromptTextMention } from "@bb/domain";
+import { EditorView } from "@tiptap/pm/view";
 import {
   createRef,
   useLayoutEffect,
@@ -1603,6 +1604,64 @@ describe("PromptBoxInternal zen mode layout", () => {
 });
 
 describe("PromptBoxInternal plugin composer actions", () => {
+  it("keeps attachment errors visible even if a reading gesture requests resting", () => {
+    render(
+      <PromptBoxInternal
+        {...createPromptBoxProps({
+          resting: true,
+          attachments: { error: "Upload failed" },
+        })}
+      />,
+    );
+    expect(screen.getByText("Upload failed")).toBeTruthy();
+    expect(document.querySelector("[data-promptbox-resting]")).toBeNull();
+  });
+
+  it("retains the plugin picker, its open state, and the editor through desktop resting changes", () => {
+    const mounted = vi.fn();
+    const unmounted = vi.fn();
+    function ModelDeck() {
+      const [open, setOpen] = useState(false);
+      useLayoutEffect(() => {
+        mounted();
+        return unmounted;
+      }, []);
+      return (
+        <button
+          aria-haspopup="dialog"
+          aria-expanded={open}
+          onClick={() => setOpen(!open)}
+        >
+          Model Deck
+        </button>
+      );
+    }
+    setPluginSlotRegistrations(
+      "model-deck",
+      pluginRegistrationSet([
+        { id: "picker", actions: [{ id: "model", component: ModelDeck }] },
+      ]),
+    );
+    const baseProps = createPromptBoxProps({
+      value: "Keep my draft",
+      autoFocus: false,
+    });
+    const view = render(<PromptBoxInternal {...baseProps} />);
+    const trigger = screen.getByRole("button", { name: "Model Deck" });
+    const editor = getPromptEditorElement();
+    fireEvent.click(trigger);
+    view.rerender(<PromptBoxInternal {...baseProps} resting />);
+    expect(screen.getByRole("button", { name: "Model Deck" })).toBe(trigger);
+    expect(trigger.getAttribute("aria-expanded")).toBe("true");
+    expect(getPromptEditorElement()).toBe(editor);
+    expect(editor.textContent).toBe("Keep my draft");
+    expect(document.querySelector("[data-promptbox-resting]")).toBeTruthy();
+    view.rerender(<PromptBoxInternal {...baseProps} />);
+    expect(mounted).toHaveBeenCalledTimes(1);
+    expect(unmounted).not.toHaveBeenCalled();
+    expect(trigger.getAttribute("aria-expanded")).toBe("true");
+  });
+
   it("mounts scope-matched actions in deterministic order before voice", () => {
     setPluginSlotRegistrations(
       "zeta",
@@ -2172,6 +2231,29 @@ describe("PromptBoxInternal compact layout", () => {
 
     fireEvent.click(submit, { detail: 1 });
     expect(onSubmit).toHaveBeenCalledOnce();
+    expect(document.activeElement).toBe(editor);
+  });
+
+  it("keeps DOM focus through submit when TipTap focus state is stale", async () => {
+    render(
+      <PromptBoxInternal
+        {...createPromptBoxProps({ value: "Send this follow-up" })}
+      />,
+    );
+
+    await waitForPromptFocus();
+    const editor = getPromptEditorElement();
+    const submit = screen.getByRole("button", { name: "Submit (Enter)" });
+
+    // TipTap derives isFocused from focus and blur events. Model the iOS
+    // window where its blur event has arrived but the contenteditable still
+    // owns native focus and therefore still controls the software keyboard.
+    editor.dispatchEvent(new FocusEvent("blur"));
+    expect(document.activeElement).toBe(editor);
+
+    expect(
+      fireEvent.pointerDown(submit, { button: 0, pointerType: "touch" }),
+    ).toBe(false);
     expect(document.activeElement).toBe(editor);
   });
 
@@ -2925,6 +3007,53 @@ describe("PromptBoxInternal mention triggers", () => {
 });
 
 describe("PromptBoxInternal prompt actions", () => {
+  it("keeps the custom caret reveal for composer-handled text pastes", async () => {
+    const { changes, promptBoxRef } = renderPromptBox("");
+
+    await focusPromptEnd(promptBoxRef);
+    await act(
+      () =>
+        new Promise<void>((resolve) => requestAnimationFrame(() => resolve())),
+    );
+
+    const scrollContainer = document.querySelector(
+      "[data-promptbox-editor-scroll]",
+    );
+    if (!(scrollContainer instanceof HTMLElement)) {
+      throw new Error("Prompt editor scroll container was not rendered");
+    }
+    const scrollRectSpy = vi
+      .spyOn(scrollContainer, "getBoundingClientRect")
+      .mockReturnValue(new DOMRect(0, 0, 320, 100));
+    const coordsAtPosSpy = vi
+      .spyOn(EditorView.prototype, "coordsAtPos")
+      .mockReturnValue({
+        left: 0,
+        right: 0,
+        top: 120,
+        bottom: 136,
+      });
+
+    try {
+      pastePlainText("first line\nsecond line");
+
+      await waitFor(() =>
+        expect(latestValue(changes)).toBe("first line\nsecond line"),
+      );
+      await act(
+        () =>
+          new Promise<void>((resolve) =>
+            requestAnimationFrame(() => resolve()),
+          ),
+      );
+
+      expect(coordsAtPosSpy).toHaveBeenCalled();
+    } finally {
+      coordsAtPosSpy.mockRestore();
+      scrollRectSpy.mockRestore();
+    }
+  });
+
   it("preserves blockquote structure when pasting copied blockquote html", async () => {
     const { changes, promptBoxRef } = renderPromptBox("");
 

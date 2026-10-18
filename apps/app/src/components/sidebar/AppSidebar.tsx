@@ -713,7 +713,7 @@ export function AppSidebar({
             onNew={() => setSpaceEditor({ kind: "create" })}
             onEdit={(space) => setSpaceEditor({ kind: "edit", space })}
           />
-          <SidebarFooter className="relative border-t border-sidebar-border/60 bg-sidebar-accent/10">
+          <SidebarFooter className="relative border-t border-sidebar-border/50 bg-sidebar">
             <OverflowFade placement="above" tone="sidebar" size="sm" />
             {/* The footer holds a variable number of plugin action buttons, so a
              * narrowed sidebar plus several plugins can no longer fit the action

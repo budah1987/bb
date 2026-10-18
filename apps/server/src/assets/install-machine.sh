@@ -519,8 +519,10 @@ if [ "$already_joined" = no ]; then
   join_log="$data_dir/install-join.log"
   active_step "Joining $server_url as $host_id"
   detail "Join progress is logged to $join_log"
+  # Use the validated Node executable, as the installed service does, instead
+  # of asking nohup to execute the CLI through its shebang.
   # The daemon passes this prefix back to npm during protocol self-updates.
-  BB_APP_NPM_PREFIX="$bb_app_npm_prefix" BB_DATA_DIR="$data_dir" nohup "$bb_app" host-daemon join \
+  BB_APP_NPM_PREFIX="$bb_app_npm_prefix" BB_DATA_DIR="$data_dir" nohup "$node_bin" "$bb_app" host-daemon join \
     --auto-update \
     --host-daemon-port "$host_daemon_port" \
     --join-code "$join_code" \

@@ -374,6 +374,7 @@ type ExpectedSystemKey =
   | "onboardingAgents"
   | "onboardingEvent"
   | "onboardingRepos"
+  | "experimental_openCodeUsageHistory"
   | "usageLimits"
   | "version";
 

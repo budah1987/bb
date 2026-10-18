@@ -3,7 +3,6 @@ import { COARSE_POINTER_TEXT_SM_CLASS } from "@bb/shared-ui/coarse-pointer-sizin
 import { cn } from "@bb/shared-ui/lib/utils";
 import { LIST_HOVER_TRANSITION } from "@bb/shared-ui/motion";
 import type { ReactNode } from "react";
-import { CONTEXT_SELECTION_SURFACE_CLASS } from "./context-selection";
 
 const TAB_PILL_DEFAULT_LABEL_MAX_WIDTH_CLASS = "max-w-[180px]";
 // No transition: the tab strip is a swept, list-like row, so the affordance
@@ -65,11 +64,11 @@ export function TabPill({
   return (
     <div
       className={cn(
-        `group/tab-pill relative inline-flex h-7 shrink-0 items-center rounded-md ${LIST_HOVER_TRANSITION} max-md:pointer-coarse:h-9`,
+        `group/tab-pill relative inline-flex h-7 shrink-0 items-center rounded-sm ${LIST_HOVER_TRANSITION} max-md:pointer-coarse:h-9`,
         COARSE_POINTER_TEXT_SM_CLASS,
         isActive
           ? activeTreatment === "fill"
-            ? cn(CONTEXT_SELECTION_SURFACE_CLASS, "text-foreground")
+            ? "bg-state-hover text-foreground shadow-[inset_0_0_0_1px_var(--border-hairline)]"
             : "text-foreground after:absolute after:inset-x-1.5 after:bottom-0 after:h-0.5 after:rounded-full after:bg-foreground/60"
           : "text-muted-foreground hover:bg-state-hover",
       )}
@@ -81,7 +80,7 @@ export function TabPill({
         aria-keyshortcuts={ariaKeyshortcuts}
         aria-pressed={isActive}
         className={cn(
-          "flex h-full min-w-0 items-center rounded-md focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring",
+          "flex h-full min-w-0 items-center rounded-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring",
           iconOnly ? "px-1.5" : "pl-1.5 pr-2",
         )}
       >
@@ -91,7 +90,7 @@ export function TabPill({
               TAB_PILL_LEADING_VISUAL_CLASS,
               !iconOnly && "mr-1.5",
               closeAction
-                ? "group-hover/tab-pill:opacity-0 group-has-[[data-tab-pill-close]:focus-visible]/tab-pill:opacity-0 max-md:pointer-coarse:opacity-0"
+                ? "group-hover/tab-pill:opacity-0 tab-pill-close-focus-visible:opacity-0 max-md:pointer-coarse:opacity-0"
                 : null,
             )}
           >

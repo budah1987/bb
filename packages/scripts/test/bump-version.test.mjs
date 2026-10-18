@@ -13,6 +13,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
 import { bumpVersion } from "../../../scripts/bump-version.mjs";
+import { deriveForkVersion } from "../../../scripts/lib/semver.mjs";
 import {
   deriveNightlyVersion,
   prepareNightlyVersion,
@@ -121,6 +122,70 @@ describe("bump-version", () => {
     expect(result.stdout).toContain("Bumped: bb-app + @bb/desktop → 0.0.7");
     expect(readVersion(repoRoot, "packages/bb-app/package.json")).toBe("0.0.7");
     expect(readVersion(repoRoot, "apps/desktop/package.json")).toBe("0.0.7");
+  });
+
+  it("derives and writes the first fork version for a newer upstream core", () => {
+    const repoRoot = createTestRepo({
+      bbAppVersion: "0.38.0-bbamir.1",
+      desktopVersion: "0.38.0-bbamir.1",
+    });
+    const result = runScript(repoRoot, ["--fork-version", "0.39.0"]);
+
+    expect(result.status).toBe(0);
+    expect(result.stdout).toContain(
+      "Forked: bb-app + @bb/desktop → 0.39.0-bbamir.1",
+    );
+    expect(readVersion(repoRoot, "packages/bb-app/package.json")).toBe(
+      "0.39.0-bbamir.1",
+    );
+    expect(readVersion(repoRoot, "apps/desktop/package.json")).toBe(
+      "0.39.0-bbamir.1",
+    );
+  });
+
+  it("increments N when re-forking the same core", () => {
+    expect(
+      deriveForkVersion({
+        currentVersions: ["0.39.0-bbamir.2", "0.39.0-bbamir.7"],
+        upstreamCore: "0.39.0",
+      }),
+    ).toBe("0.39.0-bbamir.8");
+  });
+
+  it("allows an equal-core stable release to become a fork prerelease", () => {
+    const repoRoot = createTestRepo({
+      bbAppVersion: "0.39.0",
+      desktopVersion: "0.39.0",
+    });
+    const result = runScript(repoRoot, ["--fork-version", "0.39.0"]);
+
+    expect(result.status).toBe(0);
+    expect(readVersion(repoRoot, "packages/bb-app/package.json")).toBe(
+      "0.39.0-bbamir.1",
+    );
+    expect(readVersion(repoRoot, "apps/desktop/package.json")).toBe(
+      "0.39.0-bbamir.1",
+    );
+  });
+
+  it("rejects backwards and invalid fork cores without changing either file", () => {
+    const repoRoot = createTestRepo({
+      bbAppVersion: "0.39.0-bbamir.1",
+      desktopVersion: "0.39.0-bbamir.1",
+    });
+    const backwards = runScript(repoRoot, ["--fork-version", "0.38.0"]);
+    const invalid = runScript(repoRoot, ["--fork-version", "0.40.0-beta.1"]);
+
+    expect(backwards.status).not.toBe(0);
+    expect(backwards.stderr).toContain("must not be lower");
+    expect(invalid.status).not.toBe(0);
+    expect(invalid.stderr).toContain("must be a core X.Y.Z version");
+    expect(readVersion(repoRoot, "packages/bb-app/package.json")).toBe(
+      "0.39.0-bbamir.1",
+    );
+    expect(readVersion(repoRoot, "apps/desktop/package.json")).toBe(
+      "0.39.0-bbamir.1",
+    );
   });
 
   it("restores the first package file when the second rename fails", async () => {

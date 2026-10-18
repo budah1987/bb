@@ -1078,3 +1078,87 @@ export function QueuedWorkspace() {
     </StoryCard>
   );
 }
+
+/** Uses the production scroll body and composer together for gesture QA. */
+export function FloatingConversation() {
+  const [message, setMessage] = useState("");
+  const [mentionRanges, setMentionRanges] = useState<PromptTextMention[]>([]);
+  const [replies, setReplies] = useState([
+    "The composer stays close while leaving room to read the conversation.",
+    "Scroll up to rest the composer. Click the editor or return to Latest to expand it.",
+    "Model and plugin controls keep their existing state as the layout changes.",
+  ]);
+  return (
+    <div className="mx-auto flex h-[min(760px,90dvh)] w-full max-w-4xl flex-col overflow-hidden rounded-xl border border-border bg-background">
+      <PageShell
+        floatingFooter
+        scrollBehavior="bottom-anchor"
+        scrollAnchorThreadId="floating-composer-story"
+        shellClassName="!mx-0 !mt-0 md:!mx-0 md:!mt-0"
+        footer={
+          <FollowUpPromptBox
+            attachments={attachmentsBase}
+            stack={null}
+            composer={{
+              history: {
+                currentDraft: {
+                  text: message,
+                  mentions: mentionRanges,
+                  attachments: [],
+                },
+                entries: [],
+                onSelectEntry: noop,
+              },
+              isFollowUpSubmitting: false,
+              message,
+              mentionRanges,
+              onChangeMessage: (text, mentions) => {
+                setMessage(text);
+                setMentionRanges(mentions);
+              },
+              onSubmit: () => {
+                if (message.trim()) {
+                  setReplies((current) => [...current, message]);
+                  setMessage("");
+                  setMentionRanges([]);
+                }
+              },
+              onModifierSubmit: noop,
+              canModifierSubmit: false,
+              steerActiveThreadOnEnter: false,
+              submitMode: { kind: "ready" },
+              threadRuntimeDisplayStatus: "idle",
+              promptPlaceholder: "Ask a follow-up…",
+              compactPromptPlaceholder: "Ask a follow-up…",
+            }}
+            environmentSummary={localEnvironmentSummary}
+            contextWindowUsage={usage}
+            execution={baseExecution}
+            permission={basePermission}
+            promptActions={promptActions}
+            typeahead={typeaheadBase}
+            zenModeResetKey="floating-composer-story"
+          />
+        }
+      >
+        <div className="space-y-8 py-6 text-sm leading-relaxed">
+          {Array.from({ length: 4 }, (_, index) => (
+            <div key={index} className="space-y-3">
+              <p className="ml-auto max-w-[85%] rounded-xl bg-surface-recessed px-4 py-3">
+                Keep the conversation readable while I work.
+              </p>
+              <p>
+                Scrolling into history should leave the current message in
+                place. The input becomes a quiet single line, with the same
+                editor and plugin actions still mounted.
+              </p>
+            </div>
+          ))}
+          {replies.map((reply, index) => (
+            <p key={index}>{reply}</p>
+          ))}
+        </div>
+      </PageShell>
+    </div>
+  );
+}

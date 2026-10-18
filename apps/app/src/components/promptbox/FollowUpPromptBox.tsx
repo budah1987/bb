@@ -37,6 +37,7 @@ import {
   type TypeaheadConfig,
 } from "@/components/promptbox/PromptBoxInternal";
 import { usePromptVoice } from "@/components/promptbox/usePromptVoice";
+import { useScrollRestingComposer } from "./useScrollRestingComposer";
 import { PermissionModePicker } from "@/components/pickers/PermissionModePicker";
 import {
   ExecutionControls,
@@ -375,6 +376,22 @@ function FollowUpPromptBoxWithComposer({
   const pendingFocusExpansionCleanupRef = useRef<(() => void) | null>(null);
   const pendingFocusLossCleanupRef = useRef<(() => void) | null>(null);
   const [isInteractionExpanded, setIsInteractionExpanded] = useState(false);
+  const { isResting, expand: expandRestingComposer } = useScrollRestingComposer(
+    {
+      composerRef: composerInteractionRef,
+      enabled: isPrimaryComposer && !isCompactViewport,
+      blocked:
+        attachmentCount > 0 ||
+        Boolean(attachments.error) ||
+        attachments.isAttaching === true ||
+        composer.message.includes("\n") ||
+        voice.state === "recording" ||
+        voice.state === "transcribing" ||
+        composerLayout === "zen" ||
+        !canSubmit,
+      resetKey: zenModeResetKey,
+    },
+  );
   const isMobilePromptBoxCompact = isCompactViewport && !isInteractionExpanded;
   const compactConfig = useMemo(
     () =>
@@ -390,12 +407,16 @@ function FollowUpPromptBoxWithComposer({
       isMobilePromptBoxCompact,
     ],
   );
-  const setInteractionExpanded = useCallback((nextExpanded: boolean) => {
-    if (interactionExpandedRef.current === nextExpanded) return;
-    interactionExpandedRef.current = nextExpanded;
-    promptBoxRef.current?.captureHeightForLayoutChange();
-    setIsInteractionExpanded(nextExpanded);
-  }, []);
+  const setInteractionExpanded = useCallback(
+    (nextExpanded: boolean) => {
+      if (interactionExpandedRef.current === nextExpanded) return;
+      interactionExpandedRef.current = nextExpanded;
+      if (isCompactViewport)
+        promptBoxRef.current?.captureHeightForLayoutChange();
+      setIsInteractionExpanded(nextExpanded);
+    },
+    [isCompactViewport],
+  );
   const cancelPendingFocusExpansion = useCallback(() => {
     pendingFocusExpansionCleanupRef.current?.();
     pendingFocusExpansionCleanupRef.current = null;
@@ -407,6 +428,7 @@ function FollowUpPromptBoxWithComposer({
   }, []);
   const handleComposerFocus = useCallback(
     (event: ReactFocusEvent) => {
+      expandRestingComposer();
       cancelPendingFocusLoss();
       if (interactionExpandedRef.current) return;
       if (
@@ -473,6 +495,7 @@ function FollowUpPromptBoxWithComposer({
       isCompactViewport,
       isPointerCoarse,
       setInteractionExpanded,
+      expandRestingComposer,
     ],
   );
   const scheduleCollapseAfterFocusLoss = useCallback(
@@ -691,6 +714,8 @@ function FollowUpPromptBoxWithComposer({
       data-follow-up-composer-expanded={isInteractionExpanded ? "" : undefined}
       onBlurCapture={scheduleCollapseAfterFocusLoss}
       onFocusCapture={handleComposerFocus}
+      onPointerDownCapture={expandRestingComposer}
+      onKeyDownCapture={expandRestingComposer}
     >
       <PromptBoxWithScrollAnchor
         id={id}
@@ -750,6 +775,7 @@ function FollowUpPromptBoxWithComposer({
           suppressPluginComposerCustomizations
         }
         compact={compactConfig}
+        resting={isResting}
         zenMode={{
           layout: "thread",
           storageKey: null,

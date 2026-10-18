@@ -1,16 +1,15 @@
 import { describe, expect, it } from "vitest";
-import { CONTEXT_SELECTION_SURFACE_CLASS } from "@/components/ui/context-selection";
 import {
   SIDEBAR_ROW_OPEN_IN_SPLIT_STATE_CLASS,
   SIDEBAR_ROW_SELECTED_STATE_CLASS,
 } from "./sidebarRowClasses";
 
 describe("sidebar thread state styling", () => {
-  it("uses the shared active-context surface", () => {
+  it("uses a quiet sidebar-local active surface", () => {
     expect(SIDEBAR_ROW_SELECTED_STATE_CLASS).toContain(
-      CONTEXT_SELECTION_SURFACE_CLASS,
+      "bg-sidebar-accent/70",
     );
-    expect(CONTEXT_SELECTION_SURFACE_CLASS).toBe("bg-state-active");
+    expect(SIDEBAR_ROW_SELECTED_STATE_CLASS).not.toContain("bg-state-active");
   });
 
   it("marks the row for an opaque backing surface when it becomes sticky", () => {

@@ -4079,6 +4079,27 @@ declare const providerUsageResponseSchema: z$1.ZodObject<{
     }, z$1.core.$strip>], "status">;
 }, z$1.core.$strip>;
 type ProviderUsageResponse = z$1.infer<typeof providerUsageResponseSchema>;
+declare const openCodeUsageReadResultSchema: z$1.ZodDiscriminatedUnion<[z$1.ZodObject<{
+    status: z$1.ZodLiteral<"missing">;
+}, z$1.core.$strict>, z$1.ZodObject<{
+    status: z$1.ZodLiteral<"ready">;
+    records: z$1.ZodArray<z$1.ZodObject<{
+        day: z$1.ZodString;
+        modelProviderId: z$1.ZodString;
+        model: z$1.ZodString;
+        loggedCostUsd: z$1.ZodNumber;
+        inputTokens: z$1.ZodNumber;
+        cachedInputTokens: z$1.ZodNumber;
+        cacheWriteTokens: z$1.ZodNumber;
+        outputTokens: z$1.ZodNumber;
+        reasoningTokens: z$1.ZodNumber;
+    }, z$1.core.$strict>>;
+    truncated: z$1.ZodBoolean;
+}, z$1.core.$strict>, z$1.ZodObject<{
+    status: z$1.ZodLiteral<"unavailable">;
+    message: z$1.ZodString;
+}, z$1.core.$strict>], "status">;
+type OpenCodeUsageReadResult = z$1.infer<typeof openCodeUsageReadResultSchema>;
 declare const githubAccountCatalogSchema: z$1.ZodObject<{
     accounts: z$1.ZodArray<z$1.ZodObject<{
         host: z$1.ZodString;
@@ -6477,9 +6498,9 @@ declare const hostDaemonCommandRegistry: {
         selectedBranch: z$1.ZodNullable<z$1.ZodObject<{
             name: z$1.ZodString;
             kind: z$1.ZodEnum<{
+                missing: "missing";
                 local: "local";
                 remote: "remote";
-                missing: "missing";
             }>;
         }, z$1.core.$strip>>;
     }, z$1.core.$strip>, "onlineRpc", true>;
@@ -6806,6 +6827,30 @@ declare const hostDaemonCommandRegistry: {
             accountEmail: z$1.ZodDefault<z$1.ZodNullable<z$1.ZodString>>;
         }, z$1.core.$strip>], "status">;
     }, z$1.core.$strip>, "onlineRpc", true>;
+    "usage.opencode.read": HostDaemonCommandDescriptor<"usage.opencode.read", z$1.ZodObject<{
+        type: z$1.ZodLiteral<"usage.opencode.read">;
+        databasePath: z$1.ZodString;
+        sinceUnixMilliseconds: z$1.ZodNumber;
+    }, z$1.core.$strict>, z$1.ZodDiscriminatedUnion<[z$1.ZodObject<{
+        status: z$1.ZodLiteral<"missing">;
+    }, z$1.core.$strict>, z$1.ZodObject<{
+        status: z$1.ZodLiteral<"ready">;
+        records: z$1.ZodArray<z$1.ZodObject<{
+            day: z$1.ZodString;
+            modelProviderId: z$1.ZodString;
+            model: z$1.ZodString;
+            loggedCostUsd: z$1.ZodNumber;
+            inputTokens: z$1.ZodNumber;
+            cachedInputTokens: z$1.ZodNumber;
+            cacheWriteTokens: z$1.ZodNumber;
+            outputTokens: z$1.ZodNumber;
+            reasoningTokens: z$1.ZodNumber;
+        }, z$1.core.$strict>>;
+        truncated: z$1.ZodBoolean;
+    }, z$1.core.$strict>, z$1.ZodObject<{
+        status: z$1.ZodLiteral<"unavailable">;
+        message: z$1.ZodString;
+    }, z$1.core.$strict>], "status">, "onlineRpc", true>;
     "github.repository_catalog": HostDaemonCommandDescriptor<"github.repository_catalog", z$1.ZodObject<{
         type: z$1.ZodLiteral<"github.repository_catalog">;
     }, z$1.core.$strict>, z$1.ZodObject<{
@@ -8705,6 +8750,16 @@ declare const systemUsageLimitsQuerySchema: z$1.ZodObject<{
     hostId: z$1.ZodOptional<z$1.ZodString>;
 }, z$1.core.$strip>;
 type SystemUsageLimitsQuery = z$1.infer<typeof systemUsageLimitsQuerySchema>;
+/**
+ * Reads fixed, aggregate OpenCode usage data from a connected host. The
+ * database path is a host-local setting; the server owns the retention window
+ * and the daemon owns the read-only SQLite operation.
+ */
+declare const systemExperimentalOpenCodeUsageHistoryQuerySchema: z$1.ZodObject<{
+    hostId: z$1.ZodString;
+    databasePath: z$1.ZodString;
+}, z$1.core.$strict>;
+type SystemExperimentalOpenCodeUsageHistoryQuery = z$1.infer<typeof systemExperimentalOpenCodeUsageHistoryQuerySchema>;
 /** Omission reads GitHub credentials from the primary machine. */
 declare const systemGithubAccountsQuerySchema: z$1.ZodObject<{
     hostId: z$1.ZodOptional<z$1.ZodString>;
@@ -14997,6 +15052,9 @@ interface SystemExecutionOptionsArgs extends SystemExecutionOptionsQuery {
 interface SystemUsageLimitsArgs extends SystemUsageLimitsQuery {
     signal?: AbortSignal;
 }
+interface SystemExperimentalOpenCodeUsageHistoryArgs extends SystemExperimentalOpenCodeUsageHistoryQuery {
+    signal?: AbortSignal;
+}
 interface SystemGithubRepositoriesArgs extends SystemGithubRepositoriesQuery {
     signal?: AbortSignal;
 }
@@ -15044,6 +15102,7 @@ type SystemUpdateExperimentsResult = Experiments;
 type SystemUpdateGeneralSettingsResult = AppSettings;
 type SystemUpdateKeyboardSettingsResult = AppKeybindingOverrides;
 type SystemUsageLimitsResult = ProviderUsageResponse;
+type SystemExperimentalOpenCodeUsageHistoryResult = OpenCodeUsageReadResult;
 type SystemGithubAccountsResult = GithubAccountCatalog;
 type SystemGithubRepositoriesResult = GithubRepositoryCatalog;
 type SystemGithubPullRequestsResult = GithubPullRequestCatalog;
@@ -15097,6 +15156,11 @@ interface SystemArea {
     /** On-demand issues, Actions runs, and notification inbox for a repository. */
     githubRepositoryActivity(args: SystemGithubRepositoryActivityArgs): Promise<SystemGithubRepositoryActivityResult>;
     usageLimits(args?: SystemUsageLimitsArgs): Promise<SystemUsageLimitsResult>;
+    /**
+     * Experimental fixed aggregate read of OpenCode usage history. This is a
+     * non-PTY host operation; it does not execute a shell command.
+     */
+    experimental_openCodeUsageHistory(args: SystemExperimentalOpenCodeUsageHistoryArgs): Promise<SystemExperimentalOpenCodeUsageHistoryResult>;
     version(args?: SystemVersionArgs): Promise<SystemVersionResult>;
 }
 
