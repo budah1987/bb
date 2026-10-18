@@ -1,3 +1,4 @@
+import { Tooltip, TooltipContent, TooltipTrigger } from "@bb/shared-ui/tooltip";
 import {
   lazy,
   Suspense,
@@ -3886,15 +3887,19 @@ export function RootComposeView() {
         >
           <Icon name={pill.icon} className="size-3.5 shrink-0" aria-hidden />
           <span className="min-w-0 truncate">{pill.label}</span>
-          <button
-            type="button"
-            aria-label={pill.cancelLabel}
-            title={pill.cancelLabel}
-            className="inline-flex size-5 shrink-0 cursor-pointer items-center justify-center rounded-full text-muted-foreground hover:bg-surface-hover hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            onClick={pill.onCancel}
-          >
-            <Icon name="X" className="size-3" aria-hidden />
-          </button>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                aria-label={pill.cancelLabel}
+                className="inline-flex size-5 shrink-0 cursor-pointer items-center justify-center rounded-full text-muted-foreground hover:bg-surface-hover hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                onClick={pill.onCancel}
+              >
+                <Icon name="X" className="size-3" aria-hidden />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent>{pill.cancelLabel}</TooltipContent>
+          </Tooltip>
         </div>
       </div>
     );
