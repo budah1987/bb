@@ -10,14 +10,25 @@ import {
 import {
   createDesktopReleaseConfig,
   resolveDesktopBuildPlatform,
+  resolveDesktopMaintainedFlavor,
   resolveDesktopReleaseChannel,
 } from "./desktop-release-channel.mjs";
 
 const packageRoot = process.cwd();
 const packageJsonPath = resolve(packageRoot, "package.json");
 const releaseChannel = resolveDesktopReleaseChannel(process.env);
-const releaseConfig = createDesktopReleaseConfig(releaseChannel);
+const maintainedFlavor = resolveDesktopMaintainedFlavor(process.env);
+const releaseConfig = createDesktopReleaseConfig(
+  releaseChannel,
+  maintainedFlavor,
+);
 const buildPlatform = resolveDesktopBuildPlatform(process.platform);
+if (
+  maintainedFlavor !== null &&
+  (buildPlatform !== "macos" || process.arch !== "arm64")
+) {
+  throw new Error("Maintained Nightly currently supports macOS arm64 only.");
+}
 const updateMetadataFileName =
   releaseConfig.updateMetadataFileNames[buildPlatform];
 const updateMetadataPath = resolve(

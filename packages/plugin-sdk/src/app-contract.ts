@@ -98,6 +98,8 @@ export interface PluginThreadPanelProps {
    * action opened the panel without params.
    */
   params: JsonValue | null;
+  /** Increments when the host explicitly opens or focuses this tab. */
+  experimental_activationKey: number;
 }
 
 /** Props passed to a panel tab opened by `experimental_newThreadPanelAction`. */
@@ -3870,6 +3872,21 @@ export interface BbNavigate {
    * panel actions (plugin pages) or the action is unavailable.
    */
   openThreadPanel(options: PluginTargetedPanelActionOpenOptions): boolean;
+  /** Open a registered action in a specific thread in this app window. */
+  experimental_openThreadPanel(options: {
+    threadId: string;
+    pluginId: string;
+    actionId: string;
+    params: JsonValue | null;
+  }): Promise<{
+    outcome:
+      | "opened"
+      | "superseded"
+      | "unknown-thread"
+      | "unknown-action"
+      | "invalid-params"
+      | "no-panel-surface";
+  }>;
   /**
    * Open an HTTP(S) URL using this client's BB browser preference. Returns
    * false for schemes the host does not own. Experimental: see
@@ -3931,6 +3948,12 @@ export interface PluginSdkApp {
     Contract extends PluginRpcContract = PluginRpcContract,
   >(): PluginRpcClient<Contract>;
   useRealtime(channel: string, handler: (payload: unknown) => void): void;
+  /** Read another plugin's signals on the shared connection. Experimental. */
+  experimental_usePluginRealtime(
+    pluginId: string,
+    channel: string,
+    handler: (payload: unknown) => void,
+  ): void;
   /**
    * Observe the same shared connection that delivers `useRealtime` signals.
    * Use a subsequent transition to `connected` to reconcile server state that

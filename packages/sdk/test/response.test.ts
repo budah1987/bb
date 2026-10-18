@@ -241,6 +241,18 @@ describe("readJsonResponse()", () => {
     });
   });
 
+  it("preserves a nested plugin RPC error code", async () => {
+    const response = Response.json(
+      { ok: false, error: { code: "unknown_method", message: "Missing RPC" } },
+      { status: 404 },
+    );
+
+    await expect(readJson(response)).rejects.toMatchObject({
+      code: "unknown_method",
+      status: 404,
+    });
+  });
+
   it("falls back to legacy detail field when canonical message is absent", async () => {
     const response = new Response('{"detail":"Thread not found"}', {
       status: 404,

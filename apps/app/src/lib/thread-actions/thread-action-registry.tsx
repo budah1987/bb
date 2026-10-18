@@ -224,6 +224,8 @@ function useLatestNavigate(navigate: BbNavigate, pluginId: string): BbNavigate {
     openThreadPanel: (options) =>
       getActiveThreadPanelOpener()?.({ ...options, pluginId }) ?? false,
     openUrl: (...args) => latest.current.openUrl(...args),
+    experimental_openThreadPanel: (...args) =>
+      latest.current.experimental_openThreadPanel(...args),
     experimental_openFilePreview: (...args) =>
       latest.current.experimental_openFilePreview(...args),
     experimental_openFileExternally: (...args) =>

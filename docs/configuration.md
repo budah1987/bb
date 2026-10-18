@@ -156,6 +156,17 @@ edit it). Only one launcher manages updates for a data directory; a second
 internal markers the launcher passes to its server child; do not set them. See
 `bb guide machines` for the `bb updates` commands.
 
+For private macOS arm64 Maintained Nightly builds,
+`BB_DESKTOP_MAINTAINED_FLAVOR=production|rehearsal` is a build-time selector
+used with `BB_DESKTOP_RELEASE_CHANNEL=nightly`. It is embedded in the desktop
+bundle, so changing a launch environment does not switch an installed app.
+The production build uses the existing Nightly profile and `~/.bb` unless
+`--user-data-dir` explicitly selects an isolated profile. The rehearsal build
+uses fixed isolated data/profile paths and ports, and refuses startup without
+its owned marker. Both use separate local update feeds and updater caches;
+the upstream build remains the default when the selector is unset. See
+`apps/desktop/README.md` for exact identities, paths and packaging commands.
+
 Settings → Updates shows the **Server** row for both standalone servers and servers
 hosted by the desktop app. **Update** downloads the release and restarts the
 server, using the hosting desktop's native updater when applicable. It asks

@@ -363,7 +363,7 @@ export function AppCommandProvider({ children }: { children: ReactNode }) {
         if (!matchesAppShortcut(event, binding.shortcut, isMac)) continue;
         context ??= currentContext(event.target);
         if (!matchesAppCommandContext(binding, context)) continue;
-        if (!dispatch(binding.command, event.target)) return false;
+        if (!dispatch(binding.command, event.target)) continue;
         event.preventDefault();
         event.stopPropagation();
         return true;

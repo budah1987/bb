@@ -40,6 +40,8 @@ export interface DesktopAutoUpdaterAdapter {
   checkForUpdates(): Promise<UpdateCheckResult | null>;
   downloadUpdate(): Promise<Array<string>>;
   onError(handler: DesktopAutoUpdateErrorHandler): void;
+  onNativeError(handler: (error: Error) => void): void;
+  onNativeUpdateDownloaded(handler: () => void): void;
   onUpdateAvailable(handler: DesktopAutoUpdateAvailableHandler): void;
   onUpdateDownloaded(handler: DesktopAutoUpdateDownloadedHandler): void;
   onUpdateNotAvailable(handler: DesktopAutoUpdateNotAvailableHandler): void;
@@ -135,27 +137,19 @@ export function createElectronAutoUpdaterAdapter(
         handler({ error, message: message ?? null });
       });
     },
+    onNativeError(handler) {
+      nativeUpdater.on("error", handler);
+    },
+    onNativeUpdateDownloaded(handler) {
+      nativeUpdater.on("update-downloaded", handler);
+    },
     onUpdateAvailable(handler) {
       updater.on("update-available", handler);
     },
+    // On macOS the service waits for onNativeUpdateDownloaded before an
+    // update becomes installable.
     onUpdateDownloaded(handler) {
-      if (process.platform !== "darwin") {
-        updater.on("update-downloaded", handler);
-        return;
-      }
-      let pending: UpdateDownloadedEvent | null = null;
-      updater.on("update-downloaded", (event) => {
-        pending = event;
-      });
-      updater.on("error", () => {
-        pending = null;
-      });
-      nativeUpdater.on("update-downloaded", () => {
-        if (pending === null) return;
-        const event = pending;
-        pending = null;
-        handler(event);
-      });
+      updater.on("update-downloaded", handler);
     },
     onUpdateNotAvailable(handler) {
       updater.on("update-not-available", handler);
@@ -222,6 +216,7 @@ export function createDesktopAutoUpdateService(
 ): DesktopAutoUpdateService {
   const now = args.now ?? (() => Date.now());
   let downloadInFlight: Promise<Array<string>> | null = null;
+  let pendingNativeDownload: UpdateDownloadedEvent | null = null;
   const scheduler = createDesktopUpdateScheduler({
     enabled: args.enabled,
     initialInfo: createBaseInfo(args.currentVersion, args.platform),
@@ -230,8 +225,12 @@ export function createDesktopAutoUpdateService(
     shouldSkipCheck,
   });
 
+  // A new check while Squirrel stages a download, or after it staged one,
+  // makes it raise a native error and drops the staged update.
   function shouldSkipCheck(): boolean {
-    return scheduler.getInfo().updateDownloaded;
+    return (
+      scheduler.getInfo().updateDownloaded || pendingNativeDownload !== null
+    );
   }
 
   function applyUpdateAvailable(applyArgs: ApplyUpdateAvailableArgs): void {
@@ -358,6 +357,10 @@ export function createDesktopAutoUpdateService(
       startDownload();
     });
     args.updater.onUpdateDownloaded((event) => {
+      if (args.platform === "macos") {
+        pendingNativeDownload = event;
+        return;
+      }
       args.logger.info(
         `Desktop auto-update downloaded: ${event.version}; it will install on restart or quit.`,
       );
@@ -366,6 +369,35 @@ export function createDesktopAutoUpdateService(
         version: event.version,
       });
     });
+    if (args.platform === "macos") {
+      args.updater.onNativeUpdateDownloaded(() => {
+        const event = pendingNativeDownload;
+        if (event === null) {
+          return;
+        }
+        pendingNativeDownload = null;
+        args.logger.info(
+          `Desktop auto-update downloaded: ${event.version}; it will install on restart or quit.`,
+        );
+        applyUpdateDownloaded({
+          checkedAt: formatCheckedAt(now),
+          version: event.version,
+        });
+      });
+      args.updater.onNativeError(() => {
+        pendingNativeDownload = null;
+        const info = scheduler.getInfo();
+        if (info.downloadState !== "downloading" && !info.updateDownloaded) {
+          return;
+        }
+        scheduler.updateInfo({
+          ...info,
+          downloadState: "failed",
+          pendingVersion: null,
+          updateDownloaded: false,
+        });
+      });
+    }
     args.updater.onUpdateNotAvailable((info) => {
       args.logger.info(`Desktop auto-update not available: ${info.version}.`);
       applyUpdateNotAvailable({
@@ -374,9 +406,12 @@ export function createDesktopAutoUpdateService(
       });
     });
     args.updater.onError((errorArgs) => {
+      if (scheduler.getInfo().downloadState === "downloading") {
+        pendingNativeDownload = null;
+      }
       const suffix = errorArgs.message === null ? "" : ` ${errorArgs.message}`;
       args.logger.error(
-        `Desktop auto-update error; preserving current update state.${suffix} ${formatErrorMessage(
+        `Desktop auto-update error.${suffix} ${formatErrorMessage(
           errorArgs.error,
         )}`,
       );

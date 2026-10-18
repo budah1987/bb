@@ -204,6 +204,11 @@ import {
 } from "@/components/plugin/PluginPanelActions";
 import { createFileOpenerOriginalTab } from "@/components/plugin/file-opener-tabs";
 import { PluginThreadPanelNavigationProvider } from "@/components/plugin/plugin-thread-panel-navigation";
+import {
+  completeThreadPanelRequest,
+  getReadyThreadPanelRequest,
+  subscribeThreadPanelRequest,
+} from "@/lib/plugin-thread-panel-request";
 import { ThreadTimelineNavigationProvider } from "@/components/thread/timeline/ThreadTimelineNavigationContext";
 import {
   AttachmentOpenerContext,
@@ -285,6 +290,7 @@ import { useRouteState } from "@/hooks/useRouteState";
 import { useAppCommandHandler } from "@/components/commands/AppCommandProvider";
 import { usePaneContext } from "./PaneContext";
 import { ThreadArchiveCommandHandler } from "./ThreadArchiveCommandHandler";
+import { ThreadCopyPullRequestUrlCommandHandler } from "./ThreadCopyPullRequestUrlCommandHandler";
 
 const EMPTY_PARENT_THREADS: readonly ThreadListEntry[] = [];
 const EMPTY_CHILD_THREAD_ITEMS: readonly ChildThreadPendingAttentionSource[] =
@@ -648,6 +654,7 @@ function ThreadDetailViewInternal(
   });
   const {
     activeBrowserTab,
+    activePluginPanelActivationKey,
     activeHostFileLineRange,
     activeHostFilePath,
     activeStorageFilePath,
@@ -1279,6 +1286,25 @@ function ThreadDetailViewInternal(
     reveal: openCompactDrawer,
     slot: "threadPanelAction",
   });
+  useEffect(() => {
+    if (!isFocused || !threadId) return;
+    const acceptPending = () => {
+      const request = getReadyThreadPanelRequest(threadId);
+      if (request === null) return;
+      try {
+        const accepted = handleOpenTimelinePluginPanel(request.options);
+        completeThreadPanelRequest(
+          request.id,
+          accepted ? "opened" : "unknown-action",
+        );
+      } catch {
+        completeThreadPanelRequest(request.id, "no-panel-surface");
+      }
+    };
+    const unsubscribe = subscribeThreadPanelRequest(acceptPending);
+    acceptPending();
+    return unsubscribe;
+  }, [handleOpenTimelinePluginPanel, isFocused, threadId]);
 
   const handleSelectFileSearchResult = useCallback(
     (selection: FileSearchSelection) => {
@@ -2629,6 +2655,7 @@ function ThreadDetailViewInternal(
               tab={tab}
               context={{ kind: "thread", threadId: thread.id }}
               fileOpenerOriginal={fileOpenerOriginal}
+              activationKey={activePluginPanelActivationKey}
             />
           </ThreadTimelineNavigationProvider>
         );
@@ -2920,6 +2947,7 @@ function ThreadDetailViewInternal(
   return (
     <>
       <ThreadArchiveCommandHandler thread={threadActionTarget} />
+      <ThreadCopyPullRequestUrlCommandHandler url={pullRequest?.url ?? null} />
       <ThreadProviderContext.Provider value={threadProviderContextValue}>
         <PluginThreadPanelNavigationProvider
           openThreadPanel={handleOpenTimelinePluginPanel}

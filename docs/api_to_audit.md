@@ -3094,3 +3094,30 @@ directories, linked worktrees, and submodules. Core callers: the setup guide
 Stabilize after deciding whether depth, recency window, and limit should be
 caller options, and after exercising slow or network-mounted home directories
 and Windows hosts.
+
+## `BbNavigate.experimental_openThreadPanel`
+
+Opens a registered plugin action in a specific thread in the calling app window.
+The required `params` value determines persisted tab identity; pass `null` for
+the same identity as a same-plugin open without params. The promise reports
+`opened`, `superseded`, `unknown-thread`, `unknown-action`, `invalid-params`, or
+`no-panel-surface`. `opened` means the focused target accepted panel state and
+the route committed; it does not promise plugin content rendered. New requests
+supersede pending requests, and a bounded expiry prevents late opens.
+
+Before stabilizing, audit inactive-thread navigation, split and compact
+surfaces, route cancellation, rapid calls, plugin removal, and panel identity.
+
+## `experimental_usePluginRealtime`
+
+Read-only subscription to another plugin's signal channel on the existing
+frontend WebSocket connection. Payloads remain ephemeral and should trigger
+reconciliation of durable state. Before stabilizing, audit plugin identity,
+handler replacement, unmount cleanup, disabled publishers, and reconnects.
+
+## `PluginThreadPanelProps.experimental_activationKey`
+
+Increments when a plugin panel tab is explicitly opened or focused again. The
+value is separate from persisted tab identity and starts at zero on a passive
+mount. Before stabilizing, audit tab restoration, split surfaces, compact
+drawers, and repeated activation without remounting content.

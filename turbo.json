@@ -252,7 +252,7 @@
     },
     "@bb/desktop#build": {
       "dependsOn": ["bb-app#build"],
-      "env": ["BB_DESKTOP_RELEASE_CHANNEL"],
+      "env": ["BB_DESKTOP_RELEASE_CHANNEL", "BB_DESKTOP_MAINTAINED_FLAVOR", "BB_DESKTOP_COMMIT", "BB_DESKTOP_BUILD_DATE"],
       "inputs": [
         "$TURBO_DEFAULT$",
         "$TURBO_ROOT$/apps/desktop/**",
@@ -268,6 +268,12 @@
       "outputs": ["dist/**"]
     },
     "@bb/desktop#desktop:build": {
+      "dependsOn": ["bb-app#build", "@bb/desktop#build"],
+      "cache": false,
+      "outputs": ["release/**"],
+      "passThroughEnv": ["*"]
+    },
+    "@bb/desktop#desktop:build:maintained": {
       "dependsOn": ["bb-app#build", "@bb/desktop#build"],
       "cache": false,
       "outputs": ["release/**"],
@@ -293,7 +299,11 @@
     "@bb/desktop#smoke:packaged-npm": {
       "cache": false,
       "outputs": [],
-      "passThroughEnv": ["BB_DESKTOP_RELEASE_CHANNEL"]
+      "passThroughEnv": ["BB_DESKTOP_RELEASE_CHANNEL", "BB_DESKTOP_MAINTAINED_FLAVOR"]
+    },
+    "@bb/desktop#desktop:version-feed": {
+      "cache": false,
+      "passThroughEnv": ["BB_DESKTOP_RELEASE_CHANNEL", "BB_DESKTOP_MAINTAINED_FLAVOR"]
     },
     "@bb/desktop#package": {
       "dependsOn": ["bb-app#build", "@bb/desktop#build"],

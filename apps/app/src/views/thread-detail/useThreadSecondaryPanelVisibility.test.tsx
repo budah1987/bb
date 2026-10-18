@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 
+import { StrictMode, useEffect } from "react";
 import { act, cleanup, renderHook } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
@@ -36,6 +37,32 @@ afterEach(() => {
 });
 
 describe("useThreadSecondaryPanelVisibility", () => {
+  it("keeps an explicitly opened compact drawer visible during Strict Mode effect replay", () => {
+    let accepted = false;
+    const { result, rerender } = renderHook(
+      ({ threadId }) => {
+        const visibility = useThreadSecondaryPanelDrawerVisibility({
+          isCompactViewport: true,
+          threadId,
+        });
+        useEffect(() => {
+          if (accepted) return;
+          accepted = true;
+          visibility.openDrawer();
+        }, [visibility]);
+        return visibility;
+      },
+      {
+        initialProps: { threadId: "thr_1" },
+        wrapper: StrictMode,
+      },
+    );
+
+    expect(result.current.isDrawerVisible).toBe(true);
+    rerender({ threadId: "thr_2" });
+    expect(result.current.isDrawerVisible).toBe(false);
+  });
+
   it("keeps persisted compact panels closed until an interaction reveals the drawer", () => {
     const args = createArgs({
       isCompactViewport: true,

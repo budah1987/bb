@@ -105,6 +105,10 @@ import { useQuickCreateProjectController } from "@/hooks/useQuickCreateProject";
 import { IframeDragGuardOverlay } from "@/lib/iframe-drag-guard";
 import { dispatchBrowserViewBoundsSync } from "@/lib/browser-view-bounds-sync";
 import { useFaviconBadge } from "@/lib/favicon-color-preference";
+import {
+  cancelThreadPanelRequestOnOwnerUnmount,
+  observeThreadPanelRoute,
+} from "@/lib/plugin-thread-panel-request";
 import { shouldShowFaviconAttentionDot } from "./faviconAttentionDot";
 import { AppLayoutSidebar } from "./AppLayoutSidebar";
 import { NAV_RAIL_COLLAPSED_SIDEBAR_WIDTH } from "@/components/sidebar/navRailWidth";
@@ -455,6 +459,10 @@ export function AppLayout({ children }: AppLayoutProps) {
     restoreIOSViewportOnKeyboardDismissal,
   );
   const location = useLocation();
+  useEffect(() => {
+    observeThreadPanelRoute({ key: location.key, path: location.pathname });
+  }, [location.key, location.pathname]);
+  useEffect(() => cancelThreadPanelRequestOnOwnerUnmount, []);
   const { projectId, threadId, isThreadView, isArchivedView, isRootView } =
     useRouteState();
   const [resourceRouteLabel, setResourceRouteLabel] = useAtom(

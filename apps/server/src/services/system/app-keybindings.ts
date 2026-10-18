@@ -293,6 +293,10 @@ export const DEFAULT_APP_KEYBINDINGS: AppDefaultKeybindings = [
     { mod: true, shift: true },
     composerWithoutModal,
   ),
+  binding("thread.copyPullRequestUrl", "c", { mod: true, shift: true }, {
+    ...mainWithoutModal,
+    none: ["modalOpen", "terminalFocus", "browserFocus"],
+  }),
   binding(
     "modelPicker.toggle",
     "m",

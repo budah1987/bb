@@ -3,6 +3,7 @@ import { spawn } from "node:child_process";
 import { forwardSignalsAndMirrorExit } from "./child-process-helpers.mjs";
 import {
   createDesktopReleaseConfig,
+  resolveDesktopMaintainedFlavor,
   resolveDesktopReleaseChannel,
 } from "./desktop-release-channel.mjs";
 import { createPackagedAppLaunchArguments } from "./packaged-app-launch.mjs";
@@ -12,6 +13,7 @@ const packageRoot = process.cwd();
 const releaseDir = join(packageRoot, "release");
 const releaseConfig = createDesktopReleaseConfig(
   resolveDesktopReleaseChannel(process.env),
+  resolveDesktopMaintainedFlavor(process.env),
 );
 
 function createElectronAppEnv(env) {

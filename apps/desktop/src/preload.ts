@@ -57,6 +57,7 @@ import {
   BB_DESKTOP_GET_INFO_CHANNEL,
   BB_DESKTOP_INFO_CHANGED_CHANNEL,
   BB_DESKTOP_INSTALL_UPDATE_CHANNEL,
+  BB_DESKTOP_START_MAINTAINED_REBUILD_CHANNEL,
   BB_DESKTOP_OPEN_EXTERNAL_URL_CHANNEL,
   BB_DESKTOP_SET_THEME_CHANNEL,
   BB_DESKTOP_ZOOM_COMMAND_CHANNEL,
@@ -427,6 +428,9 @@ const bbDesktopApi: BbDesktopApi = {
   get latestVersion() {
     return currentInfo.latestVersion;
   },
+  get maintainedRebuild() {
+    return currentInfo.maintainedRebuild;
+  },
   get pendingVersion() {
     return currentInfo.pendingVersion;
   },
@@ -448,6 +452,9 @@ const bbDesktopApi: BbDesktopApi = {
   },
   getInfo() {
     return invokeDesktopInfo(BB_DESKTOP_GET_INFO_CHANNEL);
+  },
+  startMaintainedRebuild() {
+    return invokeDesktopInfo(BB_DESKTOP_START_MAINTAINED_REBUILD_CHANNEL);
   },
   focusWindow() {
     ipcRenderer.send(BB_DESKTOP_FOCUS_WINDOW_CHANNEL);

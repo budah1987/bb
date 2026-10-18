@@ -7,7 +7,11 @@ import {
 } from "react";
 import ReactMarkdown, { type Components } from "react-markdown";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import type { BbDesktopInfo } from "@bb/desktop-contract";
+import { useNavigate } from "react-router-dom";
+import type {
+  BbDesktopInfo,
+  BbDesktopMaintainedRebuild,
+} from "@bb/desktop-contract";
 import type { ProviderInfo } from "@bb/domain";
 import type {
   SystemAppUpdateResult,
@@ -796,6 +800,8 @@ interface BbAppUpdateRowsProps {
   onRetryAppCheck?: (() => void) | null;
   onRelaunchDesktop: (() => void) | null;
   onRetryDesktop: (() => void) | null;
+  onStartMaintainedRebuild?: (() => void) | null;
+  onOpenThread?: ((threadId: string) => void) | null;
   onShowAppUpdateResult?: ((result: SystemAppUpdateResult) => void) | null;
   isChecking?: boolean;
 }
@@ -811,6 +817,8 @@ export function BbAppUpdateRows({
   onRetryAppCheck = null,
   onRelaunchDesktop,
   onRetryDesktop,
+  onStartMaintainedRebuild = null,
+  onOpenThread = null,
   onShowAppUpdateResult = null,
   isChecking = false,
 }: BbAppUpdateRowsProps) {
@@ -896,6 +904,20 @@ export function BbAppUpdateRows({
     }
     if (desktopInfo.updateAvailable) {
       return row(name, <RowStateControl state="update-available" />);
+    }
+    const rebuild = desktopInfo.maintainedRebuild;
+    if (rebuild !== undefined && rebuild.upstreamVersion !== null) {
+      return (
+        <MaintainedRebuildRow
+          name={rowName}
+          currentVersion={desktopInfo.version}
+          rebuild={rebuild}
+          upstreamVersion={rebuild.upstreamVersion}
+          row={row}
+          onStart={onStartMaintainedRebuild}
+          onOpenThread={onOpenThread}
+        />
+      );
     }
     if (desktopInfo.latestVersion === null) {
       const checkDesktop = onRetryAppCheck ?? onRetryDesktop;
@@ -1037,6 +1059,75 @@ type BbAppRowRenderer = (
   caption?: ReactNode,
   description?: ReactNode,
 ) => ReactNode;
+
+// bb+ only: upstream bb is newer than this build. Update starts a rebuild
+// thread; when its package reaches the local feed, the native updater takes
+// over with Relaunch.
+function MaintainedRebuildRow({
+  name: rowName,
+  currentVersion,
+  rebuild,
+  upstreamVersion,
+  row,
+  onStart,
+  onOpenThread,
+}: {
+  name: string;
+  currentVersion: string;
+  rebuild: BbDesktopMaintainedRebuild;
+  upstreamVersion: string;
+  row: BbAppRowRenderer;
+  onStart: (() => void) | null;
+  onOpenThread: ((threadId: string) => void) | null;
+}) {
+  const name = (
+    <RowName name={rowName} current={currentVersion} latest={upstreamVersion} />
+  );
+  const threadId = rebuild.threadId;
+  const viewButton =
+    threadId === null || onOpenThread === null ? null : (
+      <UpdateActionButton
+        label="Open the bb+ rebuild thread"
+        tooltipLabel="View rebuild"
+        icon="MessageSquare"
+        onClick={() => onOpenThread(threadId)}
+      />
+    );
+  if (rebuild.status === "building") {
+    return row(
+      name,
+      <span className="flex items-center gap-1">
+        {viewButton}
+        <RowStateControl live state="in-progress" />
+      </span>,
+      <RowStateCaption state="in-progress">Building</RowStateCaption>,
+    );
+  }
+  const startButton =
+    onStart === null ? (
+      <RowStateControl state="update-available" />
+    ) : (
+      <RowStateControl
+        state={rebuild.status === "failed" ? "failed" : "update-available"}
+        buttonLabel={rebuild.status === "failed" ? "Retry" : "Update"}
+        actionLabel={`Rebuild bb+ from bb ${upstreamVersion}, then offer Relaunch`}
+        onClick={onStart}
+      />
+    );
+  if (rebuild.status === "failed") {
+    return row(
+      name,
+      <span className="flex items-center gap-1">
+        {viewButton}
+        {startButton}
+      </span>,
+      <span title={rebuild.message ?? undefined}>
+        <RowStateCaption state="failed">Build failed</RowStateCaption>
+      </span>,
+    );
+  }
+  return row(name, startButton);
+}
 
 function InAppUpdateRow({
   name: rowName,
@@ -1989,8 +2080,19 @@ function desktopRowNeedsAttention(desktopInfo: BbDesktopInfo | null): boolean {
   ) {
     return true;
   }
+  if (maintainedRebuildOffered(desktopInfo)) {
+    return true;
+  }
   return (
     desktopInfo.latestVersion === null && desktopInfo.lastCheckedAt !== null
+  );
+}
+
+function maintainedRebuildOffered(desktopInfo: BbDesktopInfo | null): boolean {
+  return (
+    desktopInfo !== null &&
+    desktopInfo.maintainedRebuild !== undefined &&
+    desktopInfo.maintainedRebuild.upstreamVersion !== null
   );
 }
 
@@ -2011,6 +2113,7 @@ export function UpdatesSettingsSection({
   showChangelogPreview = false,
 }: UpdatesSettingsSectionProps = {}) {
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const inventory = useUpdateInventory();
   const { localDaemonHostId } = useHostDaemon();
   const serverPrimaryHostId = useSystemConfig().data?.primaryHostId ?? null;
@@ -2141,8 +2244,23 @@ export function UpdatesSettingsSection({
             });
           });
         };
+  // bb+ only: an offered upstream rebuild lives in the desktop row, so the
+  // desktop-owned server row keeps the desktop path while one is offered.
   const useServerUpdate =
-    serverRunsSeparately || appUpdate?.desktopUpdateSupported === true;
+    serverRunsSeparately ||
+    (appUpdate?.desktopUpdateSupported === true &&
+      !maintainedRebuildOffered(desktopInfo));
+  const startMaintainedRebuild =
+    desktopApi?.startMaintainedRebuild === undefined || showFallbackBbStatus
+      ? null
+      : () => {
+          void desktopApi.startMaintainedRebuild?.().catch((error) => {
+            appToast.error("Couldn't start the bb+ rebuild", {
+              description: checkErrorDescription(error),
+            });
+          });
+        };
+  const openThread = (threadId: string) => navigate(`/threads/${threadId}`);
   const serverAppRow = (
     <BbAppUpdateRows
       name="Server"
@@ -2157,6 +2275,8 @@ export function UpdatesSettingsSection({
       onShowAppUpdateResult={openAppUpdateResultDetails}
       onRelaunchDesktop={useServerUpdate ? null : relaunchDesktop}
       onRetryDesktop={useServerUpdate ? null : retryDesktop}
+      onStartMaintainedRebuild={useServerUpdate ? null : startMaintainedRebuild}
+      onOpenThread={useServerUpdate ? null : openThread}
     />
   );
   const desktopClientRow = (
@@ -2169,6 +2289,8 @@ export function UpdatesSettingsSection({
       onRetryAppCheck={handleCheckForUpdates}
       onRelaunchDesktop={relaunchDesktop}
       onRetryDesktop={retryDesktop}
+      onStartMaintainedRebuild={startMaintainedRebuild}
+      onOpenThread={openThread}
     />
   );
 

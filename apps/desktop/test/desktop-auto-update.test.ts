@@ -52,6 +52,8 @@ class DesktopAutoUpdaterAdapterStub implements DesktopAutoUpdaterAdapter {
   updateCheckError: Error | null = null;
 
   private readonly errorHandlers = new Set<DesktopAutoUpdateErrorHandler>();
+  private readonly nativeErrorHandlers = new Set<(error: Error) => void>();
+  private readonly nativeUpdateDownloadedHandlers = new Set<() => void>();
   private readonly updateAvailableHandlers =
     new Set<DesktopAutoUpdateAvailableHandler>();
   private readonly updateDownloadedHandlers =
@@ -78,6 +80,18 @@ class DesktopAutoUpdaterAdapterStub implements DesktopAutoUpdaterAdapter {
     }
   }
 
+  emitNativeError(error: Error): void {
+    for (const handler of this.nativeErrorHandlers) {
+      handler(error);
+    }
+  }
+
+  emitNativeUpdateDownloaded(): void {
+    for (const handler of this.nativeUpdateDownloadedHandlers) {
+      handler();
+    }
+  }
+
   emitUpdateAvailable(info: UpdateInfo): void {
     for (const handler of this.updateAvailableHandlers) {
       handler(info);
@@ -98,6 +112,14 @@ class DesktopAutoUpdaterAdapterStub implements DesktopAutoUpdaterAdapter {
 
   onError(handler: DesktopAutoUpdateErrorHandler): void {
     this.errorHandlers.add(handler);
+  }
+
+  onNativeError(handler: (error: Error) => void): void {
+    this.nativeErrorHandlers.add(handler);
+  }
+
+  onNativeUpdateDownloaded(handler: () => void): void {
+    this.nativeUpdateDownloadedHandlers.add(handler);
   }
 
   onUpdateAvailable(handler: DesktopAutoUpdateAvailableHandler): void {
@@ -211,7 +233,7 @@ function createDeferredDownload(): DeferredDownload {
 }
 
 describe("desktop auto-update service", () => {
-  it("configures electron-updater for the desktop-latest GitHub release assets", () => {
+  it("configures electron-updater for its release feed", () => {
     const updater = new DesktopAutoUpdaterAdapterStub();
     const messages = createLoggerMessages();
 
@@ -260,6 +282,13 @@ describe("desktop auto-update service", () => {
     });
 
     updater.emitUpdateDownloaded(createDownloadedEvent("0.0.2"));
+
+    expect(service.getInfo().downloadState).toBe("downloading");
+    expect(service.getInfo().updateDownloaded).toBe(false);
+    service.installUpdate();
+    expect(updater.quitAndInstallCalls).toBe(0);
+
+    updater.emitNativeUpdateDownloaded();
 
     expect(service.getInfo()).toEqual({
       downloadState: "downloaded",
@@ -388,6 +417,7 @@ describe("desktop auto-update service", () => {
     expect(updater.checkForUpdatesCalls).toBe(1);
 
     updater.emitUpdateDownloaded(createDownloadedEvent("0.0.2"));
+    updater.emitNativeUpdateDownloaded();
     await service.checkForUpdates();
     currentTime += 16 * 60 * 1000;
     await service.checkAfterActive();
@@ -403,6 +433,152 @@ describe("desktop auto-update service", () => {
       updateDownloaded: true,
       version: "0.0.1",
     });
+  });
+
+  it("skips re-checks while native staging of a download is pending", async () => {
+    const updater = new DesktopAutoUpdaterAdapterStub();
+    updater.updateCheckResult = createUpdateCheckResult("0.0.2");
+    const service = createDesktopAutoUpdateService({
+      currentVersion: "0.0.1",
+      enabled: true,
+      forceDevUpdateConfig: false,
+      logger: createLogger(createLoggerMessages()),
+      now: () => Date.parse(checkedAt),
+      platform: "macos",
+      updater,
+    });
+
+    await service.checkForUpdates();
+    updater.emitUpdateAvailable(createUpdateInfo("0.0.2"));
+    updater.emitUpdateDownloaded(createDownloadedEvent("0.0.2"));
+    await service.checkForUpdates();
+
+    expect(updater.checkForUpdatesCalls).toBe(1);
+    updater.emitNativeUpdateDownloaded();
+    expect(service.getInfo()).toMatchObject({
+      downloadState: "downloaded",
+      pendingVersion: "0.0.2",
+      updateDownloaded: true,
+    });
+  });
+
+  it("rejects failed native staging and retries a later update", async () => {
+    const updater = new DesktopAutoUpdaterAdapterStub();
+    updater.updateCheckResult = createUpdateCheckResult("0.0.2");
+    const service = createDesktopAutoUpdateService({
+      currentVersion: "0.0.1",
+      enabled: true,
+      forceDevUpdateConfig: false,
+      logger: createLogger(createLoggerMessages()),
+      now: () => Date.parse(checkedAt),
+      platform: "macos",
+      updater,
+    });
+
+    await service.checkForUpdates();
+    updater.emitUpdateAvailable(createUpdateInfo("0.0.2"));
+    updater.emitUpdateDownloaded(createDownloadedEvent("0.0.2"));
+    expect(service.getInfo().updateDownloaded).toBe(false);
+
+    const signatureError = new Error("code signature validation failed");
+    updater.emitError({ error: signatureError, message: null });
+    updater.emitNativeError(signatureError);
+    updater.emitNativeUpdateDownloaded();
+
+    expect(service.getInfo()).toMatchObject({
+      downloadState: "failed",
+      pendingVersion: null,
+      updateAvailable: true,
+      updateDownloaded: false,
+    });
+    service.installUpdate();
+    expect(updater.quitAndInstallCalls).toBe(0);
+
+    const validUpdateInfo: UpdateInfo = {
+      ...createUpdateInfo("0.0.2"),
+      files: [{ sha512: "VALID_SHA512", url: "bb-0.0.2-valid.zip" }],
+      path: "bb-0.0.2-valid.zip",
+      sha512: "VALID_SHA512",
+    };
+    updater.updateCheckResult = {
+      ...createUpdateCheckResult("0.0.2"),
+      updateInfo: validUpdateInfo,
+      versionInfo: validUpdateInfo,
+    };
+    await service.checkForUpdates();
+    updater.emitUpdateAvailable(validUpdateInfo);
+    updater.emitUpdateDownloaded({
+      ...validUpdateInfo,
+      downloadedFile: "/tmp/bb-valid.zip",
+    });
+    updater.emitNativeUpdateDownloaded();
+
+    expect(updater.checkForUpdatesCalls).toBe(2);
+    expect(updater.downloadUpdateCalls).toBe(2);
+    expect(service.getInfo()).toMatchObject({
+      downloadState: "downloaded",
+      latestVersion: "0.0.2",
+      pendingVersion: "0.0.2",
+      updateDownloaded: true,
+    });
+    service.installUpdate();
+    expect(updater.quitAndInstallCalls).toBe(1);
+  });
+
+  it("preserves a staged update after an unrelated error but revokes it on a native error", async () => {
+    const updater = new DesktopAutoUpdaterAdapterStub();
+    updater.updateCheckResult = createUpdateCheckResult("0.0.2");
+    const service = createDesktopAutoUpdateService({
+      currentVersion: "0.0.1",
+      enabled: true,
+      forceDevUpdateConfig: false,
+      logger: createLogger(createLoggerMessages()),
+      now: () => Date.parse(checkedAt),
+      platform: "macos",
+      updater,
+    });
+
+    updater.emitUpdateAvailable(createUpdateInfo("0.0.2"));
+    updater.emitUpdateDownloaded(createDownloadedEvent("0.0.2"));
+    updater.emitNativeUpdateDownloaded();
+    updater.emitError({
+      error: new Error("later feed request failed"),
+      message: "Cannot check for updates",
+    });
+
+    expect(service.getInfo().updateDownloaded).toBe(true);
+    await service.checkForUpdates();
+    expect(updater.checkForUpdatesCalls).toBe(0);
+
+    updater.emitNativeError(new Error("native staging revoked"));
+
+    expect(service.getInfo()).toMatchObject({
+      downloadState: "failed",
+      pendingVersion: null,
+      updateDownloaded: false,
+    });
+    service.installUpdate();
+    expect(updater.quitAndInstallCalls).toBe(0);
+    await service.checkForUpdates();
+    expect(updater.checkForUpdatesCalls).toBe(1);
+  });
+
+  it("marks Linux downloads ready without native staging", () => {
+    const updater = new DesktopAutoUpdaterAdapterStub();
+    const service = createDesktopAutoUpdateService({
+      currentVersion: "0.0.1",
+      enabled: true,
+      forceDevUpdateConfig: false,
+      logger: createLogger(createLoggerMessages()),
+      now: () => Date.parse(checkedAt),
+      platform: "linux",
+      updater,
+    });
+
+    updater.emitUpdateAvailable(createUpdateInfo("0.0.2"));
+    updater.emitUpdateDownloaded(createDownloadedEvent("0.0.2"));
+
+    expect(service.getInfo().updateDownloaded).toBe(true);
   });
 
   it("does not initialize electron-updater in dev mode without the override", async () => {

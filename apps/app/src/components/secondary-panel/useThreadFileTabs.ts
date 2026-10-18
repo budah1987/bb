@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type {
   TerminalSession,
   ThreadStorageFileListResponse,
@@ -294,6 +294,10 @@ export function useThreadFileTabs({
     panelStateId,
     syncThreadId,
   );
+  const [pluginPanelActivation, setPluginPanelActivation] = useState({
+    tabId: "",
+    key: 0,
+  });
   const recordRecentItem = useRecordThreadRecentItem(panelStateId);
   const resolvedPanelStateId =
     typeof panelStateId === "string" && panelStateId.length > 0
@@ -526,11 +530,21 @@ export function useThreadFileTabs({
 
   const activateTab = useCallback(
     (tabId: string) => {
+      const tab = findSecondaryPanelTab(
+        fixedPanelTabsState.secondary.tabs,
+        tabId,
+      );
+      if (tab?.kind === "plugin-panel") {
+        setPluginPanelActivation((current) => ({
+          tabId,
+          key: current.key + 1,
+        }));
+      }
       updateFixedPanelTabsState((state) =>
         activateSecondaryPanelTabInState(state, tabId),
       );
     },
-    [updateFixedPanelTabsState],
+    [fixedPanelTabsState.secondary.tabs, updateFixedPanelTabsState],
   );
 
   const closeTab = useCallback(
@@ -627,6 +641,10 @@ export function useThreadFileTabs({
         pluginId,
         title,
       });
+      setPluginPanelActivation((current) => ({
+        tabId: tab.id,
+        key: current.key + 1,
+      }));
       if (recentlyClosedPanelContextKey !== null) {
         forgetClosedPanelTab(recentlyClosedPanelContextKey, tab.id);
       }
@@ -717,6 +735,10 @@ export function useThreadFileTabs({
   const activeBrowserTab = activeTab?.kind === "browser" ? activeTab : null;
   const activePluginPanelTab =
     activeTab?.kind === "plugin-panel" ? activeTab : null;
+  const activePluginPanelActivationKey =
+    activePluginPanelTab?.id === pluginPanelActivation.tabId
+      ? pluginPanelActivation.key
+      : 0;
   const activeFileOpenerOwner =
     activePluginPanelTab !== null &&
     fileOpenerIdFromActionId(activePluginPanelTab.actionId) !== null
@@ -745,6 +767,7 @@ export function useThreadFileTabs({
   return {
     activateTab,
     activeBrowserTab,
+    activePluginPanelActivationKey,
     activeHostFileLineRange:
       activeHostFileTab?.lineRange ??
       (activeFileOpenerOwner?.kind === "host-file-preview"

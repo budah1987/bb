@@ -1918,6 +1918,44 @@ describe("plugin thread panel actions", () => {
     ).toBeDefined();
   });
 
+  it("passes explicit activation changes to an existing thread panel", () => {
+    function ActivationProbe({
+      experimental_activationKey,
+    }: PluginThreadPanelProps) {
+      return <div>activation {experimental_activationKey}</div>;
+    }
+    setPluginSlotRegistrations(
+      "demo",
+      registrationSet({
+        threadPanelActions: [
+          { id: "issue", title: "Issue", component: ActivationProbe },
+        ],
+      }),
+    );
+    const tab = createPluginPanelFixedPanelTab({
+      actionId: "issue",
+      paramsJson: null,
+      pluginId: "demo",
+      title: "Issue",
+    });
+    const view = render(
+      <PluginPanelTabContent
+        tab={tab}
+        context={{ kind: "thread", threadId: "thr_9" }}
+        activationKey={1}
+      />,
+    );
+    expect(screen.getByText("activation 1")).toBeDefined();
+    view.rerender(
+      <PluginPanelTabContent
+        tab={tab}
+        context={{ kind: "thread", threadId: "thr_9" }}
+        activationKey={2}
+      />,
+    );
+    expect(screen.getByText("activation 2")).toBeDefined();
+  });
+
   it("contains a throwing run and declines non-JSON params without opening", () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     const declines: boolean[] = [];

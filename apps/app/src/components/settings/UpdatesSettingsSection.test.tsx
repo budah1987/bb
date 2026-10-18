@@ -1731,6 +1731,73 @@ The canonical release summary.
     });
   });
 
+  it("starts a bb+ rebuild when upstream is newer and shows its progress", () => {
+    const baseInfo: BbDesktopInfo = {
+      lastCheckedAt: null,
+      latestVersion: "0.44.1-bbamir.36895179611.1.3",
+      pendingVersion: null,
+      platform: "macos",
+      updateAvailable: false,
+      updateDownloaded: false,
+      version: "0.44.1-bbamir.36895179611.1.3",
+      maintainedRebuild: {
+        message: null,
+        status: "idle",
+        threadId: null,
+        upstreamVersion: "0.45.1-nightly.37496027885.1",
+      },
+    };
+    const startMaintainedRebuild = vi.fn().mockResolvedValue(baseInfo);
+    const desktopApi = {
+      checkForUpdates: vi.fn().mockResolvedValue(baseInfo),
+      startMaintainedRebuild,
+    } as unknown as BbDesktopApi;
+    function show(desktopInfo: BbDesktopInfo) {
+      useDesktopUpdateInfoMock.mockReturnValue({
+        desktopApi,
+        desktopInfo,
+        isDesktop: true,
+      });
+      useUpdateInventoryMock.mockReturnValue(makeInventory({ desktopInfo }));
+      renderSection();
+    }
+
+    show(baseInfo);
+    expect(screen.getByText("0.45.1-nightly.37496027885.1")).toBeDefined();
+    fireEvent.click(screen.getByRole("button", { name: /Rebuild bb\+ from bb/ }));
+    expect(startMaintainedRebuild).toHaveBeenCalledOnce();
+    cleanup();
+
+    show({
+      ...baseInfo,
+      maintainedRebuild: {
+        message: null,
+        upstreamVersion: "0.45.1-nightly.37496027885.1",
+        status: "building",
+        threadId: "thr_rebuild",
+      },
+    });
+    expect(screen.getByText("Building")).toBeDefined();
+    expect(
+      screen.getByRole("button", { name: "Open the bb+ rebuild thread" }),
+    ).toBeDefined();
+    expect(screen.queryByRole("button", { name: /Rebuild bb\+ from bb/ })).toBeNull();
+    cleanup();
+
+    // A promoted build reaches the native updater, which takes priority.
+    show({
+      ...baseInfo,
+      downloadState: "downloaded",
+      pendingVersion: "0.45.1-bbamir.37496027885.1.1",
+      updateAvailable: true,
+      updateDownloaded: true,
+    });
+    expect(
+      screen.getByRole("button", { name: /Relaunch bb to finish updating/ }),
+    ).toBeDefined();
+    expect(screen.queryByRole("button", { name: /Rebuild bb\+ from bb/ })).toBeNull();
+  });
+
   it("does not claim a legacy desktop shell is downloading an available update", () => {
     const desktopInfo: BbDesktopInfo = {
       lastCheckedAt: null,
@@ -2480,4 +2547,52 @@ The canonical release summary.
       expect(installUpdate).not.toHaveBeenCalled();
     },
   );
+  it("keeps the bb+ rebuild action when the desktop-hosted server shares updates", async () => {
+    const desktopInfo: BbDesktopInfo = {
+      downloadState: "idle",
+      lastCheckedAt: null,
+      latestVersion: "0.0.5",
+      pendingVersion: null,
+      platform: "macos",
+      updateAvailable: false,
+      updateDownloaded: false,
+      version: "0.0.5",
+      maintainedRebuild: {
+        message: null,
+        status: "idle",
+        threadId: null,
+        upstreamVersion: "0.0.6-nightly.1.1",
+      },
+    };
+    const startMaintainedRebuild = vi.fn().mockResolvedValue(desktopInfo);
+    useDesktopUpdateInfoMock.mockReturnValue({
+      desktopApi: {
+        checkForUpdates: vi.fn().mockResolvedValue(desktopInfo),
+        installUpdate: vi.fn(),
+        startMaintainedRebuild,
+      } as unknown as BbDesktopApi,
+      desktopInfo,
+      isDesktop: true,
+    });
+    hostDaemon.localDaemonHostId = "host_primary";
+    useUpdateInventoryMock.mockReturnValue(desktopFleet());
+    vi.mocked(sdk.system.appUpdate).mockResolvedValue(
+      makeAppUpdateStatus({
+        support: { kind: "unsupported", reason: "desktop" },
+        desktopUpdateSupported: true,
+      }),
+    );
+    renderSection();
+    await waitFor(() => expect(sdk.system.appUpdate).toHaveBeenCalled());
+    await act(async () => {});
+    fireEvent.click(
+      screen.getByRole("button", { name: /Rebuild bb\+ from bb 0\.0\.6/ }),
+    );
+    expect(startMaintainedRebuild).toHaveBeenCalledOnce();
+    expect(
+      screen.queryByRole("button", {
+        name: "Update available · Download the update and restart bb",
+      }),
+    ).toBeNull();
+  });
 });

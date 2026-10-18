@@ -25,6 +25,12 @@ describe("plugin SDK JsonValue contract", () => {
     expectTypeOf<
       PluginThreadPanelProps["params"]
     >().toEqualTypeOf<JsonValue | null>();
+    expectTypeOf<
+      PluginThreadPanelProps["experimental_activationKey"]
+    >().toEqualTypeOf<number>();
+    expectTypeOf<
+      Parameters<BbNavigate["experimental_openThreadPanel"]>[0]["params"]
+    >().toEqualTypeOf<JsonValue | null>();
 
     const recursive: JsonValue = {
       title: "Issue",

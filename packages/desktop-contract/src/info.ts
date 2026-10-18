@@ -14,9 +14,21 @@ const bbDesktopDownloadStateSchema = z.enum([
   "failed",
 ]);
 
+export const bbDesktopMaintainedRebuildSchema = z.object({
+  message: z.string().min(1).nullable(),
+  status: z.enum(["idle", "building", "failed"]),
+  threadId: z.string().min(1).nullable(),
+  upstreamVersion: z.string().min(1).nullable(),
+});
+export type BbDesktopMaintainedRebuild = z.infer<
+  typeof bbDesktopMaintainedRebuildSchema
+>;
+
 export const bbDesktopInfoSchema = z.object({
   downloadState: bbDesktopDownloadStateSchema.optional(),
   lastCheckedAt: isoUtcDateTimeSchema.nullable(),
+  // Present only in maintained (bb+) builds, which rebuild from upstream.
+  maintainedRebuild: bbDesktopMaintainedRebuildSchema.optional(),
   latestVersion: z.string().min(1).nullable(),
   pendingVersion: z.string().min(1).nullable(),
   platform: bbDesktopVersionFeedPlatformSchema,
@@ -76,6 +88,7 @@ export interface BbDesktopApi extends BbDesktopInfo {
   installUpdate(): Promise<void>;
   macosTrafficLightInset?: number;
   macosTrafficLightTopInset?: number;
+  startMaintainedRebuild?(): Promise<BbDesktopInfo>;
   onChange(listener: BbDesktopInfoChangeHandler): BbDesktopInfoUnsubscribe;
   onWindowStateChange?(
     listener: BbDesktopWindowStateChangeHandler,

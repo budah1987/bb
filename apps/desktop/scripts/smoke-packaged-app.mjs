@@ -9,6 +9,7 @@ import { fileURLToPath } from "node:url";
 import {
   createDesktopReleaseConfig,
   resolveDesktopBuildPlatform,
+  resolveDesktopMaintainedFlavor,
   resolveDesktopReleaseChannel,
 } from "./desktop-release-channel.mjs";
 import { createPackagedAppLaunchArguments } from "./packaged-app-launch.mjs";
@@ -19,7 +20,10 @@ const scriptDirectory = dirname(fileURLToPath(import.meta.url));
 const desktopPackageRoot = resolve(scriptDirectory, "..");
 const releaseDir = join(desktopPackageRoot, "release");
 const releaseChannel = resolveDesktopReleaseChannel(process.env);
-const releaseConfig = createDesktopReleaseConfig(releaseChannel);
+const releaseConfig = createDesktopReleaseConfig(
+  releaseChannel,
+  resolveDesktopMaintainedFlavor(process.env),
+);
 const startupTimeoutMs = 20_000;
 const exitTimeoutMs = 5_000;
 const outputFlushTimeoutMs = 2_000;
@@ -125,6 +129,7 @@ async function readDesktopPackageVersion() {
 
 async function startSmokeServer({
   dataDir,
+  daemonPort,
   expectedDesktopPlatform,
   expectedDesktopVersion,
 }) {
@@ -152,7 +157,7 @@ async function startSmokeServer({
           placeholder: false,
         },
         generalSettings: {},
-        hostDaemonPort: 38887,
+        hostDaemonPort: daemonPort,
         primaryHostPlatform: null,
         voiceTranscriptionEnabled: false,
       });
@@ -305,6 +310,10 @@ async function stopPackagedApp(child) {
 }
 
 async function smokePackagedApp() {
+  if (releaseConfig.runtime?.kind === "rehearsal") {
+    throw new Error("Use the isolated native A-to-B cycle for rehearsal builds.");
+  }
+
   const desktopVersion = await readDesktopPackageVersion();
   const desktopPlatform = resolveDesktopBuildPlatform(process.platform);
   const appBinary = await resolvePackagedAppBinary({
@@ -317,8 +326,19 @@ async function smokePackagedApp() {
   const smokeRoot = await mkdtemp(join(tmpdir(), "bb-desktop-packaged-smoke-"));
   const dataDir = join(smokeRoot, "data");
   const userDataDir = join(smokeRoot, "user-data");
+  const daemonPortProbe = createServer();
+  await new Promise((resolvePromise) => {
+    daemonPortProbe.listen(0, "127.0.0.1", resolvePromise);
+  });
+  const daemonAddress = daemonPortProbe.address();
+  if (daemonAddress === null || typeof daemonAddress === "string") {
+    throw new Error("Could not reserve a smoke daemon port.");
+  }
+  const daemonPort = daemonAddress.port;
+  await new Promise((resolvePromise) => daemonPortProbe.close(resolvePromise));
   const smokeServer = await startSmokeServer({
     dataDir,
+    daemonPort,
     expectedDesktopPlatform: desktopPlatform,
     expectedDesktopVersion: desktopVersion,
   });
@@ -333,9 +353,14 @@ async function smokePackagedApp() {
     // and keep exercising the real attach path.
     BB_DESKTOP_ATTACH_WITHOUT_PROMPT: "1",
     BB_DESKTOP_OPEN_DEVTOOLS: "0",
-    BB_DESKTOP_VERSION_FEED_URL: `${serverUrl}/desktop-version.json`,
+    BB_HOST_DAEMON_PORT: String(daemonPort),
     BB_SERVER_PORT: String(smokeServer.port),
   };
+  if (releaseConfig.runtime === null) {
+    childEnv.BB_DESKTOP_VERSION_FEED_URL = `${serverUrl}/desktop-version.json`;
+  } else {
+    delete childEnv.BB_DESKTOP_VERSION_FEED_URL;
+  }
   delete childEnv.BB_DESKTOP_APP_URL;
   delete childEnv.BB_DESKTOP_NODE_EXEC_PATH;
   delete childEnv.ELECTRON_RUN_AS_NODE;

@@ -199,6 +199,10 @@ export type NavigateCall =
       method: "openThreadPanel";
       options: Parameters<BbNavigate["openThreadPanel"]>[0];
     }
+  | {
+      method: "experimental_openThreadPanel";
+      options: Parameters<BbNavigate["experimental_openThreadPanel"]>[0];
+    }
   | { method: "openUrl"; url: string }
   | {
       method: "experimental_openFilePreview";
@@ -309,6 +313,35 @@ interface SlotEnv {
   codeTheme: PluginCodeThemeState;
   branchesState: BranchesState;
   checkoutState: CheckoutState;
+}
+
+function realtimeKey(pluginId: string, channel: string): string {
+  return JSON.stringify([pluginId, channel]);
+}
+
+function useTestRealtime(
+  env: SlotEnv,
+  pluginId: string,
+  channel: string,
+  handler: (payload: unknown) => void,
+): void {
+  const handlerRef = useRef(handler);
+  useEffect(() => {
+    handlerRef.current = handler;
+  });
+  useEffect(() => {
+    const key = realtimeKey(pluginId, channel);
+    const listener = (payload: unknown) => handlerRef.current(payload);
+    let listeners = env.realtimeHandlers.get(key);
+    if (!listeners) {
+      listeners = new Set();
+      env.realtimeHandlers.set(key, listeners);
+    }
+    listeners.add(listener);
+    return () => {
+      listeners.delete(listener);
+    };
+  }, [env, pluginId, channel]);
 }
 
 interface TestFixedTabTargetStore {
@@ -1234,23 +1267,15 @@ const testPluginSdkApp = {
   },
   useRealtime(channel: string, handler: (payload: unknown) => void): void {
     const env = useSlotEnv("useRealtime");
-    // Latest handler without resubscribing per render, like the host hook.
-    const handlerRef = useRef(handler);
-    useEffect(() => {
-      handlerRef.current = handler;
-    });
-    useEffect(() => {
-      const listener = (payload: unknown) => handlerRef.current(payload);
-      let listeners = env.realtimeHandlers.get(channel);
-      if (!listeners) {
-        listeners = new Set();
-        env.realtimeHandlers.set(channel, listeners);
-      }
-      listeners.add(listener);
-      return () => {
-        listeners.delete(listener);
-      };
-    }, [env, channel]);
+    useTestRealtime(env, env.pluginId, channel, handler);
+  },
+  experimental_usePluginRealtime(
+    pluginId: string,
+    channel: string,
+    handler: (payload: unknown) => void,
+  ): void {
+    const env = useSlotEnv("experimental_usePluginRealtime");
+    useTestRealtime(env, pluginId, channel, handler);
   },
   useRealtimeConnectionState(): PluginRealtimeConnectionState {
     const connection = useSlotEnv(
@@ -1897,6 +1922,9 @@ export interface RenderSlotOptions<
   openThreadPanel?: (
     options: Parameters<BbNavigate["openThreadPanel"]>[0],
   ) => boolean;
+  experimental_openThreadPanel?: (
+    options: Parameters<BbNavigate["experimental_openThreadPanel"]>[0],
+  ) => ReturnType<BbNavigate["experimental_openThreadPanel"]>;
   /** Host acceptance for URL intents from the hook or `UrlLink`. */
   openUrl?: (url: string) => boolean;
   /** Host acceptance for preview intents from the hook or file link. */
@@ -1924,6 +1952,11 @@ export interface RenderedSlotBehaviorDrivers {
    * in act. The payload is JSON-round-tripped like `bb.realtime.publish`.
    */
   emitRealtime(channel: string, payload: unknown): Promise<void>;
+  emitPluginRealtime(
+    pluginId: string,
+    channel: string,
+    payload: unknown,
+  ): Promise<void>;
   /** Drive the lifecycle of the same connection used by realtime events. */
   setRealtimeConnectionState(
     state: PluginRealtimeConnectionState,
@@ -2295,6 +2328,16 @@ export function renderSlot<
       });
       return options.openThreadPanel?.(panelOptions) ?? false;
     },
+    experimental_openThreadPanel(panelOptions) {
+      navigateCalls.push({
+        method: "experimental_openThreadPanel",
+        options: panelOptions,
+      });
+      return (
+        options.experimental_openThreadPanel?.(panelOptions) ??
+        Promise.resolve({ outcome: "no-panel-surface" })
+      );
+    },
     openUrl(url) {
       navigateCalls.push({ method: "openUrl", url });
       return options.openUrl?.(url) ?? false;
@@ -2652,7 +2695,8 @@ export function renderSlot<
   const rerenderSlot = (ui: ReactNode): void => {
     result.rerender(renderSlotTree(ui));
   };
-  const emitRealtime = async (
+  const emitPluginRealtime = async (
+    pluginId: string,
     channel: string,
     payload: unknown,
   ): Promise<void> => {
@@ -2660,13 +2704,15 @@ export function renderSlot<
       payload === undefined
         ? null
         : strictJsonRoundTrip(payload, `realtime "${channel}" payload`);
-    const listeners = realtimeHandlers.get(channel);
+    const listeners = realtimeHandlers.get(realtimeKey(pluginId, channel));
     await act(async () => {
       for (const listener of [...(listeners ?? [])]) {
         listener(normalized);
       }
     });
   };
+  const emitRealtime = (channel: string, payload: unknown) =>
+    emitPluginRealtime(env.pluginId, channel, payload);
   const setRealtimeConnectionState = async (
     state: PluginRealtimeConnectionState,
   ): Promise<void> => {
@@ -2694,6 +2740,7 @@ export function renderSlot<
     unmount: unmountSlot,
     rpcCalls,
     emitRealtime,
+    emitPluginRealtime,
     setRealtimeConnectionState,
     setComposerText,
     setComposerScope,
@@ -2707,6 +2754,7 @@ export function renderSlot<
     composer: composerLog,
     behavior: {
       emitRealtime,
+      emitPluginRealtime,
       setRealtimeConnectionState,
       setComposerText,
       setComposerScope,

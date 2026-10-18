@@ -24,6 +24,9 @@ Hooks:
   plugin's own storage.
 - `useRealtime(channel, handler)` — fires for this plugin's
   `bb.realtime.publish(channel, …)` signals while mounted.
+- `experimental_usePluginRealtime(pluginId, channel, handler)` subscribes to
+  another plugin's ephemeral signals on the same shared socket. Reconcile
+  durable state after reconnecting; it does not replay missed signals.
 - `useRealtimeConnectionState()` — returns `"connecting"`, `"connected"`, or
   `"reconnecting"` for the same shared socket used by `useRealtime`. Reconcile
   durable server state on subsequent transitions to `connected` (not the first
@@ -52,6 +55,13 @@ experimental_openTerminal({ terminalId }) }`.
   in a thread, or its `experimental_newThreadPanelAction` tabs on the New
   thread screen, and returns whether the host accepted it; it returns false on
   plugin pages, which have no panel actions.
+  `experimental_openThreadPanel({ threadId, pluginId, actionId, params })`
+  opens a registered action in a specific thread in this app window. Pass
+  `params: null` explicitly for the default tab identity. Its promise returns
+  `{ outcome }`, where outcome is `opened`, `superseded`, `unknown-thread`,
+  `unknown-action`, `invalid-params`, or `no-panel-surface`. A new request
+  supersedes a pending request; `opened` confirms panel state and navigation,
+  not that plugin content has finished rendering.
   `openUrl` owns HTTP(S) only and returns false for schemes BB
   leaves to normal anchor behavior. The two file methods accept an
   `ExperimentalFileOpenOptions` live-file target.

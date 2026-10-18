@@ -4,7 +4,7 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   createDesktopReleaseConfig,
-  createDesktopUpdateReleaseBaseUrl,
+  resolveDesktopMaintainedFlavor,
   resolveDesktopReleaseChannel,
 } from "./desktop-release-channel.mjs";
 
@@ -161,7 +161,16 @@ function createSigningPlan(env) {
 function resolveElectronBuilderConfig(baseConfig, env, electronBuilderArgs) {
   const signingPlan = createSigningPlan(env);
   const releaseChannel = resolveDesktopReleaseChannel(env);
-  const releaseConfig = createDesktopReleaseConfig(releaseChannel);
+  const maintainedFlavor = resolveDesktopMaintainedFlavor(env);
+  const releaseConfig = createDesktopReleaseConfig(
+    releaseChannel,
+    maintainedFlavor,
+  );
+  if (maintainedFlavor !== null && signingPlan.mode !== "keychain") {
+    throw new Error(
+      "Maintained Nightly requires the BBamir Local Development keychain identity and no CI signing variables.",
+    );
+  }
   const config = cloneJson(baseConfig);
   const mac = {
     ...config.mac,
@@ -169,7 +178,9 @@ function resolveElectronBuilderConfig(baseConfig, env, electronBuilderArgs) {
     notarize: signingPlan.notarizationEnabled,
   };
 
-  if (signingPlan.mode === "disabled") {
+  if (maintainedFlavor !== null) {
+    mac.identity = "BBamir Local Development";
+  } else if (signingPlan.mode === "disabled") {
     mac.identity = null;
   } else if (signingPlan.identityName) {
     mac.identity = signingPlan.identityName;
@@ -197,11 +208,23 @@ function resolveElectronBuilderConfig(baseConfig, env, electronBuilderArgs) {
   config.appId = releaseConfig.appId;
   config.artifactName = releaseConfig.artifactName;
   config.productName = releaseConfig.applicationName;
+  if (releaseConfig.packageName !== null) {
+    config.extraMetadata = {
+      ...config.extraMetadata,
+      name: releaseConfig.packageName,
+    };
+  }
   config.publish = [
     {
       channel: releaseChannel,
       provider: "generic",
-      url: createDesktopUpdateReleaseBaseUrl(releaseConfig.releaseTag),
+      url: releaseConfig.updateReleaseBaseUrl,
+      ...(releaseConfig.updaterCacheDirName === null
+        ? {}
+        : {
+            updaterCacheDirName: releaseConfig.updaterCacheDirName,
+            useMultipleRangeRequest: false,
+          }),
     },
   ];
 
@@ -268,6 +291,35 @@ async function main() {
   const args = process.argv.slice(2);
   const printConfig = args.includes(printConfigFlag);
   const electronBuilderArgs = args.filter((arg) => arg !== printConfigFlag);
+  const maintainedFlavor = resolveDesktopMaintainedFlavor(process.env);
+  if (maintainedFlavor !== null) {
+    if (process.platform !== "darwin" || process.arch !== "arm64") {
+      throw new Error("Maintained Nightly currently supports macOS arm64 only.");
+    }
+    if (electronBuilderArgs.includes("--linux")) {
+      throw new Error("Maintained Nightly currently supports macOS arm64 only.");
+    }
+    let explicitlyDisablesPublishing = false;
+    for (let index = 0; index < electronBuilderArgs.length; index += 1) {
+      const argument = electronBuilderArgs[index];
+      if (argument.startsWith("-p") && !argument.startsWith("--")) {
+        throw new Error("Maintained Nightly packaging requires --publish never.");
+      }
+      if (argument !== "--publish" && !argument.startsWith("--publish=")) {
+        continue;
+      }
+      const value = argument === "--publish"
+        ? electronBuilderArgs[++index]
+        : argument.slice("--publish=".length);
+      if (value !== "never") {
+        throw new Error("Maintained Nightly packaging requires --publish never.");
+      }
+      explicitlyDisablesPublishing = true;
+    }
+    if (!printConfig && !explicitlyDisablesPublishing) {
+      throw new Error("Maintained Nightly packaging requires --publish never.");
+    }
+  }
   const baseConfig = await readBaseConfig();
   const { config, signingPlan } = resolveElectronBuilderConfig(
     baseConfig,

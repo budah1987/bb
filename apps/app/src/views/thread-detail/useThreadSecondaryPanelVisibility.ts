@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type {
   HostFileTabState,
   ThreadStorageFileTabState,
@@ -82,8 +82,11 @@ export function useThreadSecondaryPanelDrawerVisibility({
   const [openDrawerThreadId, setOpenDrawerThreadId] = useState<string | null>(
     null,
   );
+  const previousThreadId = useRef(threadId);
 
   useEffect(() => {
+    if (previousThreadId.current === threadId) return;
+    previousThreadId.current = threadId;
     setOpenDrawerThreadId(null);
   }, [threadId]);
 

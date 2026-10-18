@@ -135,6 +135,11 @@ bb itself when it was started from `npx bb-app` (or a global `bb-app`) without
 restarts into it. It does not roll back if the new version fails to start.
 Desktop users update through the desktop app's relaunch, and `bb-server` cannot
 update itself. Connected daemons follow the server version automatically.
+Private Maintained Nightly macOS builds use the build-time
+`BB_DESKTOP_MAINTAINED_FLAVOR=production|rehearsal` selector together with
+`BB_DESKTOP_RELEASE_CHANNEL=nightly`. The selected identity and local feed are
+embedded in the app; an unset flavor retains the upstream desktop channel.
+See `apps/desktop/README.md` for the isolated rehearsal paths and build steps.
 
 Targeting machines
 

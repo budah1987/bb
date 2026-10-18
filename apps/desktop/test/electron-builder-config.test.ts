@@ -67,7 +67,12 @@ const macConfigSchema = z
 const linuxConfigSchema = z
   .object({
     category: z.literal("Development"),
-    executableName: z.enum(["bb", "bb-nightly"]),
+    executableName: z.enum([
+      "bb",
+      "bb-nightly",
+      "bb-maintained-nightly",
+      "bb-maintained-nightly-rehearsal",
+    ]),
     icon: z.string().min(1),
     target: z.tuple([
       z
@@ -170,6 +175,7 @@ type CreateScriptEnvironment = (
 ) => NodeJS.ProcessEnv;
 type RunConfigScript = (
   overrides: EnvironmentOverrides,
+  args?: string[],
 ) => Promise<ScriptRunResult>;
 type ReadResolvedConfig = (
   overrides: EnvironmentOverrides,
@@ -185,6 +191,8 @@ const createScriptEnvironment: CreateScriptEnvironment = (overrides) => {
   for (const key of signingEnvironmentKeys) {
     delete env[key];
   }
+  delete env.BB_DESKTOP_MAINTAINED_FLAVOR;
+  delete env.BB_DESKTOP_RELEASE_CHANNEL;
 
   for (const [key, value] of Object.entries(overrides)) {
     if (value === undefined) {
@@ -197,10 +205,10 @@ const createScriptEnvironment: CreateScriptEnvironment = (overrides) => {
   return env;
 };
 
-const runConfigScript: RunConfigScript = async (overrides) => {
+const runConfigScript: RunConfigScript = async (overrides, args = []) => {
   const child = spawn(
     process.execPath,
-    ["scripts/run-electron-builder.mjs", "--print-config"],
+    ["scripts/run-electron-builder.mjs", "--print-config", ...args],
     {
       cwd: desktopPackageRoot,
       env: createScriptEnvironment(overrides),
@@ -277,6 +285,50 @@ const readResolvedConfig: ReadResolvedConfig = async (overrides) => {
 };
 
 describe("electron-builder signing config", () => {
+  it("embeds distinct maintained Nightly identity, feed and updater cache", async () => {
+    for (const [flavor, name, appId, port] of [
+      ["production", "bb-maintained-nightly", "dev.bbamir.desktop.nightly", "25140"],
+      ["rehearsal", "bb-maintained-nightly-rehearsal", "dev.bbamir.desktop.nightly-rehearsal", "25141"],
+    ] as const) {
+      const { config } = await readResolvedConfig({
+        BB_DESKTOP_RELEASE_CHANNEL: "nightly",
+        BB_DESKTOP_MAINTAINED_FLAVOR: flavor,
+      });
+      expect(config.appId).toBe(appId);
+      expect(config.productName).toBe(flavor === "production" ? "bb+" : "bb+ Rehearsal");
+      expect(config.mac.identity).toBe("BBamir Local Development");
+      expect(config.publish[0]).toMatchObject({
+        channel: "nightly",
+        url: `http://127.0.0.1:${port}/`,
+        updaterCacheDirName: `${name}-updater`,
+        useMultipleRangeRequest: false,
+      });
+      expect(config).toHaveProperty("extraMetadata.name", name);
+      expect(config.artifactName).toContain(name);
+    }
+  });
+
+  it("rejects conflicting publish flags even after an explicit never", async () => {
+    const env = { BB_DESKTOP_RELEASE_CHANNEL: "nightly", BB_DESKTOP_MAINTAINED_FLAVOR: "production" };
+    for (const args of [
+      ["--publish", "never", "--publish", "always"],
+      ["--publish=never", "--publish=always"],
+      ["--publish", "never", "-p", "always"],
+      ["-palways"],
+    ]) {
+      const result = await runConfigScript(env, args);
+      expect(result.exitCode).not.toBe(0);
+      expect(result.stderr).toContain("requires --publish never");
+    }
+    expect((await runConfigScript(env, ["--publish", "never"])).exitCode).toBe(0);
+  });
+
+  it("rejects a maintained flavor without the nightly channel", async () => {
+    const result = await runConfigScript({ BB_DESKTOP_MAINTAINED_FLAVOR: "production" });
+    expect(result.exitCode).not.toBe(0);
+    expect(result.stderr).toContain("requires BB_DESKTOP_RELEASE_CHANNEL=nightly");
+  });
+
   it("keeps package metadata compatible with electron universal's CJS entry asar", async () => {
     const packageJsonText = await readFile(
       resolve(desktopPackageRoot, "package.json"),

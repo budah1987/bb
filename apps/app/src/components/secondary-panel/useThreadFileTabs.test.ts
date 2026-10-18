@@ -1107,6 +1107,7 @@ describe("useThreadFileTabs plugin panel tabs", () => {
       title: "Issue #1",
       paramsJson: '{"n":1}',
     });
+    expect(result.current.activePluginPanelActivationKey).toBe(1);
 
     act(() =>
       result.current.openPluginPanel({
@@ -1122,6 +1123,7 @@ describe("useThreadFileTabs plugin panel tabs", () => {
       id: firstTab?.id,
       title: "Issue #1 (renamed)",
     });
+    expect(result.current.activePluginPanelActivationKey).toBe(2);
 
     act(() =>
       result.current.openPluginPanel({
@@ -1136,6 +1138,11 @@ describe("useThreadFileTabs plugin panel tabs", () => {
       kind: "plugin-panel",
       paramsJson: '{"n":2}',
     });
+    expect(result.current.activePluginPanelActivationKey).toBe(3);
+
+    if (firstTab === null) throw new Error("Expected plugin panel tab");
+    act(() => result.current.activateTab(firstTab.id));
+    expect(result.current.activePluginPanelActivationKey).toBe(4);
   });
 
   it("replaces a transient new-tab like the other launchers", () => {

@@ -84,6 +84,15 @@ import { useSetRootComposeProjectId } from "@/lib/root-compose-selection";
 import { openThreadInSplit } from "@/lib/split-layout/openThreadInSplit";
 import { useServerConnectionState } from "@/hooks/useServerConnectionState";
 import { wsManager } from "@/lib/ws";
+import { usePluginSlots } from "@/lib/plugin-slots";
+import { serializePluginPanelParams } from "@/lib/plugin-json-value";
+import {
+  completeThreadPanelRequest,
+  isThreadPanelRequestPending,
+  setThreadPanelRequestDestination,
+  startThreadPanelRequest,
+  supersedePendingThreadPanelRequest,
+} from "@/lib/plugin-thread-panel-request";
 import { pluginSdkSettingsQueryKey } from "@/hooks/queries/query-keys";
 import { useAppNavigationHost } from "@/lib/app-navigation-host";
 import { normalizeExperimentalFileOpenOptions } from "@/lib/live-file-navigation";
@@ -250,6 +259,22 @@ export function useRealtime(
   handler: (payload: unknown) => void,
 ): void {
   const pluginId = usePluginId();
+  usePluginSignal(pluginId, channel, handler);
+}
+
+export function experimental_usePluginRealtime(
+  pluginId: string,
+  channel: string,
+  handler: (payload: unknown) => void,
+): void {
+  usePluginSignal(pluginId, channel, handler);
+}
+
+function usePluginSignal(
+  pluginId: string,
+  channel: string,
+  handler: (payload: unknown) => void,
+): void {
   const handlerRef = useRef(handler);
   useEffect(() => {
     handlerRef.current = handler;
@@ -338,6 +363,7 @@ export function useBbContext(): BbContext {
 
 export function useBbNavigate(): BbNavigate {
   const pluginId = usePluginId();
+  const { threadPanelActions } = usePluginSlots();
   const location = useLocation();
   const openThreadPanelHandler = usePluginThreadPanelOpenHandler();
   const navigate = useNavigate();
@@ -424,6 +450,61 @@ export function useBbNavigate(): BbNavigate {
     (options) => openThreadPanelHandler?.({ ...options, pluginId }) ?? false,
     [openThreadPanelHandler, pluginId],
   );
+  const experimental_openThreadPanel = useCallback<
+    BbNavigate["experimental_openThreadPanel"]
+  >(
+    (options) => {
+      supersedePendingThreadPanelRequest();
+      if (
+        !threadPanelActions.some(
+          (action) =>
+            action.pluginId === options.pluginId &&
+            action.id === options.actionId,
+        )
+      ) {
+        return Promise.resolve({ outcome: "unknown-action" });
+      }
+      if (options.params === undefined) {
+        return Promise.resolve({ outcome: "invalid-params" });
+      }
+      try {
+        serializePluginPanelParams(options.params);
+      } catch {
+        return Promise.resolve({ outcome: "invalid-params" });
+      }
+      const { id, result } = startThreadPanelRequest(options, {
+        key: location.key,
+        path: location.pathname,
+      });
+      void sdk.threads.get({ threadId: options.threadId }).then(
+        (thread) => {
+          if (!isThreadPanelRequestPending(id)) return;
+          const path = getThreadRoutePath({
+            projectId: thread.projectId,
+            threadId: options.threadId,
+          });
+          if (!setThreadPanelRequestDestination(id, path)) return;
+          if (!isThreadPanelRequestPending(id)) return;
+          try {
+            void Promise.resolve(navigate(path)).catch(() =>
+              completeThreadPanelRequest(id, "no-panel-surface"),
+            );
+          } catch {
+            completeThreadPanelRequest(id, "no-panel-surface");
+          }
+        },
+        (error: unknown) =>
+          completeThreadPanelRequest(
+            id,
+            error instanceof BbHttpError && error.status === 404
+              ? "unknown-thread"
+              : "no-panel-surface",
+          ),
+      );
+      return result;
+    },
+    [location.key, location.pathname, navigate, threadPanelActions],
+  );
   const openUrl = useCallback<BbNavigate["openUrl"]>(
     (url) => appNavigation.openUrl({ url }),
     [appNavigation],
@@ -469,6 +550,7 @@ export function useBbNavigate(): BbNavigate {
       toPluginPanel,
       toCompose,
       openThreadPanel,
+      experimental_openThreadPanel,
       experimental_openFileExternally,
       experimental_openFilePreview,
       experimental_openTerminal,
@@ -480,6 +562,7 @@ export function useBbNavigate(): BbNavigate {
       toPluginPanel,
       toCompose,
       openThreadPanel,
+      experimental_openThreadPanel,
       experimental_openFileExternally,
       experimental_openFilePreview,
       experimental_openTerminal,

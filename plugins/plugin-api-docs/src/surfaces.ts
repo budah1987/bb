@@ -390,12 +390,15 @@ export const SURFACE_GROUPS: SurfaceGroup[] = [
           "Show plugin content alongside the conversation",
           "Know which thread it was opened from",
           "Open from a [message action](message-actions), the side panel's + button, or plugin code",
+          "Open its tab in a specific thread and react when the tab is opened again",
         ],
         apiSymbols: [
           "PluginThreadPanelActionRegistration",
           "BbNavigate.openThreadPanel",
           "PluginThreadPanelProps",
           "PluginThreadPanelActionContext",
+          "PluginThreadPanelProps.experimental_activationKey",
+          "BbNavigate.experimental_openThreadPanel",
         ],
         firstParty: ["Docs", "GitHub", "Side chat", "Tasks", "Workflows"],
       },
@@ -938,7 +941,7 @@ export const SURFACE_GROUPS: SurfaceGroup[] = [
         bullets: [
           "Call its server from its UI with schema-checked RPC",
           "Receive webhooks and serve HTTP or WebSocket routes",
-          "Push live updates to open bb windows",
+          "Push live updates to open bb windows and subscribe to other plugins' signals",
           "Publish RPC methods other plugins can discover",
         ],
         apiSymbols: [
@@ -953,6 +956,7 @@ export const SURFACE_GROUPS: SurfaceGroup[] = [
           "useRpc",
           "PluginRpcClient",
           "useRealtime",
+          "experimental_usePluginRealtime",
           "useRealtimeConnectionState",
           "PluginRealtimeConnectionState",
           "ExperimentalPluginWebSocket",

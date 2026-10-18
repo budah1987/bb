@@ -292,11 +292,14 @@ function readHttpErrorCode(parsed: unknown): string | null {
   if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
     return null;
   }
-  if (!("code" in parsed)) {
+  if ("code" in parsed && typeof parsed.code === "string") {
+    return parsed.code;
+  }
+  const error = "error" in parsed ? parsed.error : null;
+  if (error === null || typeof error !== "object" || Array.isArray(error)) {
     return null;
   }
-  const { code } = parsed;
-  return typeof code === "string" ? code : null;
+  return "code" in error && typeof error.code === "string" ? error.code : null;
 }
 
 async function readHttpErrorInfo(

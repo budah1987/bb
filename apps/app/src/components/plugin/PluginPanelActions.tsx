@@ -197,10 +197,12 @@ export function PluginPanelTabContent({
   tab,
   context,
   fileOpenerOriginal,
+  activationKey = 0,
 }: {
   tab: PluginPanelFixedPanelTab;
   context: PluginPanelSurfaceContext;
   fileOpenerOriginal?: ReactNode;
+  activationKey?: number;
 }) {
   const openerId = fileOpenerIdFromActionId(tab.actionId);
   if (openerId !== null) {
@@ -213,7 +215,11 @@ export function PluginPanelTabContent({
     );
   }
   return context.kind === "thread" ? (
-    <ThreadActionTabContent tab={tab} threadId={context.threadId} />
+    <ThreadActionTabContent
+      tab={tab}
+      threadId={context.threadId}
+      activationKey={activationKey}
+    />
   ) : (
     <NewThreadActionTabContent tab={tab} projectId={context.projectId} />
   );
@@ -267,9 +273,11 @@ function usePersistedActionParams(tab: PluginPanelFixedPanelTab) {
 function ThreadActionTabContent({
   tab,
   threadId,
+  activationKey,
 }: {
   tab: PluginPanelFixedPanelTab;
   threadId: string;
+  activationKey: number;
 }) {
   const { threadPanelActions } = usePluginSlots();
   const action =
@@ -290,7 +298,11 @@ function ThreadActionTabContent({
         slotKind="threadPanelAction"
         slotId={action.id}
       >
-        <action.component threadId={threadId} params={params} />
+        <action.component
+          threadId={threadId}
+          params={params}
+          experimental_activationKey={activationKey}
+        />
       </PluginSlotMount>
     </PanelActionTabFrame>
   );

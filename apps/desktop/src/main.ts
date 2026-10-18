@@ -187,8 +187,10 @@ import {
   resolveBbDesktopPlatform,
 } from "./desktop-platform.js";
 import { createDesktopUpdateService } from "./desktop-update-check.js";
+import { createDesktopStartupPolicy } from "./desktop-maintained-runtime.js";
 import {
   createDesktopUpdateFeedUrl,
+  DESKTOP_MAINTAINED_FLAVOR,
   DESKTOP_RELEASE_CHANNEL,
   DESKTOP_RELEASE_INFO,
   resolveDesktopUpdateSupport,
@@ -203,10 +205,16 @@ import {
 } from "./desktop-auto-update.js";
 import { mergeDesktopUpdateInfo } from "./desktop-update-info.js";
 import {
+  createMaintainedRebuildService,
+  type MaintainedRebuildService,
+} from "./desktop-maintained-rebuild.js";
+import { isAuthorizedDesktopUpdateSender } from "./desktop-update-sender.js";
+import {
   BB_DESKTOP_CHECK_FOR_UPDATES_CHANNEL,
   BB_DESKTOP_GET_INFO_CHANNEL,
   BB_DESKTOP_INFO_CHANGED_CHANNEL,
   BB_DESKTOP_INSTALL_UPDATE_CHANNEL,
+  BB_DESKTOP_START_MAINTAINED_REBUILD_CHANNEL,
   BB_DESKTOP_OPEN_EXTERNAL_URL_CHANNEL,
   BB_DESKTOP_SET_THEME_CHANNEL,
   BB_DESKTOP_ZOOM_COMMAND_CHANNEL,
@@ -409,6 +417,7 @@ let currentAppKeybindings: AppKeybindings = [];
 let currentApplicationMenuAccelerators = DEFAULT_APPLICATION_MENU_ACCELERATORS;
 let desktopUpdateService: DesktopUpdateService | null = null;
 let desktopAutoUpdateService: DesktopAutoUpdateService | null = null;
+let maintainedRebuildService: MaintainedRebuildService | null = null;
 let currentRuntime: DesktopRuntime | null = null;
 let currentWindowUrl: string | null = null;
 let logViewerLineBuffer: LogLineBuffer | null = null;
@@ -500,6 +509,13 @@ function resolveDesktopUpdateFeedUrl(
   args: ResolveDesktopUpdateFeedUrlArgs,
 ): string {
   const rawFeedUrl = args.env.BB_DESKTOP_VERSION_FEED_URL?.trim();
+  if (DESKTOP_MAINTAINED_FLAVOR !== null) {
+    const maintainedFeedUrl = createDesktopUpdateFeedUrl(args.platform);
+    if (rawFeedUrl !== undefined && rawFeedUrl.length > 0 && rawFeedUrl !== maintainedFeedUrl) {
+      throw new Error("BB_DESKTOP_VERSION_FEED_URL conflicts with the maintained feed.");
+    }
+    return maintainedFeedUrl;
+  }
   if (rawFeedUrl === undefined || rawFeedUrl.length === 0) {
     return createDesktopUpdateFeedUrl(args.platform);
   }
@@ -554,6 +570,9 @@ function getCurrentDesktopInfo(): BbDesktopInfo | null {
   }
   return {
     ...info,
+    ...(maintainedRebuildService === null
+      ? {}
+      : { maintainedRebuild: maintainedRebuildService.getInfo() }),
     serverDaemonLogsAvailable: shouldEnableServerDaemonLogsMenu(),
   };
 }
@@ -2368,6 +2387,7 @@ async function finishQuit(): Promise<void> {
   connectSessionRenewal?.stop();
   desktopUpdateService?.stop();
   desktopAutoUpdateService?.stop();
+  maintainedRebuildService?.stop();
   desktopBrowserViewManager?.destroyAll();
   desktopFindViewManager?.destroyAll();
   await desktopWindowFactory?.persistOpenWindows();
@@ -2378,6 +2398,7 @@ async function checkDesktopUpdates(): Promise<void> {
   await Promise.all([
     desktopUpdateService?.checkForUpdates(),
     desktopAutoUpdateService?.checkForUpdates(),
+    maintainedRebuildService?.checkUpstream(),
   ]);
 }
 
@@ -2409,6 +2430,16 @@ function registerDesktopUpdateIpc(): void {
   });
   registerDesktopWindowFocusIpc(applicationWindowWebContentsIds);
   registerDesktopClipboardIpc(applicationWindowWebContentsIds);
+  const authorized = (event: IpcMainInvokeEvent): boolean =>
+    isAuthorizedDesktopUpdateSender({
+      applicationUrl: currentWindowUrl,
+      applicationWindowWebContentsIds,
+      appLoaded: bbAppLoaded,
+      sender: event.sender,
+      senderFrame: event.senderFrame,
+      window: resolveApplicationWindow(event.sender),
+    });
+
   ipcMain.on(BB_DESKTOP_ZOOM_COMMAND_CHANNEL, (event, payload: unknown) => {
     const parsed = bbDesktopZoomCommandSchema.safeParse(payload);
     if (parsed.success) {
@@ -2418,7 +2449,8 @@ function registerDesktopUpdateIpc(): void {
       );
     }
   });
-  ipcMain.handle(BB_DESKTOP_GET_INFO_CHANNEL, () => {
+  ipcMain.handle(BB_DESKTOP_GET_INFO_CHANNEL, (event) => {
+    if (!authorized(event)) return null;
     return getCurrentDesktopInfo();
   });
   ipcMain.handle(BB_DESKTOP_GET_WINDOW_STATE_CHANNEL, (event) => {
@@ -2430,11 +2462,20 @@ function registerDesktopUpdateIpc(): void {
   ipcMain.handle(BB_DESKTOP_OPEN_DATA_DIRECTORY_CHANNEL, async () => {
     await openDataDirectory();
   });
-  ipcMain.handle(BB_DESKTOP_CHECK_FOR_UPDATES_CHANNEL, async () => {
+  ipcMain.handle(BB_DESKTOP_CHECK_FOR_UPDATES_CHANNEL, async (event) => {
+    if (!authorized(event)) return null;
     await checkDesktopUpdates();
     return getCurrentDesktopInfo();
   });
-  ipcMain.handle(BB_DESKTOP_INSTALL_UPDATE_CHANNEL, installDesktopUpdate);
+  ipcMain.handle(BB_DESKTOP_START_MAINTAINED_REBUILD_CHANNEL, async (event) => {
+    if (!authorized(event)) return null;
+    await maintainedRebuildService?.startRebuild();
+    return getCurrentDesktopInfo();
+  });
+  ipcMain.handle(BB_DESKTOP_INSTALL_UPDATE_CHANNEL, async (event) => {
+    if (!authorized(event)) return;
+    await installDesktopUpdate();
+  });
   ipcMain.on(
     BB_DESKTOP_SET_SPLIT_NAVIGATION_ENABLED_CHANNEL,
     (event, enabled: unknown, directionalCommands: unknown) => {
@@ -2856,6 +2897,17 @@ async function initializeRuntime(args: InitializeRuntimeArgs): Promise<void> {
 }
 
 async function runDesktopApp(): Promise<void> {
+  const startupPolicy = createDesktopStartupPolicy({
+    argv: process.argv,
+    env: process.env,
+    homeDir: homedir(),
+    platform: process.platform,
+    release: DESKTOP_RELEASE_INFO,
+  });
+  Object.assign(process.env, startupPolicy.environment);
+  if (startupPolicy.userDataPath !== null) {
+    app.setPath("userData", startupPolicy.userDataPath);
+  }
   ensurePackagedUserShellPath({
     env: process.env,
     isPackaged: app.isPackaged,
@@ -3129,6 +3181,21 @@ async function runDesktopApp(): Promise<void> {
   desktopUpdateService.subscribe(() => {
     sendDesktopInfoChanged();
   });
+  if (DESKTOP_RELEASE_INFO.runtime?.kind === "production" && app.isPackaged) {
+    maintainedRebuildService = createMaintainedRebuildService({
+      homeDir: app.getPath("home"),
+      installedVersion: desktopVersion,
+      logger: desktopLogger,
+      onPromoted: () => {
+        void desktopUpdateService?.checkForUpdates();
+        void desktopAutoUpdateService?.checkForUpdates();
+      },
+      platform: desktopPlatform,
+    });
+    maintainedRebuildService.subscribe(() => {
+      sendDesktopInfoChanged();
+    });
+  }
   desktopAutoUpdateService.subscribe(() => {
     sendDesktopInfoChanged();
   });
@@ -3302,6 +3369,7 @@ async function runDesktopApp(): Promise<void> {
   if (desktopUpdateSupport.versionCheck) {
     desktopUpdateService.start();
   }
+  maintainedRebuildService?.start();
   if (desktopUpdateSupport.autoUpdate) {
     desktopAutoUpdateService.start();
   } else {
@@ -3375,6 +3443,10 @@ void runDesktopApp().catch((error) => {
   const message =
     error instanceof Error ? (error.stack ?? error.message) : String(error);
   process.stderr.write(`${message}\n`);
+  if (DESKTOP_MAINTAINED_FLAVOR !== null) {
+    app.exit(1);
+    return;
+  }
   void loadStartupError({
     details: message,
     logs: "",

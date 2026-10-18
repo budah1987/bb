@@ -2,52 +2,33 @@ import {
   createBbDesktopVersionFeedFileName,
   type BbDesktopVersionFeedPlatform,
 } from "@bb/desktop-contract";
+import {
+  createDesktopReleaseConfig,
+  resolveDesktopMaintainedFlavor,
+  resolveDesktopReleaseChannel,
+  type DesktopMaintainedFlavor,
+  type DesktopReleaseChannel,
+  type DesktopReleaseConfig,
+} from "../scripts/desktop-release-channel.mjs";
 
-type DesktopReleaseChannel = "latest" | "nightly";
-
-interface DesktopReleaseInfo {
-  applicationName: "bb" | "bb Nightly";
-  channel: DesktopReleaseChannel;
-  iconFileName: "icon.png" | "icon-nightly.png";
-  releaseTag: "desktop-latest" | "desktop-nightly";
-  updateReleaseBaseUrl: string;
-}
+export type DesktopReleaseInfo = DesktopReleaseConfig;
 
 export function createDesktopReleaseInfo(
   channel: DesktopReleaseChannel,
+  flavor: DesktopMaintainedFlavor = null,
 ): DesktopReleaseInfo {
-  const nightly = channel === "nightly";
-  const releaseTag = nightly ? "desktop-nightly" : "desktop-latest";
-
-  return {
-    applicationName: nightly ? "bb Nightly" : "bb",
-    channel,
-    iconFileName: nightly ? "icon-nightly.png" : "icon.png",
-    releaseTag,
-    updateReleaseBaseUrl: `https://github.com/get-bb/bb/releases/download/${releaseTag}/`,
-  };
+  return createDesktopReleaseConfig(channel, flavor);
 }
 
-function resolveBuiltDesktopReleaseChannel(
-  rawChannel: string | undefined,
-): DesktopReleaseChannel {
-  if (rawChannel === undefined || rawChannel.length === 0) {
-    return "latest";
-  }
-  if (rawChannel === "latest" || rawChannel === "nightly") {
-    return rawChannel;
-  }
-
-  throw new Error(
-    `Built desktop release channel must be latest or nightly, got ${String(rawChannel)}.`,
-  );
-}
-
-export const DESKTOP_RELEASE_CHANNEL = resolveBuiltDesktopReleaseChannel(
-  process.env.BB_DESKTOP_RELEASE_CHANNEL,
-);
+export const DESKTOP_RELEASE_CHANNEL = resolveDesktopReleaseChannel({
+  BB_DESKTOP_RELEASE_CHANNEL: process.env.BB_DESKTOP_RELEASE_CHANNEL,
+});
+export const DESKTOP_MAINTAINED_FLAVOR = resolveDesktopMaintainedFlavor({
+  BB_DESKTOP_MAINTAINED_FLAVOR: process.env.BB_DESKTOP_MAINTAINED_FLAVOR,
+});
 export const DESKTOP_RELEASE_INFO = createDesktopReleaseInfo(
   DESKTOP_RELEASE_CHANNEL,
+  DESKTOP_MAINTAINED_FLAVOR,
 );
 const DESKTOP_UPDATE_RELEASE_BASE_URL =
   DESKTOP_RELEASE_INFO.updateReleaseBaseUrl;
@@ -62,13 +43,25 @@ export interface DesktopAutoUpdateFeedConfig {
   channel: DesktopReleaseChannel;
   provider: "generic";
   url: string;
+  useMultipleRangeRequest?: false;
 }
 
-export const DESKTOP_AUTO_UPDATE_FEED_CONFIG: DesktopAutoUpdateFeedConfig = {
-  channel: DESKTOP_RELEASE_CHANNEL,
-  provider: "generic",
-  url: DESKTOP_UPDATE_RELEASE_BASE_URL,
-};
+export function createDesktopAutoUpdateFeedConfig(
+  channel: DesktopReleaseChannel,
+  release: DesktopReleaseInfo,
+): DesktopAutoUpdateFeedConfig {
+  return {
+    channel,
+    provider: "generic",
+    url: release.updateReleaseBaseUrl,
+    ...(release.runtime === null ? {} : { useMultipleRangeRequest: false as const }),
+  };
+}
+
+export const DESKTOP_AUTO_UPDATE_FEED_CONFIG = createDesktopAutoUpdateFeedConfig(
+  DESKTOP_RELEASE_CHANNEL,
+  DESKTOP_RELEASE_INFO,
+);
 
 interface DesktopUpdateSupport {
   autoUpdate: boolean;

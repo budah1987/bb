@@ -147,6 +147,9 @@ export const experimental_SourceCode = runtimeComponent(
 export const experimental_Diff = runtimeComponent("experimental_Diff");
 export const useRpc = runtimeFunction("useRpc");
 export const useRealtime = runtimeFunction("useRealtime");
+export const experimental_usePluginRealtime = runtimeFunction(
+  "experimental_usePluginRealtime",
+);
 export const useRealtimeConnectionState = runtimeFunction(
   "useRealtimeConnectionState",
 );

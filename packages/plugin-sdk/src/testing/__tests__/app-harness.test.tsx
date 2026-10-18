@@ -34,6 +34,7 @@ const {
   useComposers,
   useComposerView,
   useRealtime,
+  experimental_usePluginRealtime,
   useRealtimeConnectionState,
   useRpc,
   useSdk,
@@ -287,6 +288,39 @@ function Panel({ subPath }: PluginNavPanelProps) {
 function RealtimeConnectionProbe() {
   const state = useRealtimeConnectionState();
   return <div>Realtime: {state}</div>;
+}
+
+function ForeignRealtimeProbe({ prefix }: { prefix: string }) {
+  const [events, setEvents] = useState<string[]>([]);
+  experimental_usePluginRealtime("pr-manager", "changed", (payload) => {
+    setEvents((current) => [...current, `${prefix}:${String(payload)}`]);
+  });
+  useRealtime("changed", (payload) => {
+    setEvents((current) => [...current, `own:${String(payload)}`]);
+  });
+  return <div>{events.join(",")}</div>;
+}
+
+function CrossPluginNavigationProbe() {
+  const navigate = useBbNavigate();
+  const [outcome, setOutcome] = useState("idle");
+  return (
+    <button
+      type="button"
+      onClick={() => {
+        void navigate
+          .experimental_openThreadPanel({
+            threadId: "thread-a",
+            pluginId: "pr-manager",
+            actionId: "linked-pull-requests",
+            params: null,
+          })
+          .then((result) => setOutcome(result.outcome));
+      }}
+    >
+      {outcome}
+    </button>
+  );
 }
 
 function UrlNavigationProbe() {
@@ -1560,6 +1594,46 @@ describe("typed rpc test runtime", () => {
 });
 
 describe("renderSlot", () => {
+  it("routes foreign realtime by plugin and channel with the latest callback", async () => {
+    const slot = renderSlot(
+      { component: ForeignRealtimeProbe },
+      { prefix: "first" },
+      { pluginId: "consumer" },
+    );
+    await slot.behavior.emitPluginRealtime("other", "changed", "ignored");
+    await slot.behavior.emitPluginRealtime("pr-manager", "other", "ignored");
+    expect(slot.queryByText(/ignored/u)).toBeNull();
+
+    slot.lifecycle.rerender(<ForeignRealtimeProbe prefix="latest" />);
+    await slot.behavior.emitPluginRealtime("pr-manager", "changed", "foreign");
+    await slot.findByText("latest:foreign");
+    await slot.behavior.emitRealtime("changed", "local");
+    await slot.findByText("latest:foreign,own:local");
+  });
+
+  it("records explicit thread panel navigation and its outcome", async () => {
+    const slot = renderSlot(
+      { component: CrossPluginNavigationProbe },
+      {},
+      {
+        experimental_openThreadPanel: async () => ({ outcome: "opened" }),
+      },
+    );
+    fireEvent.click(slot.getByRole("button", { name: "idle" }));
+    await slot.findByRole("button", { name: "opened" });
+    expect(slot.inspection.navigateCalls).toEqual([
+      {
+        method: "experimental_openThreadPanel",
+        options: {
+          threadId: "thread-a",
+          pluginId: "pr-manager",
+          actionId: "linked-pull-requests",
+          params: null,
+        },
+      },
+    ]);
+  });
+
   it("serves useSdk() from per-area fakes, records calls, and throws for a missing method", async () => {
     const slot = renderSlot(
       { component: SdkProbe },

@@ -87,6 +87,41 @@ describe("createConnectCredentialCache", () => {
     await expect(cache.read()).resolves.toBeNull();
   });
 
+  it("does not query the keychain when no credential file exists", async () => {
+    const encryption = createEncryption();
+    const isEncryptionAvailable = vi.spyOn(encryption, "isEncryptionAvailable");
+    const decryptString = vi.spyOn(encryption, "decryptString");
+    const cache = createConnectCredentialCache({
+      encryption,
+      fs: createFs(),
+      userDataPath: "/data",
+    });
+
+    await expect(cache.read()).resolves.toBeNull();
+    expect(isEncryptionAvailable).not.toHaveBeenCalled();
+    expect(decryptString).not.toHaveBeenCalled();
+  });
+
+  it("keeps stored bytes when encryption is unavailable", async () => {
+    const encrypted = Buffer.from("sealed:credential");
+    const fs = createFs(encrypted);
+    const encryption = createEncryption(false);
+    const isEncryptionAvailable = vi.spyOn(encryption, "isEncryptionAvailable");
+    const decryptString = vi.spyOn(encryption, "decryptString");
+    const removeFile = vi.spyOn(fs, "rm");
+    const cache = createConnectCredentialCache({
+      encryption,
+      fs,
+      userDataPath: "/data",
+    });
+
+    await expect(cache.read()).resolves.toBeNull();
+    expect(isEncryptionAvailable).toHaveBeenCalledOnce();
+    expect(decryptString).not.toHaveBeenCalled();
+    expect(removeFile).not.toHaveBeenCalled();
+    expect(fs.file).toBe(encrypted);
+  });
+
   it("drops bytes it cannot decrypt or parse", async () => {
     const undecryptable = createFs(Buffer.from("from-another-machine"));
     await expect(

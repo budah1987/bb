@@ -173,6 +173,9 @@ target? })`. Inside the fixed-tab component,
   `run({ threadId, openPanel })` — do anything there (rpc, toast), and/or
   call `openPanel({ title?, params? })` to open a closable panel tab
   rendering `component` with `{ threadId: string, params: JsonValue | null }`.
+  The component also receives `experimental_activationKey`, initially zero
+  on passive mount and incremented when its tab is explicitly opened or
+  focused again. Use it for repeated activation without remounting content.
   `openPanel` returns `boolean` — true when the host accepted the open, false
   when it declined (non-JSON `params`, unavailable action, or a surface with
   no side panel). A decline is a return value, never a throw, and matches

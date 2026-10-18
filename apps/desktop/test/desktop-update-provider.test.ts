@@ -1,10 +1,21 @@
 import { describe, expect, it } from "vitest";
 import {
   createDesktopUpdateFeedUrl,
+  createDesktopAutoUpdateFeedConfig,
+  createDesktopReleaseInfo,
   resolveDesktopUpdateSupport,
 } from "../src/desktop-update-provider.js";
 
 describe("desktop update feed url", () => {
+  it("keeps maintained runtime downloads on single ranges", () => {
+    for (const flavor of ["production", "rehearsal"] as const) {
+      expect(createDesktopAutoUpdateFeedConfig("nightly", createDesktopReleaseInfo("nightly", flavor)))
+        .toMatchObject({ channel: "nightly", useMultipleRangeRequest: false });
+    }
+    expect(createDesktopAutoUpdateFeedConfig("latest", createDesktopReleaseInfo("latest")))
+      .not.toHaveProperty("useMultipleRangeRequest");
+  });
+
   it("gives each platform its own feed file inside one release tag", () => {
     expect(createDesktopUpdateFeedUrl("macos")).toBe(
       "https://github.com/get-bb/bb/releases/download/desktop-latest/desktop-version.json",

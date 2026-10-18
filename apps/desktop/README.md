@@ -93,6 +93,41 @@ command in `xvfb-run -a`, as CI does.
 
 ## Packaging
 
+### Maintained Nightly build flavors
+
+Set `BB_DESKTOP_RELEASE_CHANNEL=nightly` and
+`BB_DESKTOP_MAINTAINED_FLAVOR=production` or `rehearsal` when building the
+private macOS arm64 maintained channel. The same flavor must be set for the
+Turbo build, electron-builder packaging, and version-feed generation. An
+unset flavor preserves the upstream `latest` or `nightly` build. Other flavor
+values and a maintained flavor with the `latest` channel fail the build.
+
+The production flavor embeds bundle ID `dev.bbamir.desktop.nightly`, product
+name `bb+`, updater cache `bb-maintained-nightly-updater`,
+and loopback feed `http://127.0.0.1:25140/`. It uses `~/.bb`, ports
+38886/38887, and the existing Electron profile
+`~/Library/Application Support/bb Nightly`. An explicit `--user-data-dir=<path>`
+still selects an isolated Electron profile for a smoke launch.
+
+The rehearsal flavor embeds its own bundle ID, product name, package name,
+updater cache and feed at `http://127.0.0.1:25141/`. At every launch it uses
+`/Users/amir/.local/share/bb-maintained-nightly/rehearsal/data` and
+`.../profile` with ports 25142/25143. It requires owned directories and an
+owned regular `.rehearsal-marker` in the rehearsal root containing exactly
+`bb-maintained-nightly-rehearsal-v1` followed by a newline. Conflicting
+environment or `--user-data-dir` settings stop startup before BB runs, so a
+bare native relaunch stays isolated. Provision this directory and marker only
+for an authorized rehearsal; do not copy the production data or profile.
+
+Both flavors keep the `nightly` update channel and emit `nightly-mac.yml` and
+`desktop-version.json`. The packaged `app-update.yml` uses the corresponding
+loopback feed, cache and single range requests. Packaging requires the local
+`BBamir Local Development` signing identity and must use `--publish never`.
+Run `pnpm exec turbo run desktop:build:maintained --filter=@bb/desktop --force`, then
+`pnpm exec turbo run desktop:version-feed --filter=@bb/desktop` with the same
+two variables. The release
+runner performs provenance, signing and artifact checks before promotion.
+
 ```bash
 pnpm exec turbo run desktop:build --filter=@bb/desktop
 pnpm exec turbo run smoke:packaged --filter=@bb/desktop
