@@ -151,6 +151,10 @@ import {
   type PromptDraftState,
 } from "@/lib/prompt-draft";
 import {
+  readChildThreadParentFromLocationState,
+  type ChildThreadParent,
+} from "@/lib/child-thread-compose";
+import {
   buildForkThreadRequest,
   FORK_THREAD_CREATE_SEED_LOCATION_STATE_KEY,
   type ForkThreadCreateSeed,
@@ -787,7 +791,8 @@ export function hasSingleUseRootComposeTargetState(state: unknown): boolean {
     readReuseEnvironmentIdFromLocationState(state) !== null ||
     readPluginNewThreadDraftKeyFromLocationState(state) !== null ||
     readForkThreadCreateSeedFromLocationState(state) !== null ||
-    readThreadHandoffCreateSeedFromLocationState(state) !== null
+    readThreadHandoffCreateSeedFromLocationState(state) !== null ||
+    readChildThreadParentFromLocationState(state) !== null
   );
 }
 
@@ -1000,6 +1005,15 @@ export function RootComposeView() {
   const [forkSeed, setForkSeed] = useState<ForkThreadCreateSeed | null>(() =>
     readForkThreadCreateSeedFromLocationState(location.state),
   );
+  const [childThreadParent, setChildThreadParent] =
+    useState<ChildThreadParent | null>(() =>
+      readChildThreadParentFromLocationState(location.state),
+    );
+  // A parent only applies inside its own project; switching projects drops it.
+  const activeChildThreadParent =
+    childThreadParent !== null && childThreadParent.projectId === projectId
+      ? childThreadParent
+      : null;
   const [lockedReuseEnvironmentId, setLockedReuseEnvironmentId] = useState<
     string | null
   >(() => readLockedReuseEnvironmentIdFromLocationState(location.state));
@@ -1378,6 +1392,11 @@ export function RootComposeView() {
     if (!hasSingleUseRootComposeTargetState(location.state)) {
       return;
     }
+    // Every explicit compose request restates its parent; a plain "New
+    // thread" must not inherit the previous child draft's parent.
+    setChildThreadParent(
+      readChildThreadParentFromLocationState(location.state),
+    );
     if (shouldStartComposingFromLocationState(location.state)) {
       setStartedComposing(true);
     }
@@ -2065,6 +2084,11 @@ export function RootComposeView() {
                   ...(rootComposeSectionId
                     ? { sectionId: rootComposeSectionId }
                     : {}),
+                  ...(activeChildThreadParent
+                    ? {
+                        parentThreadId: activeChildThreadParent.parentThreadId,
+                      }
+                    : {}),
                   ...(supportsServiceTier && serviceTier
                     ? { serviceTier }
                     : {}),
@@ -2081,6 +2105,7 @@ export function RootComposeView() {
         setLastCreatedThreadId(thread.id);
         clearReuseEnvironment();
         setForkSeed(null);
+        setChildThreadParent(null);
         setWorktreeBranchSlug("");
         setRootComposeSectionId(null);
         if (submittedDraft !== null) {
@@ -2099,6 +2124,7 @@ export function RootComposeView() {
       }
     },
     [
+      activeChildThreadParent,
       clearReuseEnvironment,
       createThread,
       executionInputSources,
@@ -3823,8 +3849,31 @@ export function RootComposeView() {
     });
   }, []);
 
+  const handleCancelChildThreadParent = useCallback(() => {
+    setChildThreadParent(null);
+    window.requestAnimationFrame(() => {
+      promptBoxRef.current?.focusEnd();
+    });
+  }, []);
+
   const promptHeader = useMemo(() => {
-    if (forkSeed === null) {
+    const pill =
+      forkSeed !== null
+        ? {
+            icon: "Fork" as const,
+            label: `Forking ${forkSeed.sourceThreadTitle}`,
+            cancelLabel: "Cancel fork",
+            onCancel: handleCancelForkDraft,
+          }
+        : activeChildThreadParent !== null
+          ? {
+              icon: "CornerDownRight" as const,
+              label: `Child of ${activeChildThreadParent.parentThreadTitle}`,
+              cancelLabel: "Start as a top-level thread",
+              onCancel: handleCancelChildThreadParent,
+            }
+          : null;
+    if (pill === null) {
       return null;
     }
     return (
@@ -3832,25 +3881,29 @@ export function RootComposeView() {
         {/* `-ml-1.5` shifts the pill 6px left so its icon column lines up
             with the prompt controls below the card. */}
         <div
-          aria-label={`Forking ${forkSeed.sourceThreadTitle}`}
+          aria-label={pill.label}
           className="-ml-1.5 inline-flex h-7 max-w-full items-center gap-1.5 rounded-full bg-muted py-0 pl-2.5 pr-1 text-xs font-medium text-muted-foreground"
         >
-          <Icon name="Fork" className="size-3.5 shrink-0" aria-hidden />
-          <span className="min-w-0 truncate">
-            Forking {forkSeed.sourceThreadTitle}
-          </span>
+          <Icon name={pill.icon} className="size-3.5 shrink-0" aria-hidden />
+          <span className="min-w-0 truncate">{pill.label}</span>
           <button
             type="button"
-            aria-label="Cancel fork"
+            aria-label={pill.cancelLabel}
+            title={pill.cancelLabel}
             className="inline-flex size-5 shrink-0 cursor-pointer items-center justify-center rounded-full text-muted-foreground hover:bg-surface-hover hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            onClick={handleCancelForkDraft}
+            onClick={pill.onCancel}
           >
             <Icon name="X" className="size-3" aria-hidden />
           </button>
         </div>
       </div>
     );
-  }, [forkSeed, handleCancelForkDraft]);
+  }, [
+    activeChildThreadParent,
+    forkSeed,
+    handleCancelChildThreadParent,
+    handleCancelForkDraft,
+  ]);
 
   const promptBanner = useMemo(() => {
     if (!isCodexCliVersionBlocked || codexCliStatus === null) {

@@ -209,6 +209,11 @@ export const DEFAULT_APP_KEYBINDINGS: AppDefaultKeybindings = [
     desktopOnly: true,
   }),
   binding("composer.focus", "c", { mod: true, shift: true }, composerWithoutModal),
+  // Prefer the PR URL in a focused thread; the composer binding handles threads without one.
+  binding("thread.copyPullRequestUrl", "c", { mod: true, shift: true }, {
+    ...mainWithoutModal,
+    none: ["modalOpen", "terminalFocus", "browserFocus"],
+  }),
   binding("modelPicker.toggle", "m", { mod: true, shift: true }, composerWithoutModal),
   // This later, scoped binding lets the same chord close the picker while the
   // general binding remains blocked by unrelated dialogs.

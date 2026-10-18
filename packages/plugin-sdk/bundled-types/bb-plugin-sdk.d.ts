@@ -75,6 +75,7 @@ declare const appKeybindingOverridesSchema: z$1.ZodArray<z$1.ZodObject<{
         "thread.search": "thread.search";
         "thread.rename": "thread.rename";
         "thread.archive": "thread.archive";
+        "thread.copyPullRequestUrl": "thread.copyPullRequestUrl";
         "thread.previous": "thread.previous";
         "thread.next": "thread.next";
         "pane.focus.previous": "pane.focus.previous";
@@ -2546,8 +2547,8 @@ declare const projectBranchesResponseSchema: z$1.ZodObject<{
         name: z$1.ZodString;
         kind: z$1.ZodEnum<{
             local: "local";
-            remote: "remote";
             missing: "missing";
+            remote: "remote";
         }>;
     }, z$1.core.$strip>>;
     defaultWorktreeBaseBranch: z$1.ZodNullable<z$1.ZodString>;
@@ -3219,8 +3220,8 @@ declare const environmentDiffBranchesResponseSchema: z$1.ZodObject<{
         name: z$1.ZodString;
         kind: z$1.ZodEnum<{
             local: "local";
-            remote: "remote";
             missing: "missing";
+            remote: "remote";
         }>;
     }, z$1.core.$strip>>;
 }, z$1.core.$strip>;
@@ -3341,8 +3342,8 @@ declare const environmentPreviewsResponseSchema: z$1.ZodObject<{
         }>;
         state: z$1.ZodEnum<{
             unknown: "unknown";
-            ready: "ready";
             failed: "failed";
+            ready: "ready";
             building: "building";
         }>;
         updatedAt: z$1.ZodNullable<z$1.ZodString>;
@@ -8073,8 +8074,8 @@ declare const pluginApplyUpdateResultSchema: z$1.ZodObject<{
         display: z$1.ZodString;
     }, z$1.core.$strip>>;
     outcome: z$1.ZodEnum<{
-        updated: "updated";
         current: "current";
+        updated: "updated";
         "rolled-back": "rolled-back";
     }>;
     detail: z$1.ZodOptional<z$1.ZodString>;
@@ -8142,8 +8143,8 @@ declare const installedPluginSchema: z$1.ZodObject<{
     status: z$1.ZodEnum<{
         error: "error";
         running: "running";
-        missing: "missing";
         incompatible: "incompatible";
+        missing: "missing";
         disabled: "disabled";
         degraded: "degraded";
         "needs-configuration": "needs-configuration";
@@ -8249,8 +8250,8 @@ declare const pluginListResponseSchema: z$1.ZodObject<{
         status: z$1.ZodEnum<{
             error: "error";
             running: "running";
-            missing: "missing";
             incompatible: "incompatible";
+            missing: "missing";
             disabled: "disabled";
             degraded: "degraded";
             "needs-configuration": "needs-configuration";
@@ -8358,8 +8359,8 @@ declare const pluginReloadResponseSchema: z$1.ZodObject<{
         status: z$1.ZodEnum<{
             error: "error";
             running: "running";
-            missing: "missing";
             incompatible: "incompatible";
+            missing: "missing";
             disabled: "disabled";
             degraded: "degraded";
             "needs-configuration": "needs-configuration";
@@ -8866,6 +8867,7 @@ declare const systemConfigResponseSchema: z$1.ZodObject<{
             "thread.search": "thread.search";
             "thread.rename": "thread.rename";
             "thread.archive": "thread.archive";
+            "thread.copyPullRequestUrl": "thread.copyPullRequestUrl";
             "thread.previous": "thread.previous";
             "thread.next": "thread.next";
             "thread.jump.1": "thread.jump.1";
@@ -8974,6 +8976,7 @@ declare const systemConfigResponseSchema: z$1.ZodObject<{
             "thread.search": "thread.search";
             "thread.rename": "thread.rename";
             "thread.archive": "thread.archive";
+            "thread.copyPullRequestUrl": "thread.copyPullRequestUrl";
             "thread.previous": "thread.previous";
             "thread.next": "thread.next";
             "thread.jump.1": "thread.jump.1";
@@ -9082,6 +9085,7 @@ declare const systemConfigResponseSchema: z$1.ZodObject<{
             "thread.search": "thread.search";
             "thread.rename": "thread.rename";
             "thread.archive": "thread.archive";
+            "thread.copyPullRequestUrl": "thread.copyPullRequestUrl";
             "thread.previous": "thread.previous";
             "thread.next": "thread.next";
             "thread.jump.1": "thread.jump.1";
@@ -9314,9 +9318,9 @@ declare const terminalSessionSchema: z$1.ZodObject<{
     cols: z$1.ZodNumber;
     rows: z$1.ZodNumber;
     status: z$1.ZodEnum<{
+        running: "running";
         starting: "starting";
         disconnected: "disconnected";
-        running: "running";
         exited: "exited";
     }>;
     exitCode: z$1.ZodNullable<z$1.ZodNumber>;
@@ -9351,9 +9355,9 @@ declare const terminalListResponseSchema: z$1.ZodObject<{
         cols: z$1.ZodNumber;
         rows: z$1.ZodNumber;
         status: z$1.ZodEnum<{
+            running: "running";
             starting: "starting";
             disconnected: "disconnected";
-            running: "running";
             exited: "exited";
         }>;
         exitCode: z$1.ZodNullable<z$1.ZodNumber>;
@@ -12190,8 +12194,8 @@ declare const threadTimelineResponseSchema: z$1.ZodObject<{
         updatedAt: z$1.ZodNumber;
         objective: z$1.ZodString;
         status: z$1.ZodEnum<{
-            active: "active";
             paused: "paused";
+            active: "active";
             budgetLimited: "budgetLimited";
             complete: "complete";
         }>;
@@ -13233,6 +13237,13 @@ interface PluginSidebarThreadActions {
         };
         /** Open bb's GitHub branch / pull-request workflow chooser. */
         experimental_startGithubWorkflow?: boolean;
+        /**
+         * Create the thread as a child of this thread. The composer shows the
+         * parent and switches to its project; the user can still remove it.
+         * Unknown or archived thread ids are ignored. Experimental: see
+         * docs/api_to_audit.md.
+         */
+        experimental_parentThreadId?: string;
     }): void;
     /**
      * Whether this thread can open as a temporary fork draft. The host requires

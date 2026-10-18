@@ -305,6 +305,35 @@ describe("AppCommandProvider", () => {
     vi.useRealTimers();
   });
 
+  it("tries the earlier matching shortcut when a scoped handler declines", () => {
+    const earlier = testState.keybindings.find(
+      (binding) => binding.command === "thread.new",
+    );
+    const later = testState.keybindings.find(
+      (binding) => binding.command === "thread.search",
+    );
+    if (!earlier || !later) throw new Error("Missing test bindings");
+    const originalShortcut = later.shortcut;
+    later.shortcut = earlier.shortcut;
+    try {
+      renderProvider(
+        <>
+          <Handler command="thread.new" name="fallback" result={true} />
+          <Handler command="thread.search" name="declined" result={false} />
+        </>,
+      );
+      fireEvent.keyDown(window, {
+        key: "O",
+        code: "KeyO",
+        ctrlKey: true,
+        shiftKey: true,
+      });
+      expect(testState.calls).toEqual(["declined", "fallback"]);
+    } finally {
+      later.shortcut = originalShortcut;
+    }
+  });
+
   it("shows keyboard hints for either Command or Control on macOS", () => {
     vi.useFakeTimers();
     vi.spyOn(navigator, "platform", "get").mockReturnValue("MacIntel");
