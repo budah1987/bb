@@ -36,6 +36,12 @@ export async function readProcessIdentity(
 }
 
 async function readWindowsProcess(pid: number) {
+  const script = [
+    "$ErrorActionPreference = 'Stop'",
+    "[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)",
+    `Get-CimInstance Win32_Process -Filter 'ProcessId = ${pid}' -OperationTimeoutSec 5 | ForEach-Object { @{ command = $_.CommandLine; startedAt = ([DateTimeOffset]$_.CreationDate).ToUnixTimeMilliseconds() } | ConvertTo-Json -Compress }`,
+    "exit 0",
+  ].join("; ");
   try {
     const pending = execFileAsync(
       path.join(
@@ -48,12 +54,8 @@ async function readWindowsProcess(pid: number) {
       [
         "-NoProfile",
         "-NonInteractive",
-        "-Command",
-        [
-          "$ErrorActionPreference = 'Stop'",
-          "[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)",
-          `Get-CimInstance Win32_Process -Filter 'ProcessId = ${pid}' | ForEach-Object { @{ command = $_.CommandLine; startedAt = ([DateTimeOffset]$_.CreationDate).ToUnixTimeMilliseconds() } | ConvertTo-Json -Compress }`,
-        ].join("; "),
+        "-EncodedCommand",
+        Buffer.from(script, "utf16le").toString("base64"),
       ],
       {
         encoding: "utf8",

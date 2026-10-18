@@ -684,7 +684,7 @@ jobs:
 
     # Fork pull requests cannot read secrets, so the probe would fail
     # unauthenticated for reasons unrelated to bb.
-    if: ${{ fromJSON(needs.plan.outputs.selection).providers && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) }}
+    if: ${{ github.repository_owner == 'get-bb' && fromJSON(needs.plan.outputs.selection).providers && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) }}
 
     steps:
       - name: Checkout repository

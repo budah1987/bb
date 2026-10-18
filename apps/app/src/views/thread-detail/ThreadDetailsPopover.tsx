@@ -447,11 +447,12 @@ function BranchRow({
             ROW_CLASS,
             "group/branch disabled:pointer-events-auto disabled:active:scale-100 disabled:hover:bg-transparent",
           )}
-          title={title}
           aria-label={`Branch ${branch}`}
         >
           <Icon name="GitBranch" className={ROW_ICON_CLASS} aria-hidden />
-          <span className={ROW_LABEL_CLASS}>{branch}</span>
+          <span className={ROW_LABEL_CLASS} title={title}>
+            {branch}
+          </span>
           {ahead > 0 || behind > 0 ? (
             <span className="shrink-0 text-xs font-normal text-muted-foreground tabular-nums">
               {ahead > 0 ? `↑${ahead}` : null}
@@ -602,7 +603,6 @@ function LineageSection({
             projectId: parent.projectId,
             threadId: parent.id,
           })}
-          title={parent.title}
           aria-label={`Parent thread: ${parent.title}`}
           className={cn(ROW_CLASS, "group no-underline")}
         >
@@ -611,7 +611,7 @@ function LineageSection({
             className={ROW_ICON_CLASS}
             aria-hidden
           />
-          <span className={ROW_LABEL_CLASS}>
+          <span className={ROW_LABEL_CLASS} title={parent.title}>
             <ThreadTitle title={parent.title} />
           </span>
           <span className="shrink-0 text-2xs font-normal text-muted-foreground">

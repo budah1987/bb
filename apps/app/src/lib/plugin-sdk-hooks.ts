@@ -262,13 +262,15 @@ export function useRealtime(
   usePluginSignal(pluginId, channel, handler);
 }
 
-export function experimental_usePluginRealtime(
+function usePluginRealtime(
   pluginId: string,
   channel: string,
   handler: (payload: unknown) => void,
 ): void {
   usePluginSignal(pluginId, channel, handler);
 }
+
+export { usePluginRealtime as experimental_usePluginRealtime };
 
 function usePluginSignal(
   pluginId: string,

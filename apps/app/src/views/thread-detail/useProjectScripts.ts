@@ -1,3 +1,4 @@
+import { invalidateProjectScriptQueries } from "@/hooks/cache-owners/project-cache-owner";
 import { PERSONAL_PROJECT_ID } from "@bb/domain";
 import { projectScriptsQueryKey } from "@/hooks/queries/query-keys";
 import { useRef } from "react";
@@ -32,7 +33,8 @@ export function useProjectScripts({
     enabled: projectId.length > 0 && projectId !== PERSONAL_PROJECT_ID,
     staleTime: 30_000,
   });
-  const refresh = () => queryClient.invalidateQueries({ queryKey });
+  const refresh = () =>
+    invalidateProjectScriptQueries({ projectId, queryClient });
   const save = useMutation({
     mutationFn: (input: ProjectScriptInput & { id: string | null }) => {
       const { id, ...values } = input;

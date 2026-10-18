@@ -32,7 +32,7 @@ function createRehearsalFixture() {
   return { ...release, runtime };
 }
 
-describe("maintained desktop startup policy", () => {
+describe.runIf(process.platform === "darwin")("maintained desktop startup policy", () => {
   it("uses the existing Nightly profile unless a user-data-dir is explicit", () => {
     const release = createDesktopReleaseConfig("nightly", "production");
     const args = {

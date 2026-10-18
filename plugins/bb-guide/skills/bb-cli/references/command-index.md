@@ -42,6 +42,13 @@ This index lists every command path that the core CLI registers, including alias
 ## project
 
 - `bb project`
+- `bb project script`
+- `bb project script list`
+- `bb project script add`
+- `bb project script update`
+- `bb project script delete`
+- `bb project script import`
+- `bb project script run`
 - `bb project source`
 - `bb project source add`
 - `bb project source update`
@@ -346,5 +353,4 @@ This index lists every command path that the core CLI registers, including alias
 - `bb browser import-sources`
 - `bb browser import-cookies`
 
-Project scripts: `bb project script list`, `add`, `update`, `delete`, `import`, `run`.
 See `bb guide projects` for arguments and terminal lifecycle.

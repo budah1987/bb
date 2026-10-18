@@ -255,7 +255,11 @@ describe("Task embed panel", () => {
   it("keeps an aliased task in the side panel until the user opens Tasks", async () => {
     const slot = renderSlot(
       app.threadPanelActions[0]!,
-      { threadId: "thr_1", params: { taskKey: "OLD-4" } },
+      {
+        experimental_activationKey: 1,
+        threadId: "thr_1",
+        params: { taskKey: "OLD-4" },
+      },
       { rpc: taskDetailRpc(() => ({ task })) },
     );
     await slot.findByRole("textbox", { name: "Task title" });
@@ -274,7 +278,11 @@ describe("Task embed panel", () => {
     let title = "Stale embedded detail";
     const slot = renderSlot(
       app.threadPanelActions[0]!,
-      { threadId: "thr_1", params: { taskKey: "TSK-4" } },
+      {
+        experimental_activationKey: 1,
+        threadId: "thr_1",
+        params: { taskKey: "TSK-4" },
+      },
       {
         realtimeConnectionState: "connected",
         rpc: taskDetailRpc(() => ({ task: { ...task, title } })),
@@ -292,7 +300,11 @@ describe("Task embed panel", () => {
   it("shows a hint when opened without a task key", () => {
     const slot = renderSlot(
       app.threadPanelActions[0]!,
-      { threadId: "thr_1", params: null },
+      {
+        experimental_activationKey: 1,
+        threadId: "thr_1",
+        params: null,
+      },
       { rpc: {} },
     );
     slot.getByText("Open a task card from a message to view it here.");

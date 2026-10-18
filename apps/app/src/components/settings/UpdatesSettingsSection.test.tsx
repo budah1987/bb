@@ -1784,7 +1784,6 @@ The canonical release summary.
     expect(screen.queryByRole("button", { name: /Rebuild bb\+ from bb/ })).toBeNull();
     cleanup();
 
-    // A promoted build reaches the native updater, which takes priority.
     show({
       ...baseInfo,
       downloadState: "downloaded",
