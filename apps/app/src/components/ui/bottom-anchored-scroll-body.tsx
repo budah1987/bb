@@ -56,6 +56,7 @@ export interface BottomAnchorContextValue {
 export interface BottomAnchoredScrollBodyProps {
   children: ReactNode;
   footer: ReactNode;
+  floatingFooter?: boolean;
   scrollOverlay?: ReactNode;
   scrollAreaClassName?: string;
   contentClassName?: string;
@@ -131,15 +132,15 @@ function scrollElementToBottom(element: HTMLElement) {
   element.scrollTop = getMaxScrollOffset(element);
 }
 
-function isElementFullyVisibleInScrollArea({
-  element,
-  scrollArea,
-}: ElementVisibilityArgs) {
+function isElementFullyVisibleInScrollArea(
+  { element, scrollArea }: ElementVisibilityArgs,
+  bottomInset = 0,
+) {
   const elementRect = element.getBoundingClientRect();
   const scrollAreaRect = scrollArea.getBoundingClientRect();
   return (
     elementRect.top >= scrollAreaRect.top &&
-    elementRect.bottom <= scrollAreaRect.bottom
+    elementRect.bottom <= scrollAreaRect.bottom - bottomInset
   );
 }
 
@@ -273,10 +274,45 @@ export function BottomAnchoredScrollBody({
   scrollOverlay,
   children,
   scrollAnchorThreadId,
+  floatingFooter = false,
 }: BottomAnchoredScrollBodyProps) {
   const store = useStore();
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const scrollContentRef = useRef<HTMLDivElement>(null);
+  const floatingFooterRef = useRef<HTMLDivElement>(null);
+  const [floatingFooterHeight, setFloatingFooterHeight] = useState(0);
+  const hasFooter = Boolean(footer);
+
+  useLayoutEffect(() => {
+    const element = floatingFooterRef.current;
+    if (!floatingFooter || !element) return;
+    const scrollArea = scrollAreaRef.current;
+    const previousScrollPadding = scrollArea?.style.scrollPaddingBottom ?? "";
+    const measure = () => {
+      const height = Math.ceil(element.getBoundingClientRect().height);
+      if (scrollArea) {
+        scrollArea.style.scrollPaddingBottom = `${height}px`;
+      }
+      const resting =
+        element.querySelector("[data-promptbox-resting]") !== null;
+      // Keep the expanded clearance while reading history. Expanding the
+      // input must not cover the final message or change the reading anchor.
+      setFloatingFooterHeight((previous) =>
+        resting ? Math.max(previous, height) : height,
+      );
+    };
+    measure();
+    const observer =
+      typeof ResizeObserver === "undefined"
+        ? null
+        : new ResizeObserver(measure);
+    observer?.observe(element);
+    return () => {
+      observer?.disconnect();
+      if (scrollArea)
+        scrollArea.style.scrollPaddingBottom = previousScrollPadding;
+    };
+  }, [floatingFooter, hasFooter]);
   const shouldStickToBottomRef = useRef(true);
   const userScrollIntentUntilRef = useRef(0);
   const pointerScrollIntentRef = useRef(false);
@@ -455,7 +491,10 @@ export function BottomAnchoredScrollBody({
       const scrollArea = scrollAreaRef.current;
       if (
         scrollArea &&
-        isElementFullyVisibleInScrollArea({ element, scrollArea })
+        isElementFullyVisibleInScrollArea(
+          { element, scrollArea },
+          floatingFooter ? (floatingFooterRef.current?.offsetHeight ?? 0) : 0,
+        )
       ) {
         return;
       }
@@ -464,7 +503,7 @@ export function BottomAnchoredScrollBody({
       cancelQueuedRestore();
       element.scrollIntoView(options);
     },
-    [cancelQueuedRestore],
+    [cancelQueuedRestore, floatingFooter],
   );
 
   const scrollElementIntoViewClampedToMaxScroll = useCallback(
@@ -925,7 +964,10 @@ export function BottomAnchoredScrollBody({
 
   return (
     <BottomAnchorContext.Provider value={bottomAnchorContextValue}>
-      <div className="grid min-h-0 flex-1 overflow-hidden">
+      <div
+        className="relative grid min-h-0 flex-1 overflow-hidden"
+        data-floating-chat={floatingFooter ? "" : undefined}
+      >
         <div
           ref={scrollAreaRef}
           className={cn(
@@ -956,13 +998,32 @@ export function BottomAnchoredScrollBody({
                 data-sent-message-end-space=""
                 style={{ height: sentMessageEndSpaceHeight }}
               />
+              {floatingFooter && hasFooter ? (
+                <div
+                  data-floating-chat-clearance=""
+                  aria-hidden
+                  className="shrink-0"
+                  style={{ height: floatingFooterHeight }}
+                />
+              ) : null}
               <div className="scroll-bottom-anchor" aria-hidden />
             </div>
-            {footer ? (
+            {footer && !floatingFooter ? (
               <div className="sticky bottom-0 z-20 shrink-0">{footer}</div>
             ) : null}
           </div>
         </div>
+        {floatingFooter && footer ? (
+          <div className="pointer-events-none z-20 col-start-1 row-start-1 flex min-h-0 flex-col justify-end">
+            <div
+              ref={floatingFooterRef}
+              data-floating-chat-footer=""
+              className="pointer-events-none relative shrink-0"
+            >
+              {footer}
+            </div>
+          </div>
+        ) : null}
         {scrollOverlay ? (
           <div
             data-scroll-overlay=""

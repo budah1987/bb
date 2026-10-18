@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
 
-import { cleanup, fireEvent, render } from "@testing-library/react";
+import { act, cleanup, fireEvent, render } from "@testing-library/react";
 import { getDefaultStore } from "jotai";
+import { useRef } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   BottomAnchoredScrollBody,
@@ -32,11 +33,14 @@ const SCROLL_AREA_HEIGHT = 100;
 class ResizeObserverMock implements ResizeObserver {
   static instances: ResizeObserverMock[] = [];
   readonly callback: ResizeObserverCallback;
+  readonly targets: Element[] = [];
   constructor(callback: ResizeObserverCallback) {
     this.callback = callback;
     ResizeObserverMock.instances.push(this);
   }
-  observe() {}
+  observe(target: Element) {
+    this.targets.push(target);
+  }
   unobserve() {}
   disconnect() {}
   trigger() {
@@ -724,5 +728,120 @@ describe("BottomAnchoredScrollBody scroll preservation", () => {
     getLatestResizeObserver().trigger();
 
     expect(a2.scrollArea.scrollTop).toBe(220);
+  });
+});
+
+describe("floating composer clearance", () => {
+  it("reveals a message covered by the overlay and gives native scrolling its clearance", () => {
+    function RevealMessage() {
+      const anchor = useBottomAnchoredScroll();
+      const target = useRef<HTMLDivElement>(null);
+      return (
+        <>
+          <div ref={target} data-testid="covered-message">
+            Message
+          </div>
+          <button
+            onClick={() => {
+              if (target.current)
+                anchor?.scrollElementIntoView({ element: target.current });
+            }}
+          >
+            Reveal message
+          </button>
+        </>
+      );
+    }
+    const view = render(
+      <BottomAnchoredScrollBody
+        floatingFooter
+        footer={<form data-promptbox="" />}
+        maxWidthClassName="max-w-none"
+        scrollAreaClassName={SCROLL_AREA_CLASS}
+      >
+        <RevealMessage />
+      </BottomAnchoredScrollBody>,
+    );
+    const footer = requireHTMLElement(
+      view.container.querySelector("[data-floating-chat-footer]"),
+    );
+    const scrollArea = requireHTMLElement(
+      view.container.querySelector(`.${SCROLL_AREA_CLASS}`),
+    );
+    const target = view.getByTestId("covered-message");
+    vi.spyOn(scrollArea, "getBoundingClientRect").mockReturnValue(
+      new DOMRect(0, 0, 700, 400),
+    );
+    vi.spyOn(target, "getBoundingClientRect").mockReturnValue(
+      new DOMRect(0, 280, 700, 40),
+    );
+    vi.spyOn(footer, "getBoundingClientRect").mockReturnValue(
+      new DOMRect(0, 280, 700, 120),
+    );
+    Object.defineProperty(footer, "offsetHeight", {
+      configurable: true,
+      value: 120,
+    });
+    const scrollIntoView = vi.fn();
+    target.scrollIntoView = scrollIntoView;
+    const observer = ResizeObserverMock.instances.find((instance) =>
+      instance.targets.includes(footer),
+    );
+    if (!observer) throw new Error("Expected floating footer observer");
+    act(() => observer.trigger());
+    expect(scrollArea.style.scrollPaddingBottom).toBe("120px");
+    fireEvent.click(view.getByRole("button", { name: "Reveal message" }));
+    expect(scrollIntoView).toHaveBeenCalledOnce();
+    vi.spyOn(target, "getBoundingClientRect").mockReturnValue(
+      new DOMRect(0, 200, 700, 40),
+    );
+    fireEvent.click(view.getByRole("button", { name: "Reveal message" }));
+    expect(scrollIntoView).toHaveBeenCalledOnce();
+  });
+
+  it("keeps the expanded clearance while resting and measures later expanded content", () => {
+    const view = render(
+      <BottomAnchoredScrollBody
+        floatingFooter
+        footer={<form data-promptbox="" />}
+        maxWidthClassName="max-w-none"
+      >
+        <div data-testid="last-message">Last message</div>
+      </BottomAnchoredScrollBody>,
+    );
+    const footer = requireHTMLElement(
+      view.container.querySelector("[data-floating-chat-footer]"),
+    );
+    const clearance = requireHTMLElement(
+      view.container.querySelector("[data-floating-chat-clearance]"),
+    );
+    const form = requireHTMLElement(footer.querySelector("form"));
+    const observer = ResizeObserverMock.instances.find((instance) =>
+      instance.targets.includes(footer),
+    );
+    if (!observer) throw new Error("Expected floating footer observer");
+    let height = 180;
+    vi.spyOn(footer, "getBoundingClientRect").mockImplementation(
+      () => new DOMRect(0, 0, 700, height),
+    );
+    act(() => observer.trigger());
+    expect(clearance.style.height).toBe("180px");
+    form.setAttribute("data-promptbox-resting", "");
+    height = 80;
+    act(() => observer.trigger());
+    expect(clearance.style.height).toBe("180px");
+    form.removeAttribute("data-promptbox-resting");
+    height = 240;
+    act(() => observer.trigger());
+    expect(clearance.style.height).toBe("240px");
+    height = 160;
+    act(() => observer.trigger());
+    expect(clearance.style.height).toBe("160px");
+    const content = requireHTMLElement(
+      view.container.querySelector("[data-thread-scroll-content]"),
+    );
+    expect(content.contains(footer)).toBe(false);
+    expect(content.contains(clearance)).toBe(true);
+    expect(content.contains(view.getByTestId("last-message"))).toBe(true);
   });
 });

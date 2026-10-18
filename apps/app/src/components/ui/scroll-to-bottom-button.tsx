@@ -17,7 +17,10 @@ export function ScrollToBottomButton({
   ariaLabel = "Scroll to latest event",
 }: ScrollToBottomButtonProps) {
   return (
-    <div className={cn("flex h-0 items-center justify-center", className)}>
+    <div
+      data-scroll-to-bottom=""
+      className={cn("flex h-0 items-center justify-center", className)}
+    >
       <button
         onClick={onClick}
         className={cn(
@@ -27,6 +30,8 @@ export function ScrollToBottomButton({
             : "pointer-events-none translate-y-2 opacity-0",
         )}
         aria-label={ariaLabel}
+        aria-hidden={!visible}
+        tabIndex={visible ? 0 : -1}
         type="button"
       >
         {/* One control — the down-arrow. While the thread is active it shimmers
@@ -36,6 +41,9 @@ export function ScrollToBottomButton({
           name="ArrowDown"
           className={cn("size-4", active && "animate-shine-icon")}
         />
+        <span data-scroll-to-bottom-label="" className="hidden">
+          Latest
+        </span>
       </button>
     </div>
   );

@@ -408,6 +408,8 @@ export interface PromptBoxInternalProps {
   zenMode?: PromptBoxZenModeConfig;
   /** Optional one-line presentation for unfocused mobile follow-up composers. */
   compact?: PromptBoxCompactConfig;
+  /** Desktop reading layout; retains plugin actions and the editor instance. */
+  resting?: boolean;
   /** Compact placeholder used when a follow-up composer is narrowed by its container. */
   containerCompactPlaceholder?: string;
   /**
@@ -1156,6 +1158,7 @@ export function PromptBoxInternal({
   suppressPluginComposerCustomizations = false,
   zenMode = {},
   compact,
+  resting = false,
   containerCompactPlaceholder,
   heightAnimationKey,
   history,
@@ -1419,6 +1422,15 @@ export function PromptBoxInternal({
   const showZenLayout = isZenMode;
   const showCompactLayout =
     compact?.isCompact === true && !showVoiceActionGroup && !isZenMode;
+  const showRestingLayout =
+    resting &&
+    !showVoiceActionGroup &&
+    !isZenMode &&
+    attachments.length === 0 &&
+    !isAttaching &&
+    !attachmentError &&
+    !localAttachmentError &&
+    activeTrigger === null;
   const effectivePlaceholder = showCompactLayout
     ? (compact.placeholder ?? placeholder)
     : placeholder;
@@ -1427,11 +1439,12 @@ export function PromptBoxInternal({
   const composerInputLocked = useComposerInputLock(
     pluginComposerHost?.textEffectKey ?? null,
   );
-  const composerLayout = showCompactLayout
-    ? "compact"
-    : showZenLayout
-      ? "zen"
-      : "expanded";
+  const composerLayout =
+    showCompactLayout || showRestingLayout
+      ? "compact"
+      : showZenLayout
+        ? "zen"
+        : "expanded";
   const localComposerView = usePluginComposerViewModel({
     scope: pluginComposerHost?.scope ?? {
       kind: "new-thread",
@@ -3138,6 +3151,7 @@ export function PromptBoxInternal({
       ref={formRef}
       data-promptbox=""
       data-promptbox-compact={showCompactLayout ? "" : undefined}
+      data-promptbox-resting={showRestingLayout ? "" : undefined}
       data-promptbox-zen={showZenLayout ? "" : undefined}
       data-promptbox-voice-active={showVoiceActionGroup ? "" : undefined}
       onSubmit={handleSubmit}

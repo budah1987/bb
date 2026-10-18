@@ -1604,6 +1604,64 @@ describe("PromptBoxInternal zen mode layout", () => {
 });
 
 describe("PromptBoxInternal plugin composer actions", () => {
+  it("keeps attachment errors visible even if a reading gesture requests resting", () => {
+    render(
+      <PromptBoxInternal
+        {...createPromptBoxProps({
+          resting: true,
+          attachments: { error: "Upload failed" },
+        })}
+      />,
+    );
+    expect(screen.getByText("Upload failed")).toBeTruthy();
+    expect(document.querySelector("[data-promptbox-resting]")).toBeNull();
+  });
+
+  it("retains the plugin picker, its open state, and the editor through desktop resting changes", () => {
+    const mounted = vi.fn();
+    const unmounted = vi.fn();
+    function ModelDeck() {
+      const [open, setOpen] = useState(false);
+      useLayoutEffect(() => {
+        mounted();
+        return unmounted;
+      }, []);
+      return (
+        <button
+          aria-haspopup="dialog"
+          aria-expanded={open}
+          onClick={() => setOpen(!open)}
+        >
+          Model Deck
+        </button>
+      );
+    }
+    setPluginSlotRegistrations(
+      "model-deck",
+      pluginRegistrationSet([
+        { id: "picker", actions: [{ id: "model", component: ModelDeck }] },
+      ]),
+    );
+    const baseProps = createPromptBoxProps({
+      value: "Keep my draft",
+      autoFocus: false,
+    });
+    const view = render(<PromptBoxInternal {...baseProps} />);
+    const trigger = screen.getByRole("button", { name: "Model Deck" });
+    const editor = getPromptEditorElement();
+    fireEvent.click(trigger);
+    view.rerender(<PromptBoxInternal {...baseProps} resting />);
+    expect(screen.getByRole("button", { name: "Model Deck" })).toBe(trigger);
+    expect(trigger.getAttribute("aria-expanded")).toBe("true");
+    expect(getPromptEditorElement()).toBe(editor);
+    expect(editor.textContent).toBe("Keep my draft");
+    expect(document.querySelector("[data-promptbox-resting]")).toBeTruthy();
+    view.rerender(<PromptBoxInternal {...baseProps} />);
+    expect(mounted).toHaveBeenCalledTimes(1);
+    expect(unmounted).not.toHaveBeenCalled();
+    expect(trigger.getAttribute("aria-expanded")).toBe("true");
+  });
+
   it("mounts scope-matched actions in deterministic order before voice", () => {
     setPluginSlotRegistrations(
       "zeta",

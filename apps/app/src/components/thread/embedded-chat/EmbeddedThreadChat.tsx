@@ -279,6 +279,7 @@ function EmbeddedThreadChatHostedFooter({
         key={threadId}
         scrollBehavior="bottom-anchor"
         scrollAnchorThreadId={threadId}
+        floatingFooter
         shellClassName="!mx-0 !mt-0 md:!mx-0 md:!mt-0"
         contentClassName="gap-2 pt-4"
         footerClassName="chat-prompt-box"
