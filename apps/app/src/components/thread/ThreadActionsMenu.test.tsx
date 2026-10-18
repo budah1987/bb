@@ -2,7 +2,7 @@
 
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import type { Thread } from "@bb/domain";
-import type { ReactNode } from "react";
+import { useEffect, type ReactNode } from "react";
 import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { SpaceActionsProvider } from "@/components/sidebar/SpaceActionsContext";
@@ -61,7 +61,10 @@ function makeThread(overrides: Partial<Thread> = {}): Thread {
 let composeLocationState: unknown = undefined;
 
 function ComposeRouteProbe() {
-  composeLocationState = useLocation().state;
+  const { state } = useLocation();
+  useEffect(() => {
+    composeLocationState = state;
+  }, [state]);
   return null;
 }
 
