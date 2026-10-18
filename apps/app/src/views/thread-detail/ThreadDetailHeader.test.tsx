@@ -1,15 +1,23 @@
 // @vitest-environment jsdom
 
 import {
+  act,
   cleanup,
   fireEvent,
   render,
   screen,
   waitFor,
 } from "@testing-library/react";
-import type { ReactNode, Ref } from "react";
+import { useState, type ReactNode, type Ref } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ThreadDetailHeader } from "./ThreadDetailHeader";
+import { PluginThreadHeaderActions } from "@/components/plugin/PluginThreadHeaderActions";
+import {
+  resetPluginSlotStoreForTest,
+  setPluginSlotRegistrations,
+} from "@/lib/plugin-slots";
+import { makePluginRegistrationSet } from "@/test/fixtures/plugins";
+import type { PluginThreadHeaderActionProps } from "@get-bb/plugin-sdk";
 import { PaneContext, type PaneContextValue } from "./PaneContext";
 import { ThreadTitleMentionResourcesProvider } from "@/components/thread/ThreadTitleMentions";
 import { makeThreadListEntry } from "@bb/test-helpers/domain-fixtures";
@@ -104,6 +112,7 @@ const PANE_CONTEXT: PaneContextValue = {
 afterEach(() => {
   cleanup();
   resetThreadActionRegistryForTest();
+  resetPluginSlotStoreForTest();
   viewportState.isCompactViewport = false;
   mocks.renameThreadAsync.mockReset();
   vi.restoreAllMocks();
@@ -322,6 +331,220 @@ describe("ThreadDetailHeader", () => {
     expect(screen.getByText("Commit")).not.toBeNull();
     expect(screen.getByText("Thread menu")).not.toBeNull();
     expect(screen.queryByText("Responsive menu actions")).toBeNull();
+  });
+
+  it.each([
+    {
+      label: "narrow split",
+      width: 360,
+      split: true,
+      compact: false,
+      details: true,
+      available: false,
+    },
+    {
+      label: "wide split",
+      width: 720,
+      split: true,
+      compact: false,
+      details: true,
+      available: true,
+    },
+    {
+      label: "split at the breakpoint",
+      width: 560,
+      split: true,
+      compact: false,
+      details: true,
+      available: true,
+    },
+    {
+      label: "compact viewport",
+      width: 720,
+      split: false,
+      compact: true,
+      details: true,
+      available: false,
+    },
+    {
+      label: "header without thread details",
+      width: 720,
+      split: false,
+      compact: false,
+      details: false,
+      available: false,
+    },
+  ])(
+    "reports thread details availability to plugins in a $label",
+    ({ width, split, compact, details, available }) => {
+      setPluginSlotRegistrations(
+        "header-probe",
+        makePluginRegistrationSet({
+          threadHeaderActions: [
+            {
+              id: "probe",
+              title: "Header probe",
+              component: ({
+                experimental_threadDetailsAvailable,
+                isCompactViewport,
+              }) => (
+                <button data-compact={isCompactViewport}>
+                  {experimental_threadDetailsAvailable
+                    ? "Plugin uses details"
+                    : "Plugin uses header"}
+                </button>
+              ),
+            },
+          ],
+        }),
+      );
+      viewportState.isCompactViewport = compact;
+      vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockReturnValue({
+        bottom: 40,
+        height: 40,
+        left: 0,
+        right: width,
+        top: 0,
+        width,
+        x: 0,
+        y: 0,
+        toJSON: () => ({}),
+      });
+      render(
+        <PaneContext.Provider
+          value={{
+            ...PANE_CONTEXT,
+            isSplitPane: split,
+            beginPaneDrag: split ? vi.fn() : undefined,
+          }}
+        >
+          <ThreadDetailHeader
+            actionsMenu={null}
+            isSecondaryPanelOpen={false}
+            onOpenThreadGitAction={vi.fn()}
+            onToggleSecondaryPanel={vi.fn()}
+            threadHeaderGitActions={[]}
+            threadId={THREAD_ID}
+            threadTitle="Plugin fallback"
+            threadDetails={details ? <button>Thread details</button> : null}
+            pluginActions={({ threadDetailsAvailable }) => (
+              <PluginThreadHeaderActions
+                threadId={THREAD_ID}
+                projectId="proj_header"
+                threadDetailsAvailable={threadDetailsAvailable}
+              />
+            )}
+          />
+        </PaneContext.Provider>,
+      );
+      expect(
+        screen.queryByRole("button", { name: "Thread details" }) !== null,
+      ).toBe(available);
+      expect(
+        screen.getByRole("button", {
+          name: available ? "Plugin uses details" : "Plugin uses header",
+        }),
+      ).not.toBeNull();
+      expect(
+        screen
+          .getByRole("button", {
+            name: available ? "Plugin uses details" : "Plugin uses header",
+          })
+          .getAttribute("data-compact"),
+      ).toBe(String(compact));
+    },
+  );
+
+  it("keeps plugin state mounted while a split crosses the details breakpoint", () => {
+    let width = 360;
+    let resize = () => {};
+    vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(
+      () => ({
+        bottom: 40,
+        height: 40,
+        left: 0,
+        right: width,
+        top: 0,
+        width,
+        x: 0,
+        y: 0,
+        toJSON: () => ({}),
+      }),
+    );
+    vi.stubGlobal(
+      "ResizeObserver",
+      class {
+        constructor(callback: () => void) {
+          resize = callback;
+        }
+        observe() {}
+        unobserve() {}
+        disconnect() {}
+      },
+    );
+    function PluginProbe({
+      experimental_threadDetailsAvailable,
+    }: PluginThreadHeaderActionProps) {
+      const [count, setCount] = useState(0);
+      return (
+        <button
+          hidden={experimental_threadDetailsAvailable}
+          onClick={() => setCount(count + 1)}
+        >
+          Git action {count}
+        </button>
+      );
+    }
+    setPluginSlotRegistrations(
+      "header-probe",
+      makePluginRegistrationSet({
+        threadHeaderActions: [
+          { id: "probe", title: "Header probe", component: PluginProbe },
+        ],
+      }),
+    );
+    try {
+      render(
+        <PaneContext.Provider
+          value={{ ...PANE_CONTEXT, isSplitPane: true, beginPaneDrag: vi.fn() }}
+        >
+          <ThreadDetailHeader
+            actionsMenu={null}
+            isSecondaryPanelOpen={false}
+            onOpenThreadGitAction={vi.fn()}
+            onToggleSecondaryPanel={vi.fn()}
+            threadHeaderGitActions={[]}
+            threadId={THREAD_ID}
+            threadTitle="Resizing split"
+            threadDetails={<button>Thread details</button>}
+            pluginActions={({ threadDetailsAvailable }) => (
+              <PluginThreadHeaderActions
+                threadId={THREAD_ID}
+                projectId="proj_header"
+                threadDetailsAvailable={threadDetailsAvailable}
+              />
+            )}
+          />
+        </PaneContext.Provider>,
+      );
+      fireEvent.click(screen.getByRole("button", { name: "Git action 0" }));
+      width = 720;
+      act(() => resize());
+      expect(
+        screen.getByRole("button", { name: "Thread details" }),
+      ).not.toBeNull();
+      expect(screen.queryByRole("button", { name: "Git action 1" })).toBeNull();
+      width = 360;
+      act(() => resize());
+      expect(
+        screen.queryByRole("button", { name: "Thread details" }),
+      ).toBeNull();
+      expect(
+        screen.getByRole("button", { name: "Git action 1" }),
+      ).not.toBeNull();
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 
   it("renders serialized mentions in the thread title as pills", () => {
@@ -628,7 +851,9 @@ describe("ThreadDetailHeader", () => {
       </MemoryRouter>,
     );
 
-    const slot = container.querySelector("span[aria-hidden].header-icon-button");
+    const slot = container.querySelector(
+      "span[aria-hidden].header-icon-button",
+    );
     expect(slot).not.toBeNull();
     const classes = slot?.className.split(" ") ?? [];
     for (const token of MACOS_TITLE_BAR_TRAILING_TOGGLE_CLASS.split(" ")) {

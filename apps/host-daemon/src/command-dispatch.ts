@@ -584,6 +584,18 @@ const commandHandlers: CommandHandlerMap = {
       noVerify: true,
     });
   },
+  "workspace.checkout_branch": async (command, options) => {
+    const entry = await requireResolvedWorkspaceForCommand({
+      environmentId: command.environmentId,
+      requireGit: true,
+      runtimeManager: options.runtimeManager,
+      workspaceContext: command.workspaceContext,
+    });
+    return entry.workspace.checkoutBranch({
+      branch: command.branch,
+      create: command.create,
+    });
+  },
   "workspace.pull_request_action": async (command, options) => {
     const entry = await requireResolvedWorkspaceForCommand({
       environmentId: command.environmentId,

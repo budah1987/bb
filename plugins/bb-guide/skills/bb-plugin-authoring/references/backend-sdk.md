@@ -43,6 +43,7 @@ signatures (see "Looking up the exact API" in distribution.md).
   `paths` `commit` `archiveThreads` `diff` `diffFile` `diffFiles`
   `diffBranches` `diffPatch` `pullRequest` `markPullRequestDraft`
   `markPullRequestReady` `mergePullRequest` `experimental_cleanup`
+  `experimental_checkoutBranch`
 - `hosts`: `list` `get` `update` `delete` `directory` `pathsExist`
   `pickFolder` `cloneDefaultPath` `providerCliStatus` `installProviderCli`
   `retryUpdate` `experimental_listProviders` `experimental_create`
@@ -352,3 +353,18 @@ path-shaped `baseUrl`. Append individually encoded relative path segments to
 serve browser assets from that confined host root. This is the preferred
 transport for plugin images and sandboxed HTML with sibling-relative assets;
 preview URLs expire and never reveal the host id or absolute root.
+
+### Project scripts (experimental)
+
+`bb.sdk.projects.experimental_scripts` exposes `list({projectId})`,
+`create({projectId, name, command, shortcut})`,
+`update({projectId, scriptId, name, command, shortcut})`,
+`delete({projectId, scriptId})`, `importT3({projectId, content})`, and
+`run({projectId, scriptId, threadId})`.
+
+`shortcut` is null or an integer from 1 to 9. Names and shortcut slots are unique
+within a project. `importT3` validates the supplied JSON and copies names and
+commands with unassigned shortcuts. Imports are atomic and reject conflicts;
+T3 lifecycle and preview metadata are not imported. `run` creates a terminal
+using the saved command in a thread of that project. Inspect or stop the returned
+terminal through `bb.sdk.terminals`. Core and the CLI use these same routes.

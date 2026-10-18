@@ -3,6 +3,7 @@ import { getEnvironment } from "@bb/db";
 import type { GitHostPullRequest } from "@bb/domain";
 import { readJson } from "../helpers/json.js";
 import {
+  reportQueuedCommandError,
   reportQueuedCommandSuccess,
   waitForQueuedCommand,
 } from "../helpers/commands.js";
@@ -171,6 +172,139 @@ describe("public environment action regressions", () => {
       expect(getEnvironment(harness.db, environment.id)).toMatchObject({
         branchName: "feature/current",
         defaultBranch: "trunk",
+      });
+    });
+  });
+
+  it("switches branches and records the branch the daemon reports", async () => {
+    await withTestHarness(async (harness) => {
+      const { host } = seedHostSession(harness.deps, {
+        id: "host-checkout-branch",
+      });
+      const { project } = seedProjectWithSource(harness.deps, {
+        hostId: host.id,
+      });
+      const environment = seedEnvironment(harness.deps, {
+        hostId: host.id,
+        projectId: project.id,
+        branchName: "bb/old",
+        defaultBranch: "main",
+        path: "/tmp/checkout-branch-env",
+      });
+
+      const responsePromise = harness.app.request(
+        `/api/v1/environments/${environment.id}/actions`,
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            action: "checkout_branch",
+            options: { branch: "origin/feature/new", create: false },
+          }),
+        },
+      );
+
+      const checkoutCommand = await waitForQueuedCommand(
+        harness,
+        ({ command }) =>
+          command.type === "workspace.checkout_branch" &&
+          command.environmentId === environment.id,
+      );
+      expect(checkoutCommand.command).toMatchObject({
+        branch: "origin/feature/new",
+        create: false,
+      });
+      await reportQueuedCommandSuccess(harness, checkoutCommand, {
+        branch: "feature/new",
+      });
+
+      const statusCommand = await waitForQueuedCommand(
+        harness,
+        ({ command }) =>
+          command.type === "workspace.status" &&
+          command.environmentId === environment.id,
+      );
+      await reportQueuedCommandSuccess(harness, statusCommand, {
+        outcome: "available",
+        workspaceStatus: {
+          workingTree: {
+            insertions: 0,
+            deletions: 0,
+            lineStatsComplete: true,
+            fileCount: 0,
+            files: [],
+            hasUncommittedChanges: false,
+            state: "clean",
+          },
+          branch: {
+            currentBranch: "feature/new",
+            defaultBranch: "main",
+          },
+          checkout: {
+            kind: "branch",
+            branchName: "feature/new",
+            headSha: null,
+          },
+          mergeBase: null,
+        },
+      });
+
+      const response = await responsePromise;
+      expect(response.status).toBe(200);
+      await expect(readJson(response)).resolves.toEqual({
+        ok: true,
+        action: "checkout_branch",
+        message: "Switched to feature/new",
+        branch: "feature/new",
+      });
+      expect(getEnvironment(harness.db, environment.id)).toMatchObject({
+        branchName: "feature/new",
+      });
+    });
+  });
+
+  it("maps a missing branch from the daemon to a 404", async () => {
+    await withTestHarness(async (harness) => {
+      const { host } = seedHostSession(harness.deps, {
+        id: "host-checkout-missing-branch",
+      });
+      const { project } = seedProjectWithSource(harness.deps, {
+        hostId: host.id,
+      });
+      const environment = seedEnvironment(harness.deps, {
+        hostId: host.id,
+        projectId: project.id,
+        path: "/tmp/checkout-missing-branch-env",
+      });
+
+      const responsePromise = harness.app.request(
+        `/api/v1/environments/${environment.id}/actions`,
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            action: "checkout_branch",
+            options: { branch: "missing", create: false },
+          }),
+        },
+      );
+
+      const checkoutCommand = await waitForQueuedCommand(
+        harness,
+        ({ command }) =>
+          command.type === "workspace.checkout_branch" &&
+          command.environmentId === environment.id,
+      );
+      await reportQueuedCommandError(harness, checkoutCommand, {
+        errorCode: "branch_not_found",
+        errorMessage: "Branch missing does not exist",
+      });
+
+      const response = await responsePromise;
+      expect(response.status).toBe(404);
+      await expect(readJson(response)).resolves.toMatchObject({
+        code: "branch_not_found",
+        message: "Branch missing does not exist",
       });
     });
   });

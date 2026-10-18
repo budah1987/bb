@@ -41,6 +41,12 @@ export function useRequestEnvironmentAction() {
           });
         case "pull_request_draft":
           return sdk.environments.markPullRequestDraft({ environmentId: id });
+        case "checkout_branch":
+          return sdk.environments.experimental_checkoutBranch({
+            environmentId: id,
+            branch: request.options.branch,
+            create: request.options.create,
+          });
       }
     },
     onSuccess: (_response, variables) => {

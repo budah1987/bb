@@ -162,6 +162,14 @@ export const pullRequestMergeOptionsSchema = z
   })
   .strict();
 
+export const checkoutBranchOptionsSchema = z
+  .object({
+    branch: gitBranchNameSchema,
+    create: z.boolean(),
+  })
+  .strict();
+export type CheckoutBranchOptions = z.infer<typeof checkoutBranchOptionsSchema>;
+
 export const environmentActionRequestSchema = z.discriminatedUnion("action", [
   z
     .object({
@@ -182,6 +190,12 @@ export const environmentActionRequestSchema = z.discriminatedUnion("action", [
   z
     .object({
       action: z.literal("pull_request_draft"),
+    })
+    .strict(),
+  z
+    .object({
+      action: z.literal("checkout_branch"),
+      options: checkoutBranchOptionsSchema,
     })
     .strict(),
 ]);
@@ -226,11 +240,22 @@ export type PullRequestDraftActionResponse = z.infer<
   typeof pullRequestDraftActionResponseSchema
 >;
 
+export const checkoutBranchActionResponseSchema = z.object({
+  ok: z.literal(true),
+  action: z.literal("checkout_branch"),
+  message: z.string().min(1),
+  branch: z.string().min(1).nullable(),
+});
+export type CheckoutBranchActionResponse = z.infer<
+  typeof checkoutBranchActionResponseSchema
+>;
+
 export const environmentActionResponseSchema = z.discriminatedUnion("action", [
   commitActionResponseSchema,
   pullRequestReadyActionResponseSchema,
   pullRequestMergeActionResponseSchema,
   pullRequestDraftActionResponseSchema,
+  checkoutBranchActionResponseSchema,
 ]);
 export type EnvironmentActionResponse = z.infer<
   typeof environmentActionResponseSchema

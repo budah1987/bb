@@ -118,6 +118,26 @@ async function mapPullRequestActionFailureTo409<TResult>(
   }
 }
 
+async function mapCheckoutBranchFailure<TResult>(
+  run: () => Promise<TResult>,
+): Promise<TResult> {
+  try {
+    return await run();
+  } catch (error) {
+    if (error instanceof ApiError) {
+      switch (error.body.code) {
+        case "branch_exists":
+          throw new ApiError(409, "branch_exists", error.body.message);
+        case "branch_not_found":
+          throw new ApiError(404, "branch_not_found", error.body.message);
+        case "git_command_failed":
+          throw new ApiError(409, "checkout_failed", error.body.message);
+      }
+    }
+    throw error;
+  }
+}
+
 function toWorkspaceDiffTarget(query: EnvironmentDiffQuery) {
   switch (query.target) {
     case "uncommitted":
@@ -791,6 +811,34 @@ export function registerEnvironmentRoutes(app: Hono, deps: AppDeps): void {
             action: "pull_request_merge",
             method: payload.options.method,
             message: "Pull request merge started",
+          });
+        }
+        case "checkout_branch": {
+          const target = requireWorkspaceCommandTarget(environment);
+          const result = await mapCheckoutBranchFailure(() =>
+            runLiveCommandAndWait(deps, {
+              hostId: target.hostId,
+              timeoutMs: COMMAND_TIMEOUT_MS,
+              command: {
+                type: "workspace.checkout_branch",
+                environmentId: target.environmentId,
+                workspaceContext: target.workspaceContext,
+                branch: payload.options.branch,
+                create: payload.options.create,
+              },
+            }),
+          );
+          await callEnvironmentWorkspaceStatusForWork(deps, {
+            environment,
+            target,
+          }).catch(() => undefined);
+          return context.json({
+            ok: true,
+            action: "checkout_branch",
+            message: result.branch
+              ? `Switched to ${result.branch}`
+              : "Switched to a detached HEAD",
+            branch: result.branch,
           });
         }
         default: {

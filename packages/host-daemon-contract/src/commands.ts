@@ -1051,6 +1051,14 @@ const workspaceCommitCommandSchema = hostDaemonWorkspaceTargetSchema
   })
   .strict();
 
+const workspaceCheckoutBranchCommandSchema = hostDaemonWorkspaceTargetSchema
+  .extend({
+    type: z.literal("workspace.checkout_branch"),
+    branch: gitBranchNameSchema,
+    create: z.boolean(),
+  })
+  .strict();
+
 const fileReadResultSchema = z.object({
   path: z.string(),
   content: z.string(),
@@ -1322,6 +1330,11 @@ const workspaceCommitResultSchema = z.object({
   commitSubject: z.string().min(1),
 });
 const workspacePullRequestActionResultSchema = z.object({}).strict();
+const workspaceCheckoutBranchResultSchema = z
+  .object({
+    branch: z.string().min(1).nullable(),
+  })
+  .strict();
 
 export { providerUsageWindowSchema };
 
@@ -1664,6 +1677,15 @@ export const hostDaemonCommandRegistry = {
     type: "workspace.commit",
     schema: workspaceCommitCommandSchema,
     resultSchema: workspaceCommitResultSchema,
+    transport: "settled",
+    retryable: false,
+    flushEventsBeforeResult: false,
+    envLane: "write",
+  }),
+  "workspace.checkout_branch": defineHostDaemonCommandDescriptor({
+    type: "workspace.checkout_branch",
+    schema: workspaceCheckoutBranchCommandSchema,
+    resultSchema: workspaceCheckoutBranchResultSchema,
     transport: "settled",
     retryable: false,
     flushEventsBeforeResult: false,
@@ -2118,9 +2140,7 @@ type HostDaemonRetryableOnlineRpcCommandSchema =
 type HostDaemonResultSchemaMapForTransport<
   Transport extends HostDaemonCommandTransport,
 > = {
-  [
-    Descriptor in HostDaemonCommandDescriptorForTransport<Transport> as Descriptor["type"]
-  ]: Descriptor["resultSchema"];
+  [Descriptor in HostDaemonCommandDescriptorForTransport<Transport> as Descriptor["type"]]: Descriptor["resultSchema"];
 };
 
 type HostDaemonCommandResultSchemaMap =

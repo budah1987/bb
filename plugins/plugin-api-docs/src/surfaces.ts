@@ -212,10 +212,12 @@ export const SURFACE_GROUPS: SurfaceGroup[] = [
         bullets: [
           "Show live state for the thread on screen, not just a static button",
           "Sit in the same row as bb's own header controls",
+          "Keep actions accessible when a narrow pane hides Thread details",
         ],
         apiSymbols: [
           "PluginThreadHeaderActionRegistration",
           "PluginThreadHeaderActionProps",
+          "PluginThreadHeaderActionProps.experimental_threadDetailsAvailable",
         ],
         experimental: true,
       },
@@ -1297,7 +1299,7 @@ export const SURFACE_GROUPS: SurfaceGroup[] = [
         summary:
           "Use bb's own API from plugin server code. With this, a plugin can:",
         bullets: [
-          "Create threads, send messages, and manage projects and machines",
+          "Create threads, send messages, manage projects and machines, and run project scripts",
           "Do what the [bb CLI](cli) and the app can do",
           "Have the threads it creates attributed to the plugin",
           "Start plugin updates in the background and follow their progress or rollback",
@@ -1309,6 +1311,8 @@ export const SURFACE_GROUPS: SurfaceGroup[] = [
           "PluginBbSdk.hosts.experimental_discoverRepos",
           "PluginBbSdk.experimental_promptHistory.list",
           "PluginBbSdk.environments.experimental_cleanup",
+          "PluginBbSdk.environments.experimental_checkoutBranch",
+          "PluginBbSdk.projects.experimental_scripts",
           "PluginBbSdk.plugins.experimental_getSafeMode",
           "PluginBbSdk.plugins.experimental_setSafeMode",
           "PluginBbSdk.plugins.experimental_pruneCache",

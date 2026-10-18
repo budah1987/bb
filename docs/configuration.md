@@ -403,6 +403,7 @@ Control-arrow editing. `pane.focus.previous` / `pane.focus.next` and
 | Threads   | Search threads                               | `Mod+K`                     | All clients              |
 | Threads   | Rename focused thread                        | Unassigned                  | Thread view              |
 | Threads   | Archive focused thread                       | Unassigned                  | Thread view              |
+| Threads   | Toggle thread details                        | `Mod+Shift+B`               | Desktop / wide panes     |
 | Threads   | Previous / next thread                       | Surface defaults above      | Desktop / web            |
 | Threads   | Open visible thread 1–9                      | Platform defaults above     | Web / desktop            |
 | Layout    | Previous / next chat pane                    | Unassigned                  | While split              |
@@ -1206,3 +1207,14 @@ metadata is preserved. This is a desktop-local preference, with no server
 settings CLI/SDK endpoint. Builds with tolerant readers ignore the field and
 may drop it on save; older strict readers can reject the whole file, so keep a
 backup before rolling back to a build predating the tolerant-reader fix #5286.
+
+### Project scripts
+
+Project scripts are saved on the server per project and shared across its threads and machines.
+Open **Thread details → Add project script** to save a name, shell command, and optional shortcut slot (1–9).
+Run executes the saved command in a new persistent shell terminal in that thread’s current workspace, with the same environment as other BB terminals. Stop and inspect output using the terminal controls.
+Shortcut slots default to `Mod+Alt+1` through `Mod+Alt+9` and can be rebound under Keyboard shortcuts. They target the focused thread, and do not run while editing text or focusing an embedded terminal or browser.
+Names and assigned shortcut slots must be unique within a project. Editing or deleting a saved script does not change already running terminals; repeated runs create new terminals.
+
+**Import from t3.json** reads `t3.json` from the selected thread’s workspace and previews its names and commands before saving. Import copies those two fields only; T3 icons, setup/settle hooks, preview settings, and other metadata are not imported. Imported commands run only when explicitly launched. Duplicate names or shortcut slots reject the entire import without changing existing scripts.
+The CLI imports a file from the CLI machine with `bb project script import <projectId> --client-file <path>`. Script definitions are stored in the server database, not written into the repository.

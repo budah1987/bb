@@ -1,4 +1,14 @@
 import {
+  projectScriptInputSchema,
+  importProjectScriptsRequestSchema,
+  runProjectScriptRequestSchema,
+  type ProjectScript,
+  type ProjectScriptsResponse,
+  type ProjectScriptInput,
+  type ImportProjectScriptsRequest,
+  type RunProjectScriptRequest,
+} from "./api/projects.js";
+import {
   machineEnvironmentSetSchema,
   machineEnvironmentDeleteSchema,
   type MachineEnvironmentSet,
@@ -444,6 +454,53 @@ export const publicApiRoutes = {
     }),
   },
   projects: {
+    listScripts: defineRoute({
+      path: "/projects/:id/scripts",
+      method: "get",
+      request: noRequest<PathId>(),
+      response: jsonResponse<ProjectScriptsResponse>(),
+    }),
+    createScript: defineRoute({
+      path: "/projects/:id/scripts",
+      method: "post",
+      request: jsonRequest<PathId, ProjectScriptInput>(
+        projectScriptInputSchema,
+      ),
+      response: jsonResponse<ProjectScript>({ status: 201 }),
+    }),
+    updateScript: defineRoute({
+      path: "/projects/:id/scripts/:scriptId",
+      method: "put",
+      request: jsonRequest<
+        { param: { id: string; scriptId: string } },
+        ProjectScriptInput
+      >(projectScriptInputSchema),
+      response: jsonResponse<ProjectScript>(),
+    }),
+    deleteScript: defineRoute({
+      path: "/projects/:id/scripts/:scriptId",
+      method: "delete",
+      request: noRequest<{ param: { id: string; scriptId: string } }>(),
+      response: jsonResponse<{ ok: true }>(),
+    }),
+    importScripts: defineRoute({
+      path: "/projects/:id/scripts/import",
+      method: "post",
+      request: jsonRequest<PathId, ImportProjectScriptsRequest>(
+        importProjectScriptsRequestSchema,
+      ),
+      response: jsonResponse<ProjectScriptsResponse>({ status: 201 }),
+    }),
+    runScript: defineRoute({
+      path: "/projects/:id/scripts/:scriptId/run",
+      method: "post",
+      request: jsonRequest<
+        { param: { id: string; scriptId: string } },
+        RunProjectScriptRequest
+      >(runProjectScriptRequestSchema),
+      response: jsonResponse<TerminalSession>({ status: 201 }),
+    }),
+
     machineEnvironment: defineRoute({
       path: "/projects/:id/machine-environment",
       method: "get",

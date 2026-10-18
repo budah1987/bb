@@ -292,6 +292,12 @@ function pluginAppSurfaceItems(
     ),
     ...namedSlotItems(
       pluginId,
+      slots.threadDetailsSections,
+      "thread-details",
+      "Adds a section to the thread details popover.",
+    ),
+    ...namedSlotItems(
+      pluginId,
       slots.threadActions,
       "thread-action",
       "Adds an action to thread menus.",

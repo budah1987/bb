@@ -157,6 +157,14 @@ app.slots.experimental_threadHeaderAction({
 });
 ```
 
+`experimental_threadDetailsAvailable` reports whether this pane currently shows
+Thread details. It accounts for compact viewports, narrow split panes, and
+headers without a details control. A header component may hide its control in
+favor of a details section only when this value is `true`. Keep the component
+mounted so dialogs and state survive resizing. Older hosts omit the prop;
+keep the header control available in that case. `isCompactViewport` continues
+to describe the overall viewport, not the pane width.
+
 The row is a 48px chrome row with 28px controls. Render one inline control.
 Put taller content in a portalled popover. The host limits the layout box, but
 it does not clip painted overflow. `title`
@@ -168,6 +176,30 @@ state in the component, never in a module-level singleton.
 A common pairing with a replaced sidebar: hide child threads from the list and
 surface them here instead, filtering `experimental_useSidebarThreads()` by
 `parentThreadId === threadId`.
+
+### A section in thread details
+
+`app.slots.experimental_threadDetailsSection` renders a component inside the
+thread details popover (the header's details button, `Mod+Shift+B`). The host
+places plugin sections inside Version control, after the pull request row.
+
+```tsx
+app.slots.experimental_threadDetailsSection({
+  id: "pull-requests",
+  title: "Pull requests",
+  component: ({ threadId, projectId, environmentId, closeDetails }) => { ... },
+});
+```
+
+The popover is 17.5rem wide and scrolls, so render 2rem rows. Return
+`null` when there is nothing to show; the host hides the empty region. Call
+`closeDetails()` before an action that moves focus elsewhere, such as a dialog,
+a panel, or another thread. The popover is desktop-only for now; it is not
+shown on phones or in narrow split panes.
+
+Set `replacesHostGitActions: true` when the section renders its own commit,
+push, or pull request actions. The host then hides its git action rows in the
+popover, so the user does not see two Commit rows.
 
 ### An action in every thread menu
 

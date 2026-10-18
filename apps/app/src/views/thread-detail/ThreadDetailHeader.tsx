@@ -67,8 +67,9 @@ interface ThreadDetailHeaderProps {
   onClosePane?: () => void;
   onOpenThreadGitAction: (target: ThreadGitActionDialogTarget) => void;
   onToggleSecondaryPanel: () => void;
-  pluginActions?: ReactNode;
+  pluginActions?: (args: { threadDetailsAvailable: boolean }) => ReactNode;
   threadHeaderGitActions: ThreadHeaderGitAction[];
+  threadDetails?: ReactNode;
   threadId: string;
   threadTitle: string;
   workspaceOpenButton?: ReactNode;
@@ -82,6 +83,7 @@ export function ThreadDetailHeader({
   onToggleSecondaryPanel,
   pluginActions,
   threadHeaderGitActions,
+  threadDetails,
   threadId,
   threadTitle,
   workspaceOpenButton,
@@ -144,6 +146,8 @@ export function ThreadDetailHeader({
     (isSplitPaneHeader &&
       measuredPaneWidth > 0 &&
       measuredPaneWidth < NARROW_SPLIT_HEADER_MAX_WIDTH);
+  const threadDetailsAvailable =
+    !usesResponsiveActionOverflow && threadDetails != null;
   useLayoutEffect(() => {
     if (!isSplitPaneHeader) {
       return;
@@ -236,7 +240,7 @@ export function ThreadDetailHeader({
         className="flex items-center gap-1"
         data-thread-header-workflow-actions=""
       >
-        {pluginActions}
+        {pluginActions?.({ threadDetailsAvailable })}
         {!usesResponsiveActionOverflow && workspaceOpenButton ? (
           <span className="inline-flex" data-thread-header-responsive-action="">
             {workspaceOpenButton}
@@ -274,6 +278,7 @@ export function ThreadDetailHeader({
         className="ml-1 flex items-center gap-0.5"
         data-thread-header-pane-actions=""
       >
+        {threadDetailsAvailable ? threadDetails : null}
         <PaneMaximizeButton />
         {onClosePane ? (
           <Button

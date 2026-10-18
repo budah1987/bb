@@ -1,3 +1,15 @@
+export const PROJECT_SCRIPT_APP_COMMAND_IDS = [
+  "project.script.run.1",
+  "project.script.run.2",
+  "project.script.run.3",
+  "project.script.run.4",
+  "project.script.run.5",
+  "project.script.run.6",
+  "project.script.run.7",
+  "project.script.run.8",
+  "project.script.run.9",
+] as const;
+
 import { z } from "zod";
 
 export const THREAD_JUMP_APP_COMMAND_IDS = [
@@ -49,11 +61,13 @@ export const APP_COMMAND_IDS = [
   "thread.rename",
   "thread.archive",
   "thread.copyPullRequestUrl",
+  "thread.details.toggle",
   "thread.previous",
   "thread.next",
   "history.back",
   "history.forward",
   ...THREAD_JUMP_APP_COMMAND_IDS,
+  ...PROJECT_SCRIPT_APP_COMMAND_IDS,
   ...PANE_DIRECTION_APP_COMMAND_IDS,
   "pane.focus.previous",
   "pane.focus.next",

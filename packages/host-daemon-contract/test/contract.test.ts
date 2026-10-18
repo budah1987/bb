@@ -604,6 +604,9 @@ const SETTLED_RESPONSE_RESULT_FIXTURES: SettledResponseResultFixtures = {
     commitSubject: "Checkpoint work",
   },
   "workspace.pull_request_action": {},
+  "workspace.checkout_branch": {
+    branch: "feature/topic",
+  },
 };
 
 const WORKSPACE_DIFF_FILES_AVAILABLE_RESULT: JsonObject = {
@@ -1256,7 +1259,7 @@ describe("host-daemon command schemas", () => {
   });
 
   it("uses the current host-daemon protocol version", () => {
-    expect(HOST_DAEMON_PROTOCOL_VERSION).toBe(241);
+    expect(HOST_DAEMON_PROTOCOL_VERSION).toBe(242);
     expect(HOST_ARTIFACT_MAX_BYTES).toBe(256 * 1024 * 1024);
   });
 
@@ -1411,6 +1414,34 @@ describe("host-daemon command schemas", () => {
       environmentId: "env_123",
       message: "Checkpoint work",
     });
+
+    expect(
+      hostDaemonCommandSchema.parse({
+        type: "workspace.checkout_branch",
+        environmentId: "env_123",
+        workspaceContext: {
+          workspacePath: "/tmp/workspace",
+        },
+        branch: "origin/feature",
+        create: false,
+      }),
+    ).toMatchObject({
+      type: "workspace.checkout_branch",
+      branch: "origin/feature",
+      create: false,
+    });
+
+    expect(() =>
+      hostDaemonCommandSchema.parse({
+        type: "workspace.checkout_branch",
+        environmentId: "env_123",
+        workspaceContext: {
+          workspacePath: "/tmp/workspace",
+        },
+        branch: "-bad",
+        create: true,
+      }),
+    ).toThrow();
 
     expect(() =>
       hostDaemonCommandSchema.parse({

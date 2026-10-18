@@ -1,3 +1,4 @@
+import { useProjectScripts } from "./useProjectScripts";
 import { BrowserTabIcon } from "@/components/secondary-panel/BrowserTabIcon";
 import { getPanelTabHistoryKey } from "@/components/secondary-panel/recentlyClosedPanelTabs";
 import { appendQuoteAndAttachmentsToDraft } from "@bb/client-core";
@@ -159,6 +160,7 @@ import {
   THREAD_INFO_FIXED_TAB_REFERENCE,
 } from "@/components/secondary-panel/thread-info-fixed-tab-navigation";
 import { ThreadDetailHeader } from "./ThreadDetailHeader";
+import { ThreadDetailsPopover } from "./ThreadDetailsPopover";
 import {
   ThreadDetailPromptArea,
   type ThreadDetailSentMessageEdit,
@@ -1507,6 +1509,11 @@ function ThreadDetailViewInternal(
     reveal: openCompactDrawer,
     onCloseLastTab: secondaryPanelDrawerVisibility.closeDrawer,
   });
+  const projectScripts = useProjectScripts({
+    thread,
+    isFocused,
+    onOpenTerminal: terminals.open,
+  });
   const appNavigationCapabilities = useMemo(
     () => ({
       openFilePreview: openLiveFilePreview,
@@ -2371,6 +2378,54 @@ function ThreadDetailViewInternal(
         }}
       />
     ) : undefined;
+  const threadDetails = (
+    <ThreadDetailsPopover
+      projectScripts={projectScripts}
+      thread={thread}
+      isThreadRunning={isRunningThreadRuntimeDisplayStatus(
+        thread.runtime.displayStatus,
+      )}
+      hostId={environment?.hostId ?? null}
+      openIn={
+        workspaceOpenPath && preferredDirectoryTarget
+          ? {
+              preferredTarget: preferredDirectoryTarget,
+              targets: directoryOpenTargets,
+              onOpenPreferredTarget: async () => {
+                await openPathInPreferredDirectoryTarget({
+                  lineNumber: null,
+                  path: workspaceOpenPath,
+                });
+              },
+              onOpenTarget: async (targetId) => {
+                await openPathInDirectoryTarget({
+                  lineNumber: null,
+                  path: workspaceOpenPath,
+                  rememberTarget: true,
+                  targetId,
+                });
+              },
+            }
+          : null
+      }
+      workspaceStatus={canUseGitUi ? workspaceStatus : undefined}
+      pullRequest={canUseGitUi ? pullRequest : null}
+      isPullRequestActionPending={requestEnvironmentAction.isPending}
+      onMarkPullRequestReady={handlePullRequestReady}
+      gitActions={threadHeaderGitActions}
+      onGitAction={gitActions.threadGitActionDialog.onOpen}
+      onOpenChanges={canUseGitUi ? openGitDiffDestination : null}
+      parent={
+        parentThread
+          ? {
+              id: parentThread.id,
+              projectId: parentThread.projectId,
+              title: parentThreadDisplayName ?? parentThread.id,
+            }
+          : null
+      }
+    />
+  );
   const timelineHeader = (
     <ThreadDetailHeader
       actionsMenu={({
@@ -2413,14 +2468,16 @@ function ThreadDetailViewInternal(
       onClosePane={onRequestClose ?? undefined}
       onOpenThreadGitAction={gitActions.threadGitActionDialog.onOpen}
       onToggleSecondaryPanel={toggleSecondaryPanel}
-      pluginActions={
+      pluginActions={({ threadDetailsAvailable }) => (
         <PluginThreadHeaderActions
           threadId={thread.id}
           projectId={thread.projectId}
+          threadDetailsAvailable={threadDetailsAvailable}
         />
-      }
+      )}
       threadHeaderGitActions={threadHeaderGitActions}
       threadId={thread.id}
+      threadDetails={threadDetails}
       threadTitle={threadTitle}
       workspaceOpenButton={workspaceOpenButton}
     />

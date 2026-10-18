@@ -166,6 +166,7 @@ function createFakeWorkspace(path: string, isGitRepo = true) {
       commitSha: "commit-1",
       commitSubject: "commit",
     })),
+    checkoutBranch: vi.fn(async () => ({ branch: "main" })),
     setLocalStateFingerprint(value: GetLocalStateFingerprintResult) {
       localStateFingerprint = value;
     },
