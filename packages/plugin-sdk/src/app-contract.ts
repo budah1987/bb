@@ -456,6 +456,28 @@ export interface PluginThreadHeaderActionProps {
    * icon-sized control when it is true — the row is short.
    */
   isCompactViewport: boolean;
+  /** Whether Thread details is available in this pane; absent on older hosts. */
+  experimental_threadDetailsAvailable?: boolean;
+}
+
+/**
+ * Props passed to an `experimental_threadDetailsSection` component, rendered
+ * inside the thread details popover that the thread header opens.
+ */
+export interface ExperimentalPluginThreadDetailsSectionProps {
+  /**
+   * The thread whose details are open. The popover mounts once per pane, so
+   * keep per-thread state in the component.
+   */
+  threadId: string;
+  projectId: string;
+  /** The thread's environment, or null before one is attached. */
+  environmentId: string | null;
+  /**
+   * Close the popover. Call it before an action moves focus elsewhere, such
+   * as opening a dialog, a panel, or another thread.
+   */
+  closeDetails: () => void;
 }
 
 /** JavaScript world a Browser page expression runs in. */
@@ -1710,6 +1732,26 @@ export interface PluginThreadHeaderActionRegistration {
   component: ComponentType<PluginThreadHeaderActionProps>;
 }
 
+/**
+ * A section inside the thread details popover. The host renders sections inside
+ * its Version control section, after the pull request row, in plugin load
+ * order. The popover is 17.5rem wide and scrolls: render 2rem rows, and
+ * return null when the section has nothing to show for the thread.
+ */
+export interface ExperimentalPluginThreadDetailsSectionRegistration {
+  /** Unique within the plugin; letters, digits, `-`, `_`. */
+  id: string;
+  /** Names the section region for assistive technology. */
+  title: string;
+  component: ComponentType<ExperimentalPluginThreadDetailsSectionProps>;
+  /**
+   * Set when the section renders its own git actions (commit, push, create
+   * pull request). The host then hides its git action rows in the popover.
+   * Defaults to false.
+   */
+  replacesHostGitActions?: boolean;
+}
+
 export interface ExperimentalPluginBrowserToolbarActionRegistration {
   /** Unique within the plugin; letters, digits, `-`, `_`. */
   id: string;
@@ -2587,6 +2629,14 @@ export interface PluginAppSlots {
    */
   experimental_threadHeaderAction(
     registration: PluginThreadHeaderActionRegistration,
+  ): void;
+  /**
+   * Render a section in the thread details popover (see
+   * {@link ExperimentalPluginThreadDetailsSectionRegistration}). Experimental:
+   * see docs/api_to_audit.md.
+   */
+  experimental_threadDetailsSection(
+    registration: ExperimentalPluginThreadDetailsSectionRegistration,
   ): void;
   /**
    * Add an action to every thread actions menu (see

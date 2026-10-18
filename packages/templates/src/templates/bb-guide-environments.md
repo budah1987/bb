@@ -165,6 +165,13 @@ Making your repo work with bb:
 
   bb environment commit <id>              Create a commit in the environment
 
+  bb environment checkout <id> <branch>   Switch the checkout to a branch. A remote branch
+                                          (origin/name) uses the local branch of the same
+                                          name, or creates one that tracks it. Uncommitted
+                                          changes move with the switch; a conflicting switch
+                                          fails and changes nothing
+    --create                              Create the branch from the current HEAD
+
   bb environment archive-threads <id>     Archive all threads in an environment
 
   After the last live thread is archived, the environment provider's policy

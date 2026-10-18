@@ -1,3 +1,4 @@
+import { registerProjectScriptRoutes } from "./project-scripts.js";
 import {
   projectMachineEnvironmentView,
   replaceMachineEnvironment,
@@ -348,6 +349,7 @@ async function inspectProjectGitRemoteBestEffort(
 }
 
 export function registerProjectRoutes(app: Hono, deps: AppDeps): void {
+  registerProjectScriptRoutes(app, deps);
   const { get, post, put, patch, del } = typedRoutes<PublicApiSchema>(app, {
     onValidationError: (msg) => new ApiError(400, "invalid_request", msg),
   });

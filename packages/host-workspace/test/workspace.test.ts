@@ -967,6 +967,96 @@ describe("Workspace", () => {
     expect(typeof commit.commitSha).toBe("string");
   });
 
+  it("switches to an existing local branch", async () => {
+    const repoPath = await initRepo(await makeTempDir("bb-workspace-repo-"));
+    const workspace = new Workspace(repoPath);
+    await runGit(["branch", "feature"], { cwd: repoPath });
+
+    await expect(
+      workspace.checkoutBranch({ branch: "feature", create: false }),
+    ).resolves.toEqual({ branch: "feature" });
+  });
+
+  it("creates and switches to a new branch", async () => {
+    const repoPath = await initRepo(await makeTempDir("bb-workspace-repo-"));
+    const workspace = new Workspace(repoPath);
+    await fs.writeFile(path.join(repoPath, "wip.txt"), "carry me\n", "utf8");
+
+    await expect(
+      workspace.checkoutBranch({ branch: "topic/new", create: true }),
+    ).resolves.toEqual({ branch: "topic/new" });
+    expect((await workspace.getStatus()).workingTree.state).not.toBe("clean");
+    await expect(
+      workspace.checkoutBranch({ branch: "main", create: true }),
+    ).rejects.toMatchObject({ name: "WorkspaceError", code: "branch_exists" });
+  });
+
+  it("checks out a remote branch as a local tracking branch", async () => {
+    const repoPath = await initRepo(await makeTempDir("bb-workspace-repo-"));
+    const workspace = new Workspace(repoPath);
+    await runGit(["remote", "add", "origin", repoPath], { cwd: repoPath });
+    await runGit(["update-ref", "refs/remotes/origin/remote-only", "HEAD"], {
+      cwd: repoPath,
+    });
+
+    await expect(
+      workspace.checkoutBranch({ branch: "origin/remote-only", create: false }),
+    ).resolves.toEqual({ branch: "remote-only" });
+    const upstream = await runGit(
+      ["rev-parse", "--abbrev-ref", "remote-only@{upstream}"],
+      { cwd: repoPath },
+    );
+    expect(upstream.stdout.trim()).toBe("origin/remote-only");
+  });
+
+  it("switches to the existing local branch for a remote ref", async () => {
+    const repoPath = await initRepo(await makeTempDir("bb-workspace-repo-"));
+    const workspace = new Workspace(repoPath);
+    await runGit(["branch", "shared"], { cwd: repoPath });
+    await runGit(["update-ref", "refs/remotes/origin/shared", "HEAD"], {
+      cwd: repoPath,
+    });
+
+    await expect(
+      workspace.checkoutBranch({ branch: "origin/shared", create: false }),
+    ).resolves.toEqual({ branch: "shared" });
+  });
+
+  it("rejects an unknown branch and keeps the current branch", async () => {
+    const repoPath = await initRepo(await makeTempDir("bb-workspace-repo-"));
+    const workspace = new Workspace(repoPath);
+
+    await expect(
+      workspace.checkoutBranch({ branch: "missing", create: false }),
+    ).rejects.toMatchObject({
+      name: "WorkspaceError",
+      code: "branch_not_found",
+    });
+    expect((await workspace.getStatus()).branch.currentBranch).toBe("main");
+  });
+
+  it("refuses a switch that would overwrite uncommitted changes", async () => {
+    const repoPath = await initRepo(await makeTempDir("bb-workspace-repo-"));
+    const workspace = new Workspace(repoPath);
+    await runGit(["checkout", "-b", "other"], { cwd: repoPath });
+    await fs.writeFile(path.join(repoPath, "conflict.txt"), "other\n", "utf8");
+    await runGit(["add", "conflict.txt"], { cwd: repoPath });
+    await runGit(["commit", "-m", "other"], { cwd: repoPath });
+    await runGit(["checkout", "main"], { cwd: repoPath });
+    await fs.writeFile(path.join(repoPath, "conflict.txt"), "mine\n", "utf8");
+
+    await expect(
+      workspace.checkoutBranch({ branch: "other", create: false }),
+    ).rejects.toMatchObject({
+      name: "WorkspaceError",
+      code: "git_command_failed",
+    });
+    expect((await workspace.getStatus()).branch.currentBranch).toBe("main");
+    expect(await fs.readFile(path.join(repoPath, "conflict.txt"), "utf8")).toBe(
+      "mine\n",
+    );
+  });
+
   it("serializes same-checkout mutations", async () => {
     const repoPath = await initRepo(await makeTempDir("bb-workspace-repo-"));
     const workspace = new Workspace(repoPath);

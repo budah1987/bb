@@ -1060,9 +1060,6 @@ type BbAppRowRenderer = (
   description?: ReactNode,
 ) => ReactNode;
 
-// bb+ only: upstream bb is newer than this build. Update starts a rebuild
-// thread; when its package reaches the local feed, the native updater takes
-// over with Relaunch.
 function MaintainedRebuildRow({
   name: rowName,
   currentVersion,
@@ -2244,8 +2241,6 @@ export function UpdatesSettingsSection({
             });
           });
         };
-  // bb+ only: an offered upstream rebuild lives in the desktop row, so the
-  // desktop-owned server row keeps the desktop path while one is offered.
   const useServerUpdate =
     serverRunsSeparately ||
     (appUpdate?.desktopUpdateSupported === true &&

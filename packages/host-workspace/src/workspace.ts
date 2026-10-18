@@ -21,6 +21,7 @@ import {
   ensureGitRepo,
   getCheckoutRef,
   getCurrentBranch,
+  hasRef,
   parseNameStatusEntries,
   parseNameStatusSourceEntries,
   parseNumstatEntriesZ,
@@ -69,6 +70,15 @@ export interface CommitOptions {
 export interface CommitResult {
   commitSha: string;
   commitSubject: string;
+}
+
+export interface CheckoutBranchOptions {
+  branch: string;
+  create: boolean;
+}
+
+export interface CheckoutBranchResult {
+  branch: string | null;
 }
 
 export type PullRequestActionOptions = GitHostPullRequestAction;
@@ -939,6 +949,55 @@ export class Workspace {
 
       return { commitSha, commitSubject };
     });
+  }
+
+  async checkoutBranch(
+    options: CheckoutBranchOptions,
+  ): Promise<CheckoutBranchResult> {
+    await ensureGitRepo(this.path, this.gitProcessOptions);
+
+    return this.withMutation(async () => {
+      const args = await this.resolveCheckoutBranchArgs(options);
+      await this.runGit(args, { cwd: this.path });
+      const branch = await getCurrentBranch(this.path, this.gitProcessOptions);
+      return { branch: branch ?? null };
+    });
+  }
+
+  private async resolveCheckoutBranchArgs(
+    options: CheckoutBranchOptions,
+  ): Promise<string[]> {
+    const hasLocalBranch = (name: string) =>
+      hasRef(this.path, `refs/heads/${name}`, this.gitProcessOptions);
+    if (options.create) {
+      if (await hasLocalBranch(options.branch)) {
+        throw new WorkspaceError(
+          "branch_exists",
+          `Branch ${options.branch} already exists`,
+        );
+      }
+      return ["checkout", "-b", options.branch, "--"];
+    }
+    if (await hasLocalBranch(options.branch)) {
+      return ["checkout", options.branch, "--"];
+    }
+    if (
+      await hasRef(
+        this.path,
+        `refs/remotes/${options.branch}`,
+        this.gitProcessOptions,
+      )
+    ) {
+      const localName = options.branch.slice(options.branch.indexOf("/") + 1);
+      if (localName.length > 0 && (await hasLocalBranch(localName))) {
+        return ["checkout", localName, "--"];
+      }
+      return ["checkout", "--track", options.branch, "--"];
+    }
+    throw new WorkspaceError(
+      "branch_not_found",
+      `Branch ${options.branch} does not exist`,
+    );
   }
 
   private async buildDiffSummary(args: {

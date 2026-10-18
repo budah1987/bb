@@ -1,3 +1,4 @@
+import { registerProjectScriptCommands } from "./project-scripts.js";
 import { readFile, writeFile } from "node:fs/promises";
 import { basename } from "node:path";
 import { Command } from "commander";
@@ -248,6 +249,7 @@ export function registerProjectCommands(
   const project = program
     .command("project")
     .description("Inspect and manage projects");
+  registerProjectScriptCommands(project, getUrl);
   const source = project
     .command("source")
     .description("Manage project sources");

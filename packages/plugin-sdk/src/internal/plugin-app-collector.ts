@@ -30,6 +30,7 @@ import type {
   PluginSidebarFooterActionRegistration,
   PluginSourceCodeRendererRegistration,
   PluginThreadHeaderActionRegistration,
+  ExperimentalPluginThreadDetailsSectionRegistration,
   PluginThreadActionRegistration,
   ExperimentalPluginBrowserToolbarActionRegistration,
   ExperimentalSidebarHeaderProps,
@@ -379,6 +380,7 @@ export interface CollectedPluginAppRegistrations {
   threadLists: PluginThreadListRegistration[];
   experimentalSidebarNavigations: CollectedSidebarNavigationRegistration[];
   threadHeaderActions: PluginThreadHeaderActionRegistration[];
+  threadDetailsSections: ExperimentalPluginThreadDetailsSectionRegistration[];
   threadActions: PluginThreadActionRegistration<unknown>[];
   browserToolbarActions: ExperimentalPluginBrowserToolbarActionRegistration[];
   fileOpeners: PluginFileOpenerRegistration[];
@@ -509,6 +511,7 @@ export function collectPluginAppRegistrations(
     threadLists: [],
     experimentalSidebarNavigations: [],
     threadHeaderActions: [],
+    threadDetailsSections: [],
     threadActions: [],
     browserToolbarActions: [],
     fileOpeners: [],
@@ -541,6 +544,7 @@ export function collectPluginAppRegistrations(
     sidebarNavigation: new Set<string>(),
     sidebarHeader: new Set<string>(),
     threadHeaderAction: new Set<string>(),
+    threadDetailsSection: new Set<string>(),
     threadAction: new Set<string>(),
     browserToolbarAction: new Set<string>(),
     fileOpener: new Set<string>(),
@@ -867,6 +871,23 @@ export function collectPluginAppRegistrations(
           id,
           title: requireNonEmptyString(kind, "title", registration.title),
           component: requireComponent(kind, registration.component),
+        });
+      },
+      experimental_threadDetailsSection(registration) {
+        const kind = "slots.experimental_threadDetailsSection";
+        const id = requireSlotId(kind, registration?.id);
+        requireUniqueId(kind, seenIds.threadDetailsSection, id);
+        if (
+          registration.replacesHostGitActions !== undefined &&
+          typeof registration.replacesHostGitActions !== "boolean"
+        ) {
+          throw new Error(`${kind}: "replacesHostGitActions" must be a boolean`);
+        }
+        collected.threadDetailsSections.push({
+          id,
+          title: requireNonEmptyString(kind, "title", registration.title),
+          component: requireComponent(kind, registration.component),
+          replacesHostGitActions: registration.replacesHostGitActions === true,
         });
       },
       experimental_threadAction(registration) {

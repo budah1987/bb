@@ -5,6 +5,7 @@ import {
   type EnvironmentStatus,
 } from "@bb/domain";
 import {
+  checkoutBranchActionResponseSchema,
   commitActionResponseSchema,
   pullRequestDraftActionResponseSchema,
   pullRequestMergeActionResponseSchema,
@@ -12,6 +13,7 @@ import {
   updateEnvironmentRequestSchema,
 } from "@bb/server-contract";
 import type {
+  CheckoutBranchActionResponse,
   CommitActionResponse,
   EnvironmentArchiveThreadsResponse,
   EnvironmentDiffBranchesQuery,
@@ -97,6 +99,12 @@ export interface EnvironmentCommitArgs {
   environmentId: string;
 }
 
+export interface EnvironmentCheckoutBranchArgs {
+  environmentId: string;
+  branch: string;
+  create: boolean;
+}
+
 export interface EnvironmentPullRequestMergeArgs {
   environmentId: string;
   method: PullRequestMergeMethod;
@@ -114,6 +122,7 @@ export interface EnvironmentPathsArgs extends EnvironmentPathsQuery {
 
 export type EnvironmentArchiveThreadsResult = EnvironmentArchiveThreadsResponse;
 export type EnvironmentCommitResult = CommitActionResponse;
+export type EnvironmentCheckoutBranchResult = CheckoutBranchActionResponse;
 export type EnvironmentDiffResult = EnvironmentDiffResponse;
 export type EnvironmentDiffBranchesResult = EnvironmentDiffBranchesResponse;
 export type EnvironmentDiffFileResult = EnvironmentDiffFileResponse;
@@ -156,6 +165,9 @@ const okResponseSchema = z.object({ ok: z.literal(true) });
 
 export interface EnvironmentsArea {
   experimental_cleanup(args: EnvironmentActionArgs): Promise<{ ok: true }>;
+  experimental_checkoutBranch(
+    args: EnvironmentCheckoutBranchArgs,
+  ): Promise<EnvironmentCheckoutBranchResult>;
   archiveThreads(
     args: EnvironmentActionArgs,
   ): Promise<EnvironmentArchiveThreadsResult>;
@@ -399,6 +411,18 @@ export function createEnvironmentsArea(
         ),
       );
       return response.providers;
+    },
+    async experimental_checkoutBranch(input) {
+      const body = await transport.readJson(
+        transport.api.v1.environments[":id"].actions.$post({
+          param: { id: input.environmentId },
+          json: {
+            action: "checkout_branch",
+            options: { branch: input.branch, create: input.create },
+          },
+        }),
+      );
+      return checkoutBranchActionResponseSchema.parse(body);
     },
     async experimental_cleanup(input) {
       return transport.readJson(

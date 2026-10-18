@@ -83,6 +83,7 @@ type FakeWorkspaceDiffTarget =
 interface FakeWorkspaceState {
   destroyed: boolean;
   lastCommitMessage: string | undefined;
+  lastCheckoutBranch: { branch: string; create: boolean } | undefined;
   lastDiffTarget: FakeWorkspaceDiffTarget | undefined;
   lastPullRequestAction: PullRequestActionOptions | undefined;
   pullRequestActionShellPath: string | undefined;
@@ -142,6 +143,7 @@ export function createFakeWorkspace(pathname: string) {
     statusReads: 0,
     lastDiffTarget: undefined,
     lastCommitMessage: undefined,
+    lastCheckoutBranch: undefined,
     destroyed: false,
     lastPullRequestAction: undefined,
     pullRequestActionShellPath: undefined,
@@ -244,6 +246,10 @@ export function createFakeWorkspace(pathname: string) {
         commitSha: "commit-1",
         commitSubject: options.message,
       };
+    },
+    async checkoutBranch(options: { branch: string; create: boolean }) {
+      state.lastCheckoutBranch = options;
+      return { branch: options.branch };
     },
   };
 

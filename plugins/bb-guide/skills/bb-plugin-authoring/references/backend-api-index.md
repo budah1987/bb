@@ -282,6 +282,8 @@ Read the installed declarations for exact current signatures.
 - `PluginThreadEventPayloads`
 - `PluginThreadHeaderActionProps`
 - `PluginThreadHeaderActionRegistration`
+- `ExperimentalPluginThreadDetailsSectionProps`
+- `ExperimentalPluginThreadDetailsSectionRegistration`
 - `PluginThreadListProps`
 - `PluginThreadListRegistration`
 - `PluginThreadPanelActionContext`
@@ -419,3 +421,5 @@ Read the installed declarations for exact current signatures.
 - `ExperimentalCreateHostEntryHarnessOptions`
 - `ExperimentalHostEntryHarness`
 - `ExperimentalHostHarnessSignal`
+
+- `bb.sdk.projects.experimental_scripts`: saved project commands; `list`, `create`, `update`, `delete`, `importT3`, `run` (see backend-sdk.md).

@@ -5,6 +5,7 @@ import type {
   SidebarBootstrapResponse,
 } from "@bb/server-contract";
 import {
+  projectScriptsQueryKey,
   projectsQueryKey,
   sidebarNavigationQueryKey,
 } from "../queries/query-keys";
@@ -167,4 +168,16 @@ export function applyProjectDeleteResult({
         : currentNavigation,
   );
   invalidateProjectDeleteQueries({ queryClient });
+}
+
+export function invalidateProjectScriptQueries({
+  projectId,
+  queryClient,
+}: {
+  projectId: string;
+  queryClient: QueryClient;
+}): Promise<void> {
+  return queryClient.invalidateQueries({
+    queryKey: projectScriptsQueryKey(projectId),
+  });
 }

@@ -484,6 +484,25 @@ describe("app keybindings", () => {
           none: ["modalOpen", "terminalFocus", "browserFocus"],
         },
       });
+      expect(
+        assignedDefaultKeybindings.filter((binding) =>
+          binding.command.startsWith("project.script.run."),
+        ),
+      ).toMatchObject(
+        Array.from({ length: 9 }, (_, index) => ({
+          command: `project.script.run.${index + 1}`,
+          shortcut: { key: String(index + 1), mod: true, alt: true },
+          when: {
+            all: ["mainSurface"],
+            none: [
+              "modalOpen",
+              "terminalFocus",
+              "browserFocus",
+              "editableFocus",
+            ],
+          },
+        })),
+      );
       const composerWhen = {
         all: ["mainSurface", "promptAvailable"],
         none: ["modalOpen", "terminalFocus", "browserFocus"],
@@ -549,6 +568,10 @@ describe("app keybindings", () => {
             shift: binding.shortcut.shift,
           })),
       ).toEqual([
+        ...Array.from({ length: 9 }, (_, index) => ({
+          command: `project.script.run.${index + 1}`,
+          shift: false,
+        })),
         { command: "modelPicker.cycleModel", shift: false },
         { command: "modelPicker.cycleModelBackward", shift: true },
         { command: "modelPicker.cycleProvider", shift: false },

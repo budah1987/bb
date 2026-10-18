@@ -2299,6 +2299,36 @@ Docs: `frontend-registration.md`.
    actions. Audit empty machine sections, machine removal, rename updates, and
    loading behavior for `experimental_hosts`.
 
+## `app.slots.experimental_threadDetailsSection` (`@get-bb/plugin-sdk/app`)
+
+**Added 2026-10-18.** Renders a plugin section inside the thread details
+popover, inside the Version control section after the pull request row, once per
+pane with that pane's `threadId`. Props: `threadId`, `projectId`,
+`environmentId`, and `closeDetails()`. A crash removes only that section.
+A registration with `replacesHostGitActions: true` hides the host's git action
+rows (such as Commit) in the popover, because the section renders its own.
+First consumer: PR Manager (linked pull requests and git actions).
+
+Docs: `frontend-registration.md`.
+
+**Audit before stabilizing.**
+
+1. **Ordering.** Sections render in plugin load order. Decide whether plugins
+   need a placement hint (before or after Version control) or an order key.
+2. **Overlap with host rows.** The host already shows the branch's own pull
+   request. PR Manager filters out the branch PR. `replacesHostGitActions`
+   lets one section replace the host git action rows; it hides them even when
+   that section renders null. Decide whether the flag should become a general
+   replacement key, and whether core should route its own git rows through
+   the same section contract.
+3. **Compact viewport.** The popover is desktop-only today. If it ships on
+   phones, it opens as the responsive drawer; confirm sections render well
+   there and that `closeDetails()` dismisses the drawer.
+4. **Width budget.** Sections share a 17.5rem column of 2rem rows. Decide whether the host
+   should clip, or require sections to truncate their own rows.
+5. **Data cost.** The component mounts only while the popover is open. Confirm
+   consumers do not rely on it for background polling.
+
 ## `app.slots.experimental_threadHeaderAction` (`@get-bb/plugin-sdk/app`)
 
 **Kept experimental (2026-08-22).** There are no consumers, and item 1 (merging
@@ -2610,6 +2640,28 @@ Before stabilization, audit path portability and session freshness after
 machine re-enrollment, and cleanup retry behavior across unavailable
 providers, concurrent attempts, and environments shared by archived and live
 threads.
+
+## Environment branch checkout
+
+`bb.sdk.environments.experimental_checkoutBranch({ environmentId, branch, create })`
+switches the environment's checkout to a branch (CLI: `bb environment checkout
+<id> <branch> [--create]`). `branch` is a local branch, or a remote branch such
+as `origin/name`; a remote branch checks out the local branch of the same name
+when one exists, and otherwise creates a local branch that tracks it. `create`
+creates the branch from the current HEAD and fails with `branch_exists` when
+it exists. Git keeps uncommitted changes that do not conflict; a conflicting
+switch fails with `checkout_failed` and leaves the checkout unchanged. An
+unknown branch fails with `branch_not_found`. The result carries the branch
+that is now checked out, or null for a detached HEAD.
+
+Core caller: the Thread details popover branch picker
+(`apps/app/src/views/thread-detail/ThreadDetailsPopover.tsx`) posts the
+same `checkout_branch` environment action. The server does not block a switch
+while a thread in the environment runs; the popover disables the picker for a
+running thread. Before stabilization, decide whether the server should reject
+a switch while any thread in the environment runs, whether a remote branch
+should fast-forward its existing local branch, and whether a switch should
+record a thread timeline event.
 
 ## Host process primitives (`@get-bb/plugin-sdk/host`)
 
@@ -3121,3 +3173,36 @@ Increments when a plugin panel tab is explicitly opened or focused again. The
 value is separate from persisted tab identity and starts at zero on a passive
 mount. Before stabilizing, audit tab restoration, split surfaces, compact
 drawers, and repeated activation without remounting content.
+
+## Project scripts
+
+`bb.sdk.projects.experimental_scripts` exposes list/create/update/delete/importT3/run
+for project-scoped named shell commands with optional shortcut slots. The app and
+CLI use the same SDK and server routes. Execution delegates to the ordinary
+terminal lifecycle, targets a thread in that project, and returns a terminal
+session for output and stop controls. No daemon wire change is required.
+
+Import copies names and commands from a supplied T3 config, strips metadata,
+assigns no shortcuts, and rejects the whole batch on a conflict. It does not
+run commands. Definitions are server-stored and shared across project sources.
+
+Before stabilization, audit shortcut conflicts, import limits and rollback,
+project deletion cleanup, multi-client refresh, and script/terminal association
+for possible reuse or stop controls directly in the script row. Current run
+behavior creates a new terminal each time. Existing terminal controls own stop.
+Core callers: Thread details project scripts, project script CLI commands.
+
+## `PluginThreadHeaderActionProps.experimental_threadDetailsAvailable`
+
+Optional boolean supplied by core to header plugins, reflecting whether the
+current pane renders the Thread details control. False on compact viewports,
+split panes narrower than the header breakpoint, or headers without details.
+Absence indicates an older host; consumers must retain their header action.
+Core uses the same availability value to render the details control and to
+supply this prop, so plugins do not duplicate width measurement or thresholds.
+
+Consumer: PR Manager keeps its git control mounted, hides its header surface
+only when details are available, and uses its compact git menu otherwise.
+Before stabilization, verify split resizing, compact viewports, multiple panes,
+and state/dialog preservation. The prop describes availability, not whether
+the popover is open. No daemon wire contract changes.

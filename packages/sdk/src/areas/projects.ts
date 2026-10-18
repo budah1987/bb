@@ -1,3 +1,10 @@
+import {
+  t3ProjectScriptsSchema,
+  type ProjectScript,
+  type ProjectScriptInput,
+  type ProjectScriptsResponse,
+  type TerminalSession,
+} from "@bb/server-contract";
 import type {
   MachineEnvironmentReplace,
   MachineEnvironmentSet,
@@ -163,7 +170,8 @@ export interface ProjectAttachmentReadResult {
 export type ProjectAttachmentUploadResult = UploadedPromptAttachment;
 export type ProjectCommandsResult = CommandListResponse;
 export type ProjectCreateResult = ProjectResponse;
-export type ProjectDefaultExecutionOptionsResult = ProjectExecutionDefaults | null;
+export type ProjectDefaultExecutionOptionsResult =
+  ProjectExecutionDefaults | null;
 export type ProjectDeleteResult = { ok: true };
 export interface ProjectFileContentResult {
   content: string;
@@ -199,7 +207,31 @@ export interface ProjectAttachmentsArea {
   ): Promise<ProjectAttachmentUploadResult>;
 }
 
+export interface ProjectScriptsArea {
+  list(args: {
+    projectId: string;
+    signal?: AbortSignal;
+  }): Promise<ProjectScriptsResponse>;
+  create(
+    args: ProjectScriptInput & { projectId: string },
+  ): Promise<ProjectScript>;
+  update(
+    args: ProjectScriptInput & { projectId: string; scriptId: string },
+  ): Promise<ProjectScript>;
+  delete(args: { projectId: string; scriptId: string }): Promise<{ ok: true }>;
+  importT3(args: {
+    projectId: string;
+    content: string;
+  }): Promise<ProjectScriptsResponse>;
+  run(args: {
+    projectId: string;
+    scriptId: string;
+    threadId: string;
+  }): Promise<TerminalSession>;
+}
+
 export interface ProjectsArea {
+  experimental_scripts: ProjectScriptsArea;
   machineEnvironment(args: {
     projectId: string;
   }): Promise<ProjectMachineEnvironmentList>;
@@ -450,6 +482,63 @@ export function createProjectsArea(args: CreateSdkAreaArgs): ProjectsArea {
   };
 
   return {
+    experimental_scripts: {
+      async list(input) {
+        return transport.readJson(
+          transport.api.v1.projects[":id"].scripts.$get(
+            { param: { id: input.projectId } },
+            ...signalRequestArgs(input.signal),
+          ),
+        );
+      },
+      async create(input) {
+        const { projectId, ...json } = input;
+        return transport.readJson(
+          transport.api.v1.projects[":id"].scripts.$post({
+            param: { id: projectId },
+            json,
+          }),
+        );
+      },
+      async update(input) {
+        const { projectId, scriptId, ...json } = input;
+        return transport.readJson(
+          transport.api.v1.projects[":id"].scripts[":scriptId"].$put({
+            param: { id: projectId, scriptId },
+            json,
+          }),
+        );
+      },
+      async delete(input) {
+        return transport.readJson(
+          transport.api.v1.projects[":id"].scripts[":scriptId"].$delete({
+            param: { id: input.projectId, scriptId: input.scriptId },
+          }),
+        );
+      },
+      async importT3(input) {
+        const config = t3ProjectScriptsSchema.parse(JSON.parse(input.content));
+        return transport.readJson(
+          transport.api.v1.projects[":id"].scripts.import.$post({
+            param: { id: input.projectId },
+            json: {
+              scripts: config.scripts.map((script) => ({
+                ...script,
+                shortcut: null,
+              })),
+            },
+          }),
+        );
+      },
+      async run(input) {
+        return transport.readJson(
+          transport.api.v1.projects[":id"].scripts[":scriptId"].run.$post({
+            param: { id: input.projectId, scriptId: input.scriptId },
+            json: { threadId: input.threadId },
+          }),
+        );
+      },
+    },
     attachments,
     async branches(input) {
       const { projectId, signal, ...query } = input;

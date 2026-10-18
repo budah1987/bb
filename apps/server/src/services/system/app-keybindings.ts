@@ -11,6 +11,7 @@ import {
   QUESTION_SELECT_APP_COMMAND_IDS,
   PANE_FOCUS_APP_COMMAND_IDS,
   THREAD_JUMP_APP_COMMAND_IDS,
+  PROJECT_SCRIPT_APP_COMMAND_IDS,
 } from "@bb/domain";
 
 interface ShortcutModifiers {
@@ -209,6 +210,17 @@ export const DEFAULT_APP_KEYBINDINGS: AppDefaultKeybindings = [
     },
   ),
   ...numberedChatBindings(THREAD_JUMP_APP_COMMAND_IDS, mainWithoutModal),
+  ...PROJECT_SCRIPT_APP_COMMAND_IDS.map((id, index) =>
+    binding(
+      id,
+      String(index + 1),
+      { mod: true, alt: true },
+      {
+        ...mainWithoutModal,
+        none: ["modalOpen", "terminalFocus", "browserFocus", "editableFocus"],
+      },
+    ),
+  ),
   ...(
     [
       ["pane.focus.left", "ArrowLeft"],
@@ -293,10 +305,24 @@ export const DEFAULT_APP_KEYBINDINGS: AppDefaultKeybindings = [
     { mod: true, shift: true },
     composerWithoutModal,
   ),
-  binding("thread.copyPullRequestUrl", "c", { mod: true, shift: true }, {
-    ...mainWithoutModal,
-    none: ["modalOpen", "terminalFocus", "browserFocus"],
-  }),
+  binding(
+    "thread.copyPullRequestUrl",
+    "c",
+    { mod: true, shift: true },
+    {
+      ...mainWithoutModal,
+      none: ["modalOpen", "terminalFocus", "browserFocus"],
+    },
+  ),
+  binding(
+    "thread.details.toggle",
+    "b",
+    { mod: true, shift: true },
+    {
+      ...mainWithoutModal,
+      none: ["modalOpen", "terminalFocus", "browserFocus"],
+    },
+  ),
   binding(
     "modelPicker.toggle",
     "m",

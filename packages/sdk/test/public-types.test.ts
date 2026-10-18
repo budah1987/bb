@@ -243,6 +243,7 @@ type ExpectedBbSdkKey =
 type ExpectedRealtimeKey = "subscribe";
 
 type ExpectedEnvironmentsKey =
+  | "experimental_checkoutBranch"
   | "experimental_cleanup"
   | "archiveThreads"
   | "commit"
@@ -339,6 +340,7 @@ type ExpectedPluginInstallJobsKey = "cancel" | "get" | "list";
 type ExpectedExperimentalPromptHistoryKey = "list";
 
 type ExpectedProjectsKey =
+  | "experimental_scripts"
   | "machineEnvironment"
   | "replaceMachineEnvironment"
   | "setMachineEnvironmentVariable"

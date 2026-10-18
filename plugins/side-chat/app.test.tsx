@@ -19,7 +19,11 @@ describe("SideChatPanel", () => {
     const create = vi.fn(async () => ({ id: "qm_1" }) as never);
     const slot = renderSlot(
       app.threadPanelActions[0]!,
-      { threadId: "thr_src", params },
+      {
+        experimental_activationKey: 1,
+        threadId: "thr_src",
+        params,
+      },
       { rpc: {}, sdk: { threads: { queuedMessages: { create } } } },
     );
 
@@ -38,7 +42,11 @@ describe("SideChatPanel", () => {
   it("reports a missing thread reference for malformed params", () => {
     const slot = renderSlot(
       app.threadPanelActions[0]!,
-      { threadId: "thr_src", params: { bogus: true } },
+      {
+        experimental_activationKey: 1,
+        threadId: "thr_src",
+        params: { bogus: true },
+      },
       { rpc: {} },
     );
     expect(slot.getByRole("alert").textContent).toContain(

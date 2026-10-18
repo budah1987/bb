@@ -2,6 +2,7 @@ import {
   QUESTION_SELECT_APP_COMMAND_IDS,
   PANE_FOCUS_APP_COMMAND_IDS,
   THREAD_JUMP_APP_COMMAND_IDS,
+  PROJECT_SCRIPT_APP_COMMAND_IDS,
   type AppCommandId,
 } from "@bb/domain";
 
@@ -35,6 +36,16 @@ function paletteHiddenCommand(
 
 export const APP_COMMAND_GROUPS: readonly AppCommandGroup[] = [
   {
+    label: "Project scripts",
+    commands: PROJECT_SCRIPT_APP_COMMAND_IDS.map((id, index) =>
+      command(
+        id,
+        `Run project script ${index + 1}`,
+        `Run the script assigned to shortcut ${index + 1} in the focused thread’s workspace.`,
+      ),
+    ),
+  },
+  {
     label: "Threads",
     commands: [
       command(
@@ -57,6 +68,11 @@ export const APP_COMMAND_GROUPS: readonly AppCommandGroup[] = [
         "thread.copyPullRequestUrl",
         "Copy pull request URL",
         "Copy the focused thread’s pull request URL when available.",
+      ),
+      command(
+        "thread.details.toggle",
+        "Toggle thread details",
+        "Show or hide the focused thread’s workspace, version control, and lineage details.",
       ),
       command(
         "thread.previous",

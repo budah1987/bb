@@ -18,7 +18,7 @@ concurrency:
 jobs:
   plan:
     name: Select CI checks
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: ${{ github.repository_owner == 'get-bb' && 'blacksmith-4vcpu-ubuntu-2404' || 'ubuntu-24.04' }}
     timeout-minutes: 10
     permissions:
       contents: read
@@ -84,7 +84,7 @@ jobs:
     needs: plan
     if: ${{ fromJSON(needs.plan.outputs.selection).foundation }}
     name: Windows host packages (Node 22.x)
-    runs-on: blacksmith-4vcpu-windows-2025
+    runs-on: ${{ github.repository_owner == 'get-bb' && 'blacksmith-4vcpu-windows-2025' || 'windows-2025' }}
     timeout-minutes: 15
     permissions:
       contents: read
@@ -124,6 +124,24 @@ jobs:
         shell: bash
         run: pnpm exec turbo run lint typecheck test --filter=@bb/process-utils --filter=@bb/host-workspace --filter=@bb/host-watcher --filter=@bb/agent-runtime --filter=@bb/provider-bridge-protocol --filter=@bb/provider-bridge-acp --filter=@bb/host-daemon-contract --filter=@bb/config --filter=@bb/db --cache-dir="${TURBO_CACHE_DIR:-.turbo/cache}" --continue --concurrency=2 --output-logs=new-only --summarize
 
+      - name: Diagnose Windows process identity lookup
+        if: failure()
+        timeout-minutes: 2
+        shell: bash
+        run: |
+          node --input-type=module <<'NODE'
+          import { execFileSync } from 'node:child_process';
+          import path from 'node:path';
+          const script = "$ErrorActionPreference = 'Stop'; [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false); Get-CimInstance Win32_Process -Filter 'ProcessId = " + process.pid + "' -OperationTimeoutSec 5 | ForEach-Object { @{ command = $_.CommandLine; startedAt = ([DateTimeOffset]$_.CreationDate).ToUnixTimeMilliseconds() } | ConvertTo-Json -Compress }; exit 0";
+          const started = Date.now();
+          try {
+            const result = execFileSync(path.join(process.env.SystemRoot, 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe'), ['-NoProfile', '-NonInteractive', '-EncodedCommand', Buffer.from(script, 'utf16le').toString('base64')], { encoding: 'utf8', timeout: 45000, stdio: ['ignore', 'pipe', 'pipe'] });
+            console.log(JSON.stringify({ elapsedMs: Date.now() - started, stdout: result }));
+          } catch (error) {
+            console.log(JSON.stringify({ elapsedMs: Date.now() - started, message: error.message, status: error.status, signal: error.signal, stdout: error.stdout?.toString(), stderr: error.stderr?.toString() }));
+          }
+          NODE
+
       - name: Bound saved Turbo cache
         run: node scripts/prune-turbo-cache.mjs --dir .turbo/cache --max-size-mb 256 --keep-run-summaries .turbo/runs
 
@@ -131,7 +149,7 @@ jobs:
     needs: plan
     if: ${{ fromJSON(needs.plan.outputs.selection).packaging }}
     name: Windows app smoke (Node 22.x)
-    runs-on: blacksmith-4vcpu-windows-2025
+    runs-on: ${{ github.repository_owner == 'get-bb' && 'blacksmith-4vcpu-windows-2025' || 'windows-2025' }}
     timeout-minutes: 40
     permissions:
       contents: read
@@ -189,7 +207,7 @@ jobs:
     needs: plan
     if: ${{ fromJSON(needs.plan.outputs.selection).packaging }}
     name: Windows desktop smoke (Node 22.x)
-    runs-on: blacksmith-4vcpu-windows-2025
+    runs-on: ${{ github.repository_owner == 'get-bb' && 'blacksmith-4vcpu-windows-2025' || 'windows-2025' }}
     timeout-minutes: 40
     permissions:
       contents: read
@@ -250,7 +268,7 @@ jobs:
     name: Windows tests (${{ matrix.shard }}, Node 22.x)
     needs: plan
     if: ${{ fromJSON(needs.plan.outputs.selection)['windows-tests'].include[0] != null }}
-    runs-on: blacksmith-4vcpu-windows-2025
+    runs-on: ${{ github.repository_owner == 'get-bb' && 'blacksmith-4vcpu-windows-2025' || 'windows-2025' }}
     timeout-minutes: 30
     permissions:
       contents: read
@@ -346,7 +364,7 @@ jobs:
     name: Lint and typecheck (ubuntu-latest, Node 22.x)
     needs: plan
     if: ${{ fromJSON(needs.plan.outputs.selection).staticNeeded }}
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: ${{ github.repository_owner == 'get-bb' && 'blacksmith-4vcpu-ubuntu-2404' || 'ubuntu-24.04' }}
     timeout-minutes: 20
     permissions:
       contents: read
@@ -395,7 +413,7 @@ jobs:
     needs: plan
     if: ${{ fromJSON(needs.plan.outputs.selection).buildNeeded }}
     name: Checks (ubuntu-latest, Node 22.x)
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: ${{ github.repository_owner == 'get-bb' && 'blacksmith-4vcpu-ubuntu-2404' || 'ubuntu-24.04' }}
     timeout-minutes: 30
 
     # `actions: read` is what lets the cache-usage check call the Actions API;
@@ -494,7 +512,7 @@ jobs:
     name: Tests (${{ matrix.shard }}, ubuntu-latest, Node 22.x)
     needs: plan
     if: ${{ fromJSON(needs.plan.outputs.selection)['tests'].include[0] != null }}
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: ${{ github.repository_owner == 'get-bb' && 'blacksmith-4vcpu-ubuntu-2404' || 'ubuntu-24.04' }}
     timeout-minutes: 30
 
     strategy:
@@ -589,7 +607,7 @@ jobs:
     needs: plan
     if: ${{ fromJSON(needs.plan.outputs.selection).forks }}
     name: Plugin Fork Check (${{ matrix.shard }}, ubuntu-latest, Node 22.x)
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: ${{ github.repository_owner == 'get-bb' && 'blacksmith-4vcpu-ubuntu-2404' || 'ubuntu-24.04' }}
     timeout-minutes: 20
 
     strategy:
@@ -679,12 +697,12 @@ jobs:
   provider-model-listing:
     needs: plan
     name: Provider Model Listing
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: ${{ github.repository_owner == 'get-bb' && 'blacksmith-4vcpu-ubuntu-2404' || 'ubuntu-24.04' }}
     timeout-minutes: 20
 
     # Fork pull requests cannot read secrets, so the probe would fail
     # unauthenticated for reasons unrelated to bb.
-    if: ${{ fromJSON(needs.plan.outputs.selection).providers && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) }}
+    if: ${{ github.repository_owner == 'get-bb' && fromJSON(needs.plan.outputs.selection).providers && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) }}
 
     steps:
       - name: Checkout repository
@@ -754,7 +772,7 @@ jobs:
     needs: plan
     if: ${{ fromJSON(needs.plan.outputs.selection).packaging }}
     name: Package Smoke (${{ matrix.os }}, Node ${{ matrix.node-version }})
-    runs-on: ${{ matrix.os }}
+    runs-on: ${{ github.repository_owner == 'get-bb' && matrix.os || (contains(matrix.os, 'macos') && 'macos-15' || (contains(matrix.os, 'windows') && 'windows-2025' || 'ubuntu-24.04')) }}
     timeout-minutes: 45
 
     strategy:
@@ -824,7 +842,7 @@ jobs:
   node-compat-smoke:
     name: Node Compatibility Smoke (${{ matrix.os }}, Node ${{ matrix.node-version }})
     if: ${{ github.event_name != 'pull_request' }}
-    runs-on: ${{ matrix.os }}
+    runs-on: ${{ github.repository_owner == 'get-bb' && matrix.os || (contains(matrix.os, 'macos') && 'macos-15' || (contains(matrix.os, 'windows') && 'windows-2025' || 'ubuntu-24.04')) }}
     timeout-minutes: 30
     strategy:
       fail-fast: false

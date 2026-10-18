@@ -64,6 +64,12 @@ const commandResultSideEffectHandlers: CommandResultSideEffectHandlers = {
       ok: report.ok,
     });
   },
+  "workspace.checkout_branch": ({ deps, command, report }) => {
+    notifyWorkspaceMutationResult(deps, {
+      environmentId: command.environmentId,
+      ok: report.ok,
+    });
+  },
   "workspace.pull_request_action": ({ deps, command, report }) => {
     notifyWorkspaceMutationResult(deps, {
       environmentId: command.environmentId,

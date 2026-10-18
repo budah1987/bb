@@ -1,6 +1,8 @@
 import type { ProvisioningTranscriptEntry, WorkspaceStatus } from "@bb/domain";
 import { pathExists } from "@bb/process-utils";
 import type {
+  CheckoutBranchOptions,
+  CheckoutBranchResult,
   CommitOptions,
   CommitResult,
   DiffOptions,
@@ -80,6 +82,7 @@ export interface HostWorkspace {
   ): Promise<void>;
 
   commit(options: CommitOptions): Promise<CommitResult>;
+  checkoutBranch(options: CheckoutBranchOptions): Promise<CheckoutBranchResult>;
 }
 
 class ProvisionedHostWorkspace implements HostWorkspace {
@@ -174,6 +177,12 @@ class ProvisionedHostWorkspace implements HostWorkspace {
 
   commit(options: CommitOptions): Promise<CommitResult> {
     return this.ws.commit(options);
+  }
+
+  checkoutBranch(
+    options: CheckoutBranchOptions,
+  ): Promise<CheckoutBranchResult> {
+    return this.ws.checkoutBranch(options);
   }
 }
 

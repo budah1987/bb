@@ -20,6 +20,11 @@ interface EnvironmentCommitCommandOptions {
   json?: boolean;
 }
 
+interface EnvironmentCheckoutCommandOptions {
+  create?: boolean;
+  json?: boolean;
+}
+
 interface EnvironmentListCommandOptions {
   host?: string;
   instanceKey?: string;
@@ -843,6 +848,33 @@ export function registerEnvironmentCommands(
         if (outputJson(opts, result)) return;
         console.log(`${result.message} [committed]`);
       }),
+    );
+
+  environment
+    .command("checkout <id> <branch>")
+    .description(
+      "Switch an environment's checkout to a branch (a local branch, or a remote branch such as origin/name)",
+    )
+    .option("--create", "Create the branch from the current HEAD first")
+    .option("--json", "Print machine-readable JSON output")
+    .action(
+      action(
+        async (
+          id: string,
+          branch: string,
+          opts: EnvironmentCheckoutCommandOptions,
+        ) => {
+          const result = await createCliBbSdk(
+            getUrl(),
+          ).environments.experimental_checkoutBranch({
+            environmentId: id,
+            branch,
+            create: opts.create === true,
+          });
+          if (outputJson(opts, result)) return;
+          console.log(result.message);
+        },
+      ),
     );
 
   environment

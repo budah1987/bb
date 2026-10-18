@@ -5,9 +5,11 @@ import { usePluginSlots } from "@/lib/plugin-slots";
 export function PluginThreadHeaderActions({
   threadId,
   projectId,
+  threadDetailsAvailable,
 }: {
   threadId: string;
   projectId: string;
+  threadDetailsAvailable: boolean;
 }) {
   const { threadHeaderActions } = usePluginSlots();
   const isCompactViewport = useIsCompactViewport();
@@ -36,6 +38,7 @@ export function PluginThreadHeaderActions({
                 threadId={threadId}
                 projectId={projectId}
                 isCompactViewport={isCompactViewport}
+                experimental_threadDetailsAvailable={threadDetailsAvailable}
               />
             </span>
           </PluginSlotMount>

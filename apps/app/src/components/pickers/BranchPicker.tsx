@@ -1,6 +1,13 @@
 import { ListLoadingPlaceholder } from "@/components/ui/ListLoadingPlaceholder";
 import { PICKER_MOBILE_CLASS_NAME } from "./picker-layout";
-import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
+import {
+  useDeferredValue,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactElement,
+} from "react";
 import {
   BRANCH_PICKER_CONTENT_CLASS_NAME,
   BranchPickerRow,
@@ -24,7 +31,10 @@ import {
   OPTION_TRIGGER_CONTENT_CLASS_NAME,
 } from "@bb/shared-ui/option-display";
 import { cn } from "@bb/shared-ui/lib/utils";
-import type { GitBranchRefClassification } from "@bb/domain";
+import {
+  isValidGitBranchName,
+  type GitBranchRefClassification,
+} from "@bb/domain";
 import { searchPickerOptions } from "./picker-search";
 import { useResetPickerScroll } from "./useResetPickerScroll";
 
@@ -231,6 +241,8 @@ export interface BranchPickerProps {
   defaultOpen?: boolean;
   modal?: boolean;
   popoverAlign?: "start" | "end";
+  trigger?: ReactElement;
+  onCreateBranch?: (branch: string) => void;
 }
 
 export function BranchPicker({
@@ -253,6 +265,8 @@ export function BranchPicker({
   defaultOpen = false,
   modal = true,
   popoverAlign = "start",
+  trigger,
+  onCreateBranch,
 }: BranchPickerProps) {
   const [open, setOpen] = useState(defaultOpen);
   const [query, setQuery] = useState("");
@@ -290,6 +304,11 @@ export function BranchPicker({
       }),
     [filteredCombinedBranchOptions, isSearching, value],
   );
+  const createBranchName = query.trim();
+  const canCreateBranch =
+    onCreateBranch !== undefined &&
+    isValidGitBranchName(createBranchName) &&
+    !branchOptionGroups.local.includes(createBranchName);
   const firstFilteredOption = filteredBranchOptions[0];
   const enterSelection = value
     ? (filteredBranchOptions.find((branch) => branch === value) ??
@@ -317,6 +336,10 @@ export function BranchPicker({
     onChange(branch);
     closePicker();
   };
+  const createBranchAndClose = () => {
+    onCreateBranch?.(createBranchName);
+    closePicker();
+  };
 
   useEffect(() => {
     if (!open) {
@@ -331,68 +354,70 @@ export function BranchPicker({
   return (
     <Popover modal={modal} open={open} onOpenChange={updateOpen}>
       <PopoverTrigger asChild disabled={disabled}>
-        <Button
-          type="button"
-          variant={variant === "default" ? "outline" : "ghost"}
-          size="sm"
-          disabled={disabled}
-          aria-label="Branch"
-          className={cn(
-            LIST_HOVER_TRANSITION,
-            variant === "default" &&
-              "h-8 w-full min-w-0 justify-between rounded-md border-border bg-background px-2.5 text-sm font-normal shadow-none hover:bg-state-hover",
-            variant === "minimal" &&
-              "-mx-1 h-5 w-auto min-w-0 justify-between gap-1 rounded-sm px-1 text-xs font-normal shadow-none hover:bg-state-hover data-[state=open]:bg-state-hover [&_[data-icon-root]]:size-3",
-            variant === "minimal" &&
-              muted &&
-              "text-muted-foreground hover:text-foreground",
-            variant === "option" &&
-              cn(OPTION_BASE_CLASS_NAME, OPTION_INTERACTIVE_CLASS_NAME),
-            variant === "option" && muted && OPTION_MUTED_CLASS_NAME,
-            className,
-          )}
-          role="combobox"
-          aria-expanded={open}
-        >
-          {variant === "option" ? (
-            <span
-              className={OPTION_TRIGGER_CONTENT_CLASS_NAME}
-              title={triggerTitle ?? triggerLabel}
-            >
-              <Icon
-                name="GitMerge"
-                className={COARSE_POINTER_COMPACT_ICON_SIZE_SHRINK_CLASS}
-              />
-              <BranchPickerText
-                label={triggerLabel}
-                emphasizePlainLabel={triggerHasPlainBranchValue}
-                className="truncate"
-                compactAffixesInPromptbox
-              />
-            </span>
-          ) : (
-            <span
-              className="flex min-w-0 items-center overflow-hidden"
-              title={triggerTitle ?? triggerLabel}
-            >
-              <BranchPickerText
-                label={triggerLabel}
-                emphasizePlainLabel={triggerHasPlainBranchValue}
-                className="truncate text-left"
-                compactAffixesInPromptbox
-              />
-            </span>
-          )}
-          <Icon
-            name="ChevronDown"
+        {trigger ?? (
+          <Button
+            type="button"
+            variant={variant === "default" ? "outline" : "ghost"}
+            size="sm"
+            disabled={disabled}
+            aria-label="Branch"
             className={cn(
-              "shrink-0 text-muted-foreground",
-              variant === "default" && "size-4",
-              variant === "minimal" && "size-3",
-              variant === "option" && COARSE_POINTER_COMPACT_ICON_SIZE_CLASS,
+              LIST_HOVER_TRANSITION,
+              variant === "default" &&
+                "h-8 w-full min-w-0 justify-between rounded-md border-border bg-background px-2.5 text-sm font-normal shadow-none hover:bg-state-hover",
+              variant === "minimal" &&
+                "-mx-1 h-5 w-auto min-w-0 justify-between gap-1 rounded-sm px-1 text-xs font-normal shadow-none hover:bg-state-hover data-[state=open]:bg-state-hover [&_[data-icon-root]]:size-3",
+              variant === "minimal" &&
+                muted &&
+                "text-muted-foreground hover:text-foreground",
+              variant === "option" &&
+                cn(OPTION_BASE_CLASS_NAME, OPTION_INTERACTIVE_CLASS_NAME),
+              variant === "option" && muted && OPTION_MUTED_CLASS_NAME,
+              className,
             )}
-          />
-        </Button>
+            role="combobox"
+            aria-expanded={open}
+          >
+            {variant === "option" ? (
+              <span
+                className={OPTION_TRIGGER_CONTENT_CLASS_NAME}
+                title={triggerTitle ?? triggerLabel}
+              >
+                <Icon
+                  name="GitMerge"
+                  className={COARSE_POINTER_COMPACT_ICON_SIZE_SHRINK_CLASS}
+                />
+                <BranchPickerText
+                  label={triggerLabel}
+                  emphasizePlainLabel={triggerHasPlainBranchValue}
+                  className="truncate"
+                  compactAffixesInPromptbox
+                />
+              </span>
+            ) : (
+              <span
+                className="flex min-w-0 items-center overflow-hidden"
+                title={triggerTitle ?? triggerLabel}
+              >
+                <BranchPickerText
+                  label={triggerLabel}
+                  emphasizePlainLabel={triggerHasPlainBranchValue}
+                  className="truncate text-left"
+                  compactAffixesInPromptbox
+                />
+              </span>
+            )}
+            <Icon
+              name="ChevronDown"
+              className={cn(
+                "shrink-0 text-muted-foreground",
+                variant === "default" && "size-4",
+                variant === "minimal" && "size-3",
+                variant === "option" && COARSE_POINTER_COMPACT_ICON_SIZE_CLASS,
+              )}
+            />
+          </Button>
+        )}
       </PopoverTrigger>
       <PopoverContent
         mobileClassName={PICKER_MOBILE_CLASS_NAME}
@@ -410,8 +435,14 @@ export function BranchPicker({
           <BranchPickerSearch
             inputRef={inputRef}
             query={query}
-            enterSelection={enterSelection}
-            onEnterSelection={selectBranchAndClose}
+            enterSelection={
+              enterSelection ?? (canCreateBranch ? createBranchName : undefined)
+            }
+            onEnterSelection={(branch) =>
+              enterSelection === undefined
+                ? createBranchAndClose()
+                : selectBranchAndClose(branch)
+            }
             onQueryChange={setQuery}
           />
           <div
@@ -433,7 +464,19 @@ export function BranchPicker({
                 <BranchPickerText label={branch} className="flex-1" wrap />
               </BranchPickerRow>
             ))}
-            {filteredBranchOptions.length === 0 ? (
+            {canCreateBranch ? (
+              <BranchPickerRow
+                icon="Plus"
+                selected={false}
+                title={`Create branch ${createBranchName}`}
+                onSelect={createBranchAndClose}
+              >
+                <span className="min-w-0 flex-1 truncate">
+                  Create branch “{createBranchName}”
+                </span>
+              </BranchPickerRow>
+            ) : null}
+            {filteredBranchOptions.length === 0 && !canCreateBranch ? (
               loading ? (
                 <ListLoadingPlaceholder label="Loading branches…" />
               ) : (

@@ -112,3 +112,7 @@ export function rewindQueuedMessageStateMigration(db: DbConnection): void {
     DELETE FROM __drizzle_migrations WHERE created_at >= ${QUEUED_MESSAGE_STATE_MIGRATION_WHEN};
   `);
 }
+
+export function dropProjectScriptsTable(db: DbConnection): void {
+  db.$client.exec("DROP TABLE IF EXISTS project_scripts");
+}

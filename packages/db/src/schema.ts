@@ -173,6 +173,26 @@ export const projects = sqliteTable(
   ],
 );
 
+export const projectScripts = sqliteTable(
+  "project_scripts",
+  {
+    id: text("id").primaryKey(),
+    projectId: text("project_id")
+      .notNull()
+      .references(() => projects.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    command: text("command").notNull(),
+    shortcut: integer("shortcut"),
+  },
+  (table) => [
+    uniqueIndex("project_scripts_name_idx").on(table.projectId, table.name),
+    uniqueIndex("project_scripts_shortcut_idx").on(
+      table.projectId,
+      table.shortcut,
+    ),
+  ],
+);
+
 export const projectExecutionDefaults = sqliteTable(
   "project_execution_defaults",
   {

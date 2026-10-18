@@ -33,6 +33,7 @@ import {
   iterateThreadListCacheEntries,
 } from "./thread-list-cache-data";
 import {
+  projectScriptsQueryKey,
   allHostQueryKeyPrefix,
   allMachineEnvironmentQueryKeyPrefix,
   allPluginCatalogSearchQueryKeyPrefix,
@@ -490,7 +491,13 @@ export const REALTIME_PROJECT_CHANGE_REGISTRY = {
     dirty: [getProjectListInvalidationQueryKeys],
   },
   "project-updated": {
-    dirty: [getProjectListInvalidationQueryKeys],
+    dirty: [
+      getProjectListInvalidationQueryKeys,
+      ({ projectId }) =>
+        projectId === undefined
+          ? [["projectScripts"]]
+          : [projectScriptsQueryKey(projectId)],
+    ],
   },
   "project-deleted": {
     dirty: [getProjectListInvalidationQueryKeys],

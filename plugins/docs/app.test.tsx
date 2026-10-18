@@ -1510,7 +1510,11 @@ describe("Docs nav panel", () => {
     const openThreadPanel = vi.fn(() => true);
     const slot = renderSlot(
       app.threadPanelActions[0]!,
-      { threadId: "thr_1", params: null },
+      {
+        experimental_activationKey: 1,
+        threadId: "thr_1",
+        params: null,
+      },
       {
         openThreadPanel,
         rpc: {
@@ -1545,6 +1549,7 @@ describe("Docs nav panel", () => {
     const slot = renderSlot(
       app.threadPanelActions[0]!,
       {
+        experimental_activationKey: 1,
         threadId: "thr_1",
         params: {
           vaultId: "personal",
@@ -1703,6 +1708,7 @@ describe("Docs nav panel", () => {
           ? renderSlot(
               app.threadPanelActions[0]!,
               {
+                experimental_activationKey: 1,
                 threadId: "thr_1",
                 params: { vaultId: "personal", path, title: "Metrics" },
               },

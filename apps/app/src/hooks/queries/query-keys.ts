@@ -1355,3 +1355,7 @@ export function systemProviderCatalogQueryKey() {
 export function pluginUpdateJobsQueryKey() {
   return ["plugin-update-jobs"] as const;
 }
+
+export function projectScriptsQueryKey(projectId: string) {
+  return ["projectScripts", projectId] as const;
+}

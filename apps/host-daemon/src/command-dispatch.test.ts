@@ -124,6 +124,7 @@ function createWorkspace(workspacePath = WORKSPACE_PATH): HostWorkspace {
     getPullRequest: unexpectedWorkspaceCall,
     runPullRequestAction: unexpectedWorkspaceCall,
     commit: unexpectedWorkspaceCall,
+    checkoutBranch: unexpectedWorkspaceCall,
   };
 }
 

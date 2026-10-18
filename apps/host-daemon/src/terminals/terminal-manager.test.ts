@@ -289,6 +289,7 @@ function createFakeWorkspace(path: string): HostWorkspace {
       commitSha: "commit-1",
       commitSubject: "commit",
     })),
+    checkoutBranch: vi.fn(async () => ({ branch: "main" })),
     runPullRequestAction: vi.fn(async () => undefined),
   };
 }

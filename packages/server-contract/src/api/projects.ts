@@ -461,3 +461,55 @@ export const copyProjectAttachmentsRequestSchema = z
 export type CopyProjectAttachmentsRequest = z.infer<
   typeof copyProjectAttachmentsRequestSchema
 >;
+
+export const projectScriptInputSchema = z
+  .object({
+    name: z.string().trim().min(1).max(200),
+    command: z.string().trim().min(1).max(10_000),
+    shortcut: z.number().int().min(1).max(9).nullable(),
+  })
+  .strict();
+export type ProjectScriptInput = z.infer<typeof projectScriptInputSchema>;
+
+export const projectScriptSchema = projectScriptInputSchema.extend({
+  id: z.string().min(1),
+  projectId: z.string().min(1),
+});
+export type ProjectScript = z.infer<typeof projectScriptSchema>;
+
+export const projectScriptsResponseSchema = z.object({
+  scripts: z.array(projectScriptSchema),
+});
+export type ProjectScriptsResponse = z.infer<
+  typeof projectScriptsResponseSchema
+>;
+
+export const runProjectScriptRequestSchema = z
+  .object({
+    threadId: z.string().min(1),
+  })
+  .strict();
+export type RunProjectScriptRequest = z.infer<
+  typeof runProjectScriptRequestSchema
+>;
+
+export const importProjectScriptsRequestSchema = z
+  .object({
+    scripts: z.array(projectScriptInputSchema).min(1).max(100),
+  })
+  .strict();
+export type ImportProjectScriptsRequest = z.infer<
+  typeof importProjectScriptsRequestSchema
+>;
+
+export const t3ProjectScriptsSchema = z.object({
+  scripts: z
+    .array(
+      z.object({
+        name: projectScriptInputSchema.shape.name,
+        command: projectScriptInputSchema.shape.command,
+      }),
+    )
+    .min(1)
+    .max(100),
+});

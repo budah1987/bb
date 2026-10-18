@@ -78,6 +78,24 @@ describe("workspace command dispatch", () => {
     });
     expect(harness.workspaceState.statusReads).toBe(1);
     expect(harness.workspaceState.lastCommitMessage).toBe("Commit message");
+
+    const checkoutResult = await dispatchCommand(
+      {
+        type: "workspace.checkout_branch",
+        environmentId: "env-1",
+        workspaceContext: {
+          workspacePath: "/tmp/env-1",
+        },
+        branch: "feature/topic",
+        create: true,
+      },
+      harness.dispatchOptions(),
+    );
+    expect(checkoutResult).toEqual({ branch: "feature/topic" });
+    expect(harness.workspaceState.lastCheckoutBranch).toEqual({
+      branch: "feature/topic",
+      create: true,
+    });
   });
 
   it("uses a repository added after the runtime cached a plain workspace", async () => {

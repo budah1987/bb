@@ -110,3 +110,36 @@ Sources:
 
   A live project must retain at least one source; a project pending deletion
   may remove its last source.
+
+## Project scripts
+
+Save named shell commands per project, then run them in a thread’s workspace:
+
+```bash
+bb project script list <projectId> [--json]
+bb project script add <projectId> --name <name> --command <command> [--shortcut <1-9>] [--json]
+bb project script update <projectId> <scriptId> --name <name> --command <command> [--shortcut <1-9>] [--json]
+bb project script delete <projectId> <scriptId> [--json]
+bb project script import <projectId> --client-file <path> [--json]
+bb project script run <projectId> <scriptId> --thread <id> [--json]
+```
+
+`update` replaces the definition; omitting `--shortcut` clears its assignment.
+Names and shortcut slots must be unique within a project. Shortcuts default to
+`Mod+Alt+1` through `Mod+Alt+9`, target the focused thread, and can be rebound in
+Keyboard shortcuts. Add, edit, delete, run, and preview imports in Thread details.
+
+`import` reads a `t3.json` file from the CLI machine and copies the `name` and
+`command` fields from its `scripts` array. Lifecycle hooks, icons, and preview
+options are not imported. It never runs commands. Any conflict rejects the whole
+import; existing scripts are not overwritten. The app imports from the selected
+thread’s workspace instead, with a preview before saving.
+
+`run` returns a persistent shell terminal session, using the thread’s current workspace
+and terminal environment. A thread in a different project is rejected. Inspect
+output with `bb terminal output <terminalId>` and stop with
+`bb terminal close <terminalId>`. Each run creates a new terminal; editing
+or deleting definitions does not affect commands already running.
+
+Plugins use `bb.sdk.projects.experimental_scripts` (`list`, `create`, `update`,
+`delete`, `importT3`, `run`), the same server routes as the app and CLI.

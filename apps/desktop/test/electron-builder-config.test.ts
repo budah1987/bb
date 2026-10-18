@@ -285,7 +285,18 @@ const readResolvedConfig: ReadResolvedConfig = async (overrides) => {
 };
 
 describe("electron-builder signing config", () => {
-  it("embeds distinct maintained Nightly identity, feed and updater cache", async () => {
+  it.runIf(process.platform !== "darwin" || process.arch !== "arm64")(
+    "rejects maintained Nightly on unsupported platforms",
+    async () => {
+      const result = await runConfigScript({
+        BB_DESKTOP_RELEASE_CHANNEL: "nightly",
+        BB_DESKTOP_MAINTAINED_FLAVOR: "production",
+      });
+      expect(result.exitCode).not.toBe(0);
+      expect(result.stderr).toContain("supports macOS arm64 only");
+    },
+  );
+  it.runIf(process.platform === "darwin" && process.arch === "arm64")("embeds distinct maintained Nightly identity, feed and updater cache", async () => {
     for (const [flavor, name, appId, port] of [
       ["production", "bb-maintained-nightly", "dev.bbamir.desktop.nightly", "25140"],
       ["rehearsal", "bb-maintained-nightly-rehearsal", "dev.bbamir.desktop.nightly-rehearsal", "25141"],
@@ -308,7 +319,7 @@ describe("electron-builder signing config", () => {
     }
   });
 
-  it("rejects conflicting publish flags even after an explicit never", async () => {
+  it.runIf(process.platform === "darwin" && process.arch === "arm64")("rejects conflicting publish flags even after an explicit never", async () => {
     const env = { BB_DESKTOP_RELEASE_CHANNEL: "nightly", BB_DESKTOP_MAINTAINED_FLAVOR: "production" };
     for (const args of [
       ["--publish", "never", "--publish", "always"],
@@ -323,7 +334,7 @@ describe("electron-builder signing config", () => {
     expect((await runConfigScript(env, ["--publish", "never"])).exitCode).toBe(0);
   });
 
-  it("rejects a maintained flavor without the nightly channel", async () => {
+  it.runIf(process.platform === "darwin" && process.arch === "arm64")("rejects a maintained flavor without the nightly channel", async () => {
     const result = await runConfigScript({ BB_DESKTOP_MAINTAINED_FLAVOR: "production" });
     expect(result.exitCode).not.toBe(0);
     expect(result.stderr).toContain("requires BB_DESKTOP_RELEASE_CHANNEL=nightly");
